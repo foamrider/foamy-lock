@@ -4,7 +4,7 @@ A lock screen for Omarchy Quattro with a large clock, account name and avatar,
 password and fingerprint authentication, network and battery status, and media
 controls. It uses Omarchy's wallpaper and authentication services.
 
-![Foamy Lock with a sample account and sample media](screenshot.png)
+![Foamy Lock with a sample account and sample media](preview.png)
 
 The screenshot uses synthetic account and media details and a neutral wallpaper.
 
@@ -125,6 +125,24 @@ folder. The runtime test uses an isolated home and session bus with simulated
 PAM and session-lock objects; it does not lock the desktop or authenticate a user.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
+
+## Remove
+
+Run this command only while your session is **unlocked**:
+
+```sh
+omarchy plugin remove foamy.lock
+```
+
+When removing an enabled replacement, Omarchy restores `omarchy.lock`.
+If Foamy Lock was already disabled, explicitly
+enable the stock lock with `omarchy plugin enable omarchy.lock`. Restart the
+shell while unlocked with `omarchy restart shell`, then verify the stock lock
+works. Account details, fingerprints, PAM configuration, and the avatar cache
+remain unchanged.
+
+Omarchy manages the plugin entry in `shell.json`. Packages and data outside
+the plugin directory are retained unless you remove them separately.
 
 ## License
 
