@@ -18,6 +18,7 @@ Item {
   property bool inputEnabled: true
   property bool loadBackground: true
   property var activePlayer: null
+  property string artworkPath: ""
   property bool showUserInfo: true
   property string timeFormat: "24h"
   property string passwordText: ""
@@ -69,6 +70,7 @@ Item {
   signal passwordTextEdited(string password)
   signal clearFailureRequested()
   signal wakeRequested()
+  signal artworkFailed(string path)
 
   function environmentLocaleName() {
     var raw = Quickshell.env("LC_TIME") || Quickshell.env("LC_ALL") || Quickshell.env("LANG") || "C"
@@ -577,17 +579,24 @@ Item {
         clip: true
 
         Image {
+          id: artworkImage
+          objectName: "artworkImage"
           anchors.fill: parent
-          source: root.activePlayer ? String(root.activePlayer.trackArtUrl || "") : ""
+          // Only the isolated helper's fixed-size thumbnail reaches Qt.
+          source: root.artworkPath ? root.fileUrl(root.artworkPath, 0) : ""
+          sourceSize.width: 256
+          sourceSize.height: 256
           fillMode: Image.PreserveAspectCrop
           asynchronous: true
-          visible: source !== ""
+          visible: status === Image.Ready
+          onStatusChanged: if (status === Image.Error) root.artworkFailed(root.artworkPath)
         }
 
         Text {
+          objectName: "artworkFallback"
           textFormat: Text.PlainText
           anchors.centerIn: parent
-          visible: !root.activePlayer || String(root.activePlayer.trackArtUrl || "") === ""
+          visible: artworkImage.status !== Image.Ready
           text: "󰝚"
           color: root.secondary
           opacity: 0.78

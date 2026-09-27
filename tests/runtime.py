@@ -15,6 +15,8 @@ app = base / 'app'
 app.mkdir()
 (app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
 shutil.copy(source / 'Model.js', app)
+shutil.copy(source / 'Artwork.qml', app)
+shutil.copy(source / 'artwork.py', app)
 mock = app / 'mocks'
 mock.mkdir()
 (mock / 'SessionLock.qml').write_text('''import QtQuick
@@ -67,6 +69,7 @@ Item {
   property bool inputEnabled: true
   property bool loadBackground: true
   property var activePlayer: null
+  property string artworkPath: ""
   property bool showUserInfo: true
   property string timeFormat: "24h"
   property string passwordText: ""
@@ -78,6 +81,7 @@ Item {
   signal submitPassword(string password)
   signal clearFailureRequested()
   signal wakeRequested()
+  signal artworkFailed(string path)
 }
 ''')
 service = (source / 'Service.qml').read_text().replace('import Quickshell.Wayland', 'import "mocks" as Mock')

@@ -6,11 +6,19 @@ import shutil
 import subprocess
 import tempfile
 import struct
+import importlib.util
 
 source = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('artwork', source / 'artwork.py')
+artwork = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(artwork)
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-render-'))
 app = base / 'app'
 app.mkdir()
+# The view receives only a generated thumbnail, exactly as in production.
+pixels = bytes(channel for y in range(256) for x in range(256)
+               for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
+(app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
 (app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
 shutil.copy(source / 'Model.js', app)
 view = (source / 'LockView.qml').read_text()
@@ -60,6 +68,7 @@ ShellRoot {
       avatarPath: ""
       backgroundPath: Qt.resolvedUrl("wallpaper.svg").toString().replace("file://", "")
       activePlayer: player
+      artworkPath: Qt.resolvedUrl("artwork.png").toString().replace("file://", "")
       fingerprintConfigured: true
       onPasswordTextEdited: function(value) { passwordText = value }
       onClearFailureRequested: failureMessage = ""
@@ -68,7 +77,7 @@ ShellRoot {
       id: player
       property string trackTitle: "Evening Light"
       property string trackArtist: "Sample Artist"
-      property string trackArtUrl: ""
+      property string trackArtUrl: "https://must-not-be-fetched.invalid/original.png"
       property bool isPlaying: true
       property bool canGoPrevious: true
       property bool canGoNext: true
@@ -88,15 +97,23 @@ ShellRoot {
       running: true
       onTriggered: {
         var input = view.children[0] // Locate the editor by objectName below.
-        function findInput(item) {
-          if (item.objectName === "passwordInput") return item
+        function findNamed(item, name) {
+          if (item.objectName === name) return item
           for (var i = 0; i < item.children.length; i++) {
-            var found = findInput(item.children[i])
+            var found = findNamed(item.children[i], name)
             if (found) return found
           }
           return null
         }
-        input = findInput(view)
+        input = findNamed(view, "passwordInput")
+        var artImage = findNamed(view, "artworkImage")
+        var fallback = findNamed(view, "artworkFallback")
+        if (index < 2 && (artImage.status !== Image.Ready || fallback.visible))
+          throw new Error("Validated artwork was not displayed")
+        if (index >= 4 && (!fallback.visible || artImage.visible))
+          throw new Error("Artwork icon fallback was not displayed")
+        if (String(artImage.source).indexOf("https:") === 0)
+          throw new Error("Original artwork URL reached the view")
         if (!input || (!view.authenticatingPassword && !input.activeFocus)) throw new Error("Password input lost focus")
         if (index === 1 && input.text !== "example") throw new Error("Password binding did not update")
         if (!view.grabToImage(function(result) {
@@ -121,8 +138,17 @@ ShellRoot {
             view.failureMessage = ""
             view.authenticatingPassword = true
             Fixture.Power.displayDevice = null
+          } else if (step.index === 4) {
+            view.width = 1920; view.height = 1080
+            view.activePlayer = player
+            view.showUserInfo = true
+            view.authenticatingPassword = false
+            view.artworkPath = ""
+          } else if (step.index === 5) {
+            view.width = 800; view.height = 1000
+            view.artworkPath = Qt.resolvedUrl("missing-thumbnail.png").toString().replace("file://", "")
           } else {
-            console.log("PASS: wide/narrow, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
+            console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
             Qt.quit()
             return
           }
@@ -157,7 +183,7 @@ with log_path.open('w') as log:
 output = log_path.read_text()
 print(output)
 assert process.returncode == 0 and 'PASS:' in output, output
-for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720)]):
+for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000)]):
     image = (app / f'capture-{i}.png').read_bytes()
     assert struct.unpack('>II', image[16:24]) == size
 print('Renders:', app)

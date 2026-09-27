@@ -17,6 +17,11 @@ install or change PAM configuration. The layout uses Adwaita Sans, URW Gothic,
 and JetBrainsMono Nerd Font; install these fonts for the intended typography and
 status icons.
 
+Artwork additionally uses system Python 3, ImageMagick 7, and Bubblewrap with
+unprivileged namespaces and seccomp support (x86-64 or AArch64 Linux). If the
+helper or its sandbox cannot run, the music icon is shown. There is no
+unsandboxed decoding fallback, and authentication does not depend on artwork.
+
 Install while your session is unlocked:
 
 ```sh
@@ -48,6 +53,9 @@ shows the defaults; merge it into your existing file instead of replacing it:
       "timeFormat": "24h",
       "showUserInfo": true,
       "showMedia": true,
+      "showArtwork": true,
+      "artworkHosts": [],
+      "artworkFileRoots": [],
       "blankAfterSec": 30
     }
   ],
@@ -60,6 +68,9 @@ shows the defaults; merge it into your existing file instead of replacing it:
 | `timeFormat` | `"24h"` | `"24h"` or `"12h"`; 12-hour time includes AM/PM. The date uses the session locale. |
 | `showUserInfo` | `true` | Show the account name and avatar. Set `false` to hide both. |
 | `showMedia` | `true` | Show available MPRIS media and transport controls. Set `false` to hide them. |
+| `showArtwork` | `true` | Prepare permitted artwork while unlocked. Set `false` to always show the music icon; titles and controls remain available. |
+| `artworkHosts` | `[]` | Opt in to HTTPS artwork from at most 32 exact lowercase DNS hostnames, such as `images.example.com`. No wildcards, URL schemes, IP literals, or ports. Empty disables all remote artwork. |
+| `artworkFileRoots` | `[]` | Additional permitted local artwork directories, up to 14 absolute paths. `$XDG_CACHE_HOME` (or `~/.cache`) and `$XDG_RUNTIME_DIR` are included automatically. Values must be actual absolute paths, without `..`; `~` and environment variables are not expanded. |
 | `blankAfterSec` | `30` | Integer from 1 to 2147483 seconds of lock-screen inactivity before blanking the display and keyboard backlight. `null` disables this timer. This does not unlock or suspend the computer. |
 
 All settings are optional. Changes are watched live. Invalid or unreadable JSON,
@@ -97,6 +108,63 @@ Media or a custom bar. A playing track with metadata takes priority; otherwise t
 first player with track metadata is shown. Buttons follow the player's supported
 transport actions. No controls appear when no player supplies metadata.
 
+### Artwork safety and fallback
+
+The view never loads the player's `trackArtUrl` directly. While unlocked, a
+separate helper reads permitted artwork and decodes it in a Bubblewrap sandbox
+without network, home-directory, session-bus, or desktop-socket access. It accepts
+static PNG, JPEG, and WebP only. ImageMagick delegates and other image coders are
+disabled, and the decoder cannot create subprocesses or additional namespaces.
+The sandbox returns exactly 256 × 256 RGB pixels. The Python supervisor checks
+their length and creates a minimal PNG without copying source metadata or source
+compressed data. Only that thumbnail reaches the lock view.
+
+Local sources must be `file:///` URLs to user-owned regular files below a
+permitted directory. Symlink traversal below that directory, special files, and
+parent traversal are rejected. For players that store covers elsewhere, add the
+specific artwork directory to `artworkFileRoots`, rather than your whole home.
+
+Remote artwork is off by default. Adding a hostname to `artworkHosts` allows
+requests to that host while unlocked, which reveals your IP and request timing
+to it. Every redirect must remain HTTPS on port 443 and use an allowed hostname.
+DNS answers must be public addresses; connections are pinned to a checked IP
+with normal hostname certificate verification. There are no cookies,
+credentials, proxy-environment settings, or user curl configuration involved.
+
+| Boundary | Limit |
+| --- | --- |
+| Input, including responses without a length header | 5 MiB |
+| Source width and height | 4096 pixels each |
+| Network operation, including DNS and redirects | 5 seconds; 2 redirects |
+| Decoder | 256 MiB address space; 2 CPU seconds; 3 wall-clock seconds |
+| Thumbnail | 256 × 256 RGB; approximately 193 KiB PNG |
+| Cached thumbnails | 16 files, approximately 3 MiB total |
+| Work | One job at a time; at most one start every 2 seconds |
+
+These are upper bounds, not promises that every image within them can decode:
+an image that needs more working memory falls back to the icon. The decoder
+cannot spill its image cache to disk. Whole helper jobs have a 9-second limit.
+
+On a lock request, outstanding artwork work is cancelled without delaying the
+lock. No new helper jobs start while locking or locked. A track with a completed
+thumbnail in this shell session's cache can show it; other tracks show the music
+icon until unlocked. Cancellation cannot retract network packets already sent.
+Preview follows the same policy as the current lock state.
+
+The icon also appears during loading, for missing or rejected artwork, and on
+helper or image-display errors. Stale results from cancelled tracks are ignored.
+Failures are held for 60 seconds before a subsequent track/state change can retry;
+there is no automatic retry loop. Disabling media or artwork cancels current work.
+
+Generated thumbnails use a private directory at
+`$XDG_CACHE_HOME/omarchy/foamy.lock/artwork` (or
+`~/.cache/omarchy/foamy.lock/artwork`). They contain no embedded track names or
+URLs. Old thumbnails are evicted automatically; interrupted staging files are
+reclaimed by the next decoding job. A shell restart rebuilds its trusted cache
+instead of treating existing disk images as validated. This protects against
+untrusted media content; it does not isolate the shell from other malicious
+processes already running as your Unix user.
+
 ```sh
 omarchy-shell lock preview
 omarchy-shell lock hidePreview
@@ -109,19 +177,32 @@ separately with synthetic data. Status includes effective settings, configuratio
 errors, lock state, and local account information. Do not share its output without
 checking it for personal details.
 
+Status also reports `artworkState` and a short `artworkError` code without
+including artwork URLs. `host-not-allowed` means remote artwork was not opted in;
+`file-outside-roots` means the cover is outside the permitted directories.
+`decoder-unavailable` means Bubblewrap or ImageMagick is missing; `decode-failed`
+can indicate a rejected image, a resource limit, or unavailable sandbox support.
+
 ## Validation
 
 ```sh
 omarchy plugin validate .
-qmllint Service.qml LockView.qml
+qmllint Artwork.qml Service.qml LockView.qml
 node --test tests/model.test.cjs
+python3 -m unittest discover -s tests -p artwork_test.py -v
+python3 tests/artwork_runtime.py
 python3 tests/render.py
 python3 tests/runtime.py
 ```
 
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
-folder. The runtime test uses an isolated home and session bus with simulated
+folder, including populated artwork and icon fallbacks. Artwork tests exercise
+the real sandbox with small synthetic images, a local TLS fixture, URL and file
+restrictions, byte and decoder limits, caching, cancellation, and stale results.
+They require host support for unprivileged namespaces and a private session bus;
+a restricted agent/container sandbox may prevent these even when the desktop
+supports them. The runtime test uses an isolated home and session bus with simulated
 PAM and session-lock objects; it does not lock the desktop or authenticate a user.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
@@ -138,7 +219,7 @@ When removing an enabled replacement, Omarchy restores `omarchy.lock`.
 If Foamy Lock was already disabled, explicitly
 enable the stock lock with `omarchy plugin enable omarchy.lock`. Restart the
 shell while unlocked with `omarchy restart shell`, then verify the stock lock
-works. Account details, fingerprints, PAM configuration, and the avatar cache
+works. Account details, fingerprints, PAM configuration, and the avatar/artwork caches
 remain unchanged.
 
 Omarchy manages the plugin entry in `shell.json`. Packages and data outside

@@ -5,7 +5,8 @@ const config = (settings = {}) => JSON.stringify({version: 1, plugins: [{id: 'fo
 
 test('defaults and all documented settings', () => {
   assert.deepEqual(Model.parseConfig(config()).settings, Model.defaults())
-  const custom = {timeFormat: '12h', showUserInfo: false, showMedia: false, blankAfterSec: null}
+  const custom = {...Model.defaults(), timeFormat: '12h', showUserInfo: false, showMedia: false, blankAfterSec: null,
+    showArtwork: false, artworkHosts: ['images.example.com'], artworkFileRoots: ['/tmp/album-covers']}
   assert.deepEqual(Model.parseConfig(config(custom)), {valid: true, settings: custom, error: ''})
   assert.equal(Model.parseConfig(config({blankAfterSec: 2147483})).valid, true)
 })
@@ -19,9 +20,26 @@ test('invalid configuration returns an error without replacement preferences', (
     assert.ok(result.error)
   }
   for (const settings of [{timeFormat: 'system'}, {showUserInfo: 'false'}, {showMedia: 1},
+    {showArtwork: 1}, {artworkHosts: null}, {artworkHosts: ['*.example.com']},
+    {artworkHosts: ['http://example.com']}, {artworkHosts: ['127.0.0.1']},
+    {artworkHosts: ['EXAMPLE.COM']}, {artworkHosts: Array(33).fill('example.com')},
+    {artworkFileRoots: ['/']}, {artworkFileRoots: ['relative']}, {artworkFileRoots: ['/tmp/../home']},
+    {artworkFileRoots: ['/tmp/\u0000']}, {artworkFileRoots: Array(15).fill('/tmp/images')},
     ...[0, -1, 1.5, '30', false, 2147484].map(blankAfterSec => ({blankAfterSec}))]) {
     assert.equal(Model.parseConfig(config(settings)).valid, false, JSON.stringify(settings))
   }
+})
+
+test('artwork keys distinguish tracks and bound untrusted metadata', () => {
+  assert.equal(Model.artworkKey(null), '')
+  assert.equal(Model.artworkKey({trackArtUrl: ''}), '')
+  assert.equal(Model.artworkKey({trackArtUrl: 'x'.repeat(8193)}), '')
+  const player = {trackArtUrl: 'file:///tmp/cover.png', trackTitle: 'First'}
+  const first = Model.artworkKey(player)
+  player.trackTitle = 'Second'
+  assert.notEqual(Model.artworkKey(player), first)
+  player.trackTitle = 'x'.repeat(100000)
+  assert.equal(JSON.parse(Model.artworkKey(player))[1].length, 512)
 })
 
 test('selects playing metadata, falls back when stopped or removed, accepts no player', () => {

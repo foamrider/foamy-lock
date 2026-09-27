@@ -53,6 +53,15 @@ Item {
     + "/omarchy/foamy.lock"
   readonly property string userAvatarCachePath: avatarCacheDirectory + "/avatar.png"
 
+  Artwork {
+    id: artwork
+    player: root.activePlayer
+    allowed: root.settings.showMedia && root.settings.showArtwork
+    locked: root.locked
+    hosts: root.settings.artworkHosts
+    fileRoots: root.settings.artworkFileRoots
+  }
+
   function applyConfiguration(text) {
     var result = Model.parseConfig(text)
     configError = result.error
@@ -364,6 +373,8 @@ Item {
         inputEnabled: root.lockRequested
         loadBackground: root.locked
         activePlayer: root.activePlayer
+        artworkPath: artwork.path
+        onArtworkFailed: function(path) { artwork.invalidate(path) }
         showUserInfo: root.settings.showUserInfo
         timeFormat: root.settings.timeFormat
         passwordText: root.enteredPassword
@@ -401,6 +412,8 @@ Item {
       inputEnabled: false
       loadBackground: root.previewVisible
       activePlayer: root.activePlayer
+      artworkPath: artwork.path
+      onArtworkFailed: function(path) { artwork.invalidate(path) }
       showUserInfo: root.settings.showUserInfo
       timeFormat: root.settings.timeFormat
       passwordText: ""
@@ -691,6 +704,8 @@ Item {
         passwordPam: root.passwordPamConfigured,
         fingerprint: root.fingerprintConfigured,
         authenticating: root.authenticating,
+        artworkState: artwork.state,
+        artworkError: artwork.error,
         userName: root.userName,
         displayName: root.userDisplayName || root.userName,
         avatarPath: root.userAvatarPath,
