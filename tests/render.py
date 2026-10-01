@@ -115,6 +115,8 @@ ShellRoot {
         if (String(artImage.source).indexOf("https:") === 0)
           throw new Error("Original artwork URL reached the view")
         if (!input || (!view.authenticatingPassword && !input.activeFocus)) throw new Error("Password input lost focus")
+        if (index >= 6 && !findNamed(view, "fingerprintNotice").visible)
+          throw new Error("Fingerprint unavailable notice is missing")
         if (index === 1 && input.text !== "example") throw new Error("Password binding did not update")
         if (!view.grabToImage(function(result) {
           if (!result.saveToFile(Qt.resolvedUrl("capture-" + step.index + ".png").toString().replace("file://", "")))
@@ -147,6 +149,15 @@ ShellRoot {
           } else if (step.index === 5) {
             view.width = 800; view.height = 1000
             view.artworkPath = Qt.resolvedUrl("missing-thumbnail.png").toString().replace("file://", "")
+          } else if (step.index === 6) {
+            view.width = 1920; view.height = 1080
+            view.artworkPath = ""
+            view.passwordText = ""
+            view.fingerprintConfigured = true
+            view.fingerprintUnavailable = true
+          } else if (step.index === 7) {
+            view.width = 800; view.height = 1000
+            view.passwordText = "example"
           } else {
             console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
             Qt.quit()
@@ -183,7 +194,7 @@ with log_path.open('w') as log:
 output = log_path.read_text()
 print(output)
 assert process.returncode == 0 and 'PASS:' in output, output
-for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000)]):
+for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000), (1920, 1080), (800, 1000)]):
     image = (app / f'capture-{i}.png').read_bytes()
     assert struct.unpack('>II', image[16:24]) == size
 print('Renders:', app)

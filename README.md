@@ -88,6 +88,19 @@ The plugin reads the same `~/.config/omarchy/shell.json` and
 avatar thumbnail at `$XDG_CACHE_HOME/omarchy/foamy.lock/avatar.png`, falling back to
 `~/.cache/omarchy/foamy.lock/avatar.png`.
 
+## Fingerprint recovery
+
+Temporary reader or daemon errors are retried with increasing delays. If the
+reader remains unreachable, the lock shows "Fingerprint reader unavailable";
+password unlock remains available. Temporary availability-check errors do not
+turn fingerprint unlock off for the rest of the lock session.
+
+Some readers also need a system-level `fprintd` restart after resume. This plugin
+does not install that hook or change system services. Recovery follows
+[Omarchy PR #7158](https://github.com/omacom/omarchy/pull/7158), including retries
+while the daemon restarts. Errors after a finger prompt are outside this retry
+policy. Status includes `fingerprintUnavailable`.
+
 ## Account name and avatar
 
 Open **About Me** from the application launcher (the app is **Mugshot**, also
@@ -188,7 +201,7 @@ can indicate a rejected image, a resource limit, or unavailable sandbox support.
 ```sh
 omarchy plugin validate .
 qmllint Artwork.qml Service.qml LockView.qml
-node --test tests/model.test.cjs
+node --test tests/*.test.cjs
 python3 -m unittest discover -s tests -p artwork_test.py -v
 python3 tests/artwork_runtime.py
 python3 tests/render.py

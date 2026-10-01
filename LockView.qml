@@ -12,6 +12,7 @@ Item {
   property string backgroundPath: ""
   property int backgroundVersion: 0
   property bool fingerprintConfigured: false
+  property bool fingerprintUnavailable: false
   property bool authenticatingPassword: false
   property string failureMessage: ""
   property int failedAttempts: 0
@@ -397,12 +398,12 @@ Item {
             width: Math.round(26 * root.uiScale)
             height: width
             anchors.verticalCenter: parent.verticalCenter
-            visible: root.fingerprintConfigured
+            visible: root.fingerprintConfigured && !root.fingerprintUnavailable
           }
 
           Text {
             textFormat: Text.PlainText
-            text: root.fingerprintConfigured ? "Use fingerprint or enter password" : "Enter password to unlock"
+            text: root.fingerprintConfigured && !root.fingerprintUnavailable ? "Use fingerprint or enter password" : "Enter password to unlock"
             color: root.foreground
             font.family: root.textFontFamily
             font.pixelSize: Math.round(15 * root.uiScale)
@@ -546,6 +547,22 @@ Item {
         }
       }
 
+    }
+
+    Text {
+      objectName: "fingerprintNotice"
+      anchors.top: loginColumn.bottom
+      anchors.topMargin: Math.round(8 * root.uiScale)
+      anchors.horizontalCenter: loginColumn.horizontalCenter
+      width: root.contentWidth
+      visible: root.fingerprintUnavailable
+      textFormat: Text.PlainText
+      text: "Fingerprint reader unavailable"
+      color: root.foreground
+      font.family: root.textFontFamily
+      font.pixelSize: Math.round(13 * root.uiScale)
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
     }
 
     Rectangle {

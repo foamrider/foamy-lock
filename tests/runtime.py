@@ -15,6 +15,7 @@ app = base / 'app'
 app.mkdir()
 (app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
 shutil.copy(source / 'Model.js', app)
+shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
 shutil.copy(source / 'artwork.py', app)
 mock = app / 'mocks'
@@ -35,6 +36,8 @@ QtObject {
   property string config: ""
   property string user: ""
   property bool active: false
+  property bool messageIsError: false
+  property int starts: 0
   property bool responseRequired: false
   property int generation: 0
   signal completed(int result)
@@ -42,6 +45,8 @@ QtObject {
   signal pamMessage()
   function start() {
     active = true
+    starts++
+    if (config === "omarchy-lock-fingerprint") return true
     Qt.callLater(function() { if (pam.active) pam.responseRequired = true })
     return true
   }
@@ -63,6 +68,7 @@ Item {
   property string backgroundPath: ""
   property int backgroundVersion: 0
   property bool fingerprintConfigured: false
+  property bool fingerprintUnavailable: false
   property bool authenticatingPassword: false
   property string failureMessage: ""
   property int failedAttempts: 0
@@ -85,6 +91,7 @@ Item {
 }
 ''')
 service = (source / 'Service.qml').read_text().replace('import Quickshell.Wayland', 'import "mocks" as Mock')
+service = service.replace('  id: root', '  id: root\n  property alias testFingerprintPam: fingerprintPam\n  property alias testRetry: fingerprintRetryTimer')
 service = service.replace('  WlSessionLock {', '  Mock.SessionLock {').replace('    WlSessionLockSurface {', '    Rectangle {')
 service = service.replace('  PamContext {', '  Mock.PamContext {').replace('LockView {', 'Mock.LockView {')
 service = service.replace('  PanelWindow {', '  Rectangle {').replace('    anchors { top: true; bottom: true; left: true; right: true }', '    width: 800; height: 600')
@@ -103,6 +110,28 @@ ShellRoot {
     target: "test"
     function submit(value: string): string { service.submitPassword(value); return "ok" }
     function failures(): string { return String(service.failedAttempts) }
+    function fingerprintState(): string {
+      return JSON.stringify({starts: service.testFingerprintPam.starts,
+        generation: service.testFingerprintPam.generation,
+        streak: service.fingerprintUnreachedStreak,
+        delay: service.testRetry.interval, retrying: service.testRetry.running,
+        active: service.testFingerprintPam.active,
+        probing: service.fingerprintProbeStreak})
+    }
+    function fingerprintFail(): string {
+      service.testFingerprintPam.active = false
+      service.testFingerprintPam.error(1)
+      service.testFingerprintPam.completed(1)
+      return "ok"
+    }
+    function fingerprintPrompt(): string { service.testFingerprintPam.pamMessage(); return "ok" }
+    function fingerprintMatch(): string {
+      service.testFingerprintPam.active = false
+      service.testFingerprintPam.completed(0)
+      return "ok"
+    }
+    function fingerprintProbe(): string { service.refreshFingerprintStatus(); return "ok" }
+    function resume(): string { service.restartFingerprintAfterSleep(); return "ok" }
     function missingPam(): string { service.passwordPamConfigured = false; return "ok" }
   }
 }
@@ -117,7 +146,9 @@ for name in ['getent', 'busctl', 'magick', 'fprintd-list', 'omarchy-hyprland-ses
     script = '#!/bin/sh\n'
     if name == 'getent':
         script += 'printf "fixture:x:1000:1000:Foamy User:%s:/bin/sh\\n" "$HOME"\n'
-    elif name in ['busctl', 'magick', 'fprintd-list', 'omarchy-hyprland-session-locked']:
+    elif name == 'fprintd-list':
+        script += 'cat "$HOME/fingerprint-output" 2>/dev/null || echo no\n'
+    elif name in ['busctl', 'magick', 'omarchy-hyprland-session-locked']:
         script += 'exit 1\n'
     else:
         script += 'printf "%s\\n" "' + name + '" >> "$HOME/calls"\n'
@@ -199,6 +230,48 @@ with log_path.open('w') as log:
         wait_for(lambda s: s['secure'])
         ipc('test', 'submit', 'test-password')
         wait_for(lambda s: not s['locked'])
+        fingerprint_output = base / 'fingerprint-output'
+        fingerprint_output.write_text('found 1 devices\n - #0: right-index-finger\n')
+        assert ipc('lock', 'lock') == 'ok'
+        wait_for(lambda s: s['secure'] and s['fingerprint'] and s['authenticating'])
+        def fingerprint_state():
+            return json.loads(ipc('test', 'fingerprintState'))
+        for expected_streak, delay in [(1, 1000), (2, 2000), (3, 4000)]:
+            wait_for(lambda s: fingerprint_state()['active'])
+            ipc('test', 'fingerprintFail')
+            state = fingerprint_state()
+            assert state['streak'] == expected_streak, 'error plus completed must settle once'
+            assert state['delay'] == delay
+        assert status()['fingerprintUnavailable'] and status()['secure']
+        ipc('test', 'submit', 'incorrect')
+        wait_for(lambda s: ipc('test', 'failures') == '1')
+        assert status()['secure'], 'wrong password while reader is unavailable must not unlock'
+        ipc('test', 'submit', 'test-password')
+        wait_for(lambda s: not s['locked'])
+        assert not fingerprint_state()['retrying'], 'password fallback must stop fingerprint retries'
+        assert ipc('lock', 'lock') == 'ok'
+        wait_for(lambda s: s['secure'] and fingerprint_state()['active'])
+        wait_for(lambda s: fingerprint_state()['active'])
+        ipc('test', 'fingerprintPrompt')
+        assert not status()['fingerprintUnavailable'], 'prompt clears notice immediately'
+        generation = fingerprint_state()['generation']
+        ipc('test', 'resume')
+        assert fingerprint_state()['generation'] == generation + 1
+        wait_for(lambda s: fingerprint_state()['active'])
+        assert fingerprint_state()['streak'] == 0, 'resume clears the stale streak'
+        fingerprint_output.write_text('D-Bus activation failed\n')
+        ipc('test', 'fingerprintProbe')
+        wait_for(lambda s: fingerprint_state()['probing'] > 0)
+        assert status()['fingerprint'], 'temporary probe error must retain enrollment state'
+        fingerprint_output.write_text('found 1 devices\n - #0: right-index-finger\n')
+        wait_for(lambda s: fingerprint_state()['probing'] == 0)
+        ipc('test', 'fingerprintMatch')
+        wait_for(lambda s: not s['locked'])
+        assert not fingerprint_state()['retrying'], 'unlock must stop pending retries'
+        fingerprint_output.write_text('no\n')
+        ipc('test', 'fingerprintProbe')
+        wait_for(lambda s: not s['fingerprint'])
+        print('PASS: fingerprint duplicate settlement, backoff, unavailable/recovered UI state, resume abort/retry, transient probe recovery, match unlock and retry cleanup')
         ipc('test', 'missingPam')
         assert ipc('lock', 'lock') == 'missing-pam'
         assert not status()['locked']
