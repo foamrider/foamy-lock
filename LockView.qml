@@ -599,6 +599,15 @@ Item {
           id: artworkImage
           objectName: "artworkImage"
           anchors.fill: parent
+          anchors.margins: albumArt.border.width
+          // Rectangle.clip is rectangular; mask artwork to the inside of its border.
+          layer.enabled: true
+          layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: artworkMask
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 1.0
+          }
           // Only the isolated helper's fixed-size thumbnail reaches Qt.
           source: root.artworkPath ? root.fileUrl(root.artworkPath, 0) : ""
           sourceSize.width: 256
@@ -607,6 +616,16 @@ Item {
           asynchronous: true
           visible: status === Image.Ready
           onStatusChanged: if (status === Image.Error) root.artworkFailed(root.artworkPath)
+        }
+
+        Rectangle {
+          id: artworkMask
+          width: artworkImage.width
+          height: artworkImage.height
+          radius: Math.max(0, albumArt.radius - albumArt.border.width)
+          color: "white"
+          visible: false
+          layer.enabled: true
         }
 
         Text {
