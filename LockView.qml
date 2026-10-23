@@ -34,7 +34,7 @@ Item {
     || String(userName || "").trim()
   readonly property string textFontFamily: "Adwaita Sans"
   readonly property string iconFontFamily: "JetBrainsMono Nerd Font"
-  readonly property string placeholderText: "Enter password"
+  readonly property string placeholderText: FoamyI18n.t("Enter password")
   readonly property real uiScale: Math.max(0.82, Math.min(1.12, height / 1080))
   readonly property real contentWidth: Math.min(Math.round(560 * uiScale), width - Math.round(64 * uiScale))
   readonly property real fieldWidth: Math.min(Math.round(320 * uiScale), contentWidth)
@@ -58,7 +58,7 @@ Item {
   readonly property bool wiredConnected: hasConnectedDevice(DeviceType.Wired)
   readonly property string networkLabel: networkStatusLabel()
   readonly property string networkIcon: wiredConnected ? "" : (networkLabel === "Offline" ? "󰤮" : "")
-  readonly property var userLocale: Qt.locale(environmentLocaleName())
+  readonly property var userLocale: Qt.locale(FoamyI18n.formatLocale)
   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
     : 1
@@ -74,10 +74,7 @@ Item {
   signal wakeRequested()
   signal artworkFailed(string path)
 
-  function environmentLocaleName() {
-    var raw = Quickshell.env("LC_TIME") || Quickshell.env("LC_ALL") || Quickshell.env("LANG") || "C"
-    return String(raw).split(".")[0].split("@")[0]
-  }
+
 
   // Cache-bust profile and wallpaper images when their files change in place.
   function fileUrl(path, version) {
@@ -274,7 +271,7 @@ Item {
         textFormat: Text.PlainText
         id: clockLabel
         width: parent.width
-        text: Qt.formatDateTime(lockClock.date, root.timeFormat === "12h" ? "h:mm AP" : "HH:mm")
+        text: root.userLocale.toString(lockClock.date, root.timeFormat === "12h" ? "h:mm AP" : "HH:mm")
         fontSizeMode: Text.Fit
         minimumPixelSize: Math.round(48 * root.uiScale)
         color: root.foreground
@@ -409,7 +406,7 @@ Item {
 
           Text {
             textFormat: Text.PlainText
-            text: root.fingerprintConfigured && !root.fingerprintUnavailable ? "Use fingerprint or enter password" : "Enter password to unlock"
+            text: root.fingerprintConfigured && !root.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
             color: root.foreground
             font.family: root.textFontFamily
             font.pixelSize: Math.round(15 * root.uiScale)
@@ -477,8 +474,8 @@ Item {
           textFormat: Text.PlainText
           anchors.fill: passwordInput
           text: root.authenticatingPassword
-            ? "Checking…"
-            : (root.failureMessage.length > 0 ? root.failureMessage : root.placeholderText)
+            ? FoamyI18n.t("Checking…")
+            : (root.failureMessage.length > 0 ? root.failedAttempts > 0 ? FoamyI18n.t("Authentication failed (%1)", FoamyI18n.number(root.failedAttempts)) : FoamyI18n.t(root.failureMessage) : root.placeholderText)
           visible: root.showPassword && passwordInput.text.length === 0
           color: root.authenticatingPassword
             ? root.foreground
@@ -567,7 +564,7 @@ Item {
       width: root.contentWidth
       visible: root.fingerprintUnavailable
       textFormat: Text.PlainText
-      text: "Fingerprint reader unavailable"
+      text: FoamyI18n.t("Fingerprint reader unavailable")
       color: root.foreground
       font.family: root.textFontFamily
       font.pixelSize: Math.round(13 * root.uiScale)
@@ -823,7 +820,7 @@ Item {
           Text {
             textFormat: Text.PlainText
             height: statusFooter.height
-            text: root.networkLabel
+            text: FoamyI18n.t(root.networkLabel)
             color: root.foreground
             opacity: 0.88
             font.family: root.textFontFamily
@@ -862,7 +859,7 @@ Item {
           Text {
             textFormat: Text.PlainText
             height: statusFooter.height
-            text: root.batteryPercentage + "%"
+            text: FoamyI18n.number(root.batteryPercentage) + "%"
             color: root.foreground
             opacity: 0.88
             font.family: root.textFontFamily
