@@ -20,6 +20,10 @@ pixels = bytes(channel for y in range(256) for x in range(256)
                for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
 (app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
 (app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
+# Include the plugin translator without registering unrelated fixture types.
+(app / 'FoamyI18n.qml').symlink_to(source / 'FoamyI18n.qml')
+(app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
+(app / 'qmldir').write_text('singleton FoamyI18n 1.0 FoamyI18n.qml\n')
 shutil.copy(source / 'Model.js', app)
 view = (source / 'LockView.qml').read_text()
 view = view.replace('import Quickshell.Networking', 'import "fixtures" as Fixture').replace('import Quickshell.Services.UPower\n', '')
@@ -174,6 +178,12 @@ runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
 home = base / 'home'
 home.mkdir()
+# Register generated view types beside the explicit singleton in this fixture.
+with (app / 'qmldir').open('a') as registry:
+    for qml in app.glob('*.qml'):
+        if qml.name[0].isupper() and qml.name != 'FoamyI18n.qml':
+            registry.write(f'{qml.stem} 1.0 {qml.name}\n')
+
 env = dict(os.environ, HOME=str(home), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen',
            QT_QUICK_BACKEND='software', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion', LANG='en_US.UTF-8', LC_ALL='en_US.UTF-8', LC_TIME='en_US.UTF-8')
 env.pop('DISPLAY', None)

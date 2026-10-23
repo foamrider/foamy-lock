@@ -1,0 +1,13 @@
+{
+  "Enter password": "Enter password",
+  "Use fingerprint or enter password": "Use fingerprint or enter password",
+  "Enter password to unlock": "Enter password to unlock",
+  "Fingerprint reader unavailable": "Fingerprint reader unavailable",
+  "Unlocking…": "Unlocking…",
+  "Connected": "Connected",
+  "Sign-in required": "Sign-in required",
+  "Limited connection": "Limited connection",
+  "Offline": "Offline",
+  "Checking…": "Checking…",
+  "Authentication failed (%1)": "Authentication failed (%1)"
+}

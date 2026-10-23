@@ -241,3 +241,7 @@ the plugin directory are retained unless you remove them separately.
 ## License
 
 Licensed under [MIT](LICENSE), with the upstream [Omarchy notice](LICENSE-OMARCHY).
+
+Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
+
+Translation checks: `python3 tests/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.

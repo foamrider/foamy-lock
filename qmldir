@@ -1,0 +1,4 @@
+singleton FoamyI18n 1.0 FoamyI18n.qml
+Artwork 1.0 Artwork.qml
+LockView 1.0 LockView.qml
+Service 1.0 Service.qml

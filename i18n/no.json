@@ -1,0 +1,13 @@
+{
+  "Enter password": "Skriv inn passord",
+  "Use fingerprint or enter password": "Bruk fingeravtrykk eller skriv inn passord",
+  "Enter password to unlock": "Skriv inn passord for å låse opp",
+  "Fingerprint reader unavailable": "Fingeravtrykksleseren er utilgjengelig",
+  "Unlocking…": "Låser opp…",
+  "Connected": "Tilkoblet",
+  "Sign-in required": "Innlogging kreves",
+  "Limited connection": "Begrenset tilkobling",
+  "Offline": "Frakoblet",
+  "Checking…": "Kontrollerer…",
+  "Authentication failed (%1)": "Godkjenning mislyktes (%1)"
+}

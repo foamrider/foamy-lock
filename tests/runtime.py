@@ -14,6 +14,10 @@ base = Path(tempfile.mkdtemp(prefix='foamy-lock-runtime-'))
 app = base / 'app'
 app.mkdir()
 (app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
+# Include the plugin translator without registering unrelated fixture types.
+(app / 'FoamyI18n.qml').symlink_to(source / 'FoamyI18n.qml')
+(app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
+(app / 'qmldir').write_text('singleton FoamyI18n 1.0 FoamyI18n.qml\n')
 shutil.copy(source / 'Model.js', app)
 shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
@@ -160,6 +164,12 @@ config.parent.mkdir(parents=True)
 def write_config(**settings):
     config.write_text(json.dumps({'version': 1, 'plugins': [{'id': 'foamy.lock', **settings}]}))
 write_config()
+# Register generated view types beside the explicit singleton in this fixture.
+with (app / 'qmldir').open('a') as registry:
+    for qml in app.glob('*.qml'):
+        if qml.name[0].isupper() and qml.name != 'FoamyI18n.qml':
+            registry.write(f'{qml.stem} 1.0 {qml.name}\n')
+
 env = dict(os.environ, HOME=str(base), USER='fixture', LOGNAME='fixture', XDG_RUNTIME_DIR=str(runtime),
            XDG_CACHE_HOME=str(base / 'cache'), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
            QT_STYLE_OVERRIDE='Fusion', PATH=str(bin_dir) + ':' + os.environ['PATH'])
