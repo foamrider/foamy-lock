@@ -1,3 +1,13 @@
+// These helpers are local because Omarchy 4.0.6 has no video-path helper.
+function isVideoPath(path) {
+  return /\.(mp4|m4v|mov|webm|mkv|avi)$/i.test(String(path || ""))
+}
+
+function fileUrl(path, version) {
+  if (!path) return ""
+  return "file://" + String(path).split("/").map(encodeURIComponent).join("/") + "?v=" + Number(version || 0)
+}
+
 function defaults() {
   return { timeFormat: "24h", showUserInfo: true, showMedia: true, blankAfterSec: 30,
     showArtwork: true, artworkHosts: [], artworkFileRoots: [] }
@@ -81,6 +91,6 @@ function runMediaAction(player, action) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-  defaults: defaults, parseConfig: parseConfig,
+  defaults: defaults, parseConfig: parseConfig, isVideoPath: isVideoPath, fileUrl: fileUrl,
   selectPlayer: selectPlayer, runMediaAction: runMediaAction, artworkKey: artworkKey
 }

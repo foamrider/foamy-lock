@@ -71,3 +71,14 @@ test('transport respects player capabilities and play/pause fallbacks', () => {
   assert.equal(Model.runMediaAction(player, 'playPause'), false)
   assert.deepEqual(calls, ['next', 'toggle', 'pause', 'play'])
 })
+
+
+test('wallpaper paths distinguish video and produce versioned local URLs', () => {
+  assert.equal(Model.isVideoPath('/tmp/loop.MP4'), true)
+  assert.equal(Model.isVideoPath('/tmp/loop.webm'), true)
+  assert.equal(Model.isVideoPath('/tmp/loop.mp4.png'), false)
+  assert.equal(Model.isVideoPath(''), false)
+  assert.equal(Model.fileUrl('', 3), '')
+  assert.equal(Model.fileUrl('/tmp/a #?%.png', 3), 'file:///tmp/a%20%23%3F%25.png?v=3')
+  assert.notEqual(Model.fileUrl('/tmp/a.png', 1), Model.fileUrl('/tmp/a.png', 2))
+})

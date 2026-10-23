@@ -13,7 +13,7 @@ source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-runtime-'))
 app = base / 'app'
 app.mkdir()
-(app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
+(app / 'Commons').symlink_to(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'), target_is_directory=True)
 shutil.copy(source / 'Model.js', app)
 shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
@@ -91,7 +91,8 @@ Item {
 }
 ''')
 service = (source / 'Service.qml').read_text().replace('import Quickshell.Wayland', 'import "mocks" as Mock')
-service = service.replace('  id: root', '  id: root\n  property alias testFingerprintPam: fingerprintPam\n  property alias testRetry: fingerprintRetryTimer')
+service = service.replace('  id: root', '  id: root\n  property alias testFingerprintPam: fingerprintPam\n  property alias testRetry: fingerprintRetryTimer\n  property alias testProbeRetry: fingerprintRecheckTimer\n  property alias testResume: fingerprintResumeTimer\n  property bool testStaleLocked: false')
+service = service.replace('readonly property bool locked: lockRequested', 'readonly property bool locked: testStaleLocked || lockRequested')
 service = service.replace('  WlSessionLock {', '  Mock.SessionLock {').replace('    WlSessionLockSurface {', '    Rectangle {')
 service = service.replace('  PamContext {', '  Mock.PamContext {').replace('LockView {', 'Mock.LockView {')
 service = service.replace('  PanelWindow {', '  Rectangle {').replace('    anchors { top: true; bottom: true; left: true; right: true }', '    width: 800; height: 600')
@@ -99,7 +100,9 @@ service = re.sub(r'^    (WlrLayershell\..*|exclusionMode:.*)\n', '', service, fl
 service = service.replace('var screens = Quickshell.screens || []', 'var screens = [{ name: "fixture", width: 1920, height: 1080 }]')
 pam_path = base / 'pam-password'
 pam_path.touch()
+# Both PAM services are fixtures; enrollment must not depend on host setup.
 service = service.replace('/etc/pam.d/omarchy-lock-password', str(pam_path))
+service = service.replace('/etc/pam.d/omarchy-lock-fingerprint', str(pam_path))
 (app / 'Service.qml').write_text(service)
 (app / 'shell.qml').write_text('''import QtQuick
 import Quickshell
@@ -116,13 +119,34 @@ ShellRoot {
         streak: service.fingerprintUnreachedStreak,
         delay: service.testRetry.interval, retrying: service.testRetry.running,
         active: service.testFingerprintPam.active,
-        probing: service.fingerprintProbeStreak})
+        probing: service.fingerprintProbeStreak,
+        probeRetrying: service.testProbeRetry.running,
+        backoff: service.fingerprintRetryBackoffMs, due: service.fingerprintRetryDueMs,
+        resumeWatching: service.testResume.running})
     }
     function fingerprintFail(): string {
       service.testFingerprintPam.active = false
       service.testFingerprintPam.error(1)
       service.testFingerprintPam.completed(1)
       return "ok"
+    }
+    function blank(): string { service.runBlank(); return "ok" }
+    function wake(): string { service.runWake(); return "ok" }
+    function unpause(): string { service.resumeFingerprint(); return "ok" }
+    function sleepGap(): string { service.testResume.lastTickMs -= 10000; return "ok" }
+    function strandedCheck(): string { service.strandedLockResolved = false; service.checkStrandedLock(); return "ok" }
+    function strandedResolved(): string { return String(service.strandedLockResolved) }
+    function staleLock(value: bool): string { service.testStaleLocked = value; return "ok" }
+    function fingerprintMismatch(): string {
+      service.testFingerprintPam.active = false
+      service.testFingerprintPam.completed(1)
+      return "ok"
+    }
+    function oldPrompt(): string { service.fingerprintAttemptPromptedAtMs -= 3000; return "ok" }
+    function wallpaperRefresh(): string { service.refreshBackground(); return "ok" }
+    function wallpaperState(): string {
+      return JSON.stringify({path: service.lockWallpaperPath, version: service.backgroundVersion,
+        source: service.backgroundPath, error: service.wallpaperError})
     }
     function fingerprintPrompt(): string { service.testFingerprintPam.pamMessage(); return "ok" }
     function fingerprintMatch(): string {
@@ -141,27 +165,34 @@ runtime.mkdir(mode=0o700)
 bin_dir = base / 'bin'
 bin_dir.mkdir()
 # Replace every command that could affect the desktop; identity probes also use test data.
-for name in ['getent', 'busctl', 'magick', 'fprintd-list', 'omarchy-hyprland-session-locked',
+for name in ['getent', 'busctl', 'magick', 'fprintd-list', 'omarchy-hyprland-session-lock-stranded',
              'omarchy-system-wake', 'omarchy-brightness-keyboard', 'omarchy-brightness-display']:
     script = '#!/bin/sh\n'
     if name == 'getent':
         script += 'printf "fixture:x:1000:1000:Foamy User:%s:/bin/sh\\n" "$HOME"\n'
     elif name == 'fprintd-list':
         script += 'cat "$HOME/fingerprint-output" 2>/dev/null || echo no\n'
-    elif name in ['busctl', 'magick', 'omarchy-hyprland-session-locked']:
+    elif name == 'omarchy-hyprland-session-lock-stranded':
+        script += 'printf "%s\\n" "$1" > "$HOME/stranded-parent"\nexit "$(cat "$HOME/stranded-result" 2>/dev/null || echo 1)"\n'
+    elif name in ['busctl', 'magick']:
         script += 'exit 1\n'
     else:
         script += 'printf "%s\\n" "' + name + '" >> "$HOME/calls"\n'
     path = bin_dir / name
     path.write_text(script)
     path.chmod(0o755)
+host = base / 'omarchy'
+poster = host / 'shell/plugins/lock/poster.sh'
+poster.parent.mkdir(parents=True)
+background = base / '.local/state/omarchy/current/background'
+background.parent.mkdir(parents=True)
 config = base / '.config/omarchy/shell.json'
 config.parent.mkdir(parents=True)
 def write_config(**settings):
     config.write_text(json.dumps({'version': 1, 'plugins': [{'id': 'foamy.lock', **settings}]}))
 write_config()
 env = dict(os.environ, HOME=str(base), USER='fixture', LOGNAME='fixture', XDG_RUNTIME_DIR=str(runtime),
-           XDG_CACHE_HOME=str(base / 'cache'), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
+           XDG_CACHE_HOME=str(base / 'cache'), OMARCHY_PATH=str(host), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
            QT_STYLE_OVERRIDE='Fusion', PATH=str(bin_dir) + ':' + os.environ['PATH'])
 env.pop('DISPLAY', None)
 env.pop('WAYLAND_DISPLAY', None)
@@ -187,7 +218,76 @@ with log_path.open('w') as log:
                                env=env, stdout=log, stderr=log, start_new_session=True)
     try:
         wait_for(lambda s: s['passwordPam'] and not s['configError'])
-        write_config(timeFormat='12h', showUserInfo=False, showMedia=False, blankAfterSec=None)
+        def wallpaper_state():
+            return json.loads(ipc('test', 'wallpaperState'))
+        def refresh_wallpaper():
+            ipc('test', 'wallpaperRefresh')
+        static = base / 'static # wallpaper.svg'
+        static.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"/>')
+        background.symlink_to(static)
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['path'] == str(static))
+        version = wallpaper_state()['version']
+        static.write_text(static.read_text().replace('16', '32'))
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['version'] > version)
+        version = wallpaper_state()['version']
+        refresh_wallpaper()
+        time.sleep(0.2)
+        assert wallpaper_state()['version'] == version, 'unchanged wallpaper should reuse cache'
+        video = base / 'movie.MP4'
+        video.touch()
+        background.unlink()
+        background.symlink_to(video)
+        refresh_wallpaper()
+        wait_for(lambda s: s['wallpaperError'] == 'video-poster-unavailable')
+        assert wallpaper_state()['path'] == '', '4.0.6 must never send video to Image'
+        poster.write_text('#!/bin/sh\nexit 1\n')
+        refresh_wallpaper()
+        wait_for(lambda s: s['wallpaperError'] == 'video-poster-failed')
+        assert wallpaper_state()['path'] == ''
+        poster.write_text('#!/bin/sh\nsleep 0.2\nprintf "%s\\n" "$HOME/static # wallpaper.svg"\n')
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['path'] == str(static) and not s['wallpaperError'])
+        # A stale video result must launch extraction for the newest video as well.
+        second_video = base / 'second.mp4'
+        second_video.touch()
+        second_poster = base / 'second.svg'
+        second_poster.write_text(static.read_text())
+        marker = base / 'poster-started'
+        poster.write_text('#!/bin/sh\n: > "$HOME/poster-started"\nsleep 0.3\ncase "$1" in *second.mp4) printf "%s\\n" "$HOME/second.svg";; *) printf "%s\\n" "$HOME/static # wallpaper.svg";; esac\n')
+        refresh_wallpaper()
+        wait_for(lambda s: marker.exists())
+        background.unlink()
+        background.symlink_to(second_video)
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['source'] == str(second_video))
+        wait_for(lambda s: wallpaper_state()['path'] == str(second_poster))
+        # Change the selection while extraction is still running; reject its stale output.
+        refresh_wallpaper()
+        time.sleep(0.1)
+        background.unlink()
+        background.symlink_to(static)
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['source'] == str(static))
+        time.sleep(0.3)
+        assert wallpaper_state()['path'] == str(static)
+        background.unlink()
+        refresh_wallpaper()
+        wait_for(lambda s: s['wallpaperError'] == 'wallpaper-unavailable')
+        assert wallpaper_state()['path'] == ''
+        assert not status()['locked'], 'wallpaper failures must not change lock state'
+        print('PASS: static wallpaper invalidation/cache reuse, optional video poster success/failure/missing helper, stale result rejection')
+        # Simulate a stale QML property binding during a pre-suspend IPC call.
+        ipc('test', 'staleLock', 'true')
+        assert ipc('lock', 'isLocked') == 'false'
+        assert ipc('lock', 'lock') == 'ok'
+        wait_for(lambda s: s['requested'] and s['secure'])
+        ipc('test', 'staleLock', 'false')
+        ipc('test', 'submit', 'test-password')
+        wait_for(lambda s: not s['locked'])
+        (base / 'calls').unlink(missing_ok=True)
+        write_config(timeFormat='12h' , showUserInfo=False, showMedia=False, blankAfterSec=None)
         wait_for(lambda s: s['settings']['timeFormat'] == '12h' and s['settings']['blankAfterSec'] is None)
         assert ipc('lock', 'lock') == 'ok'
         wait_for(lambda s: s['secure'])
@@ -231,6 +331,8 @@ with log_path.open('w') as log:
         ipc('test', 'submit', 'test-password')
         wait_for(lambda s: not s['locked'])
         fingerprint_output = base / 'fingerprint-output'
+        write_config(blankAfterSec=None)
+        wait_for(lambda s: s['settings']['blankAfterSec'] is None)
         fingerprint_output.write_text('found 1 devices\n - #0: right-index-finger\n')
         assert ipc('lock', 'lock') == 'ok'
         wait_for(lambda s: s['secure'] and s['fingerprint'] and s['authenticating'])
@@ -254,6 +356,42 @@ with log_path.open('w') as log:
         wait_for(lambda s: fingerprint_state()['active'])
         ipc('test', 'fingerprintPrompt')
         assert not status()['fingerprintUnavailable'], 'prompt clears notice immediately'
+        # A prompt followed immediately by a device error is still an unusable attempt.
+        ipc('test', 'fingerprintFail')
+        assert fingerprint_state()['streak'] == 1 and fingerprint_state()['delay'] == 1000
+        wait_for(lambda s: fingerprint_state()['active'])
+        ipc('test', 'fingerprintPrompt')
+        ipc('test', 'fingerprintMismatch')
+        assert fingerprint_state()['streak'] == 0 and fingerprint_state()['delay'] == 250
+        wait_for(lambda s: fingerprint_state()['active'])
+        ipc('test', 'fingerprintPrompt')
+        ipc('test', 'oldPrompt')
+        ipc('test', 'fingerprintFail')
+        assert fingerprint_state()['streak'] == 0, 'normal full-window error should retry fast'
+        wait_for(lambda s: fingerprint_state()['active'])
+        starts = fingerprint_state()['starts']
+        ipc('test', 'blank')
+        assert status()['fingerprintPaused'] and fingerprint_state()['active'], 'blanking preserves the active attempt'
+        ipc('test', 'fingerprintFail')
+        time.sleep(1.2)
+        assert fingerprint_state()['starts'] == starts and not fingerprint_state()['retrying']
+        ipc('test', 'unpause')
+        assert fingerprint_state()['backoff'] == 1000, 'wake must preserve the backoff tier'
+        wait_for(lambda s: fingerprint_state()['active'])
+        ipc('test', 'fingerprintFail')
+        ipc('test', 'blank')
+        due = fingerprint_state()['due']
+        time.sleep(0.1)
+        ipc('test', 'unpause')
+        assert fingerprint_state()['due'] == due and fingerprint_state()['backoff'] == 2000
+        assert 250 <= fingerprint_state()['delay'] < 2000, 'wake resumes the remaining delay'
+        ipc('test', 'blank')
+        assert ipc('lock', 'lock') == 'ok'
+        assert fingerprint_state()['resumeWatching'], 'repeat pre-suspend lock must watch for resume while blank'
+        ipc('test', 'sleepGap')
+        wait_for(lambda s: not s['fingerprintPaused'] and fingerprint_state()['active'])
+        assert fingerprint_state()['streak'] == 0
+        ipc('test', 'fingerprintPrompt')
         generation = fingerprint_state()['generation']
         ipc('test', 'resume')
         assert fingerprint_state()['generation'] == generation + 1
@@ -261,9 +399,11 @@ with log_path.open('w') as log:
         assert fingerprint_state()['streak'] == 0, 'resume clears the stale streak'
         fingerprint_output.write_text('D-Bus activation failed\n')
         ipc('test', 'fingerprintProbe')
-        wait_for(lambda s: fingerprint_state()['probing'] > 0)
+        time.sleep(0.2)
+        assert fingerprint_state()['probing'] == 0 and not fingerprint_state()['probeRetrying'], 'known enrollment must not spawn competing probes'
         assert status()['fingerprint'], 'temporary probe error must retain enrollment state'
         fingerprint_output.write_text('found 1 devices\n - #0: right-index-finger\n')
+        ipc('test', 'fingerprintProbe')
         wait_for(lambda s: fingerprint_state()['probing'] == 0)
         ipc('test', 'fingerprintMatch')
         wait_for(lambda s: not s['locked'])
@@ -271,7 +411,29 @@ with log_path.open('w') as log:
         fingerprint_output.write_text('no\n')
         ipc('test', 'fingerprintProbe')
         wait_for(lambda s: not s['fingerprint'])
+        fingerprint_output.write_text('D-Bus activation failed\n')
+        assert ipc('lock', 'lock') == 'ok'
+        wait_for(lambda s: s['secure'] and s['fingerprintUnavailable'])
+        assert not status()['fingerprint'], 'unknown initial enrollment must remain unknown'
+        ipc('test', 'submit', 'test-password')
+        wait_for(lambda s: not s['locked'])
+        assert not fingerprint_state()['probeRetrying'] and not fingerprint_state()['resumeWatching']
+        print('PASS: fingerprint pause/in-flight completion, deadline/backoff preservation, blank suspend recovery, fast device errors, initial probe failures')
         print('PASS: fingerprint duplicate settlement, backoff, unavailable/recovered UI state, resume abort/retry, transient probe recovery, match unlock and retry cleanup')
+        (base / 'stranded-result').write_text('1')
+        ipc('test', 'strandedCheck')
+        wait_for(lambda s: ipc('test', 'strandedResolved') == 'true')
+        assert not status()['locked'], 'another live locker must not be taken over'
+        assert int((base / 'stranded-parent').read_text()) > 0, 'stranded helper receives the shell PID'
+        (base / 'stranded-result').write_text('2')
+        ipc('test', 'strandedCheck')
+        time.sleep(0.6)
+        assert not status()['locked'] and ipc('test', 'strandedResolved') == 'false'
+        (base / 'stranded-result').write_text('0')
+        wait_for(lambda s: s['secure'])
+        ipc('test', 'submit', 'test-password')
+        wait_for(lambda s: not s['locked'])
+        print('PASS: direct lock-state decisions, live-owner refusal, unknown-output retry and orphan recovery')
         ipc('test', 'missingPam')
         assert ipc('lock', 'lock') == 'missing-pam'
         assert not status()['locked']

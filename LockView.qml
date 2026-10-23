@@ -3,7 +3,8 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Networking
 import Quickshell.Services.UPower
-import qs.Commons
+// Qualify the theme singleton to avoid QtQuick.Color taking precedence.
+import qs.Commons as Commons
 import "Model.js" as Model
 
 Item {
@@ -81,8 +82,12 @@ Item {
   // Cache-bust profile and wallpaper images when their files change in place.
   function fileUrl(path, version) {
     if (!path) return ""
-    var encoded = String(path).split("/").map(encodeURIComponent).join("/")
-    return "file://" + encoded + "?v=" + Number(version || 0)
+    return Model.fileUrl(path, version)
+  }
+
+  // Monitor wake can delay key releases; only deletion should auto-repeat.
+  function dropsAutoRepeat(key) {
+    return key !== Qt.Key_Backspace && key !== Qt.Key_Delete
   }
 
   function forcePasswordFocus() {
@@ -211,15 +216,16 @@ Item {
 
   Rectangle {
     anchors.fill: parent
-    color: Color.background
+    color: Commons.Color.background
 
     Image {
       id: wallpaper
+      objectName: "lockWallpaper"
       anchors.fill: parent
-      source: root.loadBackground ? root.fileUrl(root.backgroundPath, root.backgroundVersion) : ""
+      source: root.loadBackground && width > 0 && height > 0 ? root.fileUrl(root.backgroundPath, root.backgroundVersion) : ""
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
-      cache: false
+      cache: true
       sourceSize.width: width
       sourceSize.height: height
     }
@@ -386,7 +392,7 @@ Item {
         radius: height / 2
         color: root.showPassword ? root.glass : "transparent"
         border.width: root.showPassword ? 1 : 0
-        border.color: root.errorState ? Color.lock.borderError : root.glassBorder
+        border.color: root.errorState ? Commons.Color.lock.borderError : root.glassBorder
         clip: true
 
         Row {
@@ -454,6 +460,10 @@ Item {
           onAccepted: root.submitCurrentPassword()
 
           Keys.onPressed: function(event) {
+            if (event.isAutoRepeat && root.dropsAutoRepeat(event.key)) {
+              event.accepted = true
+              return
+            }
             root.wakeRequested()
             if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
               root.passwordTextEdited("")
@@ -472,7 +482,7 @@ Item {
           visible: root.showPassword && passwordInput.text.length === 0
           color: root.authenticatingPassword
             ? root.foreground
-            : (root.errorState ? Color.lock.textError : root.secondary)
+            : (root.errorState ? Commons.Color.lock.textError : root.secondary)
           font.family: root.textFontFamily
           font.pixelSize: root.fieldFontSize
           font.italic: root.errorState

@@ -19,7 +19,7 @@ app.mkdir()
 pixels = bytes(channel for y in range(256) for x in range(256)
                for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
 (app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
-(app / 'Commons').symlink_to('/usr/share/omarchy/shell/Commons', target_is_directory=True)
+(app / 'Commons').symlink_to(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'), target_is_directory=True)
 shutil.copy(source / 'Model.js', app)
 view = (source / 'LockView.qml').read_text()
 view = view.replace('import Quickshell.Networking', 'import "fixtures" as Fixture').replace('import Quickshell.Services.UPower\n', '')
@@ -106,8 +106,17 @@ ShellRoot {
           return null
         }
         input = findNamed(view, "passwordInput")
+        if (index === 0) {
+          var dropped = [Qt.Key_A, Qt.Key_0, Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape]
+          for (var k = 0; k < dropped.length; k++)
+            if (!view.dropsAutoRepeat(dropped[k])) throw new Error("Unsafe auto-repeat key")
+          if (view.dropsAutoRepeat(Qt.Key_Backspace) || view.dropsAutoRepeat(Qt.Key_Delete))
+            throw new Error("Repeated deletion must remain available")
+        }
         var artImage = findNamed(view, "artworkImage")
         var fallback = findNamed(view, "artworkFallback")
+        if (index === 7 && String(findNamed(view, "lockWallpaper").source) !== "")
+          throw new Error("Plain wallpaper fallback was not displayed")
         if (index < 2 && (artImage.status !== Image.Ready || fallback.visible))
           throw new Error("Validated artwork was not displayed")
         if (index >= 4 && (!fallback.visible || artImage.visible))
@@ -158,6 +167,7 @@ ShellRoot {
           } else if (step.index === 7) {
             view.width = 800; view.height = 1000
             view.passwordText = "example"
+            view.backgroundPath = ""
           } else {
             console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
             Qt.quit()

@@ -4,9 +4,10 @@ import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
-import qs.Commons
+// Qualify the theme singleton to avoid QtQuick.Color taking precedence.
+import qs.Commons as Commons
 import "Model.js" as Model
-// Fingerprint recovery adapted from Omarchy PR #7158 (e77ed414f283).
+// Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
 
 Item {
@@ -29,6 +30,14 @@ Item {
   property bool fingerprintConfigured: false
   property int fingerprintUnreachedStreak: 0
   property bool fingerprintAttemptReachedDevice: false
+  property bool fingerprintAttemptFastError: false
+  property double fingerprintAttemptPromptedAtMs: 0
+  // Blanking pauses new attempts, preserving a pending backoff until wake.
+  property bool fingerprintPaused: false
+  property bool fingerprintSleptWhilePaused: false
+  property double fingerprintRetryDueMs: 0
+  property int fingerprintRetryBackoffMs: 0
+  property int knownScreenCount: 0
   property double fingerprintLastNudgeMs: 0
   property double fingerprintLastSettleMs: 0
   property double fingerprintResumedAtMs: 0
@@ -40,6 +49,13 @@ Item {
   property int failedAttempts: 0
   property string backgroundPath: ""
   property int backgroundVersion: 0
+  property string backgroundSignature: ""
+  property string videoPosterPath: ""
+  property string wallpaperError: ""
+  property bool backgroundProbePending: false
+  readonly property bool videoBackground: Model.isVideoPath(backgroundPath)
+  readonly property string lockWallpaperPath: videoBackground ? videoPosterPath : backgroundPath
+  readonly property string lockWallpaperUrl: Model.fileUrl(lockWallpaperPath, backgroundVersion)
   property string userDisplayName: ""
   property string userAvatarPath: ""
   property string userAvatarRenderPath: ""
@@ -52,7 +68,7 @@ Item {
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
-  readonly property bool fingerprintUnavailable: fingerprintConfigured && !fingerprintAttemptReachedDevice && FingerprintModel.isUnavailable(fingerprintUnreachedStreak)
+  readonly property bool fingerprintUnavailable: FingerprintModel.isUnavailable(fingerprintProbeStreak) || (fingerprintConfigured && (!fingerprintAttemptReachedDevice || fingerprintAttemptFastError) && FingerprintModel.isUnavailable(fingerprintUnreachedStreak))
   readonly property string configPath: home + "/.config/omarchy/shell.json"
   property var settings: Model.defaults()
   property string configError: ""
@@ -81,6 +97,38 @@ Item {
 
   onSettingsChanged: {
     if (lockRequested) armBlankTimer()
+  }
+
+  function currentlyLocked() {
+    return lockRequested || sessionLock.locked || sessionLock.secure
+  }
+
+  function pauseFingerprint() {
+    if (fingerprintPaused) return
+    fingerprintPaused = true
+    fingerprintRetryTimer.stop()
+  }
+
+  function resumeFingerprint() {
+    if (!fingerprintPaused) return
+    fingerprintPaused = false
+    if (fingerprintSleptWhilePaused) {
+      fingerprintSleptWhilePaused = false
+      noteFingerprintResumed()
+      fingerprintRetryBackoffMs = FingerprintModel.MATCH_RETRY_MS
+      fingerprintRetryTimer.interval = FingerprintModel.MATCH_RETRY_MS
+    } else {
+      fingerprintRetryTimer.interval = Math.max(FingerprintModel.MATCH_RETRY_MS, fingerprintRetryDueMs - Date.now())
+    }
+    if (lockRequested && fingerprintConfigured && !fingerprintAuthenticating) fingerprintRetryTimer.restart()
+  }
+
+  function noteSleepRequested() {
+    if (!lockRequested || !fingerprintPaused) return
+    // logind holds a suspend for its inhibitor delay, at most 15 seconds here.
+    fingerprintResumeTimer.ticksLeft = 20
+    fingerprintResumeTimer.lastTickMs = Date.now()
+    fingerprintResumeTimer.restart()
   }
 
   function realScreenCount() {
@@ -123,13 +171,13 @@ Item {
   }
 
   // ext-session-lock outlives its client, and a restart carries no lock over, so
-  // a session locked this early is an orphan behind Hyprland's failsafe. Outputs
-  // are often still absent here, so ask until the answer means something.
+  // a startup check must distinguish an orphan from another live locker.
+  // Outputs can still be absent, so keep retrying an undetermined answer.
   function checkStrandedLock() {
     if (strandedLockResolved || strandedLockCheckProc.running) return
 
     // A lock this shell took is nobody's orphan.
-    if (locked || lockRequested) {
+    if (currentlyLocked()) {
       strandedLockResolved = true
       return
     }
@@ -138,7 +186,7 @@ Item {
   }
 
   function recoverStrandedLock() {
-    if (!strandedLock || locked || !passwordPamConfigured) return
+    if (!strandedLock || currentlyLocked() || !passwordPamConfigured) return
 
     strandedLock = false
     logEvent("lock-stranded: recovering")
@@ -146,7 +194,24 @@ Item {
   }
 
   function refreshBackground() {
-    if (!readlinkProc.running) readlinkProc.running = true
+    // Coalesce theme/lock requests while the filesystem probe is in flight.
+    if (readlinkProc.running) {
+      backgroundProbePending = true
+      return
+    }
+    backgroundProbePending = false
+    readlinkProc.running = true
+  }
+
+  function refreshPoster() {
+    if (!videoBackground) {
+      videoPosterPath = ""
+      return
+    }
+    if (posterProc.running) return
+    posterProc.sourcePath = backgroundPath
+    posterProc.sourceSignature = backgroundSignature
+    posterProc.running = true
   }
 
   function refreshFingerprintStatus() {
@@ -161,6 +226,7 @@ Item {
   function applyFingerprintProbe(text) {
     var status = FingerprintModel.classifyProbe(text)
     if (status === "unknown") {
+      if (fingerprintConfigured) return
       fingerprintProbeStreak += 1
       if (lockRequested) {
         fingerprintRecheckTimer.interval = FingerprintModel.retryDelayMs(fingerprintProbeStreak)
@@ -254,14 +320,18 @@ Item {
     authenticatingPassword = false
     fingerprintAuthenticating = false
     fingerprintUnreachedStreak = 0
-    fingerprintAttemptReachedDevice = false
+    fingerprintAttemptFastError = false
+    fingerprintAttemptPromptedAtMs = 0
     fingerprintLastNudgeMs = 0
     fingerprintLastSettleMs = 0
     fingerprintResumedAtMs = 0
     fingerprintProbeStreak = 0
+    fingerprintPaused = false
+    fingerprintSleptWhilePaused = false
     fingerprintRecheckTimer.stop()
     fingerprintRetryTimer.stop()
     fingerprintReachTimer.stop()
+    fingerprintResumeTimer.stop()
     if (passwordPam.active) passwordPam.abort()
     if (fingerprintPam.active) fingerprintPam.abort()
   }
@@ -288,7 +358,7 @@ Item {
   }
 
   function finishUnlock() {
-    if (!root.locked && !lockRequested) return
+    if (!root.currentlyLocked()) return
 
     lockRequested = false
     pendingSessionLock = false
@@ -310,6 +380,7 @@ Item {
   function runWake() {
     if (!wakeProcess.running) wakeProcess.running = true
     if (lockRequested) armBlankTimer()
+    resumeFingerprint()
     nudgeFingerprint()
   }
 
@@ -320,19 +391,30 @@ Item {
   // be re-collapsed straight back into the storm the backoff exists to prevent;
   // past the floor, the current tier paces repeat nudges.
   function nudgeFingerprint() {
-    if (!lockRequested || !fingerprintConfigured) return
+    if (!lockRequested) return
+    if (!fingerprintConfigured && fingerprintRecheckTimer.running) {
+      var now = Date.now()
+      if (FingerprintModel.shouldNudge(now, fingerprintLastNudgeMs, now - FingerprintModel.IDLE_CLEAR_MS, fingerprintRecheckTimer.interval)) {
+        fingerprintLastNudgeMs = now
+        fingerprintRecheckTimer.interval = FingerprintModel.MATCH_RETRY_MS
+        fingerprintRecheckTimer.restart()
+      }
+      return
+    }
+    if (!fingerprintConfigured) return
     if (fingerprintPam.active || fingerprintAuthenticating) return
     if (!fingerprintRetryTimer.running) return
     var now = Date.now()
-    if (!FingerprintModel.shouldNudge(now, fingerprintLastNudgeMs, fingerprintLastSettleMs, fingerprintRetryTimer.interval)) return
+    if (!FingerprintModel.shouldNudge(now, fingerprintLastNudgeMs, fingerprintLastSettleMs, fingerprintRetryBackoffMs)) return
     fingerprintLastNudgeMs = now
     armFingerprintRetry(FingerprintModel.MATCH_RETRY_MS)
   }
 
   function armFingerprintRetry(delayMs) {
     fingerprintRetryTimer.interval = delayMs
-    fingerprintRetryTimer.armedAt = Date.now()
-    fingerprintRetryTimer.restart()
+    fingerprintRetryBackoffMs = delayMs
+    fingerprintRetryDueMs = Date.now() + delayMs
+    if (!fingerprintPaused) fingerprintRetryTimer.restart()
   }
 
   // Monotonic timers pause across suspend, so a wait armed before the sleep
@@ -370,6 +452,7 @@ Item {
   }
 
   function runBlank() {
+    pauseFingerprint()
     if (!blankProcess.running) blankProcess.running = true
   }
 
@@ -407,34 +490,33 @@ Item {
   }
 
   function startFingerprint() {
-    if (!lockRequested || !sessionLock.secure || !fingerprintConfigured) return
+    if (!lockRequested || !sessionLock.secure || !fingerprintConfigured || fingerprintPaused) return
     if (fingerprintPam.active || fingerprintAuthenticating) return
 
     fingerprintAuthenticating = true
     fingerprintAttemptReachedDevice = false
+    fingerprintAttemptFastError = false
+    fingerprintAttemptPromptedAtMs = 0
     if (!fingerprintPam.start()) {
-      // A start that fails before PAM even runs is a configuration problem
-      // (the PAM file removed under the lock), not a reader miss. Settle for
-      // pacing, then re-check: an unconfigured result hides the icon and stops
-      // the retries rather than counting toward "reader unavailable".
+      // Pace a failed start while checking whether its PAM configuration was
+      // removed; a definitive "no" stops retries and hides the indicator.
       settleFingerprintAttempt()
       refreshFingerprintStatus()
       return
     }
-    // Bound the wait for the first prompt: a claim fprintd accepts but never
-    // completes (a device open stuck behind a wedged claim) otherwise sits here
-    // for GDBus's full call timeout without erroring, and nothing downstream
-    // re-arms. A daemon restarted under the verify is not that case; it fails
-    // the attempt promptly. See REACH_TIMEOUT_MS for the bound's limits.
+    // Bound claims that never prompt; a normal verify waits for a finger
+    // under pam_fprintd's own timeout after reaching the reader.
     fingerprintReachTimer.restart()
   }
 
   // A verify prompt is the only PAM message pam_fprintd relays, and only once
   // the claim has landed, so any non-error message means this attempt reached
-  // the reader. Errors after the prompt are outside this recovery policy. It may now
+  // the reader. Immediate device errors still back off. It may now
   // wait for a finger as long as pam_fprintd allows, so the reach bound stops.
   function noteFingerprintReachedDevice() {
+    if (fingerprintAttemptReachedDevice) return
     fingerprintAttemptReachedDevice = true
+    fingerprintAttemptPromptedAtMs = Date.now()
     fingerprintReachTimer.stop()
   }
 
@@ -452,20 +534,17 @@ Item {
   // attempt into the streak exactly once: fingerprintAuthenticating is the
   // attempt being open, and the first settle closes it. Reached attempts clear
   // the streak; unreached ones advance it and stretch the next retry.
-  function settleFingerprintAttempt() {
+  function settleFingerprintAttempt(deviceError) {
     if (!fingerprintAuthenticating) return
     fingerprintAuthenticating = false
     fingerprintReachTimer.stop()
     if (!lockRequested || !fingerprintConfigured) return
 
-    // The sleep watch ticks every second while locked, so a settle that finds
-    // its last tick far in the past is the first thing to run after a resume:
-    // this attempt was in flight across the suspend and was ended by the
-    // restart, not by the reader. Judged from the tick rather than the
-    // attempt's own age so a suspend shorter than the reach bound is caught
-    // too, before the tick itself gets a chance to.
+    // An error can arrive before the sleep watcher notices the wall-clock gap.
     var now = Date.now()
-    if (!fingerprintAttemptReachedDevice && fingerprintSleepWatch.running
+    fingerprintAttemptFastError = !!deviceError && fingerprintAttemptReachedDevice && now - fingerprintAttemptPromptedAtMs < FingerprintModel.FAST_ERROR_MS
+    var usableAttempt = fingerprintAttemptReachedDevice && !fingerprintAttemptFastError
+    if (!usableAttempt && fingerprintSleepWatch.running
         && FingerprintModel.spannedSleep(now - fingerprintSleepWatch.lastTickMs, fingerprintSleepWatch.interval)) {
       noteFingerprintResumed()
     }
@@ -474,8 +553,8 @@ Item {
     // the misses and the recovery from them leave a trace.
     var previousStreak = fingerprintUnreachedStreak
     var inGrace = FingerprintModel.inResumeGrace(now, fingerprintResumedAtMs)
-    fingerprintUnreachedStreak = FingerprintModel.nextStreak(previousStreak, fingerprintAttemptReachedDevice, inGrace)
-    if (!fingerprintAttemptReachedDevice) {
+    fingerprintUnreachedStreak = FingerprintModel.nextStreak(previousStreak, usableAttempt, inGrace)
+    if (!usableAttempt) {
       var crossed = !FingerprintModel.isUnavailable(previousStreak) && FingerprintModel.isUnavailable(fingerprintUnreachedStreak)
       logEvent((crossed ? "fingerprint-unavailable" : "fingerprint-unreached") + ": streak=" + fingerprintUnreachedStreak)
     } else if (previousStreak > 0) {
@@ -492,7 +571,7 @@ Item {
       if (fingerprintUnreachedStreak > 0) logEvent("fingerprint-recovered: streak=" + fingerprintUnreachedStreak)
       finishUnlock()
     } else {
-      settleFingerprintAttempt()
+      settleFingerprintAttempt(result === PamResult.Error)
     }
   }
 
@@ -532,14 +611,14 @@ Item {
 
     WlSessionLockSurface {
       id: lockSurface
-      color: Color.background
+      color: Commons.Color.background
 
       LockView {
         id: lockView
         anchors.fill: parent
-        backgroundPath: root.backgroundPath
+        backgroundPath: root.lockWallpaperPath
         backgroundVersion: root.backgroundVersion
-        fingerprintConfigured: root.fingerprintConfigured
+        fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
         fingerprintUnavailable: root.fingerprintUnavailable
         authenticatingPassword: root.authenticatingPassword
         failureMessage: root.failureMessage
@@ -577,9 +656,9 @@ Item {
 
     LockView {
       anchors.fill: parent
-      backgroundPath: root.backgroundPath
+      backgroundPath: root.lockWallpaperPath
       backgroundVersion: root.backgroundVersion
-      fingerprintConfigured: root.fingerprintConfigured
+      fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
       fingerprintUnavailable: root.fingerprintUnavailable
       authenticatingPassword: false
       failureMessage: ""
@@ -641,7 +720,7 @@ Item {
     }
 
     onError: function(error) {
-      root.settleFingerprintAttempt()
+      root.settleFingerprintAttempt(true)
     }
   }
 
@@ -649,23 +728,15 @@ Item {
     id: fingerprintRetryTimer
     interval: FingerprintModel.MATCH_RETRY_MS
     repeat: false
-    property double armedAt: 0
-    onTriggered: {
-      // A wait that took far longer on the wall clock than its interval
-      // spanned a suspend; see noteFingerprintResumed.
-      if (FingerprintModel.spannedSleep(Date.now() - armedAt, interval)) root.noteFingerprintResumed()
-      root.startFingerprint()
-    }
+    onTriggered: root.startFingerprint()
   }
 
-  // Watches the wall clock for the whole lock, so a resume is noticed within
-  // a tick whatever the loop was doing -- mid-wait, or with an attempt in
-  // flight that the restart is about to end.
+  // Detect resume both during an active attempt and during backoff.
   Timer {
     id: fingerprintSleepWatch
     interval: 1000
     repeat: true
-    running: root.lockRequested && root.fingerprintConfigured
+    running: root.lockRequested && root.fingerprintConfigured && (!root.fingerprintPaused || root.fingerprintAuthenticating)
     property double lastTickMs: 0
     onRunningChanged: lastTickMs = Date.now()
     onTriggered: {
@@ -676,6 +747,30 @@ Item {
     }
   }
 
+  // Timers stand still through a suspend, so the first tick after a resume
+  // sees the wall clock jump. Runs only for the seconds after a lock request
+  // that a suspend can take to begin.
+  Timer {
+    id: fingerprintResumeTimer
+    interval: 1000
+    repeat: true
+    property int ticksLeft: 0
+    property double lastTickMs: 0
+    onTriggered: {
+      var now = Date.now()
+      var slept = FingerprintModel.spannedSleep(now - lastTickMs, interval)
+      lastTickMs = now
+      if (slept && root.lockRequested && root.fingerprintPaused) {
+        stop()
+        root.fingerprintSleptWhilePaused = true
+        root.resumeFingerprint()
+        root.armBlankTimer()
+      } else if (slept || !root.fingerprintPaused || --ticksLeft <= 0) {
+        stop()
+      }
+    }
+  }
+
   Timer {
     id: fingerprintReachTimer
     interval: FingerprintModel.REACH_TIMEOUT_MS
@@ -683,17 +778,76 @@ Item {
     onTriggered: root.timeoutFingerprintReach()
   }
 
+  // Match the view's URL, logical size and fill mode so the first lock frame
+  // can use an already decoded image. Video uses only a cached still frame.
+  Variants {
+    model: Quickshell.screens
+    Image {
+      required property var modelData
+      visible: false
+      source: width > 0 && height > 0 ? root.lockWallpaperUrl : ""
+      width: modelData.width
+      height: modelData.height
+      sourceSize.width: width
+      sourceSize.height: height
+      fillMode: Image.PreserveAspectCrop
+      asynchronous: true
+      cache: true
+    }
+  }
+
   Process {
     id: readlinkProc
-    command: ["readlink", "-f", root.currentBackgroundLink]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var next = String(text || "").trim()
-        if (next !== root.backgroundPath) {
-          root.backgroundPath = next
+    command: ["timeout", "--kill-after=1s", "2s", "bash", "-c",
+      'path=$(readlink -f -- "$1") && signature=$(stat -Lc "%s:%y:%z" -- "$path") && jq -cn --arg path "$path" --arg signature "$signature" \'{path:$path,signature:$signature}\'',
+      "foamy-lock-wallpaper", root.currentBackgroundLink]
+    stdout: StdioCollector { id: backgroundOutput; waitForEnd: true }
+    onExited: function(exitCode, exitStatus) {
+      var data = null
+      if (exitCode === 0 && exitStatus === 0) {
+        try { data = JSON.parse(backgroundOutput.text) } catch (error) { data = null }
+      }
+      if (!data || typeof data.path !== "string" || data.path[0] !== "/" || typeof data.signature !== "string") {
+        root.backgroundPath = ""
+        root.videoPosterPath = ""
+        root.wallpaperError = "wallpaper-unavailable"
+      } else {
+        if (data.path !== root.backgroundPath || data.signature !== root.backgroundSignature) {
+          root.videoPosterPath = ""
+          root.backgroundPath = data.path
+          root.backgroundSignature = data.signature
           root.backgroundVersion += 1
         }
+        root.wallpaperError = ""
+        root.refreshPoster()
+      }
+      if (root.backgroundProbePending) root.refreshBackground()
+    }
+  }
+
+  Process {
+    id: posterProc
+    property string sourcePath: ""
+    property string sourceSignature: ""
+    // 4.5 owns this helper and its decoder/cache. 4.0.6 has no helper and
+    // keeps the plain background for videos without importing any new QML API.
+    command: ["timeout", "--kill-after=1s", "16s", "bash", "-c",
+      '[[ -f $1 ]] || exit 69; exec bash "$1" "$2"', "foamy-lock-poster",
+      (root.omarchyPath || Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/shell/plugins/lock/poster.sh", sourcePath]
+    stdout: StdioCollector { id: posterOutput; waitForEnd: true }
+    onExited: function(exitCode, exitStatus) {
+      // A theme can change during extraction; never show the previous theme's frame.
+      if (sourcePath !== root.backgroundPath || sourceSignature !== root.backgroundSignature) {
+        root.refreshPoster()
+        return
+      }
+      var path = String(posterOutput.text || "").trim()
+      if (exitCode === 0 && exitStatus === 0 && path[0] === "/" && !Model.isVideoPath(path)) {
+        root.videoPosterPath = path
+        root.wallpaperError = ""
+      } else {
+        root.videoPosterPath = ""
+        root.wallpaperError = exitCode === 69 ? "video-poster-unavailable" : "video-poster-failed"
       }
     }
   }
@@ -743,7 +897,7 @@ Item {
   // answer may change fingerprintConfigured. See applyFingerprintProbe.
   Process {
     id: fingerprintCheckProc
-    command: ["bash", "-c", "if [[ -f /etc/pam.d/omarchy-lock-fingerprint ]] && command -v fprintd-list >/dev/null 2>&1; then fprintd-list \"$USER\" 2>&1; else echo no; fi"]
+    command: ["bash", "-c", "if [[ -f /etc/pam.d/omarchy-lock-fingerprint ]] && command -v fprintd-list >/dev/null 2>&1; then LC_ALL=C fprintd-list \"$USER\" 2>&1; else echo no; fi"]
     stdout: StdioCollector { id: fingerprintCheckStdout; waitForEnd: true }
     onExited: root.applyFingerprintProbe(fingerprintCheckStdout.text)
   }
@@ -759,7 +913,7 @@ Item {
 
   Process {
     id: strandedLockCheckProc
-    command: ["bash", "-c", "omarchy-hyprland-session-locked"]
+    command: ["bash", "-c", "omarchy-hyprland-session-lock-stranded \"$PPID\""]
     onExited: function(exitCode) {
       // No output to read the lock off yet.
       if (exitCode === 2) return
@@ -767,7 +921,7 @@ Item {
       root.strandedLockResolved = true
 
       // A lock taken while this was in flight is this shell's own.
-      root.strandedLock = exitCode === 0 && !root.locked && !root.lockRequested
+      root.strandedLock = exitCode === 0 && !root.currentlyLocked()
       root.recoverStrandedLock()
     }
   }
@@ -838,6 +992,13 @@ Item {
   Connections {
     target: Quickshell
     function onScreensChanged() {
+      var screens = root.realScreenCount()
+      // Only an arriving display wakes the reader; unplugging one must not.
+      if (screens > root.knownScreenCount) {
+        root.resumeFingerprint()
+        if (root.lockRequested) root.armBlankTimer()
+      }
+      root.knownScreenCount = screens
       root.requestSessionLock()
 
       // A monitor still coming up has no workspace, so cannot answer yet.
@@ -888,6 +1049,7 @@ Item {
   }
 
   Component.onCompleted: {
+    knownScreenCount = realScreenCount()
     refreshBackground()
     refreshFingerprintStatus()
     refreshUserIdentity()
@@ -900,19 +1062,21 @@ Item {
 
     function lock(): string {
       if (!root.passwordPamConfigured) return "missing-pam"
-      if (!root.locked && !root.beginLock()) return "failed"
+      // The pre-suspend service requests a lock even when already locked.
+      if (root.currentlyLocked()) root.noteSleepRequested()
+      if (!root.currentlyLocked() && !root.beginLock()) return "failed"
       return "ok"
     }
 
     function isLocked(): string {
-      return root.locked ? "true" : "false"
+      return root.currentlyLocked() ? "true" : "false"
     }
 
     function status(): string {
       return JSON.stringify({
         settings: root.settings,
         configError: root.configError,
-        locked: root.locked,
+        locked: root.currentlyLocked(),
         requested: root.lockRequested,
         pending: root.pendingSessionLock,
         sessionLocked: sessionLock.locked,
@@ -921,7 +1085,9 @@ Item {
         passwordPam: root.passwordPamConfigured,
         fingerprint: root.fingerprintConfigured,
         fingerprintUnavailable: root.fingerprintUnavailable,
+        fingerprintPaused: root.fingerprintPaused,
         authenticating: root.authenticating,
+        wallpaperError: root.wallpaperError,
         artworkState: artwork.state,
         artworkError: artwork.error,
         userName: root.userName,
