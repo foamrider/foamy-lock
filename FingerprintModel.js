@@ -1,12 +1,13 @@
-// Adapted from Omarchy PR #7158, commit e77ed414f283; see LICENSE-OMARCHY.
+// Adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef); see LICENSE-OMARCHY.
 // Retry pacing and the availability signal for the lock screen's fingerprint
 // loop. The signal is whether an attempt reached the reader at all: pam_fprintd
 // relays a "place your finger" prompt only once the claim has landed and the
 // verify is live, so an attempt that ends without ever prompting never reached
 // the device -- it is wedged (a verify killed by suspend), held by another
 // client, or gone. Those are what the backoff paces and the notice reports. An
-// attempt that did prompt clears the streak. Errors after that prompt are
-// outside this claim-recovery policy; a prompt does not prove a successful scan.
+// attempt that prompted and stayed usable clears the streak. Immediate device
+// errors after a prompt also count as unusable attempts;
+// a prompt alone does not prove a functioning reader.
 //
 // A finger that merely fails to match still prompted, so it resets too and
 // retries fast. Consecutive unreached attempts back off exponentially to a
@@ -14,6 +15,7 @@
 // resume hook clearing it can still recover once the retries let fprintd idle
 // out.
 
+var FAST_ERROR_MS = 2000
 var MATCH_RETRY_MS = 250
 var ERROR_RETRY_BASE_MS = 1000
 // fprintd exits this long after its last client leaves; a claim wedged by a
@@ -87,18 +89,18 @@ function shouldNudge(nowMs, lastNudgeMs, lastSettleMs, currentIntervalMs) {
 // loop, the sleep watch and the notice for the rest of the lock (#9453).
 function classifyProbe(text) {
   var s = String(text || "").trim()
-  if (s.indexOf(" - #") !== -1) return "yes"
+  if (/^[ \t]*-[ \t]*#[0-9]+:/m.test(s)) return "yes"
   if (s === "no") return "no"
   if (/has no fingers enrolled/i.test(s)) return "no"
   return "unknown"
 }
 
-// The streak after an attempt: a reached attempt clears it, an unreached one
+// The streak after an attempt: a usable attempt clears it, an unusable one
 // advances it -- unless the machine just woke, in which case the miss is
 // most likely the resume restart landing under the attempt and the streak
 // holds at the first tier instead.
-function nextStreak(streak, reachedDevice, inResumeGrace) {
-  if (reachedDevice) return 0
+function nextStreak(streak, usableAttempt, inResumeGrace) {
+  if (usableAttempt) return 0
   if (inResumeGrace) return 1
   return streak + 1
 }
@@ -129,6 +131,7 @@ function isUnavailable(streak) {
 
 if (typeof module !== "undefined") {
   module.exports = {
+    FAST_ERROR_MS: FAST_ERROR_MS,
     MATCH_RETRY_MS: MATCH_RETRY_MS,
     ERROR_RETRY_BASE_MS: ERROR_RETRY_BASE_MS,
     ERROR_RETRY_CAP_MS: ERROR_RETRY_CAP_MS,

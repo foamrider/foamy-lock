@@ -10,7 +10,8 @@ The screenshot uses synthetic account and media details and a neutral wallpaper.
 
 ## Install
 
-This plugin requires Omarchy Quattro, its Quickshell build, and the existing
+This plugin supports Omarchy 4.0.6 and targets 4.5 (checked against 4.5.0-rc1).
+It requires Omarchy's Quickshell build and the existing
 `/etc/pam.d/omarchy-lock-password` service. Fingerprint unlock also requires
 Omarchy's fingerprint setup and an enrolled fingerprint. The plugin does not
 install or change PAM configuration. The layout uses Adwaita Sans, URW Gothic,
@@ -98,8 +99,20 @@ turn fingerprint unlock off for the rest of the lock session.
 Some readers also need a system-level `fprintd` restart after resume. This plugin
 does not install that hook or change system services. Recovery follows
 [Omarchy PR #7158](https://github.com/omacom/omarchy/pull/7158), including retries
-while the daemon restarts. Errors after a finger prompt are outside this retry
-policy. Status includes `fingerprintUnavailable`.
+while the daemon restarts. Device errors within two seconds of a finger prompt
+also back off; ordinary mismatches keep the fast retry. Display blanking pauses
+new attempts, lets an active attempt finish, and preserves pending retry delays.
+Input, an arriving display, or resume detection restarts the loop. Status includes
+`fingerprintUnavailable` and `fingerprintPaused`.
+
+## Wallpaper
+
+Static wallpapers are preloaded at each display size and refreshed when the
+selected file changes, including replacement at the same path. Video wallpapers
+use a cached still frame from Omarchy 4.5's optional `poster.sh` helper. Foamy Lock
+does not play video or require the new video QML module. On 4.0.6, or if extraction
+fails, videos use the plain themed background. Wallpaper failures do not block
+authentication; `lock status` reports them in `wallpaperError`.
 
 ## Account name and avatar
 
@@ -200,7 +213,7 @@ can indicate a rejected image, a resource limit, or unavailable sandbox support.
 
 ```sh
 omarchy plugin validate .
-qmllint Artwork.qml Service.qml LockView.qml
+/usr/lib/qt6/bin/qmllint Artwork.qml Service.qml LockView.qml
 node --test tests/*.test.cjs
 python3 -m unittest discover -s tests -p artwork_test.py -v
 python3 tests/artwork_runtime.py
@@ -219,6 +232,11 @@ supports them. The runtime test uses an isolated home and session bus with simul
 PAM and session-lock objects; it does not lock the desktop or authenticate a user.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
+
+For a second host-version check, set `FOAMY_TEST_COMMONS` to that Omarchy source
+tree's `shell/Commons` directory when running `tests/runtime.py` and `tests/render.py`.
+The runtime suite supplies both PAM-file fixtures and simulated authentication;
+it does not require an enrolled fingerprint or change the host session.
 
 ## Remove
 

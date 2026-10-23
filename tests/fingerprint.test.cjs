@@ -161,6 +161,8 @@ test('fingerprint recovery pacing, resume grace and probe classification', () =>
 
   // Probe classification (#9453): only a definitive answer may change state.
   assertEqual(model.classifyProbe('found 1 devices\nFingerprints for user g on X:\n - #0: right-index-finger'), 'yes', 'an enrolled print row reads yes')
+  assertEqual(model.classifyProbe('\t-   #12: left-thumb'), 'yes', 'enrollment whitespace is accepted')
+  assertEqual(model.classifyProbe('error: - #0: no reader'), 'unknown', 'diagnostics are not enrolled-print rows')
   assertEqual(model.classifyProbe('no'), 'no', "the probe script's own no reads no")
   assertEqual(model.classifyProbe('found 1 devices\nUser bob has no fingers enrolled.'), 'no', "fprintd's explicit no-prints answer reads no")
   assertEqual(model.classifyProbe('Impossible to get devices: GDBus.Error:org.freedesktop.DBus.Error.NameHasNoOwner: Could not activate remote peer'), 'unknown', 'an activation failure reads unknown, not unconfigured')
