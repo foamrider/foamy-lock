@@ -10,18 +10,22 @@ The screenshot uses synthetic account and media details and a neutral wallpaper.
 
 ## Install
 
-This plugin supports Omarchy 4.0.6 and targets 4.5 (checked against 4.5.0-rc1).
+This plugin supports Omarchy 4.0.6 and targets Omarchy 4.5 (checked against 4.5.0-rc2).
 It requires Omarchy's Quickshell build and the existing
 `/etc/pam.d/omarchy-lock-password` service. Fingerprint unlock also requires
 Omarchy's fingerprint setup and an enrolled fingerprint. The plugin does not
 install or change PAM configuration. The layout uses Adwaita Sans, URW Gothic,
-and JetBrainsMono Nerd Font; install these fonts for the intended typography and
-status icons.
+and JetBrainsMono Nerd Font for the intended typography and status icons. When one
+is missing, text falls back to the system sans-serif font and icons to the Omarchy
+font. A theme that styles the stock lock (`[lock]` colours in `shell.toml`: `text`,
+`placeholder`, `background`, `border`, `selection`, `text-error`, `border-error`)
+recolours the glass; without those entries the lock keeps its white-on-glass look.
 
-Artwork additionally uses system Python 3, ImageMagick 7, and Bubblewrap with
-unprivileged namespaces and seccomp support (x86-64 or AArch64 Linux). If the
-helper or its sandbox cannot run, the music icon is shown. There is no
-unsandboxed decoding fallback, and authentication does not depend on artwork.
+Artwork and the avatar thumbnail additionally use system Python 3, ImageMagick 7,
+and Bubblewrap with unprivileged namespaces and seccomp support (x86-64 or AArch64
+Linux). If the helper or its sandbox cannot run, the music icon (or the account
+initial) is shown. Artwork has no unsandboxed decoding fallback, and authentication
+depends on neither.
 
 Install while your session is unlocked:
 
@@ -34,6 +38,14 @@ replace its entry with `foamy.lock` in `~/.config/omarchy/shell.json` as shown b
 Otherwise, you can enable Foamy Lock at the prompt; Omarchy disables the stock
 lock service automatically. Keep exactly one lock service active, and keep
 `omarchy.lock` in `disabledPlugins`. Preserve all unrelated entries and settings.
+
+If both lock services end up loaded anyway, `omarchy-shell lock status` reports
+`"conflict": true` with `conflictReasons` (`stock-lock-enabled`: `omarchy.lock` is
+missing from `disabledPlugins`; `lock-target-shared`: another handler also answers
+`lock`), and the shell log has a warning. On Omarchy 4.5 Foamy Lock keeps the
+`lock` IPC target answered by itself, so the lock request and the pre-suspend status
+check always reach the same lock screen. `omarchy-shell foamy.lock status` returns
+the same status from a target only this plugin uses.
 
 Apply the initial switch with `omarchy restart shell` **while unlocked**. Lock
 normally with `omarchy system lock`. Restarting the shell while locked can leave
@@ -54,6 +66,7 @@ shows the defaults; merge it into your existing file instead of replacing it:
       "timeFormat": "24h",
       "showUserInfo": true,
       "showMedia": true,
+      "showBrowserMedia": false,
       "showArtwork": true,
       "artworkHosts": [],
       "artworkFileRoots": [],
@@ -69,15 +82,24 @@ shows the defaults; merge it into your existing file instead of replacing it:
 | `timeFormat` | `"24h"` | `"24h"` or `"12h"`; 12-hour time includes AM/PM. The date uses the session locale. |
 | `showUserInfo` | `true` | Show the account name and avatar. Set `false` to hide both. |
 | `showMedia` | `true` | Show available MPRIS media and transport controls. Set `false` to hide them. |
+| `showBrowserMedia` | `false` | Also show media from web browsers (Firefox, Chromium, Chrome, Brave, Zen and others). Browsers report the page or tab title as the track title, so it stays off the lock screen unless you set `true`. |
 | `showArtwork` | `true` | Prepare permitted artwork while unlocked. Set `false` to always show the music icon; titles and controls remain available. |
 | `artworkHosts` | `[]` | Opt in to HTTPS artwork from at most 32 exact lowercase DNS hostnames, such as `images.example.com`. No wildcards, URL schemes, IP literals, or ports. Empty disables all remote artwork. |
 | `artworkFileRoots` | `[]` | Additional permitted local artwork directories, up to 14 absolute paths. `$XDG_CACHE_HOME` (or `~/.cache`) and `$XDG_RUNTIME_DIR` are included automatically. Values must be actual absolute paths, without `..`; `~` and environment variables are not expanded. |
 | `blankAfterSec` | `30` | Integer from 1 to 2147483 seconds of lock-screen inactivity before blanking the display and keyboard backlight. `null` disables this timer. This does not unlock or suspend the computer. |
 
-All settings are optional. Changes are watched live. Invalid or unreadable JSON,
-duplicate plugin entries, or invalid setting values produce a warning and retain
-the last valid preferences (the defaults on startup). They never disable locking
-or bypass authentication. Correct the file to apply new settings.
+All settings are optional. Changes are watched live. Invalid setting values,
+duplicate `foamy.lock` entries, or a file this plugin cannot read produce a warning
+and retain the last valid preferences (the defaults on startup). Correct the file to
+apply new settings.
+
+A `shell.json` that Omarchy itself cannot use (invalid JSON, or no `"version": 1`)
+is different: Omarchy then falls back to its default configuration, in which Foamy
+Lock is not enabled and the stock lock is. Until the file is fixed, the stock lock
+screen is used. If this happens while the screen is locked (for example after
+editing the file over SSH), the session stays locked: Hyprland keeps the lock, and
+the stock lock's stranded-lock recovery takes over. Nothing in this path unlocks
+the session.
 
 The automatic **lock** timeout remains Omarchy's `idle.lock` setting. This plugin's
 `blankAfterSec` only controls blanking after a lock has been requested. The normal
@@ -123,9 +145,12 @@ in `shell.json`. Open the preview or lock again after saving to refresh them.
 
 AccountsService supplies the display name and avatar when available. The passwd
 entry's full name and `~/.face` are fallbacks; without a display name the login name
-is shown, and without a usable image the avatar shows an initial. ImageMagick's
-`magick` command creates a square thumbnail; if conversion fails, the original
-image is used.
+is shown, and without a usable image the avatar shows an initial. The picture
+goes through the same sandboxed decoder as artwork (PNG, JPEG or WebP, up to
+16 MiB and 4096 × 4096 pixels) and comes back as a 256 × 256 thumbnail, with a
+10-second limit for the whole job. Only when Bubblewrap or ImageMagick is not
+installed is the original picture shown instead; a picture the sandbox rejects or
+times out on shows the initial, and `lock status` reports `avatarError`.
 
 ## Media and preview
 
@@ -133,6 +158,13 @@ Media controls use Quickshell's MPRIS integration directly and do not need Foamy
 Media or a custom bar. A playing track with metadata takes priority; otherwise the
 first player with track metadata is shown. Buttons follow the player's supported
 transport actions. No controls appear when no player supplies metadata.
+
+Privacy: anyone at the locked computer can read the shown title and artist and use
+previous, play/pause and next. Transport control is deliberate: Omarchy's media keys
+already work while locked (they are bound with `locked = true`), so the buttons add
+no new capability, and nothing else is reachable from them. Browser players are
+hidden by default (`showBrowserMedia`) because their "track title" is the page or
+tab title. Set `showMedia: false` to show no media at all.
 
 ### Artwork safety and fallback
 
@@ -197,14 +229,17 @@ omarchy-shell lock hidePreview
 omarchy-shell lock status
 ```
 
-Preview is a visual overlay, **not a secure lock**. Click it to dismiss it. Preview
+Preview is a visual overlay, **not a secure lock**. Click it or press any key to
+dismiss it; a real lock request also closes it. Preview
 and status use your real account details; the README screenshot is generated
 separately with synthetic data. Status includes effective settings, configuration
 errors, lock state, and local account information. Do not share its output without
 checking it for personal details.
 
 Status also reports `artworkState` and a short `artworkError` code without
-including artwork URLs. `host-not-allowed` means remote artwork was not opted in;
+including artwork URLs. Sources outside `artworkHosts` or `artworkFileRoots` are
+refused before any helper starts, and each error code is logged once until artwork
+works again. `host-not-allowed` means remote artwork was not opted in;
 `file-outside-roots` means the cover is outside the permitted directories.
 `decoder-unavailable` means Bubblewrap or ImageMagick is missing; `decode-failed`
 can indicate a rejected image, a resource limit, or unavailable sandbox support.
@@ -215,11 +250,16 @@ can indicate a rejected image, a resource limit, or unavailable sandbox support.
 omarchy plugin validate .
 /usr/lib/qt6/bin/qmllint Artwork.qml Service.qml LockView.qml
 node --test tests/*.test.cjs
-python3 -m unittest discover -s tests -p artwork_test.py -v
-python3 tests/artwork_runtime.py
-python3 tests/render.py
-python3 tests/runtime.py
+python3 -I -B -m unittest discover -s tests -p artwork_test.py -v
+python3 -I -B tests/artwork_runtime.py
+python3 -I -B tests/render.py
+python3 -I -B tests/runtime.py
+bash tests/kit-check.sh
 ```
+
+Shared foamy components (translations, IPC, style tokens) live in `kit/`, copied
+from [foamy-kit](https://github.com/foamrider/foamy-kit); `tests/kit-check.sh`
+verifies they are unedited.
 
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
@@ -260,6 +300,9 @@ the plugin directory are retained unless you remove them separately.
 
 Licensed under [MIT](LICENSE), with the upstream [Omarchy notice](LICENSE-OMARCHY).
 
-Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
+Language follows **Omarchy → Setup → Language** on Omarchy 4.5, including
+right-to-left layout for right-to-left languages (media transport buttons keep their
+order). Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin
+in English. Missing translations fall back to English.
 
 Translation checks: `python3 tests/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.
