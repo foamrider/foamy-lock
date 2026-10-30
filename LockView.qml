@@ -407,6 +407,7 @@ Item {
 
       Rectangle {
         id: inputField
+        objectName: "inputField"
         width: root.fieldWidth
         x: Math.round((parent.width - width) / 2)
         height: root.fieldHeight
@@ -531,11 +532,14 @@ Item {
           }
 
           Item {
+            id: submitArrow
+            objectName: "submitArrow"
             anchors.centerIn: parent
             width: Math.round(30 * root.uiScale)
             height: Math.round(26 * root.uiScale)
-            // The submit arrow points along the reading direction.
-            transform: Scale { origin.x: width / 2; xScale: root.rightToLeft ? -1 : 1 }
+            // The submit arrow points along the reading direction, mirrored
+            // around its own centre (a bare `width` inside Scale is the view's).
+            transform: Scale { origin.x: submitArrow.width / 2; xScale: root.rightToLeft ? -1 : 1 }
 
             Rectangle {
               x: Math.round(2 * root.uiScale)

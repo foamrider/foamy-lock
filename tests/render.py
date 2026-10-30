@@ -176,7 +176,7 @@ ShellRoot {
             // Right-to-left: the layout mirrors, transport controls do not.
             view.width = 1920; view.height = 1080
             view.rightToLeft = true
-            view.passwordText = ""
+            view.passwordText = "example"
             view.fingerprintUnavailable = false
             view.backgroundPath = Qt.resolvedUrl("wallpaper.svg").toString().replace("file://", "")
             view.artworkPath = Qt.resolvedUrl("artwork.png").toString().replace("file://", "")
@@ -188,6 +188,15 @@ ShellRoot {
               throw new Error("Right-to-left layout was not mirrored")
             if (controls.children[0].x > controls.children[2].x)
               throw new Error("Media transport order must not mirror")
+            // The submit arrow mirrors around its own centre and stays inside the field.
+            var field = findNamed(view, "inputField")
+            var arrow = findNamed(view, "submitArrow")
+            var start = arrow.mapToItem(field, 0, arrow.height / 2)
+            var end = arrow.mapToItem(field, arrow.width, arrow.height / 2)
+            if (!(start.x > end.x)) throw new Error("Submit arrow is not mirrored in right-to-left")
+            if (end.x < 0 || start.x > field.width || start.y < 0 || start.y > field.height)
+              throw new Error("Submit arrow left the password field: " + end.x + ".." + start.x + " of " + field.width)
+            if (end.x > field.width / 2) throw new Error("Submit arrow should sit at the leading (left) edge in right-to-left")
             console.log("PASS: right-to-left mirroring with fixed transport order")
             console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
             Qt.quit()
