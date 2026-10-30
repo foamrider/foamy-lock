@@ -6,6 +6,8 @@ import Quickshell.Services.Mpris
 import Quickshell.Wayland
 // Qualify the theme singleton to avoid QtQuick.Color taking precedence.
 import qs.Commons as Commons
+import "kit"
+import "kit/FoamyIpcResolver.js" as IpcResolver
 import "Model.js" as Model
 // Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
@@ -65,6 +67,13 @@ Item {
   property string lastEventAt: ""
   property bool strandedLock: false
   property bool strandedLockResolved: false
+  // One PAM conversation can report a failure through both onError and
+  // onCompleted; the open attempt is counted once.
+  property bool passwordAttemptOpen: false
+  property string avatarError: ""
+  // null until shell.json has been read once.
+  property var stockLockEnabled: null
+  property string conflictLogged: ""
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -73,7 +82,7 @@ Item {
   property var settings: Model.defaults()
   property string configError: ""
   readonly property var activePlayer: settings.showMedia
-    ? Model.selectPlayer(Mpris.players.values) : null
+    ? Model.selectPlayer(Mpris.players.values, settings.showBrowserMedia) : null
   readonly property string avatarCacheDirectory: (Quickshell.env("XDG_CACHE_HOME") || home + "/.cache")
     + "/omarchy/foamy.lock"
   readonly property string userAvatarCachePath: avatarCacheDirectory + "/avatar.png"
@@ -91,8 +100,50 @@ Item {
     var result = Model.parseConfig(text)
     configError = result.error
     // A broken preferences file must never disable authentication or reset a lock.
-    if (result.valid) settings = result.settings
-    else console.warn("foamy.lock: " + configError + "; keeping previous settings")
+    if (result.valid) {
+      settings = result.settings
+      stockLockEnabled = result.stockLockEnabled
+    } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
+    // Services may have been added or removed with this edit.
+    Qt.callLater(claimLockRoute)
+  }
+
+  // Other live handlers for the "lock" IPC target in 4.5's IpcRegistry, which
+  // answers the omarchy-shell socket. 4.0 has no registry: an empty list.
+  function otherLockHandlers() {
+    var registry = IpcResolver.registry(root)
+    if (!registry || !Array.isArray(registry.handlers)) return []
+    return registry.handlers.filter(function(handler) {
+      return handler && handler !== lockIpc && handler.enabled && handler.target === "lock"
+    })
+  }
+
+  // The socket answers from the first enabled handler for a target. When a
+  // second lock service is loaded anyway, keep `lock`, `isLocked` and
+  // `status` on this one, the lock the user enabled, so the request and the
+  // pre-suspend status poll always reach the same session lock; status then
+  // reports the conflict. This only reorders the registry's list: no other
+  // handler is removed, disabled or called.
+  function claimLockRoute() {
+    var registry = IpcResolver.registry(root)
+    if (registry && Array.isArray(registry.handlers)) {
+      var index = registry.handlers.indexOf(lockIpc)
+      if (index > 0 && otherLockHandlers().length > 0) {
+        registry.handlers.splice(index, 1)
+        registry.handlers.unshift(lockIpc)
+      }
+    }
+    var reasons = conflictReasons()
+    var key = reasons.join(",")
+    if (key && key !== conflictLogged) console.warn("foamy.lock: another lock service is loaded (" + key + "); keep omarchy.lock in disabledPlugins")
+    conflictLogged = key
+  }
+
+  function conflictReasons() {
+    var reasons = []
+    if (stockLockEnabled === true) reasons.push("stock-lock-enabled")
+    if (otherLockHandlers().length > 0) reasons.push("lock-target-shared")
+    return reasons
   }
 
   onSettingsChanged: {
@@ -268,12 +319,30 @@ Item {
       return
     }
 
-    avatarThumbnailProc.command = [
-      "bash", "-c",
-      'mkdir -p -- "$1" && exec magick "$2" -auto-orient -filter Lanczos -resize "256x256^" -gravity center -extent 256x256 "png:$3"',
-      "foamy-lock-avatar", avatarCacheDirectory, userAvatarPath, userAvatarCachePath
-    ]
+    // The same sandboxed decoder as media artwork (artwork.py), bounded by
+    // its own alarm and an outer timeout, so a pathological picture can
+    // neither run ImageMagick delegates nor hang the refresh.
+    avatarThumbnailProc.request = JSON.stringify({ kind: "avatar", path: userAvatarPath })
+    avatarThumbnailProc.stdinEnabled = true
     avatarThumbnailProc.running = true
+  }
+
+  function applyAvatarResult(text) {
+    var result = null
+    try { result = JSON.parse(String(text || "")) } catch (error) { result = null }
+    if (result && result.ok === true && result.path === userAvatarCachePath) {
+      avatarError = ""
+      userAvatarRenderPath = userAvatarCachePath
+    } else {
+      var code = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
+        ? result.error : "avatar-helper-failed"
+      avatarError = code
+      // Without Bubblewrap or ImageMagick there is no thumbnail at all; the
+      // user's own picture is then shown as before. A picture the sandbox
+      // rejected or timed out on never reaches Qt's decoder: the initial shows.
+      userAvatarRenderPath = code === "decoder-unavailable" ? userAvatarPath : ""
+    }
+    userAvatarVersion += 1
   }
 
   function applyPasswdIdentity(value) {
@@ -318,6 +387,7 @@ Item {
     failureMessage = ""
     failedAttempts = 0
     authenticatingPassword = false
+    passwordAttemptOpen = false
     fingerprintAuthenticating = false
     fingerprintUnreachedStreak = 0
     fingerprintAttemptFastError = false
@@ -343,6 +413,8 @@ Item {
     }
 
     resetAuthenticationState()
+    // The preview overlay is not a lock; never leave it behind a real one.
+    previewVisible = false
     lockRequested = true
     armBlankTimer()
     logEvent("lock-requested")
@@ -464,6 +536,7 @@ Item {
     pendingPassword = password
     failureMessage = ""
     authenticatingPassword = true
+    passwordAttemptOpen = true
 
     if (!passwordPam.start()) {
       handlePasswordFailure()
@@ -479,6 +552,9 @@ Item {
   }
 
   function handlePasswordFailure() {
+    // Settle each attempt once: onError and onCompleted may both report it.
+    if (!passwordAttemptOpen) return
+    passwordAttemptOpen = false
     if (!lockRequested) return
 
     authenticatingPassword = false
@@ -682,6 +758,20 @@ Item {
       acceptedButtons: Qt.LeftButton | Qt.RightButton
       onClicked: root.previewVisible = false
     }
+
+    // The overlay holds exclusive keyboard focus, so any key closes it too:
+    // without a pointer it would otherwise block the keyboard until hidePreview.
+    Item {
+      id: previewKeys
+      anchors.fill: parent
+      focus: true
+      Keys.onPressed: function(event) { root.previewKeyPressed(event) }
+    }
+  }
+
+  function previewKeyPressed(event) {
+    previewVisible = false
+    if (event) event.accepted = true
   }
 
   PamContext {
@@ -697,8 +787,10 @@ Item {
       root.pendingPassword = ""
 
       if (!root.lockRequested) return
-      if (result === PamResult.Success) root.finishUnlock()
-      else root.handlePasswordFailure()
+      if (result === PamResult.Success) {
+        root.passwordAttemptOpen = false
+        root.finishUnlock()
+      } else root.handlePasswordFailure()
     }
 
     onError: function(error) {
@@ -881,9 +973,19 @@ Item {
 
   Process {
     id: avatarThumbnailProc
+    property string request: ""
+    command: ["timeout", "--kill-after=1s", "10s", "/usr/bin/python3", "-I", "-B",
+      decodeURIComponent(Qt.resolvedUrl("artwork.py").toString().replace(/^file:\/\//, ""))]
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: avatarOutput; waitForEnd: true }
     onExited: function(exitCode) {
-      userAvatarRenderPath = exitCode === 0 ? userAvatarCachePath : userAvatarPath
-      userAvatarVersion += 1
+      root.applyAvatarResult(avatarOutput.text)
 
       if (avatarThumbnailPending) {
         avatarThumbnailPending = false
@@ -1054,13 +1156,53 @@ Item {
     refreshFingerprintStatus()
     refreshUserIdentity()
     checkStrandedLock()
+    Qt.callLater(claimLockRoute)
   }
 
-  // Keep the host IPC contract used by Omarchy lock and idle commands.
-  IpcHandler {
+  function statusJson() {
+    claimLockRoute()
+    var reasons = conflictReasons()
+    return JSON.stringify({
+      settings: root.settings,
+      configError: root.configError,
+      locked: root.currentlyLocked(),
+      requested: root.lockRequested,
+      pending: root.pendingSessionLock,
+      sessionLocked: sessionLock.locked,
+      secure: sessionLock.secure,
+      realScreens: root.realScreenCount(),
+      passwordPam: root.passwordPamConfigured,
+      fingerprint: root.fingerprintConfigured,
+      fingerprintUnavailable: root.fingerprintUnavailable,
+      fingerprintPaused: root.fingerprintPaused,
+      authenticating: root.authenticating,
+      wallpaperError: root.wallpaperError,
+      artworkState: artwork.state,
+      artworkError: artwork.error,
+      userName: root.userName,
+      displayName: root.userDisplayName || root.userName,
+      avatarPath: root.userAvatarPath,
+      avatarRenderPath: root.userAvatarRenderPath,
+      avatarError: root.avatarError,
+      conflict: reasons.length > 0,
+      conflictReasons: reasons,
+      ipcFastPath: IpcResolver.fastPath(root),
+      lastEvent: root.lastEvent,
+      lastEventAt: root.lastEventAt
+    })
+  }
+
+  // Keep the host IPC contract used by Omarchy lock and idle commands. On 4.5
+  // FoamyIpc also registers with IpcRegistry, so omarchy-shell reaches this
+  // over the shell socket, including omarchy-system-sleep-lock's pre-suspend
+  // poll. Only lock, isLocked, status, preview and hidePreview exist: nothing
+  // here can unlock.
+  FoamyIpc {
+    id: lockIpc
     target: "lock"
 
     function lock(): string {
+      root.claimLockRoute()
       if (!root.passwordPamConfigured) return "missing-pam"
       // The pre-suspend service requests a lock even when already locked.
       if (root.currentlyLocked()) root.noteSleepRequested()
@@ -1073,30 +1215,7 @@ Item {
     }
 
     function status(): string {
-      return JSON.stringify({
-        settings: root.settings,
-        configError: root.configError,
-        locked: root.currentlyLocked(),
-        requested: root.lockRequested,
-        pending: root.pendingSessionLock,
-        sessionLocked: sessionLock.locked,
-        secure: sessionLock.secure,
-        realScreens: root.realScreenCount(),
-        passwordPam: root.passwordPamConfigured,
-        fingerprint: root.fingerprintConfigured,
-        fingerprintUnavailable: root.fingerprintUnavailable,
-        fingerprintPaused: root.fingerprintPaused,
-        authenticating: root.authenticating,
-        wallpaperError: root.wallpaperError,
-        artworkState: artwork.state,
-        artworkError: artwork.error,
-        userName: root.userName,
-        displayName: root.userDisplayName || root.userName,
-        avatarPath: root.userAvatarPath,
-        avatarRenderPath: root.userAvatarRenderPath,
-        lastEvent: root.lastEvent,
-        lastEventAt: root.lastEventAt
-      })
+      return root.statusJson()
     }
 
     function preview(): string {
@@ -1110,6 +1229,16 @@ Item {
     function hidePreview(): string {
       root.previewVisible = false
       return "ok"
+    }
+  }
+
+  // A target only this plugin uses, so its status (and the conflict flag)
+  // stays reachable even if another lock service answers "lock".
+  FoamyIpc {
+    target: "foamy.lock"
+
+    function status(): string {
+      return root.statusJson()
     }
   }
 }
