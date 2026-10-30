@@ -121,6 +121,8 @@ service = service.replace('/etc/pam.d/omarchy-lock-fingerprint', str(pam_path))
 import Quickshell
 import Quickshell.Io
 ShellRoot {
+  id: shell
+  property var stock: null
   Service { id: service }
   IpcHandler {
     target: "test"
@@ -175,23 +177,38 @@ ShellRoot {
     function previewKey(): string { var event = { accepted: false }; service.previewKeyPressed(event); return String(event.accepted) }
     // 4.5 only: what the omarchy-shell socket would answer, with a second
     // "lock" handler (standing in for omarchy.lock) registered ahead of foamy.
-    function registryRoute(): string {
+    function registry() {
       var probe = Qt.createQmlObject('import QtQuick; import qs.Commons; QtObject { function registry() { return IpcRegistry } }', service, "RegistryProbe")
-      var registry = probe.registry()
-      var direct = registry.call("lock", "status", [])
-      var refused = registry.call("lock", "destroy", [])
-      var stock = Qt.createQmlObject('import qs.Commons; ShellIpc { target: "lock"; function status(): string { return "stock" } function lock(): string { return "stock" } }', service, "StockLock")
-      registry.unregister(stock)
-      registry.handlers.unshift(stock)
-      var shadowed = registry.handlerFor("lock") === stock
-      // As at startup when the other lock service registered first.
-      service.claimLockRoute()
-      var routed = registry.call("lock", "status", [])
-      var locked = registry.call("lock", "isLocked", [])
-      registry.unregister(stock)
-      stock.destroy()
-      var after = registry.call("lock", "status", [])
-      return JSON.stringify({direct: direct, refused: refused, shadowed: shadowed, routed: routed, locked: locked, after: after})
+      var found = probe.registry()
+      probe.destroy()
+      return found
+    }
+    function registryDirect(): string {
+      var found = registry()
+      return JSON.stringify({direct: found.call("lock", "status", []), refused: found.call("lock", "destroy", [])})
+    }
+    // Put the stand-in ahead of foamy without telling foamy, as if another
+    // service (or a later prefer()) had promoted itself.
+    function registryShadow(): string {
+      var found = registry()
+      shell.stock = Qt.createQmlObject('import qs.Commons; ShellIpc { target: "lock"; function status(): string { return "stock" } function lock(): string { return "stock" } function isLocked(): string { return "stock" } }', service, "StockLock")
+      found.unregister(shell.stock)
+      found.handlers.unshift(shell.stock)
+      return String(found.handlerFor("lock") === shell.stock)
+    }
+    function registryRoute(): string {
+      var found = registry()
+      return JSON.stringify({first: found.handlerFor("lock") !== shell.stock,
+        status: found.call("lock", "status", []), isLocked: found.call("lock", "isLocked", []),
+        lock: found.call("lock", "lock", [])})
+    }
+    function registryCleanup(): string {
+      var found = registry()
+      found.unregister(shell.stock)
+      shell.stock.destroy()
+      shell.stock = null
+      service.checkLockRoute()
+      return "ok"
     }
   }
 }
@@ -275,14 +292,28 @@ with log_path.open('w') as log:
         write_config()
         wait_for(lambda s: not s['conflict'])
         if has_registry:
-            route = json.loads(ipc('test', 'registryRoute'))
-            assert route['direct']['ran'] and json.loads(route['direct']['output'])['passwordPam'], route
-            assert route['refused'] == {'ran': False}, 'undeclared functions stay unreachable'
-            assert route['shadowed'], 'fixture registered the stand-in handler first'
-            routed = json.loads(route['routed']['output'])
-            assert routed['conflict'] and 'lock-target-shared' in routed['conflictReasons'], route
-            assert route['locked'] == {'ran': True, 'output': 'false'}, route
-            assert not json.loads(route['after']['output'])['conflict'], route
+            direct = json.loads(ipc('test', 'registryDirect'))
+            assert direct['direct']['ran'] and json.loads(direct['direct']['output'])['passwordPam'], direct
+            assert direct['refused'] == {'ran': False}, 'undeclared functions stay unreachable'
+            assert status()['ipcRouteFirst'] is True
+            assert ipc('test', 'registryShadow') == 'true', 'fixture put the stand-in handler first'
+            # FoamyIpcPreference re-claims the route on its own (5 s timer), no call needed.
+            deadline = time.monotonic() + 7
+            while time.monotonic() < deadline:
+                route = json.loads(ipc('test', 'registryRoute'))
+                if route['first']:
+                    break
+                time.sleep(0.25)
+            assert route['first'], 'foamy-lock did not re-claim the lock route'
+            routed = json.loads(route['status']['output'])
+            assert routed['conflict'] and 'lock-target-shared' in routed['conflictReasons'] and routed['ipcRouteFirst'], route
+            assert route['isLocked'] == {'ran': True, 'output': 'false'}, route
+            assert route['lock'] == {'ran': True, 'output': 'ok'}, 'lock must reach foamy-lock, not the second handler'
+            wait_for(lambda s: s['secure'])
+            ipc('test', 'submit', 'test-password')
+            wait_for(lambda s: not s['locked'])
+            ipc('test', 'registryCleanup')
+            wait_for(lambda s: not s['conflict'])
             assert status()['ipcFastPath'] is True
             print('PASS: 4.5 IpcRegistry routes lock to foamy, keeps it ahead of a second lock handler and reports the conflict')
         else:

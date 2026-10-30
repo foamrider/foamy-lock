@@ -105,34 +105,18 @@ Item {
       stockLockEnabled = result.stockLockEnabled
     } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
     // Services may have been added or removed with this edit.
-    Qt.callLater(claimLockRoute)
-  }
-
-  // Other live handlers for the "lock" IPC target in 4.5's IpcRegistry, which
-  // answers the omarchy-shell socket. 4.0 has no registry: an empty list.
-  function otherLockHandlers() {
-    var registry = IpcResolver.registry(root)
-    if (!registry || !Array.isArray(registry.handlers)) return []
-    return registry.handlers.filter(function(handler) {
-      return handler && handler !== lockIpc && handler.enabled && handler.target === "lock"
-    })
+    Qt.callLater(checkLockRoute)
   }
 
   // The socket answers from the first enabled handler for a target. When a
-  // second lock service is loaded anyway, keep `lock`, `isLocked` and
-  // `status` on this one, the lock the user enabled, so the request and the
-  // pre-suspend status poll always reach the same session lock; status then
-  // reports the conflict. This only reorders the registry's list: no other
-  // handler is removed, disabled or called.
-  function claimLockRoute() {
-    var registry = IpcResolver.registry(root)
-    if (registry && Array.isArray(registry.handlers)) {
-      var index = registry.handlers.indexOf(lockIpc)
-      if (index > 0 && otherLockHandlers().length > 0) {
-        registry.handlers.splice(index, 1)
-        registry.handlers.unshift(lockIpc)
-      }
-    }
+  // second lock service is loaded anyway, lockRoute (foamy-kit
+  // FoamyIpcPreference) keeps `lock`, `isLocked` and `status` on this one,
+  // the lock the user enabled, so the request and the pre-suspend status poll
+  // always reach the same session lock; status then reports the conflict.
+  // It only reorders the registry's list: no other handler is removed,
+  // disabled or called. 4.0 has no registry: nothing happens there.
+  function checkLockRoute() {
+    lockRoute.recheck()
     var reasons = conflictReasons()
     var key = reasons.join(",")
     if (key && key !== conflictLogged) console.warn("foamy.lock: another lock service is loaded (" + key + "); keep omarchy.lock in disabledPlugins")
@@ -142,7 +126,7 @@ Item {
   function conflictReasons() {
     var reasons = []
     if (stockLockEnabled === true) reasons.push("stock-lock-enabled")
-    if (otherLockHandlers().length > 0) reasons.push("lock-target-shared")
+    if (lockRoute.others > 0) reasons.push("lock-target-shared")
     return reasons
   }
 
@@ -1156,11 +1140,11 @@ Item {
     refreshFingerprintStatus()
     refreshUserIdentity()
     checkStrandedLock()
-    Qt.callLater(claimLockRoute)
+    Qt.callLater(checkLockRoute)
   }
 
   function statusJson() {
-    claimLockRoute()
+    checkLockRoute()
     var reasons = conflictReasons()
     return JSON.stringify({
       settings: root.settings,
@@ -1187,6 +1171,8 @@ Item {
       conflict: reasons.length > 0,
       conflictReasons: reasons,
       ipcFastPath: IpcResolver.fastPath(root),
+      // 4.5: this plugin answers the "lock" target on the omarchy-shell socket.
+      ipcRouteFirst: lockRoute.answering,
       lastEvent: root.lastEvent,
       lastEventAt: root.lastEventAt
     })
@@ -1202,7 +1188,7 @@ Item {
     target: "lock"
 
     function lock(): string {
-      root.claimLockRoute()
+      root.checkLockRoute()
       if (!root.passwordPamConfigured) return "missing-pam"
       // The pre-suspend service requests a lock even when already locked.
       if (root.currentlyLocked()) root.noteSleepRequested()
@@ -1230,6 +1216,15 @@ Item {
       root.previewVisible = false
       return "ok"
     }
+  }
+
+  // Re-claims the front of IpcRegistry's "lock" list on start, on
+  // checkLockRoute() and every few seconds on 4.5 (a short array scan), so a
+  // lock service registered or promoted later cannot take the route over.
+  FoamyIpcPreference {
+    id: lockRoute
+    handler: lockIpc
+    onOthersChanged: Qt.callLater(root.checkLockRoute)
   }
 
   // A target only this plugin uses, so its status (and the conflict flag)
