@@ -26,6 +26,18 @@ Item {
   property var job: null
   property var entries: []
   property double lastStarted: 0
+  // Each failure code is logged once until artwork works again, so a
+  // rejected source does not write a warning for every track.
+  property var loggedErrors: ({})
+
+  function logError(code) {
+    if (loggedErrors[code]) return
+    var next = {}
+    for (var key in loggedErrors) next[key] = true
+    next[code] = true
+    loggedErrors = next
+    console.warn("foamy.lock artwork: " + code)
+  }
 
   function cached(key) {
     for (var i = 0; i < entries.length; i++) {
@@ -60,6 +72,15 @@ Item {
       remember(entry)
       path = entry.path
       state = "ready"
+      return
+    }
+    // Sources the helper would refuse (the default: no remote hosts) are
+    // settled here, without starting a process.
+    var refused = Model.artworkPrecheck(player ? player.trackArtUrl : "", hosts, roots)
+    if (refused) {
+      state = "fallback"
+      error = refused
+      logError(refused)
       return
     }
     if (locked) { state = "locked-miss"; return }
@@ -100,6 +121,7 @@ Item {
       path = result.path
       state = "ready"
       error = ""
+      loggedErrors = ({})
     } else {
       // Only stable codes enter logs/status; URLs and media metadata stay private.
       var code = typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
@@ -107,7 +129,7 @@ Item {
       remember({ key: job.key, path: "", error: code, retryAt: Date.now() + 60000 })
       state = "fallback"
       error = code
-      console.warn("foamy.lock artwork: " + code)
+      logError(code)
     }
   }
 
@@ -126,7 +148,7 @@ Item {
   }
   Process {
     id: worker
-    command: ["/usr/bin/python3", "-I", decodeURIComponent(Qt.resolvedUrl("artwork.py").toString().replace(/^file:\/\//, ""))]
+    command: ["/usr/bin/python3", "-I", "-B", decodeURIComponent(Qt.resolvedUrl("artwork.py").toString().replace(/^file:\/\//, ""))]
     clearEnvironment: true
     environment: ({ HOME: Quickshell.env("HOME"), XDG_CACHE_HOME: root.cacheHome,
       XDG_RUNTIME_DIR: Quickshell.env("XDG_RUNTIME_DIR"), PATH: "/usr/bin", LANG: "C.UTF-8" })
