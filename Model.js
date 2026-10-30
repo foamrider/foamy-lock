@@ -110,16 +110,54 @@ function selectPlayer(players, includeBrowsers) {
   return fallback
 }
 
-// A cheap, reject-only copy of artwork.py's first checks, so the default
+// Python's posixpath.normpath for an absolute path, which artwork.py applies to
+// each root via os.path.abspath: "." and empty parts go, ".." pops, and exactly
+// two leading slashes are kept (POSIX leaves "//" implementation-defined).
+function normalizeRoot(path) {
+  var text = String(path)
+  var initial = text.charAt(0) === "/" ? 1 : 0
+  if (initial && text.slice(0, 2) === "//" && text.slice(0, 3) !== "///") initial = 2
+  var parts = []
+  var pieces = text.split("/")
+  for (var i = 0; i < pieces.length; i++) {
+    var piece = pieces[i]
+    if (piece === "" || piece === ".") continue
+    if (piece !== ".." || (!initial && parts.length === 0) || (parts.length && parts[parts.length - 1] === ".."))
+      parts.push(piece)
+    else if (parts.length) parts.pop()
+  }
+  var joined = "/".repeat(initial) + parts.join("/")
+  return joined || "."
+}
+
+// artwork.py validate_options: one bad root or host refuses every request.
+var HOST_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+function optionsError(hosts, roots) {
+  if (!Array.isArray(hosts) || hosts.length > 32 || hosts.some(function(host) {
+    return typeof host !== "string" || !HOST_PATTERN.test(host)
+  })) return "invalid-hosts"
+  if (!Array.isArray(roots) || roots.length > 16 || roots.some(function(root) {
+    return typeof root !== "string" || root.charAt(0) !== "/" || root.length > 4096
+      || root.indexOf("\u0000") !== -1 || root === "/" || root.split("/").indexOf("..") !== -1
+  })) return "invalid-roots"
+  return ""
+}
+
+// A cheap, reject-only copy of artwork.py's string checks, so the default
 // settings (no remote hosts) do not start a helper for every track only to
-// have it refuse. Returns "" when the helper should decide; artwork.py still
-// enforces every rule itself.
+// have it refuse. It rejects exactly what the helper rejects from the strings
+// alone (same root normalisation, same prefix rule) and returns "" whenever
+// the helper has to decide: unparsable URLs, and everything that depends on
+// the filesystem (symlinked roots or parents, ownership, size). artwork.py
+// still enforces every rule itself.
 function artworkPrecheck(url, hosts, roots) {
   var text = String(url || "")
   if (!text) return "invalid-url"
   var scheme = /^([a-z][a-z0-9+.-]*):/i.exec(text)
   if (!scheme) return "unsupported-scheme"
   var name = scheme[1].toLowerCase()
+  var options = optionsError(hosts || [], roots || [])
+  if (options) return options
   if (name === "https") {
     var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
     if (!match) return ""
@@ -131,10 +169,12 @@ function artworkPrecheck(url, hosts, roots) {
     if (!path) return ""
     var decoded
     try { decoded = decodeURIComponent(path[1]) } catch (error) { return "" }
+    // Paths are not normalised by the helper: these refuse outright.
+    if (decoded.indexOf("\u0000") !== -1 || decoded.split("/").indexOf("..") !== -1) return "invalid-file-path"
     var list = roots || []
     for (var i = 0; i < list.length; i++) {
-      var root = String(list[i] || "").replace(/\/+$/, "")
-      if (root && decoded.indexOf(root + "/") === 0) return ""
+      var prefix = normalizeRoot(list[i]).replace(/\/+$/, "") + "/"
+      if (decoded.indexOf(prefix) === 0) return ""
     }
     return "file-outside-roots"
   }
@@ -158,5 +198,5 @@ if (typeof module !== "undefined") module.exports = {
   defaults: defaults, parseConfig: parseConfig, isVideoPath: isVideoPath, fileUrl: fileUrl,
   selectPlayer: selectPlayer, runMediaAction: runMediaAction, artworkKey: artworkKey,
   mediaPlaying: mediaPlaying, isBrowserPlayer: isBrowserPlayer, artworkPrecheck: artworkPrecheck,
-  stockLockEnabled: stockLockEnabled
+  stockLockEnabled: stockLockEnabled, normalizeRoot: normalizeRoot
 }

@@ -128,3 +128,16 @@ test('artwork precheck refuses what the helper would, without spawning it', () =
   assert.equal(Model.artworkPrecheck('https://user@i.scdn.co/a', [], []), '')
   assert.equal(Model.artworkPrecheck('file:///bad%zz.png', [], ['/tmp']), '')
 })
+
+test('artwork roots are normalised exactly like os.path.abspath in artwork.py', () => {
+  const cases = {'/home/u/Music/.': '/home/u/Music', '/home//u/Music': '/home/u/Music', '/home/u/Music/': '/home/u/Music',
+    '//home/u': '//home/u', '///home/u': '/home/u', '/.': '/', '//': '//', '/a/./b': '/a/b', '/a/b/../c': '/a/c'}
+  for (const [root, normal] of Object.entries(cases)) assert.equal(Model.normalizeRoot(root), normal, root)
+  const url = 'file:///home/u/Music/a.png'
+  for (const root of ['/home/u/Music/.', '/home//u/Music', '/home/u/./Music', '/home/u/Music//', '/.', '//'])
+    assert.equal(Model.artworkPrecheck(url, [], [root]), '', root)
+  assert.equal(Model.artworkPrecheck(url, [], ['//home/u/Music']), 'file-outside-roots')
+  assert.equal(Model.artworkPrecheck(url, [], ['/home/u/Music/sub/..']), 'invalid-roots')
+  assert.equal(Model.artworkPrecheck('file:///home/u/Music/../Music/a.png', [], ['/home/u/Music']), 'invalid-file-path')
+  assert.equal(Model.artworkPrecheck('https://i.scdn.co/a', ['BAD HOST'], []), 'invalid-hosts')
+})

@@ -141,6 +141,54 @@ class Boundaries(unittest.TestCase):
             art.encode_png(pixels + b'\x00')
 
 
+class PrecheckMatchesHelper(unittest.TestCase):
+    """Model.artworkPrecheck (QML) may only refuse what artwork.py refuses."""
+
+    def test_root_normalisation_and_symlinks_match_the_helper(self):
+        with tempfile.TemporaryDirectory(prefix='foamy-precheck-') as directory:
+            base = Path(directory)
+            music = base / 'Music'
+            music.mkdir()
+            (music / 'a.png').write_bytes(b'png')
+            (base / 'link').symlink_to(music, target_is_directory=True)
+            url = (music / 'a.png').as_uri()
+            cases = [
+                ([str(music) + '/.'], url, True), ([str(base) + '//Music'], url, True),
+                ([str(music) + '/'], url, True), ([str(base) + '/./Music'], url, True),
+                ([str(music) + '//'], url, True), ([str(music)], url, True),
+                (['/' + str(music)], url, False),          # "//tmp/…" stays distinct, as in POSIX
+                ([str(base / 'link')], url, False),        # symlinked root: refused by the helper only
+                ([str(base / 'link')], (base / 'link' / 'a.png').as_uri(), False),
+                ([str(base / 'Other')], url, False), ([str(music) + '/sub/..'], url, False),
+                ([str(music)], 'file://' + str(music) + '//a.png', False),
+                ([str(music)], 'file://' + str(music) + '/../Music/a.png', False),
+                (['/.'], url, True), (['//'], url, True),
+            ]
+            script = ("const M = require(process.argv[1]); const cases = JSON.parse(process.argv[2]);"
+                      "console.log(JSON.stringify(cases.map(c => M.artworkPrecheck(c[1], [], c[0]))))")
+            verdicts = json.loads(subprocess.run(
+                ['node', '-e', script, str(SOURCE / 'Model.js'), json.dumps([[c[0], c[1]] for c in cases])],
+                capture_output=True, text=True, check=True, timeout=10).stdout)
+            for (roots, source, accepted), verdict in zip(cases, verdicts):
+                with self.subTest(roots=roots, url=source):
+                    try:
+                        art.validate_options([], roots)
+                        art.read_local(art.parse_url(source), roots)
+                        helper = True
+                    except (art.ArtworkError, OSError):
+                        helper = False
+                    self.assertEqual(helper, accepted)
+                    if helper:
+                        self.assertEqual(verdict, '', 'the precheck refused what the helper accepts')
+                    elif verdict:
+                        self.assertFalse(helper)
+            # The string-level refusals are still made without the helper.
+            self.assertEqual(verdicts[6], 'file-outside-roots')
+            self.assertEqual(verdicts[9], 'file-outside-roots')
+            self.assertEqual(verdicts[10], 'invalid-roots')
+            self.assertEqual(verdicts[12], 'invalid-file-path')
+
+
 class RealDecoder(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='foamy-artwork-test-')
