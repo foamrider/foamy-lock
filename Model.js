@@ -9,8 +9,15 @@ function fileUrl(path, version) {
 }
 
 function defaults() {
-  return { timeFormat: "24h", showUserInfo: true, showMedia: true, blankAfterSec: 30,
-    showArtwork: true, artworkHosts: [], artworkFileRoots: [] }
+  return { timeFormat: "24h", showUserInfo: true, showMedia: true, showBrowserMedia: false,
+    blankAfterSec: 30, showArtwork: true, artworkHosts: [], artworkFileRoots: [] }
+}
+
+// Omarchy loads a first-party plugin unless it is listed in disabledPlugins,
+// so a foamy.lock entry without that line runs two lock services at once.
+function stockLockEnabled(config) {
+  return !(config && Array.isArray(config.disabledPlugins)
+    && config.disabledPlugins.indexOf("omarchy.lock") !== -1)
 }
 
 function parseConfig(text) {
@@ -32,6 +39,8 @@ function parseConfig(text) {
       throw new Error("showUserInfo must be true or false")
     if (typeof settings.showMedia !== "boolean")
       throw new Error("showMedia must be true or false")
+    if (typeof settings.showBrowserMedia !== "boolean")
+      throw new Error("showBrowserMedia must be true or false")
     if (typeof settings.showArtwork !== "boolean")
       throw new Error("showArtwork must be true or false")
     if (!Array.isArray(settings.artworkHosts) || settings.artworkHosts.length > 32
@@ -49,9 +58,9 @@ function parseConfig(text) {
     if (timeout !== null && (typeof timeout !== "number" || !isFinite(timeout)
         || Math.floor(timeout) !== timeout || timeout < 1 || timeout > 2147483))
       throw new Error("blankAfterSec must be null or an integer from 1 to 2147483")
-    return { valid: true, settings: settings, error: "" }
+    return { valid: true, settings: settings, error: "", stockLockEnabled: stockLockEnabled(config) }
   } catch (error) {
-    return { valid: false, settings: null, error: String(error.message || error) }
+    return { valid: false, settings: null, error: String(error.message || error), stockLockEnabled: null }
   }
 }
 
@@ -65,16 +74,71 @@ function artworkKey(player) {
     String(player.trackTitle || "").slice(0, 512), String(player.trackArtist || "").slice(0, 512), url])
 }
 
-function selectPlayer(players) {
+// Shared with foamy-idle-suspend (see its Policy.js): media "is playing" when
+// any MPRIS player reports PlaybackStatus Playing. Paused or stopped players,
+// and players without metadata, do not count.
+function mediaPlaying(players) {
+  var list = players || []
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].isPlaying === true) return true
+  }
+  return false
+}
+
+// Browsers publish the page or tab title as the track title, so their media
+// stays off the lock screen unless showBrowserMedia opts in.
+var BROWSER_PATTERN = /(^|[^a-z])(firefox|librewolf|waterfox|floorp|zen|chromium|chrome|brave|vivaldi|opera|msedge|microsoft-edge|edge|epiphany|qutebrowser|falkon|midori|thorium|helium|plasma-browser-integration)([^a-z]|$)/
+
+function isBrowserPlayer(player) {
+  if (!player) return false
+  var names = [player.desktopEntry, player.dbusName, player.identity].map(function(value) {
+    return String(value || "").toLowerCase()
+  }).join(" ")
+  return BROWSER_PATTERN.test(names) || /web browser/.test(names)
+}
+
+function selectPlayer(players, includeBrowsers) {
   var fallback = null
   for (var i = 0; i < players.length; i++) {
     var player = players[i]
     if (!player || (!player.trackTitle && !player.trackArtist)) continue
+    if (includeBrowsers !== true && isBrowserPlayer(player)) continue
     // Prefer a playing track, retaining a paused track when nothing is playing.
     if (player.isPlaying) return player
     if (!fallback) fallback = player
   }
   return fallback
+}
+
+// A cheap, reject-only copy of artwork.py's first checks, so the default
+// settings (no remote hosts) do not start a helper for every track only to
+// have it refuse. Returns "" when the helper should decide; artwork.py still
+// enforces every rule itself.
+function artworkPrecheck(url, hosts, roots) {
+  var text = String(url || "")
+  if (!text) return "invalid-url"
+  var scheme = /^([a-z][a-z0-9+.-]*):/i.exec(text)
+  if (!scheme) return "unsupported-scheme"
+  var name = scheme[1].toLowerCase()
+  if (name === "https") {
+    var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
+    if (!match) return ""
+    var host = match[1].toLowerCase()
+    return (hosts || []).indexOf(host) === -1 ? "host-not-allowed" : ""
+  }
+  if (name === "file") {
+    var path = /^file:\/\/(\/[^?#]*)$/.exec(text)
+    if (!path) return ""
+    var decoded
+    try { decoded = decodeURIComponent(path[1]) } catch (error) { return "" }
+    var list = roots || []
+    for (var i = 0; i < list.length; i++) {
+      var root = String(list[i] || "").replace(/\/+$/, "")
+      if (root && decoded.indexOf(root + "/") === 0) return ""
+    }
+    return "file-outside-roots"
+  }
+  return "unsupported-scheme"
 }
 
 function runMediaAction(player, action) {
@@ -92,5 +156,7 @@ function runMediaAction(player, action) {
 
 if (typeof module !== "undefined") module.exports = {
   defaults: defaults, parseConfig: parseConfig, isVideoPath: isVideoPath, fileUrl: fileUrl,
-  selectPlayer: selectPlayer, runMediaAction: runMediaAction, artworkKey: artworkKey
+  selectPlayer: selectPlayer, runMediaAction: runMediaAction, artworkKey: artworkKey,
+  mediaPlaying: mediaPlaying, isBrowserPlayer: isBrowserPlayer, artworkPrecheck: artworkPrecheck,
+  stockLockEnabled: stockLockEnabled
 }
