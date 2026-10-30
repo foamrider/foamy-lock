@@ -66,7 +66,7 @@ Item {
   readonly property int batteryPercentage: hasBattery ? Math.round(Number(batteryDevice.percentage || 0) * 100) : 0
   readonly property bool wiredConnected: hasConnectedDevice(DeviceType.Wired)
   readonly property string networkLabel: networkStatusLabel()
-  readonly property string networkIcon: wiredConnected ? "" : (networkLabel === "Offline" ? "󰤮" : "")
+  readonly property string networkIcon: wiredConnected ? "\u{ef09}" : (networkLabel === "Offline" ? "\u{f092e}" : "\u{f1eb}")
   readonly property var userLocale: Qt.locale(FoamyI18n.formatLocale)
   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
@@ -155,12 +155,12 @@ Item {
     if (!device) return ""
 
     var index = Math.max(0, Math.min(9, Math.floor(level / 10)))
-    var chargingIcons = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"]
-    var defaultIcons = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+    var chargingIcons = ["\u{f089c}", "\u{f0086}", "\u{f0087}", "\u{f0088}", "\u{f089d}", "\u{f0089}", "\u{f089e}", "\u{f008a}", "\u{f008b}", "\u{f0085}"]
+    var defaultIcons = ["\u{f007a}", "\u{f007b}", "\u{f007c}", "\u{f007d}", "\u{f007e}", "\u{f007f}", "\u{f0080}", "\u{f0081}", "\u{f0082}", "\u{f0079}"]
 
     if (!UPower.onBattery && device.state === UPowerDeviceState.Charging) return chargingIcons[index]
     if (!UPower.onBattery
-        && (device.state === UPowerDeviceState.FullyCharged || device.state === UPowerDeviceState.PendingCharge)) return "󱟢"
+        && (device.state === UPowerDeviceState.FullyCharged || device.state === UPowerDeviceState.PendingCharge)) return "\u{f17e2}"
     return defaultIcons[index]
   }
 
@@ -667,7 +667,7 @@ Item {
           textFormat: Text.PlainText
           anchors.centerIn: parent
           visible: artworkImage.status !== Image.Ready
-          text: "󰝚"
+          text: "\u{f075a}"
           color: root.secondary
           opacity: 0.78
           font.family: root.iconFontFamily
