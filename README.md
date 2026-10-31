@@ -298,6 +298,8 @@ the plugin directory are retained unless you remove them separately.
 
 ## License
 
+`kit/` holds shared components copied from [foamy-kit](https://github.com/foamrider/foamy-kit); edit them there, not here.
+
 Licensed under [MIT](LICENSE), with the upstream [Omarchy notice](LICENSE-OMARCHY).
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5, including
