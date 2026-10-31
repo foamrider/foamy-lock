@@ -1,4 +1,5 @@
 """Exercise service settings and lock flow with simulated PAM and compositor boundaries."""
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -10,14 +11,19 @@ import tempfile
 import time
 
 source = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('artwork', source / 'artwork.py')
+artwork = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(artwork)
+commons = Path(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'))
+has_registry = (commons / 'IpcRegistry.qml').exists()
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-runtime-'))
 app = base / 'app'
 app.mkdir()
-(app / 'Commons').symlink_to(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'), target_is_directory=True)
-# Include the plugin translator without registering unrelated fixture types.
-(app / 'FoamyI18n.qml').symlink_to(source / 'FoamyI18n.qml')
+(app / 'Commons').symlink_to(commons, target_is_directory=True)
+# The plugin's stamped kit (FoamyIpc, FoamyI18n) and catalogs, unmodified.
+(app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
-(app / 'qmldir').write_text('singleton FoamyI18n 1.0 FoamyI18n.qml\n')
+(app / 'qmldir').write_text('')
 shutil.copy(source / 'Model.js', app)
 shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
@@ -44,6 +50,8 @@ QtObject {
   property int starts: 0
   property bool responseRequired: false
   property int generation: 0
+  // Report a failed password through both signals, as one PAM conversation may.
+  property bool doubleReport: false
   signal completed(int result)
   signal error(int error)
   signal pamMessage()
@@ -61,6 +69,7 @@ QtObject {
     Qt.callLater(function() {
       if (!pam.active || attempt !== generation) return
       pam.active = false
+      if (value !== "test-password" && pam.doubleReport) pam.error(1)
       pam.completed(value === "test-password" ? PamResult.Success : PamResult.Failed)
     })
   }
@@ -95,7 +104,7 @@ Item {
 }
 ''')
 service = (source / 'Service.qml').read_text().replace('import Quickshell.Wayland', 'import "mocks" as Mock')
-service = service.replace('  id: root', '  id: root\n  property alias testFingerprintPam: fingerprintPam\n  property alias testRetry: fingerprintRetryTimer\n  property alias testProbeRetry: fingerprintRecheckTimer\n  property alias testResume: fingerprintResumeTimer\n  property bool testStaleLocked: false')
+service = service.replace('  id: root', '  id: root\n  property alias testPasswordPam: passwordPam\n  property alias testFingerprintPam: fingerprintPam\n  property alias testRetry: fingerprintRetryTimer\n  property alias testProbeRetry: fingerprintRecheckTimer\n  property alias testResume: fingerprintResumeTimer\n  property bool testStaleLocked: false')
 service = service.replace('readonly property bool locked: lockRequested', 'readonly property bool locked: testStaleLocked || lockRequested')
 service = service.replace('  WlSessionLock {', '  Mock.SessionLock {').replace('    WlSessionLockSurface {', '    Rectangle {')
 service = service.replace('  PamContext {', '  Mock.PamContext {').replace('LockView {', 'Mock.LockView {')
@@ -112,6 +121,8 @@ service = service.replace('/etc/pam.d/omarchy-lock-fingerprint', str(pam_path))
 import Quickshell
 import Quickshell.Io
 ShellRoot {
+  id: shell
+  property var stock: null
   Service { id: service }
   IpcHandler {
     target: "test"
@@ -161,6 +172,44 @@ ShellRoot {
     function fingerprintProbe(): string { service.refreshFingerprintStatus(); return "ok" }
     function resume(): string { service.restartFingerprintAfterSleep(); return "ok" }
     function missingPam(): string { service.passwordPamConfigured = false; return "ok" }
+    function doubleReport(value: bool): string { service.testPasswordPam.doubleReport = value; return "ok" }
+    function previewState(): string { return String(service.previewVisible) }
+    function previewKey(): string { var event = { accepted: false }; service.previewKeyPressed(event); return String(event.accepted) }
+    // 4.5 only: what the omarchy-shell socket would answer, with a second
+    // "lock" handler (standing in for omarchy.lock) registered ahead of foamy.
+    function registry() {
+      var probe = Qt.createQmlObject('import QtQuick; import qs.Commons; QtObject { function registry() { return IpcRegistry } }', service, "RegistryProbe")
+      var found = probe.registry()
+      probe.destroy()
+      return found
+    }
+    function registryDirect(): string {
+      var found = registry()
+      return JSON.stringify({direct: found.call("lock", "status", []), refused: found.call("lock", "destroy", [])})
+    }
+    // Put the stand-in ahead of foamy without telling foamy, as if another
+    // service (or a later prefer()) had promoted itself.
+    function registryShadow(): string {
+      var found = registry()
+      shell.stock = Qt.createQmlObject('import qs.Commons; ShellIpc { target: "lock"; function status(): string { return "stock" } function lock(): string { return "stock" } function isLocked(): string { return "stock" } }', service, "StockLock")
+      found.unregister(shell.stock)
+      found.handlers.unshift(shell.stock)
+      return String(found.handlerFor("lock") === shell.stock)
+    }
+    function registryRoute(): string {
+      var found = registry()
+      return JSON.stringify({first: found.handlerFor("lock") !== shell.stock,
+        status: found.call("lock", "status", []), isLocked: found.call("lock", "isLocked", []),
+        lock: found.call("lock", "lock", [])})
+    }
+    function registryCleanup(): string {
+      var found = registry()
+      found.unregister(shell.stock)
+      shell.stock.destroy()
+      shell.stock = null
+      service.checkLockRoute()
+      return "ok"
+    }
   }
 }
 ''')
@@ -192,13 +241,17 @@ background = base / '.local/state/omarchy/current/background'
 background.parent.mkdir(parents=True)
 config = base / '.config/omarchy/shell.json'
 config.parent.mkdir(parents=True)
-def write_config(**settings):
-    config.write_text(json.dumps({'version': 1, 'plugins': [{'id': 'foamy.lock', **settings}]}))
+def write_config(disabled=('omarchy.lock',), **settings):
+    config.write_text(json.dumps({'version': 1, 'plugins': [{'id': 'foamy.lock', **settings}],
+                                  'disabledPlugins': list(disabled)}))
 write_config()
+# A real account picture goes through the sandboxed helper into the cache.
+(base / '.face').write_bytes(artwork.encode_png(bytes([200, 80, 40]) * 256 * 256))
+avatar_cache = base / 'cache/omarchy/foamy.lock/avatar.png'
 # Register generated view types beside the explicit singleton in this fixture.
 with (app / 'qmldir').open('a') as registry:
     for qml in app.glob('*.qml'):
-        if qml.name[0].isupper() and qml.name != 'FoamyI18n.qml':
+        if qml.name[0].isupper():
             registry.write(f'{qml.stem} 1.0 {qml.name}\n')
 
 env = dict(os.environ, HOME=str(base), USER='fixture', LOGNAME='fixture', XDG_RUNTIME_DIR=str(runtime),
@@ -228,6 +281,47 @@ with log_path.open('w') as log:
                                env=env, stdout=log, stderr=log, start_new_session=True)
     try:
         wait_for(lambda s: s['passwordPam'] and not s['configError'])
+        state = wait_for(lambda s: s['avatarRenderPath'] or s['avatarError'])
+        assert state['avatarRenderPath'] == str(avatar_cache) and not state['avatarError'], state
+        assert avatar_cache.read_bytes()[:8] == artwork.PNG_MAGIC
+        assert not state['conflict'] and state['conflictReasons'] == [], state
+        assert json.loads(ipc('foamy.lock', 'status'))['secure'] is False, 'foamy.lock status target answers'
+        write_config(disabled=())
+        state = wait_for(lambda s: s['conflict'])
+        assert state['conflictReasons'] == ['stock-lock-enabled'], state
+        write_config()
+        wait_for(lambda s: not s['conflict'])
+        if has_registry:
+            direct = json.loads(ipc('test', 'registryDirect'))
+            assert direct['direct']['ran'] and json.loads(direct['direct']['output'])['passwordPam'], direct
+            assert direct['refused'] == {'ran': False}, 'undeclared functions stay unreachable'
+            assert status()['ipcRouteFirst'] is True
+            assert ipc('test', 'registryShadow') == 'true', 'fixture put the stand-in handler first'
+            # FoamyIpcPreference re-claims the route on its own (5 s timer), no call needed.
+            deadline = time.monotonic() + 7
+            while time.monotonic() < deadline:
+                route = json.loads(ipc('test', 'registryRoute'))
+                if route['first']:
+                    break
+                time.sleep(0.25)
+            assert route['first'], 'foamy-lock did not re-claim the lock route'
+            routed = json.loads(route['status']['output'])
+            assert routed['conflict'] and 'lock-target-shared' in routed['conflictReasons'] and routed['ipcRouteFirst'], route
+            assert route['isLocked'] == {'ran': True, 'output': 'false'}, route
+            assert route['lock'] == {'ran': True, 'output': 'ok'}, 'lock must reach foamy-lock, not the second handler'
+            wait_for(lambda s: s['secure'])
+            ipc('test', 'submit', 'test-password')
+            wait_for(lambda s: not s['locked'])
+            ipc('test', 'registryCleanup')
+            wait_for(lambda s: not s['conflict'])
+            assert status()['ipcFastPath'] is True
+            print('PASS: 4.5 IpcRegistry routes lock to foamy, keeps it ahead of a second lock handler and reports the conflict')
+        else:
+            assert status()['ipcFastPath'] is False
+        print('PASS: sandboxed avatar thumbnail, conflict flag from disabledPlugins, foamy.lock status target')
+        assert ipc('lock', 'preview') == 'ok' and ipc('test', 'previewState') == 'true'
+        assert ipc('test', 'previewKey') == 'true' and ipc('test', 'previewState') == 'false'
+        assert ipc('lock', 'preview') == 'ok'
         def wallpaper_state():
             return json.loads(ipc('test', 'wallpaperState'))
         def refresh_wallpaper():
@@ -293,6 +387,7 @@ with log_path.open('w') as log:
         assert ipc('lock', 'isLocked') == 'false'
         assert ipc('lock', 'lock') == 'ok'
         wait_for(lambda s: s['requested'] and s['secure'])
+        assert ipc('test', 'previewState') == 'false', 'a real lock hides the preview overlay'
         ipc('test', 'staleLock', 'false')
         ipc('test', 'submit', 'test-password')
         wait_for(lambda s: not s['locked'])
@@ -308,12 +403,20 @@ with log_path.open('w') as log:
         assert state['secure'] and state['settings']['timeFormat'] == '12h'
         write_config(blankAfterSec=0)
         wait_for(lambda s: 'blankAfterSec' in s['configError'])
+        ipc('test', 'doubleReport', 'true')
         ipc('test', 'submit', 'incorrect')
         wait_for(lambda s: not s['authenticating'] and s['secure'])
         deadline = time.monotonic() + 3
         while ipc('test', 'failures') != '1' and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert ipc('test', 'failures') == '1'
+        time.sleep(0.2)
+        assert ipc('test', 'failures') == '1', 'onError plus onCompleted must count one failure'
+        ipc('test', 'doubleReport', 'false')
+        assert status()['secure']
+        # A picture the sandbox refuses never reaches Qt: the initial is shown.
+        (base / '.face').write_bytes(b'not an image')
+        ipc('test', 'submit', 'incorrect')
+        wait_for(lambda s: ipc('test', 'failures') == '2')
         assert status()['secure']
         ipc('test', 'submit', 'test-password')
         wait_for(lambda s: not s['locked'])
@@ -321,6 +424,8 @@ with log_path.open('w') as log:
         wait_for(lambda s: not s['configError'] and s['settings']['blankAfterSec'] == 1)
         assert ipc('lock', 'lock') == 'ok'
         wait_for(lambda s: s['secure'])
+        state = wait_for(lambda s: s['avatarError'])
+        assert state['avatarError'] == 'unsupported-format' and state['avatarRenderPath'] == '', state
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
             if (base / 'calls').exists() and 'omarchy-brightness-display' in (base / 'calls').read_text():

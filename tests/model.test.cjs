@@ -7,7 +7,7 @@ test('defaults and all documented settings', () => {
   assert.deepEqual(Model.parseConfig(config()).settings, Model.defaults())
   const custom = {...Model.defaults(), timeFormat: '12h', showUserInfo: false, showMedia: false, blankAfterSec: null,
     showArtwork: false, artworkHosts: ['images.example.com'], artworkFileRoots: ['/tmp/album-covers']}
-  assert.deepEqual(Model.parseConfig(config(custom)), {valid: true, settings: custom, error: ''})
+  assert.deepEqual(Model.parseConfig(config(custom)), {valid: true, settings: custom, error: '', stockLockEnabled: true})
   assert.equal(Model.parseConfig(config({blankAfterSec: 2147483})).valid, true)
 })
 
@@ -20,7 +20,7 @@ test('invalid configuration returns an error without replacement preferences', (
     assert.ok(result.error)
   }
   for (const settings of [{timeFormat: 'system'}, {showUserInfo: 'false'}, {showMedia: 1},
-    {showArtwork: 1}, {artworkHosts: null}, {artworkHosts: ['*.example.com']},
+    {showArtwork: 1}, {showBrowserMedia: 'yes'}, {artworkHosts: null}, {artworkHosts: ['*.example.com']},
     {artworkHosts: ['http://example.com']}, {artworkHosts: ['127.0.0.1']},
     {artworkHosts: ['EXAMPLE.COM']}, {artworkHosts: Array(33).fill('example.com')},
     {artworkFileRoots: ['/']}, {artworkFileRoots: ['relative']}, {artworkFileRoots: ['/tmp/../home']},
@@ -81,4 +81,63 @@ test('wallpaper paths distinguish video and produce versioned local URLs', () =>
   assert.equal(Model.fileUrl('', 3), '')
   assert.equal(Model.fileUrl('/tmp/a #?%.png', 3), 'file:///tmp/a%20%23%3F%25.png?v=3')
   assert.notEqual(Model.fileUrl('/tmp/a.png', 1), Model.fileUrl('/tmp/a.png', 2))
+})
+
+test('a foamy.lock entry without omarchy.lock in disabledPlugins is a conflict', () => {
+  const entry = {id: 'foamy.lock'}
+  assert.equal(Model.parseConfig(JSON.stringify({version: 1, plugins: [entry]})).stockLockEnabled, true)
+  assert.equal(Model.parseConfig(JSON.stringify({version: 1, plugins: [entry], disabledPlugins: ['omarchy.lock']})).stockLockEnabled, false)
+  assert.equal(Model.parseConfig(JSON.stringify({version: 1, plugins: [entry], disabledPlugins: ['omarchy.idle']})).stockLockEnabled, true)
+  assert.equal(Model.parseConfig('{').stockLockEnabled, null)
+})
+
+test('media-is-playing semantics match the shared contract', () => {
+  const vectors = require('./media-playing.json')
+  for (const {players, playing} of vectors.cases)
+    assert.equal(Model.mediaPlaying(players), playing, JSON.stringify(players))
+  assert.equal(Model.mediaPlaying(null), false)
+})
+
+test('browser players stay off the lock screen unless opted in', () => {
+  const browsers = [{dbusName: 'org.mpris.MediaPlayer2.firefox.instance_1_42'},
+    {dbusName: 'org.mpris.MediaPlayer2.chromium.instance9', identity: 'Chromium'},
+    {desktopEntry: 'brave-browser'}, {desktopEntry: 'google-chrome'}, {desktopEntry: 'zen'},
+    {identity: 'Mozilla Firefox'}, {dbusName: 'org.mpris.MediaPlayer2.plasma-browser-integration'}]
+  for (const names of browsers) assert.equal(Model.isBrowserPlayer(names), true, JSON.stringify(names))
+  for (const names of [{desktopEntry: 'spotify', identity: 'Spotify'}, {dbusName: 'org.mpris.MediaPlayer2.mpv'},
+    {desktopEntry: 'zenity'}, {identity: 'Chromecast speaker'}, null])
+    assert.equal(Model.isBrowserPlayer(names), false, JSON.stringify(names))
+  const tab = {trackTitle: 'Private video', isPlaying: true, desktopEntry: 'firefox'}
+  const music = {trackTitle: 'Song', isPlaying: false, desktopEntry: 'spotify'}
+  assert.equal(Model.selectPlayer([tab, music]), music)
+  assert.equal(Model.selectPlayer([tab]), null)
+  assert.equal(Model.selectPlayer([tab, music], true), tab)
+})
+
+test('artwork precheck refuses what the helper would, without spawning it', () => {
+  assert.equal(Model.artworkPrecheck('https://i.scdn.co/image/a', [], []), 'host-not-allowed')
+  assert.equal(Model.artworkPrecheck('https://I.SCDN.CO:443/image/a', ['i.scdn.co'], []), '')
+  assert.equal(Model.artworkPrecheck('https://other.example/a', ['i.scdn.co'], []), 'host-not-allowed')
+  assert.equal(Model.artworkPrecheck('http://i.scdn.co/a', ['i.scdn.co'], []), 'unsupported-scheme')
+  assert.equal(Model.artworkPrecheck('data:image/png;base64,AA', [], []), 'unsupported-scheme')
+  assert.equal(Model.artworkPrecheck('', [], []), 'invalid-url')
+  assert.equal(Model.artworkPrecheck('file:///home/u/.cache/a%20b.png', [], ['/home/u/.cache']), '')
+  assert.equal(Model.artworkPrecheck('file:///home/u/.cache/a.png', [], ['/home/u/.cache/']), '')
+  assert.equal(Model.artworkPrecheck('file:///home/u/.cachex/a.png', [], ['/home/u/.cache']), 'file-outside-roots')
+  // Anything the precheck cannot parse is left to the helper, which rejects it.
+  assert.equal(Model.artworkPrecheck('https://user@i.scdn.co/a', [], []), '')
+  assert.equal(Model.artworkPrecheck('file:///bad%zz.png', [], ['/tmp']), '')
+})
+
+test('artwork roots are normalised exactly like os.path.abspath in artwork.py', () => {
+  const cases = {'/home/u/Music/.': '/home/u/Music', '/home//u/Music': '/home/u/Music', '/home/u/Music/': '/home/u/Music',
+    '//home/u': '//home/u', '///home/u': '/home/u', '/.': '/', '//': '//', '/a/./b': '/a/b', '/a/b/../c': '/a/c'}
+  for (const [root, normal] of Object.entries(cases)) assert.equal(Model.normalizeRoot(root), normal, root)
+  const url = 'file:///home/u/Music/a.png'
+  for (const root of ['/home/u/Music/.', '/home//u/Music', '/home/u/./Music', '/home/u/Music//', '/.', '//'])
+    assert.equal(Model.artworkPrecheck(url, [], [root]), '', root)
+  assert.equal(Model.artworkPrecheck(url, [], ['//home/u/Music']), 'file-outside-roots')
+  assert.equal(Model.artworkPrecheck(url, [], ['/home/u/Music/sub/..']), 'invalid-roots')
+  assert.equal(Model.artworkPrecheck('file:///home/u/Music/../Music/a.png', [], ['/home/u/Music']), 'invalid-file-path')
+  assert.equal(Model.artworkPrecheck('https://i.scdn.co/a', ['BAD HOST'], []), 'invalid-hosts')
 })

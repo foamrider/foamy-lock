@@ -12,5 +12,14 @@ assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);
 assert.equal(I.text('Unknown %1 {name}', 'no', ['$& %2']), '$& %2 {name}'.replace(/^/, 'Unknown '));
 assert.equal(I.text('constructor', 'no'), 'constructor');
-const ui = fs.readFileSync(path.join(__dirname, '../FoamyI18n.qml'), 'utf8');
+const ui = fs.readFileSync(path.join(__dirname, '../kit/FoamyI18n.qml'), 'utf8');
 assert.ok(ui.includes('Qt.createQmlObject'), '4.0 must not statically require a 4.5 QML type');
+
+const service = fs.readFileSync(path.join(__dirname, '../Service.qml'), 'utf8');
+// The preview overlay holds exclusive keyboard focus, so a key must close it.
+assert.match(service, /Keys\.onPressed: function\(event\) \{ root\.previewKeyPressed\(event\) \}/);
+assert.ok(!/\bIpcHandler\s*\{/.test(service), 'IPC goes through FoamyIpc');
+const artworkQml = fs.readFileSync(path.join(__dirname, '../Artwork.qml'), 'utf8');
+assert.ok(artworkQml.includes('"/usr/bin/python3", "-I", "-B"'), 'helper must not write __pycache__');
+assert.match(service, /"timeout", "--kill-after=1s", "10s", "\/usr\/bin\/python3", "-I", "-B"/, 'avatar helper is bounded');
+assert.ok(!/exec magick/.test(service), 'no unsandboxed ImageMagick call');

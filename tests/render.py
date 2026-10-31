@@ -20,10 +20,10 @@ pixels = bytes(channel for y in range(256) for x in range(256)
                for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
 (app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
 (app / 'Commons').symlink_to(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'), target_is_directory=True)
-# Include the plugin translator without registering unrelated fixture types.
-(app / 'FoamyI18n.qml').symlink_to(source / 'FoamyI18n.qml')
+# The plugin's stamped kit (FoamyI18n, FoamyStyle) and catalogs, unmodified.
+(app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
-(app / 'qmldir').write_text('singleton FoamyI18n 1.0 FoamyI18n.qml\n')
+(app / 'qmldir').write_text('')
 shutil.copy(source / 'Model.js', app)
 view = (source / 'LockView.qml').read_text()
 view = view.replace('import Quickshell.Networking', 'import "fixtures" as Fixture').replace('import Quickshell.Services.UPower\n', '')
@@ -123,12 +123,12 @@ ShellRoot {
           throw new Error("Plain wallpaper fallback was not displayed")
         if (index < 2 && (artImage.status !== Image.Ready || fallback.visible))
           throw new Error("Validated artwork was not displayed")
-        if (index >= 4 && (!fallback.visible || artImage.visible))
+        if (index >= 4 && index < 8 && (!fallback.visible || artImage.visible))
           throw new Error("Artwork icon fallback was not displayed")
         if (String(artImage.source).indexOf("https:") === 0)
           throw new Error("Original artwork URL reached the view")
         if (!input || (!view.authenticatingPassword && !input.activeFocus)) throw new Error("Password input lost focus")
-        if (index >= 6 && !findNamed(view, "fingerprintNotice").visible)
+        if (index >= 6 && index < 8 && !findNamed(view, "fingerprintNotice").visible)
           throw new Error("Fingerprint unavailable notice is missing")
         if (index === 1 && input.text !== "example") throw new Error("Password binding did not update")
         if (!view.grabToImage(function(result) {
@@ -172,7 +172,32 @@ ShellRoot {
             view.width = 800; view.height = 1000
             view.passwordText = "example"
             view.backgroundPath = ""
+          } else if (step.index === 8) {
+            // Right-to-left: the layout mirrors, transport controls do not.
+            view.width = 1920; view.height = 1080
+            view.rightToLeft = true
+            view.passwordText = "example"
+            view.fingerprintUnavailable = false
+            view.backgroundPath = Qt.resolvedUrl("wallpaper.svg").toString().replace("file://", "")
+            view.artworkPath = Qt.resolvedUrl("artwork.png").toString().replace("file://", "")
           } else {
+            var media = findNamed(view, "mediaRow")
+            var footer = findNamed(view, "statusFooter")
+            var controls = findNamed(view, "mediaControls")
+            if (media.x < view.width / 2 || footer.x > view.width / 2)
+              throw new Error("Right-to-left layout was not mirrored")
+            if (controls.children[0].x > controls.children[2].x)
+              throw new Error("Media transport order must not mirror")
+            // The submit arrow mirrors around its own centre and stays inside the field.
+            var field = findNamed(view, "inputField")
+            var arrow = findNamed(view, "submitArrow")
+            var start = arrow.mapToItem(field, 0, arrow.height / 2)
+            var end = arrow.mapToItem(field, arrow.width, arrow.height / 2)
+            if (!(start.x > end.x)) throw new Error("Submit arrow is not mirrored in right-to-left")
+            if (end.x < 0 || start.x > field.width || start.y < 0 || start.y > field.height)
+              throw new Error("Submit arrow left the password field: " + end.x + ".." + start.x + " of " + field.width)
+            if (end.x > field.width / 2) throw new Error("Submit arrow should sit at the leading (left) edge in right-to-left")
+            console.log("PASS: right-to-left mirroring with fixed transport order")
             console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
             Qt.quit()
             return
@@ -214,7 +239,13 @@ with log_path.open('w') as log:
 output = log_path.read_text()
 print(output)
 assert process.returncode == 0 and 'PASS:' in output, output
-for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000), (1920, 1080), (800, 1000)]):
+for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000), (1920, 1080), (800, 1000), (1920, 1080)]):
     image = (app / f'capture-{i}.png').read_bytes()
     assert struct.unpack('>II', image[16:24]) == size
 print('Renders:', app)
+# Optional: keep the captures (screenshots for review).
+if os.environ.get('FOAMY_RENDER_OUT'):
+    out = Path(os.environ['FOAMY_RENDER_OUT'])
+    out.mkdir(parents=True, exist_ok=True)
+    for capture in app.glob('capture-*.png'):
+        shutil.copy(capture, out / capture.name)

@@ -1,4 +1,8 @@
-"""Prepare bounded lock artwork. Original images never enter the shell process."""
+"""Prepare bounded lock artwork and the account avatar thumbnail.
+
+Original images never enter the shell process: both go through the same
+sandboxed decoder and come back as a freshly encoded 256 x 256 PNG.
+"""
 import ctypes
 import fcntl
 import hashlib
@@ -25,6 +29,9 @@ from urllib.parse import unquote, urljoin, urlsplit
 import zlib
 
 MAX_INPUT = 5 * 1024 * 1024
+# Account pictures are chosen by the user (Mugshot, AccountsService) and are
+# often camera photos, so they may be larger than track artwork.
+MAX_AVATAR_INPUT = 16 * 1024 * 1024
 SIZE = 256
 PIXEL_BYTES = SIZE * SIZE * 3
 MAX_CACHE = 16
@@ -388,6 +395,57 @@ def prepare(request):
     return {'ok': True, 'path': str(cache / name)}
 
 
+def read_avatar(path):
+    """Snapshot the account picture. The path comes from the user's own
+    AccountsService record or ~/.face, so symlinks and root-owned
+    AccountsService icons are allowed; special files and huge inputs are not."""
+    if (not isinstance(path, str) or not path.startswith('/') or len(path) > 4096
+            or '\x00' in path):
+        raise ArtworkError('invalid-avatar-path')
+    try:
+        source = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except FileNotFoundError:
+        raise ArtworkError('avatar-missing') from None
+    try:
+        info = os.fstat(source)
+        if not stat.S_ISREG(info.st_mode):
+            raise ArtworkError('not-regular-file')
+        if info.st_size > MAX_AVATAR_INPUT:
+            raise ArtworkError('input-too-large')
+    except BaseException:
+        os.close(source)
+        raise
+    with os.fdopen(source, 'rb') as stream:
+        data = stream.read(MAX_AVATAR_INPUT + 1)
+    if len(data) > MAX_AVATAR_INPUT:
+        raise ArtworkError('input-too-large')
+    return data
+
+
+def prepare_avatar(request):
+    data = read_avatar(request.get('path'))
+    cache_home = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache')
+    directory = cache_home / 'omarchy' / 'foamy.lock'
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    info = directory.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise ArtworkError('unsafe-cache')
+    # The shell runs one avatar job at a time; a killed job leaves only its
+    # own staging directory, reclaimed here once it is clearly abandoned.
+    for stale in directory.glob('.avatar-*'):
+        if (re.fullmatch(r'\.avatar-[a-z0-9_]{8}', stale.name) and not stale.is_symlink()
+                and stale.is_dir() and time.time() - stale.lstat().st_mtime > 60):
+            shutil.rmtree(stale, ignore_errors=True)
+    with tempfile.TemporaryDirectory(prefix='.avatar-', dir=directory) as temporary:
+        staging = Path(temporary)
+        encoded = encode_png(decode(data, staging))
+        output = staging / 'avatar.png'
+        output.write_bytes(encoded)
+        output.chmod(0o600)
+        os.replace(output, directory / 'avatar.png')
+    return {'ok': True, 'path': str(directory / 'avatar.png')}
+
+
 def interrupted(signum, frame):
     raise ArtworkError('cancelled' if signum == signal.SIGTERM else 'job-timeout')
 
@@ -412,7 +470,7 @@ def main():
         request = json.loads(line)
         if not isinstance(request, dict):
             raise ArtworkError('invalid-request')
-        result = prepare(request)
+        result = prepare_avatar(request) if request.get('kind') == 'avatar' else prepare(request)
     except ArtworkError as error:
         result = {'ok': False, 'error': str(error)}
     except (socket.timeout, TimeoutError, subprocess.TimeoutExpired):

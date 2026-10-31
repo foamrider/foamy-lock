@@ -5,6 +5,7 @@ import Quickshell.Networking
 import Quickshell.Services.UPower
 // Qualify the theme singleton to avoid QtQuick.Color taking precedence.
 import qs.Commons as Commons
+import "kit"
 import "Model.js" as Model
 
 Item {
@@ -32,8 +33,15 @@ Item {
 
   readonly property string displayName: String(userDisplayName || "").trim()
     || String(userName || "").trim()
-  readonly property string textFontFamily: "Adwaita Sans"
-  readonly property string iconFontFamily: "JetBrainsMono Nerd Font"
+  // The lock is an art-directed surface: its own typefaces and white glass
+  // over the wallpaper scrim. Missing typefaces fall back to the foamy body
+  // and Omarchy fonts; a theme that styles the lock ([lock] in shell.toml)
+  // wins over the glass defaults.
+  readonly property var installedFonts: Qt.fontFamilies()
+  readonly property string textFontFamily: fontOr("Adwaita Sans", FoamyStyle.fontFamily)
+  readonly property string displayFontFamily: fontOr("URW Gothic", FoamyStyle.fontFamily)
+  readonly property string iconFontFamily: fontOr("JetBrainsMono Nerd Font", FoamyStyle.monoFamily)
+  property bool rightToLeft: FoamyI18n.rightToLeft
   readonly property string placeholderText: FoamyI18n.t("Enter password")
   readonly property real uiScale: Math.max(0.82, Math.min(1.12, height / 1080))
   readonly property real contentWidth: Math.min(Math.round(560 * uiScale), width - Math.round(64 * uiScale))
@@ -43,10 +51,11 @@ Item {
   readonly property int fieldFontSize: Math.round(18 * uiScale)
   readonly property int passwordDotFontSize: Math.round(17 * uiScale)
   readonly property int passwordDotLetterSpacing: Math.round(2 * uiScale)
-  readonly property color foreground: Qt.rgba(0.98, 0.98, 1, 0.96)
-  readonly property color secondary: Qt.rgba(0.94, 0.95, 1, 0.68)
-  readonly property color glass: Qt.rgba(0.025, 0.035, 0.065, 0.34)
-  readonly property color glassBorder: Qt.rgba(0.95, 0.96, 1, 0.18)
+  readonly property color foreground: themeLock("text", Commons.Color.lock.text, Qt.rgba(0.98, 0.98, 1, 0.96))
+  readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
+  readonly property color glass: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
+  readonly property color glassBorder: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
+  readonly property color selection: themeLock("selection", Commons.Color.lock.selection, Qt.rgba(1, 1, 1, 0.25))
   readonly property bool hasMedia: activePlayer !== null
     && (String(activePlayer.trackTitle || "") !== "" || String(activePlayer.trackArtist || "") !== "")
   readonly property var batteryDevice: UPower.displayDevice
@@ -57,7 +66,7 @@ Item {
   readonly property int batteryPercentage: hasBattery ? Math.round(Number(batteryDevice.percentage || 0) * 100) : 0
   readonly property bool wiredConnected: hasConnectedDevice(DeviceType.Wired)
   readonly property string networkLabel: networkStatusLabel()
-  readonly property string networkIcon: wiredConnected ? "" : (networkLabel === "Offline" ? "󰤮" : "")
+  readonly property string networkIcon: wiredConnected ? "\u{ef09}" : (networkLabel === "Offline" ? "\u{f092e}" : "\u{f1eb}")
   readonly property var userLocale: Qt.locale(FoamyI18n.formatLocale)
   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
@@ -75,6 +84,21 @@ Item {
   signal artworkFailed(string path)
 
 
+
+  LayoutMirroring.enabled: rightToLeft
+  LayoutMirroring.childrenInherit: true
+
+  function fontOr(family, fallback) {
+    return installedFonts.indexOf(family) !== -1 ? family : fallback
+  }
+
+  // Commons.Color.lock.* always has a value (theme foreground and friends);
+  // only an explicit [lock] entry replaces the glass look.
+  function themeLock(key, themed, glass) {
+    var values = Commons.Color.shellValues || ({})
+    var value = values["lock." + key]
+    return typeof value === "string" && value.length > 0 ? themed : glass
+  }
 
   // Cache-bust profile and wallpaper images when their files change in place.
   function fileUrl(path, version) {
@@ -131,12 +155,12 @@ Item {
     if (!device) return ""
 
     var index = Math.max(0, Math.min(9, Math.floor(level / 10)))
-    var chargingIcons = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"]
-    var defaultIcons = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+    var chargingIcons = ["\u{f089c}", "\u{f0086}", "\u{f0087}", "\u{f0088}", "\u{f089d}", "\u{f0089}", "\u{f089e}", "\u{f008a}", "\u{f008b}", "\u{f0085}"]
+    var defaultIcons = ["\u{f007a}", "\u{f007b}", "\u{f007c}", "\u{f007d}", "\u{f007e}", "\u{f007f}", "\u{f0080}", "\u{f0081}", "\u{f0082}", "\u{f0079}"]
 
     if (!UPower.onBattery && device.state === UPowerDeviceState.Charging) return chargingIcons[index]
     if (!UPower.onBattery
-        && (device.state === UPowerDeviceState.FullyCharged || device.state === UPowerDeviceState.PendingCharge)) return "󱟢"
+        && (device.state === UPowerDeviceState.FullyCharged || device.state === UPowerDeviceState.PendingCharge)) return "\u{f17e2}"
     return defaultIcons[index]
   }
 
@@ -260,7 +284,7 @@ Item {
         width: parent.width
         text: lockClock.date.toLocaleString(root.userLocale, "dddd, d MMMM")
         color: root.foreground
-        font.family: "URW Gothic"
+        font.family: root.displayFontFamily
         font.pixelSize: Math.round(30 * root.uiScale)
         font.weight: Font.Normal
         horizontalAlignment: Text.AlignHCenter
@@ -275,7 +299,7 @@ Item {
         fontSizeMode: Text.Fit
         minimumPixelSize: Math.round(48 * root.uiScale)
         color: root.foreground
-        font.family: "URW Gothic"
+        font.family: root.displayFontFamily
         font.pixelSize: Math.round(192 * root.uiScale)
         font.weight: Font.Normal
         horizontalAlignment: Text.AlignHCenter
@@ -383,6 +407,7 @@ Item {
 
       Rectangle {
         id: inputField
+        objectName: "inputField"
         width: root.fieldWidth
         x: Math.round((parent.width - width) / 2)
         height: root.fieldHeight
@@ -434,7 +459,7 @@ Item {
           passwordCharacter: "\u25CF"
           passwordMaskDelay: 0
           color: root.foreground
-          selectionColor: Qt.rgba(1, 1, 1, 0.25)
+          selectionColor: root.selection
           selectedTextColor: root.foreground
           font.family: root.textFontFamily
           font.pixelSize: text.length > 0
@@ -507,9 +532,14 @@ Item {
           }
 
           Item {
+            id: submitArrow
+            objectName: "submitArrow"
             anchors.centerIn: parent
             width: Math.round(30 * root.uiScale)
             height: Math.round(26 * root.uiScale)
+            // The submit arrow points along the reading direction, mirrored
+            // around its own centre (a bare `width` inside Scale is the view's).
+            transform: Scale { origin.x: submitArrow.width / 2; xScale: root.rightToLeft ? -1 : 1 }
 
             Rectangle {
               x: Math.round(2 * root.uiScale)
@@ -574,6 +604,7 @@ Item {
 
     Rectangle {
       id: mediaRow
+      objectName: "mediaRow"
       width: Math.min(Math.round(470 * root.uiScale), root.width - 48 * root.uiScale)
       height: Math.round(92 * root.uiScale)
       anchors.left: parent.left
@@ -640,7 +671,7 @@ Item {
           textFormat: Text.PlainText
           anchors.centerIn: parent
           visible: artworkImage.status !== Image.Ready
-          text: "󰝚"
+          text: "\u{f075a}"
           color: root.secondary
           opacity: 0.78
           font.family: root.iconFontFamily
@@ -683,6 +714,10 @@ Item {
 
       Row {
         id: mediaControls
+        objectName: "mediaControls"
+        // Transport controls keep their left-to-right order in every language:
+        // mirroring flips this Row's direction, so ask for the opposite.
+        layoutDirection: root.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight
         anchors.right: parent.right
         anchors.rightMargin: Math.round(12 * root.uiScale)
         anchors.verticalCenter: parent.verticalCenter
@@ -787,6 +822,7 @@ Item {
 
     Row {
       id: statusFooter
+      objectName: "statusFooter"
       anchors.right: parent.right
       anchors.top: parent.top
       anchors.margins: Math.round(24 * root.uiScale)

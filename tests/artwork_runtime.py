@@ -123,9 +123,13 @@ with log_path.open('w') as log:
         ipc('track', first, 'First')
         assert status()['path'] == first_path
         ipc('lock', 'false')
+        before = len(jobs())
         ipc('track', 'https://images.example.com/cover.png', 'Remote')
         denied = wait_for(lambda s: s['state'] == 'fallback' and not s['busy'])
         assert denied['error'] == 'host-not-allowed'
+        ipc('track', 'https://images.example.com/other.png', 'Remote 2')
+        time.sleep(0.6)
+        assert len(jobs()) == before, 'a host outside artworkHosts must not start the helper'
         count = len(jobs())
         ipc('lock', 'true')
         ipc('lock', 'false')

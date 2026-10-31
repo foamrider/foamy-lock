@@ -141,6 +141,54 @@ class Boundaries(unittest.TestCase):
             art.encode_png(pixels + b'\x00')
 
 
+class PrecheckMatchesHelper(unittest.TestCase):
+    """Model.artworkPrecheck (QML) may only refuse what artwork.py refuses."""
+
+    def test_root_normalisation_and_symlinks_match_the_helper(self):
+        with tempfile.TemporaryDirectory(prefix='foamy-precheck-') as directory:
+            base = Path(directory)
+            music = base / 'Music'
+            music.mkdir()
+            (music / 'a.png').write_bytes(b'png')
+            (base / 'link').symlink_to(music, target_is_directory=True)
+            url = (music / 'a.png').as_uri()
+            cases = [
+                ([str(music) + '/.'], url, True), ([str(base) + '//Music'], url, True),
+                ([str(music) + '/'], url, True), ([str(base) + '/./Music'], url, True),
+                ([str(music) + '//'], url, True), ([str(music)], url, True),
+                (['/' + str(music)], url, False),          # "//tmp/…" stays distinct, as in POSIX
+                ([str(base / 'link')], url, False),        # symlinked root: refused by the helper only
+                ([str(base / 'link')], (base / 'link' / 'a.png').as_uri(), False),
+                ([str(base / 'Other')], url, False), ([str(music) + '/sub/..'], url, False),
+                ([str(music)], 'file://' + str(music) + '//a.png', False),
+                ([str(music)], 'file://' + str(music) + '/../Music/a.png', False),
+                (['/.'], url, True), (['//'], url, True),
+            ]
+            script = ("const M = require(process.argv[1]); const cases = JSON.parse(process.argv[2]);"
+                      "console.log(JSON.stringify(cases.map(c => M.artworkPrecheck(c[1], [], c[0]))))")
+            verdicts = json.loads(subprocess.run(
+                ['node', '-e', script, str(SOURCE / 'Model.js'), json.dumps([[c[0], c[1]] for c in cases])],
+                capture_output=True, text=True, check=True, timeout=10).stdout)
+            for (roots, source, accepted), verdict in zip(cases, verdicts):
+                with self.subTest(roots=roots, url=source):
+                    try:
+                        art.validate_options([], roots)
+                        art.read_local(art.parse_url(source), roots)
+                        helper = True
+                    except (art.ArtworkError, OSError):
+                        helper = False
+                    self.assertEqual(helper, accepted)
+                    if helper:
+                        self.assertEqual(verdict, '', 'the precheck refused what the helper accepts')
+                    elif verdict:
+                        self.assertFalse(helper)
+            # The string-level refusals are still made without the helper.
+            self.assertEqual(verdicts[6], 'file-outside-roots')
+            self.assertEqual(verdicts[9], 'file-outside-roots')
+            self.assertEqual(verdicts[10], 'invalid-roots')
+            self.assertEqual(verdicts[12], 'invalid-file-path')
+
+
 class RealDecoder(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='foamy-artwork-test-')
@@ -262,15 +310,45 @@ class RealDecoder(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
+    def test_avatar_is_sandboxed_resized_and_private(self):
+        face = self.base / 'face.png'
+        face.write_bytes(self.png)
+        link = self.base / '.face'
+        link.symlink_to(face)
+        result = art.prepare_avatar({'kind': 'avatar', 'path': str(link)})
+        output = Path(result['path'])
+        self.assertEqual(output, self.base / 'cache/omarchy/foamy.lock/avatar.png')
+        self.assertEqual(struct.unpack('>II', output.read_bytes()[16:24]), (256, 256))
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(list(output.parent.glob('.avatar-*')), [])
+        with patch.object(art.subprocess, 'Popen', side_effect=OSError('unavailable')) as launch:
+            with self.assertRaises(OSError):
+                art.prepare_avatar({'kind': 'avatar', 'path': str(face)})
+            self.assertEqual(launch.call_args.args[0][0], '/usr/bin/bwrap')
+
+    def test_avatar_rejects_special_missing_large_and_foreign_formats(self):
+        fifo = self.base / 'fifo'
+        os.mkfifo(fifo)
+        large = self.base / 'large.png'
+        with large.open('wb') as stream:
+            stream.truncate(art.MAX_AVATAR_INPUT + 1)
+        svg = self.base / 'face.svg'
+        svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+        for path, error in [(fifo, 'not-regular-file'), (self.base / 'missing', 'avatar-missing'),
+                            (large, 'input-too-large'), (svg, 'unsupported-format'),
+                            ('relative.png', 'invalid-avatar-path'), (self.base, 'not-regular-file')]:
+            with self.subTest(error=error), self.assertRaisesRegex(art.ArtworkError, error):
+                art.prepare_avatar({'kind': 'avatar', 'path': str(path)})
+
     def test_cli_and_cancel_leave_no_job(self):
         source = self.base / 'source.png'
         source.write_bytes(self.png)
         request = json.dumps({'url': source.as_uri(), 'roots': [str(self.base)]}) + '\n'
-        result = subprocess.run(['/usr/bin/python3', '-I', str(SOURCE / 'artwork.py')],
+        result = subprocess.run(['/usr/bin/python3', '-I', '-B', str(SOURCE / 'artwork.py')],
                                 input=request, text=True, capture_output=True, timeout=10, check=True)
         self.assertTrue(json.loads(result.stdout)['ok'], result.stdout)
         self.assertEqual(result.stderr, '')
-        process = subprocess.Popen(['/usr/bin/python3', '-I', str(SOURCE / 'artwork.py')],
+        process = subprocess.Popen(['/usr/bin/python3', '-I', '-B', str(SOURCE / 'artwork.py')],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         time.sleep(0.1)
         process.send_signal(signal.SIGTERM)
