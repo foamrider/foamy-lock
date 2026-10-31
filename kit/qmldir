@@ -1,4 +1,4 @@
-# foamy-kit 0.3.5 06c49fa56dd4eca7884509f75146489efd9abc2ff181120e6d6cb9620d8d14a8 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.4.0 06c49fa56dd4eca7884509f75146489efd9abc2ff181120e6d6cb9620d8d14a8 — do not edit; change foamy-kit and run sync
 singleton FoamyI18n 1.0 FoamyI18n.qml
 FoamyIpc 1.0 FoamyIpc.qml
 FoamyIpcPreference 1.0 FoamyIpcPreference.qml
