@@ -264,9 +264,8 @@ Item {
       onPositionChanged: root.wakeRequested()
     }
 
-    SystemClock {
+    FoamyWallClock {
       id: lockClock
-      precision: SystemClock.Minutes
     }
 
     Column {
