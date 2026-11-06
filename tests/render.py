@@ -9,7 +9,8 @@ import struct
 import importlib.util
 
 source = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('artwork', source / 'artwork.py')
+# Fixture images (the helper itself is tested in artwork_test.py).
+spec = importlib.util.spec_from_file_location('png_fixture', source / 'tests' / 'png_fixture.py')
 artwork = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(artwork)
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-render-'))

@@ -110,9 +110,10 @@ function selectPlayer(players, includeBrowsers) {
   return fallback
 }
 
-// Python's posixpath.normpath for an absolute path, which artwork.py applies to
-// each root via os.path.abspath: "." and empty parts go, ".." pops, and exactly
-// two leading slashes are kept (POSIX leaves "//" implementation-defined).
+// Python's posixpath.normpath for an absolute path, which the helper applies
+// to each root (as os.path.abspath did in the former artwork.py): "." and
+// empty parts go, ".." pops, and exactly two leading slashes are kept (POSIX
+// leaves "//" implementation-defined).
 function normalizeRoot(path) {
   var text = String(path)
   var initial = text.charAt(0) === "/" ? 1 : 0
@@ -130,7 +131,7 @@ function normalizeRoot(path) {
   return joined || "."
 }
 
-// artwork.py validate_options: one bad root or host refuses every request.
+// The helper's option check: one bad root or host refuses every request.
 var HOST_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 function optionsError(hosts, roots) {
   if (!Array.isArray(hosts) || hosts.length > 32 || hosts.some(function(host) {
@@ -143,13 +144,13 @@ function optionsError(hosts, roots) {
   return ""
 }
 
-// A cheap, reject-only copy of artwork.py's string checks, so the default
+// A cheap, reject-only copy of the helper's string checks, so the default
 // settings (no remote hosts) do not start a helper for every track only to
 // have it refuse. It rejects exactly what the helper rejects from the strings
 // alone (same root normalisation, same prefix rule) and returns "" whenever
 // the helper has to decide: unparsable URLs, and everything that depends on
-// the filesystem (symlinked roots or parents, ownership, size). artwork.py
-// still enforces every rule itself.
+// the filesystem (symlinked roots or parents, ownership, size). The helper
+// (native/) still enforces every rule itself.
 function artworkPrecheck(url, hosts, roots) {
   var text = String(url || "")
   if (!text) return "invalid-url"

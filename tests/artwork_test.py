@@ -2,8 +2,8 @@
 environment Quickshell gives it, one JSON request line on standard input and
 one JSON reply line on standard output.
 
-FOAMY_HELPER is the helper's argv prefix as a JSON list (default: the Python
-artwork.py through tests/legacy_artwork.py); the tests append "artwork".
+FOAMY_HELPER is the helper's argv prefix as a JSON list (default: this
+machine's bin/<arch>/foamy-lock-helper); the tests append "artwork".
 For the aarch64 build through qemu binfmt:
   FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py
 
@@ -80,7 +80,7 @@ def helper_prefix():
     if os.environ.get('FOAMY_HELPER'):
         prefix = json.loads(os.environ['FOAMY_HELPER'])
     else:
-        prefix = ['/usr/bin/python3', '-I', '-B', str(PLUGIN / 'tests' / 'legacy_artwork.py')]
+        prefix = [str(PLUGIN / 'bin' / platform.machine() / 'foamy-lock-helper')]
     program = prefix[0] if '/' in prefix[0] else shutil.which(prefix[0])
     if not program:
         raise RuntimeError(f'helper program not found: {prefix[0]}')
@@ -468,7 +468,7 @@ def respond(status, headers=(), body=b'', chunked=False, delay=0):
 
 
 def public(address):
-    """artwork.py's address rule (Python 3.14 ipaddress)."""
+    """The helper's address rule, as artwork.py had it (Python 3.14 ipaddress)."""
     ip = ipaddress.ip_address(address)
     return not (not ip.is_global or ip.is_multicast or ip.is_unspecified
                 or getattr(ip, 'ipv4_mapped', None) is not None
