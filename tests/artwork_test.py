@@ -34,6 +34,7 @@ import platform
 import re
 import shutil
 import signal
+import socket
 import ssl
 import struct
 import subprocess
@@ -600,7 +601,128 @@ class Https(HttpsBase):
         self.assertLess(self.elapsed, 6.5)
 
 
-FAKE_BWRAP = '''#!/usr/bin/python3 -I
+class TricklingTls:
+    """A raw TLS endpoint for images.example.com and cdn.example.com that
+    sends one TLS-record byte every `gap` seconds: in the handshake (a record
+    header, then the record one byte at a time), or, after a normal handshake
+    and response head, in the records that carry the body. A TLS library
+    reads the socket many times for one such record."""
+
+    def __init__(self, directory, mode, gap=0.5):
+        self.mode, self.gap = mode, gap
+        self.requests = []
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context.load_cert_chain(directory / 'leaf.pem', directory / 'leaf.key')
+        self.listener = socket.create_server(('127.0.0.1', 0))
+        self.listener.settimeout(0.2)
+        self.endpoint = '127.0.0.1:%d' % self.listener.getsockname()[1]
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(timeout=2)
+        self.listener.close()
+
+    def serve(self):
+        while not self.stop.is_set():
+            try:
+                peer, _ = self.listener.accept()
+            except OSError:
+                continue
+            threading.Thread(target=self.handle, args=(peer,), daemon=True).start()
+
+    def trickle(self, peer, data):
+        for byte in data:
+            if self.stop.wait(self.gap):
+                return
+            peer.sendall(bytes([byte]))
+
+    def handle(self, peer):
+        with peer:
+            peer.settimeout(10)
+            try:
+                if self.mode == 'handshake':
+                    peer.recv(65536)
+                    # A 16 KiB handshake record that would take over two hours.
+                    peer.sendall(b'\x16\x03\x03\x40\x00')
+                    self.trickle(peer, bytes(16384))
+                else:
+                    self.respond(peer)
+            except (OSError, ssl.SSLError):
+                pass
+
+    def respond(self, peer):
+        incoming, outgoing = ssl.MemoryBIO(), ssl.MemoryBIO()
+        tls = self.context.wrap_bio(incoming, outgoing, server_side=True)
+
+        def flush():
+            data = outgoing.read()
+            if data:
+                peer.sendall(data)
+
+        def feed():
+            data = peer.recv(65536)
+            if not data:
+                raise ConnectionError('closed')
+            incoming.write(data)
+
+        while True:
+            try:
+                tls.do_handshake()
+                break
+            except ssl.SSLWantReadError:
+                flush()
+                feed()
+        flush()
+        request = b''
+        while b'\r\n\r\n' not in request:
+            try:
+                request += tls.read(65536)
+            except ssl.SSLWantReadError:
+                flush()
+                feed()
+        self.requests.append(request.split(b'\r\n', 1)[0].decode('latin-1'))
+        flush()
+        tls.write(b'HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n')
+        flush()
+        tls.write(b'x' * 100)
+        self.trickle(peer, outgoing.read())
+
+
+class HttpsTrickle(HttpsBase):
+    """One 5 s budget for the whole fetch, however many socket reads the TLS
+    layer makes: a peer trickling TLS-record bytes is `fetch-timeout` at
+    5 s, not `job-timeout` at 9 s. (artwork.py had an independent 5 s
+    ITIMER_REAL timer for this.)"""
+
+    def trickler(self, mode):
+        trickler = TricklingTls(Path(self.directory.name), mode)
+        self.addCleanup(trickler.close)
+        return trickler
+
+    def assert_fetch_timeout(self, reply):
+        self.assertEqual(reply, {'ok': False, 'error': 'fetch-timeout'})
+        self.assertGreater(self.elapsed, 4.5)
+        self.assertLess(self.elapsed, 6.5)
+
+    def test_a_trickled_handshake_is_a_fetch_timeout(self):
+        trickler = self.trickler('handshake')
+        self.assert_fetch_timeout(self.fetch('https://images.example.com/a',
+                                             connect={'8.8.8.8': trickler.endpoint}))
+
+    def test_a_trickled_body_after_a_redirect_is_a_fetch_timeout(self):
+        trickler = self.trickler('body')
+        self.server.routes['/hop'] = respond(302, [('Location', 'https://cdn.example.com/body')])
+        resolve = {'images.example.com': ['8.8.8.8'], 'cdn.example.com': ['8.8.4.4']}
+        connect = {'8.8.8.8': self.server.endpoint, '8.8.4.4': trickler.endpoint}
+        self.assert_fetch_timeout(self.fetch('https://images.example.com/hop', resolve=resolve, connect=connect))
+        self.assertEqual(self.paths(), ['/hop'])
+        self.assertEqual(trickler.requests, ['GET /body HTTP/1.1'])
+
+
+FAKE_BWRAP ='''#!/usr/bin/python3 -I
 import ctypes, hashlib, json, os, resource, subprocess, sys, time
 STATE = {state!r}
 PROBE = {probe!r}

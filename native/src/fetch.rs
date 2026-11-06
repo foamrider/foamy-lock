@@ -13,6 +13,7 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use foamy_helper::net::{self, DeadlineStream};
 use foamy_helper::tls::{self, TlsError, rustls};
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
@@ -33,12 +34,14 @@ fn timeout() -> Fail {
     Fail("fetch-timeout")
 }
 
-/// Maps a transport error: a socket timeout is the fetch deadline (every
-/// socket timeout is set to the time left), anything else a failed source.
+/// Maps a transport error: the fetch deadline (`DeadlineExceeded`, or a
+/// socket timeout, which is always armed to the time left) is
+/// `fetch-timeout`, anything else a failed source.
 fn transport(error: io::Error) -> Fail {
-    match error.kind() {
-        ErrorKind::WouldBlock | ErrorKind::TimedOut => timeout(),
-        _ => Fail("source-unavailable"),
+    if net::is_deadline(&error) {
+        timeout()
+    } else {
+        Fail("source-unavailable")
     }
 }
 
@@ -228,30 +231,20 @@ fn endpoint(address: IpAddr) -> Result<SocketAddr, Fail> {
     }
 }
 
-/// TLS over TCP with every read and write bounded by the deadline. A TCP
-/// close without TLS close_notify reads as the end of the stream (Python's
-/// `suppress_ragged_eofs`); the framing below decides whether that is an
-/// error.
+/// TLS over TCP. The socket is a `DeadlineStream`: rustls may read the
+/// socket many times for one record (a handshake flight, a body record
+/// trickled byte by byte), and each of those reads and writes gets only
+/// the time left, so the handshake, request, head and body of every hop
+/// share the one fetch budget (artwork.py had an independent 5 s timer).
+/// A TCP close without TLS close_notify reads as the end of the stream
+/// (Python's `suppress_ragged_eofs`); the framing below decides whether
+/// that is an error.
 struct Transport {
-    stream: StreamOwned<ClientConnection, TcpStream>,
-    deadline: Instant,
-}
-
-impl Transport {
-    fn bound(&self) -> io::Result<()> {
-        let now = Instant::now();
-        if now >= self.deadline {
-            return Err(io::Error::from(ErrorKind::TimedOut));
-        }
-        let left = Some(self.deadline - now);
-        self.stream.sock.set_read_timeout(left)?;
-        self.stream.sock.set_write_timeout(left)
-    }
+    stream: StreamOwned<ClientConnection, DeadlineStream<TcpStream>>,
 }
 
 impl Read for Transport {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.bound()?;
         match self.stream.read(buf) {
             Err(error) if error.kind() == ErrorKind::UnexpectedEof => Ok(0),
             other => other,
@@ -261,12 +254,10 @@ impl Read for Transport {
 
 impl Write for Transport {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.bound()?;
         self.stream.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.bound()?;
         self.stream.flush()
     }
 }
@@ -553,8 +544,7 @@ fn connect(
     let connection =
         ClientConnection::new(Arc::clone(config), name).map_err(|_| Fail("source-unavailable"))?;
     Ok(Transport {
-        stream: StreamOwned::new(connection, socket),
-        deadline,
+        stream: StreamOwned::new(connection, DeadlineStream::new(socket, deadline)),
     })
 }
 
@@ -761,6 +751,23 @@ mod tests {
         let mut chunks = format!("{:x}\r\n", MAX_INPUT + 10).into_bytes();
         chunks.extend_from_slice(&big);
         assert_eq!(body(&chunks, chunked, None).unwrap().len(), MAX_INPUT + 1);
+    }
+
+    #[test]
+    fn a_passed_deadline_is_a_fetch_timeout_wherever_it_surfaces() {
+        use std::net::{TcpListener, TcpStream};
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let socket = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let mut stream = DeadlineStream::new(socket, Instant::now());
+        let error = stream.read(&mut [0u8; 1]).unwrap_err();
+        assert_eq!(transport(error), timeout());
+        // As a TLS or HTTP layer would wrap it.
+        let error = stream.write(b"x").unwrap_err();
+        assert_eq!(transport(io::Error::other(error)), timeout());
+        assert_eq!(
+            transport(io::Error::from(ErrorKind::ConnectionReset)),
+            Fail("source-unavailable")
+        );
     }
 
     #[test]
