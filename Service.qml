@@ -8,6 +8,7 @@ import Quickshell.Wayland
 import qs.Commons as Commons
 import "kit"
 import "kit/FoamyIpcResolver.js" as IpcResolver
+import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
 // Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
@@ -63,6 +64,9 @@ Item {
   property string userAvatarRenderPath: ""
   property int userAvatarVersion: 0
   property bool avatarThumbnailPending: false
+  // No helper binary for this CPU (exit 126/127): the initial is shown and
+  // the helper is not started again.
+  property bool avatarHelperUnavailable: false
   property string lastEvent: "init"
   property string lastEventAt: ""
   property bool strandedLock: false
@@ -302,8 +306,12 @@ Item {
       avatarThumbnailPending = true
       return
     }
+    if (avatarHelperUnavailable) {
+      applyAvatarResult('{"ok":false,"error":"helper-unavailable"}')
+      return
+    }
 
-    // The same sandboxed decoder as media artwork (artwork.py), bounded by
+    // The same sandboxed decoder as media artwork (foamy-lock-helper), bounded by
     // its own alarm and an outer timeout, so a pathological picture can
     // neither run ImageMagick delegates nor hang the refresh.
     avatarThumbnailProc.request = JSON.stringify({ kind: "avatar", path: userAvatarPath })
@@ -958,8 +966,8 @@ Item {
   Process {
     id: avatarThumbnailProc
     property string request: ""
-    command: ["timeout", "--kill-after=1s", "10s", "/usr/bin/python3", "-I", "-B",
-      decodeURIComponent(Qt.resolvedUrl("artwork.py").toString().replace(/^file:\/\//, ""))]
+    command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
     clearEnvironment: true
     environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
       PATH: "/usr/bin", LANG: "C.UTF-8" })
@@ -969,7 +977,12 @@ Item {
     }
     stdout: StdioCollector { id: avatarOutput; waitForEnd: true }
     onExited: function(exitCode) {
-      root.applyAvatarResult(avatarOutput.text)
+      if (FoamyNative.unavailable(exitCode)) {
+        root.avatarHelperUnavailable = true
+        root.applyAvatarResult('{"ok":false,"error":"helper-unavailable"}')
+      } else {
+        root.applyAvatarResult(avatarOutput.text)
+      }
 
       if (avatarThumbnailPending) {
         avatarThumbnailPending = false

@@ -129,7 +129,7 @@ test('artwork precheck refuses what the helper would, without spawning it', () =
   assert.equal(Model.artworkPrecheck('file:///bad%zz.png', [], ['/tmp']), '')
 })
 
-test('artwork roots are normalised exactly like os.path.abspath in artwork.py', () => {
+test('artwork roots are normalised exactly like os.path.abspath (the helper\'s rule)', () => {
   const cases = {'/home/u/Music/.': '/home/u/Music', '/home//u/Music': '/home/u/Music', '/home/u/Music/': '/home/u/Music',
     '//home/u': '//home/u', '///home/u': '/home/u', '/.': '/', '//': '//', '/a/./b': '/a/b', '/a/b/../c': '/a/c'}
   for (const [root, normal] of Object.entries(cases)) assert.equal(Model.normalizeRoot(root), normal, root)

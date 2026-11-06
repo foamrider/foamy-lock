@@ -11,7 +11,8 @@ import tempfile
 import time
 
 source = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('artwork', source / 'artwork.py')
+# Fixture images (the helper itself is tested in artwork_test.py).
+spec = importlib.util.spec_from_file_location('png_fixture', source / 'tests' / 'png_fixture.py')
 artwork = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(artwork)
 commons = Path(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'))
@@ -27,7 +28,7 @@ app.mkdir()
 shutil.copy(source / 'Model.js', app)
 shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
-shutil.copy(source / 'artwork.py', app)
+(app / 'bin').symlink_to(source / 'bin', target_is_directory=True)
 mock = app / 'mocks'
 mock.mkdir()
 (mock / 'SessionLock.qml').write_text('''import QtQuick

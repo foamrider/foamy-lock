@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import signal
 import subprocess
@@ -10,7 +11,8 @@ import tempfile
 import time
 
 source = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('artwork', source / 'artwork.py')
+# Fixture images (the helper itself is tested in artwork_test.py).
+spec = importlib.util.spec_from_file_location('png_fixture', source / 'tests' / 'png_fixture.py')
 artwork = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(artwork)
 base = Path(tempfile.mkdtemp(prefix='foamy-artwork-runtime-'))
@@ -22,14 +24,17 @@ cache = base / 'cache'
 cache.mkdir()
 for name in ['Artwork.qml', 'Model.js']:
     shutil.copy(source / name, app)
-shutil.copy(source / 'artwork.py', app / 'implementation.py')
-# Record each real helper invocation. The slow case deliberately returns after
-# SIGTERM to prove that generation checks reject results from a cancelled job.
-(app / 'artwork.py').write_text('''import importlib.util, io, json, os, signal, sys, time
-from pathlib import Path
-spec = importlib.util.spec_from_file_location("implementation", Path(__file__).with_name("implementation.py"))
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+# The plugin's stamped kit (FoamyNative) and a recording stand-in for the
+# helper at bin/<arch>/foamy-lock-helper: it logs each real invocation and
+# execs the real helper. The slow case deliberately returns after SIGTERM to
+# prove that generation checks reject results from a cancelled job.
+(app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
+machine = platform.machine()
+helper = app / 'bin' / machine / 'foamy-lock-helper'
+helper.parent.mkdir(parents=True)
+helper.write_text('''#!/usr/bin/python3 -I
+import json, os, signal, sys, time
+REAL = %r
 line = sys.stdin.buffer.readline()
 request = json.loads(line)
 with open(os.environ["HOME"] + "/jobs", "a") as record:
@@ -39,9 +44,13 @@ if request["url"].endswith("slow.png"):
     time.sleep(0.8)
     print(json.dumps({"ok": True, "path": os.environ["XDG_CACHE_HOME"] + "/omarchy/foamy.lock/artwork/" + "a" * 64 + ".png"}))
 else:
-    sys.stdin = io.TextIOWrapper(io.BytesIO(line))
-    module.main()
-''')
+    read, write = os.pipe()
+    os.write(write, line)
+    os.close(write)
+    os.dup2(read, 0)
+    os.execv(REAL, [REAL, *sys.argv[1:]])
+''' % str(source / 'bin' / machine / 'foamy-lock-helper'))
+helper.chmod(0o755)
 for name, color in [('first.png', [34, 120, 156]), ('second.png', [140, 90, 55])]:
     (cache / name).write_bytes(artwork.encode_png(bytes(color) * 256 * 256))
 (app / 'shell.qml').write_text('''import QtQuick
@@ -149,9 +158,23 @@ with log_path.open('w') as log:
         ready = wait_for(lambda s: s['state'] == 'ready' and not s['busy'])
         assert ready['path'] != first_path
         assert len(jobs()) == count + 1
+        # No helper for this CPU (bash's exec exits 127): fallback, logged
+        # once, and no helper is started for later tracks.
+        helper.rename(helper.with_name('moved-away'))
+        for index in range(3):
+            (cache / f'other{index}.png').write_bytes(artwork.encode_png(bytes([index, 1, 2]) * 256 * 256))
+        ipc('track', (cache / 'other0.png').as_uri(), 'Unavailable')
+        unavailable = wait_for(lambda s: s['state'] == 'fallback' and not s['busy'])
+        assert unavailable['error'] == 'helper-unavailable', unavailable
+        for index in [1, 2]:
+            ipc('track', (cache / f'other{index}.png').as_uri(), f'Unavailable {index}')
+            state = status()
+            assert state['state'] == 'fallback' and state['error'] == 'helper-unavailable' and not state['busy'], state
+        helper.with_name('moved-away').rename(helper)
         ipc('enabled', 'false')
         assert status()['state'] == 'empty' and not status()['path']
-        print('PASS: real thumbnail, locked cache hit/miss, denied HTTPS, failure backoff, cancellation, stale result, coalescing, disabled artwork')
+        assert log_path.read_text().count('foamy.lock artwork: helper-unavailable') == 1, 'logged once'
+        print('PASS: real thumbnail, locked cache hit/miss, denied HTTPS, failure backoff, cancellation, stale result, coalescing, unavailable helper, disabled artwork')
     finally:
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)

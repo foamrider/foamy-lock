@@ -21,11 +21,16 @@ font. A theme that styles the stock lock (`[lock]` colours in `shell.toml`: `tex
 `placeholder`, `background`, `border`, `selection`, `text-error`, `border-error`)
 recolours the glass; without those entries the lock keeps its white-on-glass look.
 
-Artwork and the avatar thumbnail additionally use system Python 3, ImageMagick 7,
-and Bubblewrap with unprivileged namespaces and seccomp support (x86-64 or AArch64
-Linux). If the helper or its sandbox cannot run, the music icon (or the account
-initial) is shown. Artwork has no unsandboxed decoding fallback, and authentication
-depends on neither.
+Artwork and the avatar thumbnail additionally use ImageMagick 7 and Bubblewrap
+with unprivileged namespaces and seccomp support. They are prepared by the plugin's
+bundled helper, `bin/<arch>/foamy-lock-helper` (static binaries for x86-64 and
+AArch64 Linux; no Python or other runtime). Remote artwork over HTTPS also needs a
+CPU with AES and carry-less multiplication instructions (on x86-64 also AVX2, BMI2
+and ADX: Intel Broadwell, AMD Zen or newer; on AArch64 the ARMv8 crypto extensions,
+so not a Raspberry Pi 4); without them remote artwork reports `https-unsupported`.
+If the helper or its sandbox cannot run, the music icon (or the account initial) is
+shown. Artwork has no unsandboxed decoding fallback, and authentication depends on
+neither.
 
 Install while your session is unlocked:
 
@@ -173,7 +178,7 @@ separate helper reads permitted artwork and decodes it in a Bubblewrap sandbox
 without network, home-directory, session-bus, or desktop-socket access. It accepts
 static PNG, JPEG, and WebP only. ImageMagick delegates and other image coders are
 disabled, and the decoder cannot create subprocesses or additional namespaces.
-The sandbox returns exactly 256 × 256 RGB pixels. The Python supervisor checks
+The sandbox returns exactly 256 × 256 RGB pixels. The helper checks
 their length and creates a minimal PNG without copying source metadata or source
 compressed data. Only that thumbnail reaches the lock view.
 
@@ -243,6 +248,8 @@ works again. `host-not-allowed` means remote artwork was not opted in;
 `file-outside-roots` means the cover is outside the permitted directories.
 `decoder-unavailable` means Bubblewrap or ImageMagick is missing; `decode-failed`
 can indicate a rejected image, a resource limit, or unavailable sandbox support.
+`helper-unavailable` means there is no helper binary for this CPU; artwork then
+stays on the music icon and no helper is started again until the shell reloads.
 
 ## Validation
 
@@ -251,11 +258,39 @@ omarchy plugin validate .
 /usr/lib/qt6/bin/qmllint Artwork.qml Service.qml LockView.qml
 node --test tests/*.test.cjs
 python3 -I -B -m unittest discover -s tests -p artwork_test.py -v
+FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py
 python3 -I -B tests/artwork_runtime.py
 python3 -I -B tests/render.py
 python3 -I -B tests/runtime.py
 bash tests/kit-check.sh
 ```
+
+The tests are Python 3 and Node (development only; the plugin does not need
+them at runtime). `artwork_test.py` runs the helper as a process: it checks the
+request/reply contract, the exact Bubblewrap command line, environment, rlimits,
+inherited descriptors, policy and seccomp program (through stand-in `bwrap` and
+`magick` scripts in an outer Bubblewrap namespace), HTTPS against a local TLS
+server, and the real sandbox. `FOAMY_HELPER` selects another build; the aarch64
+binary runs through qemu binfmt, which has no seccomp, so its real-sandbox tests
+are skipped. The HTTPS tests use the helper's test-only `FOAMY_LOCK_TEST_RESOLVE`
+and `FOAMY_LOCK_TEST_CONNECT` overrides (documented in `native/src/main.rs`; the
+shell clears the helper's environment, so they never apply there).
+
+### Rebuilding the helper
+
+The helper's source is `native/` (Rust; its contract is the doc comment at the top
+of `native/src/main.rs`), built with foamy-kit's tool, which needs rustup with the
+toolchain in `rust-toolchain.toml`:
+
+```sh
+export CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-lock   # never a target/ inside the plugin
+~/GitHub/Personal/foamy-kit/tools/build-native.sh . --test  # fmt, clippy, unit tests
+~/GitHub/Personal/foamy-kit/tools/build-native.sh .         # both arches into bin/, writes native/native.pin
+~/GitHub/Personal/foamy-kit/tools/build-native.sh . --verify
+```
+
+Commit the binaries with `native/native.pin`; `tests/kit-check.sh` refuses
+binaries that are stale or don't match the pin.
 
 Shared foamy components (translations, IPC, style tokens) live in `kit/`, copied
 from [foamy-kit](https://github.com/foamrider/foamy-kit); `tests/kit-check.sh`
