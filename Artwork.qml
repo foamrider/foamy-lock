@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
 
 Item {
@@ -26,6 +27,9 @@ Item {
   property var job: null
   property var entries: []
   property double lastStarted: 0
+  // No helper binary for this CPU (exit 126/127): artwork stays on the
+  // fallback and no job is started again.
+  property bool helperUnavailable: false
   // Each failure code is logged once until artwork works again, so a
   // rejected source does not write a warning for every track.
   property var loggedErrors: ({})
@@ -84,6 +88,11 @@ Item {
       return
     }
     if (locked) { state = "locked-miss"; return }
+    if (helperUnavailable) {
+      state = "fallback"
+      error = "helper-unavailable"
+      return
+    }
     if (entry && Date.now() < entry.retryAt) {
       state = "fallback"
       error = entry.error
@@ -148,7 +157,7 @@ Item {
   }
   Process {
     id: worker
-    command: ["/usr/bin/python3", "-I", "-B", decodeURIComponent(Qt.resolvedUrl("artwork.py").toString().replace(/^file:\/\//, ""))]
+    command: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"])
     clearEnvironment: true
     environment: ({ HOME: Quickshell.env("HOME"), XDG_CACHE_HOME: root.cacheHome,
       XDG_RUNTIME_DIR: Quickshell.env("XDG_RUNTIME_DIR"), PATH: "/usr/bin", LANG: "C.UTF-8" })
@@ -157,10 +166,16 @@ Item {
       write(root.job.request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.acceptResult(text) }
-    onExited: {
+    // The helper always prints one line; no output means it never ran or was
+    // killed, which onExited settles (helper-unavailable, helper-exited).
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: if (text) root.acceptResult(text) }
+    onExited: function(exitCode) {
       watchdog.stop()
       root.busy = false
+      if (FoamyNative.unavailable(exitCode)) {
+        root.helperUnavailable = true
+        root.acceptResult('{"ok":false,"error":"helper-unavailable"}')
+      }
       // Stream delivery can precede or follow exit. Defer until both have had
       // a chance to run, then recover failed starts or schedule the newest track.
       Qt.callLater(function() {

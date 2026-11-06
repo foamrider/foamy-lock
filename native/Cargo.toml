@@ -1,0 +1,20 @@
+[package]
+name = "foamy-lock-helper"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+# Kit: bounded child processes, seccomp/bubblewrap (sandbox) and HTTPS through
+# rustls + Graviola with the system trust store (tls).
+foamy-helper = { path = "../kit/rust/foamy-helper", features = ["sandbox", "tls"] }
+# The one JSON request and reply.
+serde_json = "1"
+# openat/fstat/mkdir without following symlinks, getrandom, PR_SET_PDEATHSIG,
+# the signal pipe.
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "pipe", "process", "rand"] }
+# Signal mask and sigtimedwait for the cancel/deadline thread, close_range.
+libc = "0.2.153"
+# Content-addressed thumbnail names; pure Rust (Graviola's SHA-256 would need AVX).
+sha2 = { version = "0.10", default-features = false }

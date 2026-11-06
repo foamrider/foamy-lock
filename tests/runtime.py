@@ -27,7 +27,7 @@ app.mkdir()
 shutil.copy(source / 'Model.js', app)
 shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
-shutil.copy(source / 'artwork.py', app)
+(app / 'bin').symlink_to(source / 'bin', target_is_directory=True)
 mock = app / 'mocks'
 mock.mkdir()
 (mock / 'SessionLock.qml').write_text('''import QtQuick
