@@ -665,10 +665,45 @@ fn look(test: &Test) -> R {
             "previewPreset {name:?}"
         );
     }
+    // A picture goes through the helper's sandbox; the view gets only the
+    // prepared PNG, and a missing file leaves the theme colour.
+    let picture = test.path("lake.png");
+    write(
+        &picture,
+        crate::png::encode_rgb(64, 48, &vec![90; 64 * 48 * 3]),
+    )?;
+    test.write_config(
+        STOCK_OFF,
+        json!({"background": {"source": "picture", "path": picture.display().to_string(), "blur": 0.5}}),
+    )?;
+    let state = test.wait_for(|s| {
+        Ok(!text(s, "picturePath")?.is_empty() || !text(s, "pictureError")?.is_empty())
+    })?;
+    let prepared = text(&state, "picturePath")?.to_string();
+    ensure!(
+        text(&state, "pictureError")?.is_empty()
+            && prepared.contains("/omarchy/foamy.lock/background/"),
+        "{state}"
+    );
+    let bytes = std::fs::read(&prepared).map_err(|e| format!("{prepared}: {e}"))?;
+    ensure!(
+        crate::png::size(&bytes).is_some_and(|(w, h)| w >= 16 && h >= 16),
+        "the prepared background is a PNG"
+    );
+    test.write_config(
+        STOCK_OFF,
+        json!({"background": {"source": "picture", "path": test.path("missing.png").display().to_string()}}),
+    )?;
+    let state = test.wait_for(|s| Ok(text(s, "pictureError")? == "background-missing"))?;
+    ensure!(text(&state, "picturePath")?.is_empty(), "{state}");
     test.write_config(STOCK_OFF, json!({}))?;
-    test.wait_for(|s| Ok(text(s, "preset")? == "foamy" && text(s, "configError")?.is_empty()))?;
+    test.wait_for(|s| {
+        Ok(text(s, "preset")? == "foamy"
+            && text(s, "configError")?.is_empty()
+            && text(s, "pictureError")?.is_empty())
+    })?;
     println!(
-        "PASS: look presets and overrides reload live, look and settings mistakes stay apart, previewPreset shows without saving"
+        "PASS: look presets and overrides reload live, look and settings mistakes stay apart, previewPreset shows without saving, sandboxed picture background and missing picture"
     );
     Ok(())
 }

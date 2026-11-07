@@ -26,6 +26,7 @@ Item {
   signal wakeRequested()
   property var look: null
   property bool primary: true
+  property bool backgroundPrepared: false
   signal artworkFailed(string path)
   signal layoutFellBack(string error, string preset)
 }

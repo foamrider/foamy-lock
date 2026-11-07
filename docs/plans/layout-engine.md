@@ -1,6 +1,6 @@
 # Plan: lock-screen layout engine (foamy-lock 1.3.0)
 
-Status: in progress (steps 0–3, 5, 6 done; see Progress) · reviewed, revision 2 · 2026-11-07 · branch `feat/layout-engine` off `dev`
+Status: offline work done (steps 0–6; see Progress); live validation pending · reviewed, revision 2 · 2026-11-07 · branch `feat/layout-engine` off `dev`
 
 ## Goal
 
@@ -279,9 +279,11 @@ screen yet; that waits for the user's go.
 - **3:** second styles and presets.
 - **5:** primary surface.
 - **6:** status fields and `previewPreset`.
-- **4:** the QML half is done: sources, dim, glass, GPU blur. The helper's
-  `background` kind, which decodes and blurs your picture in the sandbox, is
-  in progress.
+- **4:** sources, dim, glass, GPU blur, and the helper's `background` kind:
+  your picture is decoded, cropped and blurred in the sandbox while unlocked,
+  and the runtime test covers it through the real helper.
+- **7:** the README is done. The version bump and release wait for live
+  validation.
 
 What changed from the plan while building:
 - **One JavaScript file.** Presets live in Layout.js. A second `.js`

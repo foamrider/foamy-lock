@@ -94,6 +94,15 @@ Item {
   // The last geometry fallback a lock view reported ("" when none).
   property string layoutError: ""
   property string fallbackPreset: ""
+  // The look's own picture, prepared by the helper's sandbox while unlocked
+  // (decoded, cropped to the largest screen, blurred). Qt never decodes the
+  // original; without a prepared file the theme colour shows.
+  readonly property bool pictureWanted: look.background.source === "picture" && look.background.path !== ""
+  property string pictureRenderPath: ""
+  property string pictureError: ""
+  property string pictureRequestKey: ""
+  property bool picturePending: false
+  property bool pictureHelperUnavailable: false
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -396,8 +405,75 @@ Item {
 
   onPreviewVisibleChanged: if (!previewVisible) previewLook = null
   // Fallback reports describe the views of the current lock and look.
-  onLockRequestedChanged: if (lockRequested) clearLayoutFallback()
-  onLookChanged: clearLayoutFallback()
+  onLockRequestedChanged: {
+    if (lockRequested) clearLayoutFallback()
+    // A picture changed while locked is prepared once unlocked.
+    else refreshPicture()
+  }
+  onLookChanged: {
+    clearLayoutFallback()
+    // After the bindings that read the look have caught up.
+    Qt.callLater(refreshPicture)
+  }
+
+  // The largest screen in logical pixels, inside the helper's bounds.
+  function pictureSize() {
+    var screens = Quickshell.screens || []
+    var width = 0
+    var height = 0
+    for (var i = 0; i < screens.length; i++) {
+      if (!screens[i]) continue
+      width = Math.max(width, Math.round(screens[i].width || 0))
+      height = Math.max(height, Math.round(screens[i].height || 0))
+    }
+    if (width < 16 || height < 16) return [1920, 1080]
+    return [Math.min(width, 7680), Math.min(height, 4320)]
+  }
+
+  function refreshPicture() {
+    var background = look.background
+    if (background.source !== "picture" || !background.path) {
+      pictureRequestKey = ""
+      pictureRenderPath = ""
+      pictureError = ""
+      return
+    }
+    var size = pictureSize()
+    var request = { kind: "background", path: background.path, width: size[0], height: size[1],
+      blur: background.blur }
+    var key = JSON.stringify(request)
+    if (key === pictureRequestKey) return
+    // Prepared while unlocked only: a lock keeps what it was shown with.
+    if (currentlyLocked()) return
+    if (pictureProc.running) {
+      picturePending = true
+      return
+    }
+    pictureRequestKey = key
+    if (pictureHelperUnavailable) {
+      applyPictureResult('{"ok":false,"error":"helper-unavailable"}')
+      return
+    }
+    pictureProc.request = key
+    pictureProc.stdinEnabled = true
+    pictureProc.running = true
+  }
+
+  function applyPictureResult(text) {
+    var result = null
+    try { result = JSON.parse(String(text || "")) } catch (error) { result = null }
+    var directory = avatarCacheDirectory + "/background/"
+    if (result && result.ok === true && typeof result.path === "string"
+        && result.path.indexOf(directory) === 0 && /^[0-9a-f]{64}\.png$/.test(result.path.slice(directory.length))) {
+      pictureError = ""
+      pictureRenderPath = result.path
+    } else {
+      pictureError = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
+        ? result.error : "picture-helper-failed"
+      pictureRenderPath = ""
+      console.warn("foamy.lock: background picture unavailable (" + pictureError + "); showing the theme colour")
+    }
+  }
 
   function clearLayoutFallback() {
     layoutError = ""
@@ -734,7 +810,8 @@ Item {
         primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
         onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
-        backgroundPath: root.lockWallpaperPath
+        backgroundPath: root.pictureWanted ? root.pictureRenderPath : root.lockWallpaperPath
+        backgroundPrepared: root.pictureWanted
         backgroundVersion: root.backgroundVersion
         fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
         fingerprintUnavailable: root.fingerprintUnavailable
@@ -774,7 +851,8 @@ Item {
 
     LockView {
       anchors.fill: parent
-      backgroundPath: root.lockWallpaperPath
+      backgroundPath: !root.previewLook && root.pictureWanted ? root.pictureRenderPath : root.lockWallpaperPath
+      backgroundPrepared: !root.previewLook && root.pictureWanted
       backgroundVersion: root.backgroundVersion
       fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
       fingerprintUnavailable: root.fingerprintUnavailable
@@ -1024,6 +1102,34 @@ Item {
   }
 
   Process {
+    id: pictureProc
+    property string request: ""
+    // The helper's own job limit is 9 s.
+    command: ["timeout", "--kill-after=1s", "12s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: pictureOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (FoamyNative.unavailable(exitCode)) {
+        root.pictureHelperUnavailable = true
+        root.applyPictureResult('{"ok":false,"error":"helper-unavailable"}')
+      } else {
+        root.applyPictureResult(pictureOutput.text)
+      }
+      if (root.picturePending) {
+        root.picturePending = false
+        root.refreshPicture()
+      }
+    }
+  }
+
+  Process {
     id: avatarThumbnailProc
     property string request: ""
     command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(
@@ -1159,6 +1265,7 @@ Item {
       }
       root.knownScreenCount = screens
       root.requestSessionLock()
+      root.refreshPicture()
 
       // A monitor still coming up has no workspace, so cannot answer yet.
       strandedLockRetryTimer.rearm()
@@ -1248,6 +1355,8 @@ Item {
       avatarPath: root.userAvatarPath,
       avatarRenderPath: root.userAvatarRenderPath,
       avatarError: root.avatarError,
+      pictureError: root.pictureError,
+      picturePath: root.pictureRenderPath,
       conflict: reasons.length > 0,
       conflictReasons: reasons,
       ipcFastPath: IpcResolver.fastPath(root),
