@@ -20,7 +20,7 @@ var STYLES = {
   date: ["long", "caps", "short", "serif"],
   clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog"],
   account: ["avatar", "chip", "name"],
-  password: ["pill", "underline"],
+  password: ["pill", "underline", "box", "dots", "terminal", "card"],
   media: ["card", "line"],
   status: ["text", "icons", "pill"]
 }

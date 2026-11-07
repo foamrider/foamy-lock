@@ -9,5 +9,7 @@
   "Limited connection": "Limited connection",
   "Offline": "Offline",
   "Checking…": "Checking…",
-  "Authentication failed (%1)": "Authentication failed (%1)"
+  "Authentication failed (%1)": "Authentication failed (%1)",
+  "Welcome back": "Welcome back",
+  "Password:": "Password:"
 }

@@ -393,13 +393,13 @@ Item {
     }
 
     // A scrim keeps white type legible; 0.25 (the default) preserves
-    // wallpaper detail. The look's `dim` sets it, but an underline field has
-    // no surface of its own, so it keeps at least 0.15 behind it.
+    // wallpaper detail. The look's `dim` sets it, but an underline or dots
+    // field has no surface of its own, so it keeps at least 0.15 behind it.
     Rectangle {
       objectName: "scrim"
       anchors.fill: parent
       color: Qt.rgba(0.005, 0.01, 0.025, Math.max(root.effectiveLook.background.dim,
-        root.placed.password.style === "underline" ? 0.15 : 0))
+        ["underline", "dots"].indexOf(root.placed.password.style) !== -1 ? 0.15 : 0))
     }
 
     MouseArea {

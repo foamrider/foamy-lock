@@ -15,27 +15,132 @@ Rectangle {
   // Off on a surface that doesn't get the keys: the editor stays live and
   // focused there, only the field's chrome is hidden (see LockView.primary).
   property bool chromeVisible: true
-  // "pill" (glass pill once typing starts) or "underline" (a line under the
-  // text, no surface). Only the surround changes; the editor is the same.
+  // Only the surround changes between styles; the editor is the same. Each
+  // style has a fixed size, whatever is typed or shown.
+  // - "pill": a glass pill once typing starts.
+  // - "underline": a line under the text, no surface.
+  // - "box": a squarer glass box, always shown, with the hint inside and the
+  //   submit arrow in its own segment.
+  // - "dots": no surface: centred dots, the hint and states as small text.
+  // - "terminal": a dark box in the mono font with a "Password:" prompt
+  //   before the editor and a block caret.
+  // - "card": a glass card with a greeting above a pill.
   property string styleName: "pill"
   readonly property bool underline: styleName === "underline"
+  readonly property bool box: styleName === "box"
+  readonly property bool dotsOnly: styleName === "dots"
+  readonly property bool terminal: styleName === "terminal"
+  readonly property bool card: styleName === "card"
   // A password being typed is never invisible, whichever surface has it.
   readonly property bool chromeShown: chromeVisible || view.passwordText.length > 0
   readonly property alias input: passwordInput
   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
     : 1
+  readonly property bool mirrored: view.rightToLeft
+  readonly property string editorFontFamily: terminal ? FoamyStyle.monoFamily : view.textFontFamily
+  // The surface behind everything: glass for the pill while typing, always
+  // for the box and card, a dark panel for the terminal, none otherwise.
+  readonly property bool surfaceShown: chromeShown && (box || card || terminal || (styleName === "pill" && view.showPassword))
+  readonly property real submitWidth: Math.round(70 * view.uiScale)
+  // The submit arrow: the pill and card while typing, the box always; the
+  // dots and terminal submit with Enter alone.
+  readonly property bool submitShown: chromeShown && (box || (!dotsOnly && !terminal && view.showPassword))
+  // The editor's inset from the leading and trailing edges of its area.
+  readonly property real inset: Math.round(16 * view.uiScale)
+  readonly property real editorLeading: terminal ? 0 : dotsOnly ? inset : view.fieldLeadingInset
+  readonly property real editorTrailing: dotsOnly || terminal ? inset : submitWidth
+  readonly property real cardPadding: Math.round(16 * view.uiScale)
 
   objectName: "inputField"
-  width: view.fieldWidth
-  height: view.fieldHeight
-  radius: underline ? 0 : height / 2
-  color: !underline && chromeShown && view.showPassword ? view.glass : "transparent"
-  border.width: !underline && chromeShown && view.showPassword ? 1 : 0
+  width: box || terminal || card ? Math.min(Math.round((terminal ? 440 : 360) * view.uiScale), view.contentWidth) : view.fieldWidth
+  height: box ? Math.round(56 * view.uiScale) : terminal ? Math.round(50 * view.uiScale)
+    : card ? Math.round(138 * view.uiScale) : view.fieldHeight
+  radius: box ? Math.round(12 * view.uiScale) : terminal ? Math.round(6 * view.uiScale)
+    : card ? Math.round(24 * view.uiScale) : underline || dotsOnly ? 0 : height / 2
+  color: !surfaceShown ? "transparent" : terminal ? Qt.rgba(0.012, 0.016, 0.03, 0.72) : view.glass
+  border.width: surfaceShown ? 1 : 0
   border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
   // Not clipped: the unlock hint below shows only while the field has no
   // fill or border, and a translated hint can be wider than the pill.
   // The editor and its placeholder clip and elide on their own.
+
+  // Where the editor sits: the whole field, the part after the terminal's
+  // prompt, or the card's inner pill. Plain x/y, mirrored by hand.
+  Item {
+    id: editorArea
+    objectName: "editorArea"
+    readonly property real promptEnd: field.inset + prompt.implicitWidth + Math.round(10 * field.view.uiScale)
+    x: field.card ? field.cardPadding : field.terminal && !field.mirrored ? promptEnd : 0
+    y: field.card ? field.height - height - field.cardPadding : 0
+    width: field.card ? field.width - 2 * field.cardPadding : field.terminal ? field.width - promptEnd : field.width
+    height: field.card ? Math.round(50 * field.view.uiScale) : field.height
+  }
+
+  // Where the idle hint sits: the editor area without the box's arrow segment.
+  Item {
+    id: hintArea
+    x: editorArea.x + (field.box && field.mirrored ? field.submitWidth : 0)
+    y: editorArea.y
+    width: editorArea.width - (field.box ? field.submitWidth : 0)
+    height: editorArea.height
+  }
+
+  Text {
+    id: greeting
+    objectName: "cardGreeting"
+    visible: field.card && field.chromeShown
+    x: Math.round(22 * field.view.uiScale)
+    y: Math.round(20 * field.view.uiScale)
+    width: field.width - 2 * x
+    textFormat: Text.PlainText
+    text: FoamyI18n.t("Welcome back")
+    color: field.view.foreground
+    font.family: field.view.textFontFamily
+    font.pixelSize: Math.round(20 * field.view.uiScale)
+    font.weight: Font.Medium
+    horizontalAlignment: field.alignment === "start" ? Text.AlignLeft : field.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
+    elide: Text.ElideRight
+  }
+
+  // The card's inner pill, around the editor.
+  Rectangle {
+    objectName: "cardPill"
+    visible: field.card && field.chromeShown
+    x: editorArea.x
+    y: editorArea.y
+    width: editorArea.width
+    height: editorArea.height
+    radius: height / 2
+    color: Qt.rgba(1, 1, 1, field.view.showPassword ? 0.08 : 0.05)
+    border.width: 1
+    border.color: field.view.errorState ? Commons.Color.lock.borderError : field.view.glassBorder
+  }
+
+  Text {
+    id: prompt
+    objectName: "terminalPrompt"
+    visible: field.terminal && field.chromeShown
+    x: field.mirrored ? field.width - field.inset - width : field.inset
+    y: Math.round((field.height - height) / 2)
+    textFormat: Text.PlainText
+    text: FoamyI18n.t("Password:")
+    color: field.view.foreground
+    opacity: 0.72
+    font.family: FoamyStyle.monoFamily
+    font.pixelSize: Math.round(16 * field.view.uiScale)
+    font.weight: Font.Medium
+  }
+
+  // The box's submit segment: a divider before the arrow.
+  Rectangle {
+    visible: field.box && field.chromeShown
+    x: field.mirrored ? field.submitWidth : field.width - field.submitWidth - width
+    y: Math.round(10 * field.view.uiScale)
+    width: 1
+    height: field.height - 2 * y
+    color: field.view.glassBorder
+  }
 
   Rectangle {
     objectName: "fieldUnderline"
@@ -50,7 +155,7 @@ Rectangle {
 
   TextMetrics {
     id: dotMetrics
-    font.family: field.view.textFontFamily
+    font.family: field.editorFontFamily
     font.pixelSize: field.view.passwordDotFontSize
     font.letterSpacing: field.view.passwordDotLetterSpacing
     text: "●".repeat(passwordInput.text.length)
@@ -58,16 +163,22 @@ Rectangle {
 
   // The hint is bounded by the view's content width, not the pill: it wraps
   // to a second line (two lines fit the field's height) and elides only beyond.
+  // Inside a box, card or terminal it stays within the surface; the terminal
+  // starts it after the prompt.
   Row {
     id: unlockHint
     objectName: "unlockHint"
-    anchors.centerIn: parent
+    readonly property bool contained: field.box || field.card || field.terminal
+    readonly property real limit: contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.view.uiScale)) : field.view.contentWidth
+    x: !field.terminal ? hintArea.x + (hintArea.width - width) / 2
+      : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
+    y: hintArea.y + (hintArea.height - height) / 2
     spacing: Math.round(10 * field.view.uiScale)
     visible: field.chromeShown && !field.view.showPassword
 
     FingerprintIcon {
       id: unlockHintIcon
-      width: Math.round(26 * field.view.uiScale)
+      width: Math.round((field.dotsOnly || field.terminal ? 20 : 26) * field.view.uiScale)
       height: width
       anchors.verticalCenter: parent.verticalCenter
       lineColor: field.view.foreground
@@ -78,12 +189,13 @@ Rectangle {
       objectName: "unlockHintText"
       textFormat: Text.PlainText
       text: field.view.fingerprintConfigured && !field.view.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
-      width: Math.min(implicitWidth, field.view.contentWidth
+      width: Math.min(implicitWidth, unlockHint.limit
         - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
       color: field.view.foreground
-      font.family: field.view.textFontFamily
-      font.pixelSize: Math.round(15 * field.view.uiScale)
-      horizontalAlignment: Text.AlignHCenter
+      opacity: field.dotsOnly || field.terminal ? 0.82 : 1
+      font.family: field.editorFontFamily
+      font.pixelSize: Math.round((field.dotsOnly || field.terminal ? 13 : unlockHint.contained ? 14 : 15) * field.view.uiScale)
+      horizontalAlignment: field.terminal ? Text.AlignLeft : Text.AlignHCenter
       wrapMode: Text.WordWrap
       maximumLineCount: 2
       elide: Text.ElideRight
@@ -96,14 +208,16 @@ Rectangle {
     objectName: "passwordInput"
     // Kept focused while invisible so the first character is retained.
     opacity: field.chromeShown && field.view.showPassword ? 1 : 0
-    anchors.left: parent.left
-    anchors.leftMargin: field.view.fieldLeadingInset
-    anchors.right: parent.right
-    anchors.rightMargin: Math.round(70 * field.view.uiScale)
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
+    // Fixed anchors to the editor area; only its geometry and the margins
+    // follow the style.
+    anchors.left: editorArea.left
+    anchors.leftMargin: field.editorLeading
+    anchors.right: editorArea.right
+    anchors.rightMargin: field.editorTrailing
+    anchors.top: editorArea.top
+    anchors.bottom: editorArea.bottom
     verticalAlignment: TextInput.AlignVCenter
-    horizontalAlignment: TextInput.AlignLeft
+    horizontalAlignment: field.dotsOnly ? TextInput.AlignHCenter : TextInput.AlignLeft
     activeFocusOnPress: true
     clip: true
     enabled: field.view.inputEnabled && !field.view.authenticatingPassword
@@ -114,15 +228,17 @@ Rectangle {
     color: field.view.foreground
     selectionColor: field.view.selection
     selectedTextColor: field.view.foreground
-    font.family: field.view.textFontFamily
+    font.family: field.editorFontFamily
     font.pixelSize: text.length > 0
       ? Math.max(1, Math.floor(field.view.passwordDotFontSize * field.passwordDotScale))
       : field.view.fieldFontSize
     font.letterSpacing: text.length > 0 ? field.view.passwordDotLetterSpacing * field.passwordDotScale : 0
     cursorVisible: activeFocus && field.view.showPasswordCursor && text.length > 0
+    // The terminal's caret is a block.
     cursorDelegate: Rectangle {
-      width: 2
+      width: field.terminal ? Math.round(10 * field.view.uiScale) : 2
       color: field.view.foreground
+      opacity: field.terminal ? 0.7 : 1
       visible: passwordInput.cursorVisible
     }
 
@@ -158,21 +274,21 @@ Rectangle {
     color: field.view.authenticatingPassword
       ? field.view.foreground
       : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
-    font.family: field.view.textFontFamily
-    font.pixelSize: field.view.fieldFontSize
+    font.family: field.editorFontFamily
+    font.pixelSize: field.dotsOnly ? Math.round(13 * field.view.uiScale) : field.terminal ? Math.round(15 * field.view.uiScale) : field.view.fieldFontSize
     font.italic: field.view.errorState
-    horizontalAlignment: Text.AlignLeft
+    horizontalAlignment: field.dotsOnly ? Text.AlignHCenter : Text.AlignLeft
     verticalAlignment: Text.AlignVCenter
     elide: Text.ElideRight
   }
 
   Item {
-    visible: field.chromeShown && field.view.showPassword
-    width: Math.round(70 * field.view.uiScale)
-    anchors.right: parent.right
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    opacity: field.view.authenticatingPassword ? 0.55 : (field.view.passwordText.length > 0 ? 1 : 0.9)
+    visible: field.submitShown
+    width: field.submitWidth
+    anchors.right: editorArea.right
+    anchors.top: editorArea.top
+    anchors.bottom: editorArea.bottom
+    opacity: field.view.authenticatingPassword ? 0.55 : (field.view.passwordText.length > 0 ? 1 : field.view.showPassword ? 0.9 : 0.55)
 
     Rectangle {
       anchors.centerIn: parent
