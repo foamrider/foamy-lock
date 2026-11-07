@@ -260,7 +260,7 @@ node --test tests/*.test.cjs
 python3 -I -B -m unittest discover -s tests -p artwork_test.py -v
 FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py
 python3 -I -B tests/artwork_runtime.py
-python3 -I -B tests/render.py
+python3 -I -B tests/render.py                 # --language no renders in Norwegian
 python3 -I -B tests/runtime.py
 bash tests/kit-check.sh
 ```
@@ -299,8 +299,9 @@ verifies they are unedited.
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
 folder, including populated artwork and icon fallbacks; set `FOAMY_RENDER_OUT` to
-a directory to keep a copy. Strings follow the desktop's Omarchy language unless
-`OMARCHY_LANGUAGE_FILE` names a file containing `en`. `preview.png` is the first
+a directory to keep a copy. It is hermetic: a temporary home and config, English
+unless `--language CODE` picks another Omarchy language, whatever the desktop uses.
+`preview.png` is the first
 1920 × 1080 capture with `artworkPath` cleared: the offscreen software renderer
 draws no masked artwork, so the screenshot shows the music icon. Artwork tests exercise
 the real sandbox with small synthetic images, a local TLS fixture, URL and file
@@ -312,8 +313,10 @@ PAM and session-lock objects; it does not lock the desktop or authenticate a use
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
 
-For a second host-version check, set `FOAMY_TEST_COMMONS` to that Omarchy source
-tree's `shell/Commons` directory when running `tests/runtime.py` and `tests/render.py`.
+`tests/runtime.py` and `tests/render.py` run on Omarchy 4.5: `FOAMY_HOST_45` (a
+`shell` directory), else `$OMARCHY_TEST_ROOT/shell`, else the installed
+`/usr/share/omarchy/shell`. `--host 4.0` and `--host both` run 4.0 only when
+`FOAMY_HOST_40` names a 4.0 shell; otherwise they print a SKIP line for it.
 The runtime suite supplies both PAM-file fixtures and simulated authentication;
 it does not require an enrolled fingerprint or change the host session.
 
@@ -346,4 +349,4 @@ right-to-left layout for right-to-left languages (media transport buttons keep t
 order). Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin
 in English. Missing translations fall back to English.
 
-Translation checks: `python3 tests/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.
+Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed 4.5 shell. Set `OMARCHY_PATH` to another Omarchy tree to check that one.

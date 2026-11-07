@@ -1,4 +1,5 @@
-// These helpers are local because Omarchy 4.0.6 has no video-path helper.
+// Runtime helpers, local rather than Commons.Util because Omarchy 4.0.6 has no
+// video-path helper and the plugin still loads there.
 function isVideoPath(path) {
   return /\.(mp4|m4v|mov|webm|mkv|avi)$/i.test(String(path || ""))
 }

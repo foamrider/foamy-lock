@@ -1,6 +1,15 @@
-"""Render LockView with synthetic identity, media, power, and network data only."""
+"""Render LockView with synthetic identity, media, power, and network data only.
+
+Usage: tests/render.py [--language CODE] [--host 4.5|4.0|both]
+
+Hermetic: a temporary HOME and XDG config, English unless --language picks
+another Omarchy language code (e.g. `no`), whatever the desktop uses. The host
+is Omarchy 4.5 (tests/hosts.py). FOAMY_RENDER_OUT keeps a copy of the captures."""
+import argparse
 import os
+import re
 import signal
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -9,10 +18,25 @@ import struct
 import importlib.util
 
 source = Path(__file__).resolve().parents[1]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, source / 'tests' / f'{name}.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 # Fixture images (the helper itself is tested in artwork_test.py).
-spec = importlib.util.spec_from_file_location('png_fixture', source / 'tests' / 'png_fixture.py')
-artwork = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(artwork)
+artwork = load('png_fixture')
+hosts = load('hosts')
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument('--language', default='en', help='Omarchy language code (default en)')
+parser.add_argument('--host', default='4.5', choices=hosts.CHOICES)
+args = parser.parse_args()
+if not re.fullmatch(r'[a-z]{2,3}(-[A-Za-z]{2})?', args.language):
+    parser.error(f'not a language code: {args.language!r}')
+host_name, host_shell = hosts.current(__file__, args.host, sys.argv[1:])
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-render-'))
 app = base / 'app'
 app.mkdir()
@@ -20,7 +44,7 @@ app.mkdir()
 pixels = bytes(channel for y in range(256) for x in range(256)
                for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
 (app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
-(app / 'Commons').symlink_to(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'), target_is_directory=True)
+(app / 'Commons').symlink_to(host_shell / 'Commons', target_is_directory=True)
 # The plugin's stamped kit (FoamyI18n, FoamyStyle) and catalogs, unmodified.
 (app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
@@ -220,10 +244,14 @@ with (app / 'qmldir').open('a') as registry:
         if qml.name[0].isupper() and qml.name != 'FoamyI18n.qml':
             registry.write(f'{qml.stem} 1.0 {qml.name}\n')
 
-env = dict(os.environ, HOME=str(home), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen',
+# The language comes from this temporary config only, never the desktop's.
+language_file = home / '.config/omarchy/language'
+language_file.parent.mkdir(parents=True)
+language_file.write_text(args.language + '\n')
+env = hosts.hermetic(os.environ, home, runtime, language_file)
+# OMARCHY_PATH is the host tree: Commons reads its language catalogs there.
+env.update(OMARCHY_PATH=str(host_shell.parent), QT_QPA_PLATFORM='offscreen',
            QT_QUICK_BACKEND='software', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion', LANG='en_US.UTF-8', LC_ALL='en_US.UTF-8', LC_TIME='en_US.UTF-8')
-env.pop('DISPLAY', None)
-env.pop('WAYLAND_DISPLAY', None)
 log_path = base / 'render.log'
 with log_path.open('w') as log:
     process = subprocess.Popen(['dbus-run-session', '--', 'quickshell', '-p', str(app), '--no-color'],
@@ -243,10 +271,12 @@ assert process.returncode == 0 and 'PASS:' in output, output
 for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000), (1920, 1080), (800, 1000), (1920, 1080)]):
     image = (app / f'capture-{i}.png').read_bytes()
     assert struct.unpack('>II', image[16:24]) == size
-print('Renders:', app)
+print(f'Renders ({host_name} {host_shell}, language {args.language}):', app)
 # Optional: keep the captures (screenshots for review).
 if os.environ.get('FOAMY_RENDER_OUT'):
     out = Path(os.environ['FOAMY_RENDER_OUT'])
+    if args.host == 'both':
+        out = out / host_name
     out.mkdir(parents=True, exist_ok=True)
     for capture in app.glob('capture-*.png'):
         shutil.copy(capture, out / capture.name)

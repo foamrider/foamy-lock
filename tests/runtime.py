@@ -1,4 +1,9 @@
-"""Exercise service settings and lock flow with simulated PAM and compositor boundaries."""
+"""Exercise service settings and lock flow with simulated PAM and compositor boundaries.
+
+Usage: tests/runtime.py [--host 4.5|4.0|both]
+
+The host is Omarchy 4.5 (tests/hosts.py); 4.0 runs only with FOAMY_HOST_40."""
+import argparse
 import importlib.util
 import json
 import os
@@ -7,15 +12,29 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 source = Path(__file__).resolve().parents[1]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, source / 'tests' / f'{name}.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 # Fixture images (the helper itself is tested in artwork_test.py).
-spec = importlib.util.spec_from_file_location('png_fixture', source / 'tests' / 'png_fixture.py')
-artwork = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(artwork)
-commons = Path(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'))
+artwork = load('png_fixture')
+hosts = load('hosts')
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument('--host', default='4.5', choices=hosts.CHOICES)
+args = parser.parse_args()
+host_name, host_shell = hosts.current(__file__, args.host, sys.argv[1:])
+print(f'Host {host_name}: {host_shell}', flush=True)
+commons = host_shell / 'Commons'
 has_registry = (commons / 'IpcRegistry.qml').exists()
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-runtime-'))
 app = base / 'app'
@@ -255,11 +274,11 @@ with (app / 'qmldir').open('a') as registry:
         if qml.name[0].isupper():
             registry.write(f'{qml.stem} 1.0 {qml.name}\n')
 
-env = dict(os.environ, HOME=str(base), USER='fixture', LOGNAME='fixture', XDG_RUNTIME_DIR=str(runtime),
-           XDG_CACHE_HOME=str(base / 'cache'), OMARCHY_PATH=str(host), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
+# No desktop config, language, compositor or session bus reaches the shell.
+env = hosts.hermetic(os.environ, base, runtime)
+env.update(USER='fixture', LOGNAME='fixture', XDG_CACHE_HOME=str(base / 'cache'), OMARCHY_PATH=str(host),
+           QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
            QT_STYLE_OVERRIDE='Fusion', PATH=str(bin_dir) + ':' + os.environ['PATH'])
-env.pop('DISPLAY', None)
-env.pop('WAYLAND_DISPLAY', None)
 def ipc(target, method, *args):
     return subprocess.check_output(['quickshell', 'ipc', '-p', str(app), 'call', target, method, *args],
                                    env=env, text=True, stderr=subprocess.DEVNULL, timeout=3).strip()
@@ -346,7 +365,7 @@ with log_path.open('w') as log:
         background.symlink_to(video)
         refresh_wallpaper()
         wait_for(lambda s: s['wallpaperError'] == 'video-poster-unavailable')
-        assert wallpaper_state()['path'] == '', '4.0.6 must never send video to Image'
+        assert wallpaper_state()['path'] == '', 'without poster.sh (as on 4.0) video must never reach Image'
         poster.write_text('#!/bin/sh\nexit 1\n')
         refresh_wallpaper()
         wait_for(lambda s: s['wallpaperError'] == 'video-poster-failed')
