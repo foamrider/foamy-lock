@@ -151,7 +151,7 @@ Item {
     readonly property string family: clock.view.displayFontFamily
     readonly property string time: label.text
     readonly property real textWidth: outlineMetrics.advanceWidth * fontSize / baseSize
-    readonly property string paintKey: [time, fontSize, width, height, clock.view.foreground, family, stroke].join("|")
+    readonly property string paintKey: [time, fontSize, width, height, clock.view.lineColor, family, stroke].join("|")
 
     visible: clock.styleName === "outline"
     x: clock.blockX(width)
@@ -184,7 +184,7 @@ Item {
       context.textBaseline = "alphabetic"
       context.lineJoin = "round"
       context.lineWidth = stroke
-      context.strokeStyle = clock.view.foreground
+      context.strokeStyle = clock.view.lineColor
       context.strokeText(time, stroke, stroke + outlineFont.ascent)
     }
   }

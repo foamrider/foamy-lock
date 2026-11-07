@@ -45,6 +45,8 @@ Item {
   // latched until the look changes (each lock creates a new view).
   property string fallbackPreset: ""
   property string layoutError: ""
+  // False while the service has blanked the display: nothing moves then.
+  property bool displayAwake: true
   readonly property var effectiveLook: fallbackPreset ? Layout.preset(fallbackPreset) : look
   readonly property var placed: effectiveLook.elements
 
@@ -72,9 +74,21 @@ Item {
   readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
   readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
   readonly property color accent: Commons.Color.accent
-  // The look's glass opacity scales the theme's (or default) glass alpha.
-  readonly property color glass: Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * effectiveLook.glass.opacity)
-  readonly property color glassBorder: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
+  // The look's glass: "none" keeps the white glass, "accent" draws the edges
+  // in the theme accent over a darker glass, "solid" makes it opaque without
+  // edges. The opacity scales the theme's (or default) glass alpha.
+  readonly property string glassTint: effectiveLook.glass.tint || "none"
+  readonly property color glass: glassTint === "solid"
+    ? Qt.rgba(glassBase.r, glassBase.g, glassBase.b, Math.min(1, 0.9 * effectiveLook.glass.opacity))
+    : glassTint === "accent"
+      ? Qt.rgba(glassBase.r * 0.9 + accent.r * 0.1, glassBase.g * 0.9 + accent.g * 0.1, glassBase.b * 0.9 + accent.b * 0.1,
+        Math.max(glassBase.a, 0.55) * effectiveLook.glass.opacity)
+      : Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * effectiveLook.glass.opacity)
+  readonly property color glassEdge: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
+  readonly property color glassBorder: glassTint === "accent" ? Qt.rgba(accent.r, accent.g, accent.b, 0.9)
+    : glassTint === "solid" ? Qt.rgba(glassEdge.r, glassEdge.g, glassEdge.b, 0) : glassEdge
+  // Drawn lines (the outline clock): the accent with the accent tint.
+  readonly property color lineColor: glassTint === "accent" ? accent : foreground
   readonly property color selection: themeLock("selection", Commons.Color.lock.selection, Qt.rgba(1, 1, 1, 0.25))
   readonly property bool hasMedia: activePlayer !== null
     && (String(activePlayer.trackTitle || "") !== "" || String(activePlayer.trackArtist || "") !== "")
@@ -95,11 +109,19 @@ Item {
   // Keep the editor focused while invisible so the first character is retained.
   readonly property bool compactLayout: width < 1100 * uiScale
   readonly property bool showPassword: passwordText.length > 0 || authenticatingPassword || errorState
+  // Omarchy's animations switch (reduced motion, CPU rendering); 4.0 has none.
+  readonly property bool reduceMotion: Commons.Style.reduceMotion === true
+  // A drawn background moves only while it can be seen: the view is shown,
+  // the display awake, animations on and the GPU renders.
+  readonly property bool motionAllowed: visible && loadBackground && displayAwake && !reduceMotion
+    && GraphicsInfo.api !== GraphicsInfo.Software
+  readonly property Item wallpaperItem: wallpaper
+
   // The "system" status style reads /proc while it shows, and only then;
   // nothing is read or kept while it doesn't. procRoot is for the tests.
   property string procRoot: "/proc"
   readonly property bool systemShown: placed.status.style === "system" && elementShown("status") && visible
-    && loadBackground
+    && loadBackground && displayAwake
   property real systemUptime: -1
   property string systemLoad: ""
   property real memoryTotal: 0
@@ -296,6 +318,8 @@ Item {
       var first = Math.round((height - above - 2 * zoneGap - stackHeight("middle-end", own === "end" ? name : undefined)) / 2)
       top = own === "start" ? first : first + above + 2 * zoneGap
     } else if (row === "middle") top = Math.round((height - total) / 2)
+    else if (center && Layout.BAND_DECORATIONS.indexOf(effectiveLook.background.decor) !== -1)
+      top = height - total - (compactLayout ? bottomReserve() : edgeMargin(row))
     else if (center) top = Math.min(height * 0.65, height - total - bottomReserve())
     else if (!compactLayout || Layout.zoneColumn(zone) === "start") top = height - edgeMargin(row) - total
     else {
@@ -310,6 +334,31 @@ Item {
   // zone above, both at the start edge (side by side they could collide).
   function middleStacked() {
     return compactLayout && stackHeight("middle-start") > 0 && stackHeight("middle-end") > 0
+  }
+
+  // The part of an element that draws: text centred in the full-width
+  // center column is narrower than its item.
+  function drawnRect(name) {
+    var item = elementItem(name)
+    var w = item.width
+    if (item.naturalWidth !== undefined && Layout.zoneColumn(placed[name].zone) === "center")
+      w = Math.min(item.width, Math.ceil(item.naturalWidth))
+    return { x: item.x + (item.width - w) / 2, y: item.y, width: w, height: item.height }
+  }
+
+  // The union of the shown elements' drawn rectangles in `zones`, or null
+  // (the decorations fit themselves to it).
+  function zonesRect(zones) {
+    var shown = shownMap()
+    var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+    for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+      var name = Layout.ELEMENTS[i]
+      if (!shown[name] || zones.indexOf(placed[name].zone) === -1) continue
+      var r = drawnRect(name)
+      left = Math.min(left, r.x); top = Math.min(top, r.y)
+      right = Math.max(right, r.x + r.width); bottom = Math.max(bottom, r.y + r.height)
+    }
+    return left === Infinity ? null : { x: left, y: top, width: right - left, height: bottom - top }
   }
 
   // The space the bottom-center stack keeps free below it. Narrow screens
@@ -465,6 +514,14 @@ Item {
       }
     }
 
+    // The drawn sources over the theme's background colour.
+    Backdrop {
+      anchors.fill: parent
+      view: root
+      visible: Layout.DRAWN_SOURCES.indexOf(root.effectiveLook.background.source) !== -1
+      source: visible ? root.effectiveLook.background.source : "aurora"
+    }
+
     // A scrim keeps white type legible; 0.25 (the default) preserves
     // wallpaper detail. The look's `dim` sets it, but an underline or dots
     // field has no surface of its own, so it keeps at least 0.15 behind it.
@@ -484,6 +541,14 @@ Item {
 
     FoamyWallClock {
       id: lockClock
+    }
+
+    // Panels, bars and frames behind the elements (background, never checked
+    // against the field, never above it).
+    Decoration {
+      anchors.fill: parent
+      view: root
+      kind: root.effectiveLook.background.decor || "none"
     }
 
     DateElement {

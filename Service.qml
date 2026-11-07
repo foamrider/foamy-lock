@@ -39,6 +39,9 @@ Item {
   // Blanking pauses new attempts, preserving a pending backoff until wake.
   property bool fingerprintPaused: false
   property bool fingerprintSleptWhilePaused: false
+  // Set by runBlank, cleared by runWake: drawn backgrounds hold still while
+  // the display is off (input or a new lock wakes it through runWake).
+  property bool displayBlanked: false
   property double fingerprintRetryDueMs: 0
   property int fingerprintRetryBackoffMs: 0
   property int knownScreenCount: 0
@@ -542,6 +545,7 @@ Item {
     // The preview overlay is not a lock; never leave it behind a real one.
     previewVisible = false
     lockRequested = true
+    displayBlanked = false
     armBlankTimer()
     logEvent("lock-requested")
     queueSessionLock()
@@ -576,6 +580,7 @@ Item {
   }
 
   function runWake() {
+    displayBlanked = false
     if (!wakeProcess.running) wakeProcess.running = true
     if (lockRequested) armBlankTimer()
     resumeFingerprint()
@@ -650,6 +655,7 @@ Item {
   }
 
   function runBlank() {
+    displayBlanked = true
     pauseFingerprint()
     if (!blankProcess.running) blankProcess.running = true
   }
@@ -822,6 +828,7 @@ Item {
         onSurfaceActiveChanged: root.activeSurfaces = Math.max(0, root.activeSurfaces + (surfaceActive ? 1 : -1))
         Component.onDestruction: if (surfaceActive) root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
         look: root.look
+        displayAwake: !root.displayBlanked
         primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
         onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
@@ -1364,6 +1371,7 @@ Item {
       fingerprint: root.fingerprintConfigured,
       fingerprintUnavailable: root.fingerprintUnavailable,
       fingerprintPaused: root.fingerprintPaused,
+      displayBlanked: root.displayBlanked,
       authenticating: root.authenticating,
       wallpaperError: root.wallpaperError,
       artworkState: artwork.state,
@@ -1460,7 +1468,8 @@ Item {
       }
       return JSON.stringify({ version: 1, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
-        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, defaultPreset: Layout.DEFAULT_PRESET,
+        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
+        glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
         look: root.look, lookError: root.lookError })
     }
 

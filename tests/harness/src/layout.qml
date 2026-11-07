@@ -1,6 +1,6 @@
 // Layout shell: one preset (__PRESET__) through sizes, clock formats, typing
-// and primary/non-primary states, then right-to-left (everything must
-// mirror); then, for foamy, every preset on one
+// and primary/non-primary states, then right-to-left (everything, the
+// decorations included, must mirror); then, for foamy, every preset on one
 // view and back, and the fallback chain on a screen too small for it.
 // Written into a temporary app by the harness.
 import QtQuick
@@ -25,6 +25,8 @@ ShellRoot {
   property var reference: null
   readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter", "calendarBlock"]
   readonly property var elementNames: ["dateLabel", "clockLabel", "identityBlock", "inputField", "mediaRow", "statusFooter", "calendarBlock"]
+  readonly property var modelNames: ({ dateLabel: "date", clockLabel: "clock", identityBlock: "account", inputField: "password",
+    mediaRow: "media", statusFooter: "status", calendarBlock: "calendar" })
 
   function geometry() {
     var out = {}
@@ -153,7 +155,7 @@ ShellRoot {
           label = "cycle " + shellRoot.cycleAt + " " + name
           shellRoot.checkAccountShape(label)
           if (view.fallbackPreset !== "") shellRoot.fail("fell back: " + view.layoutError)
-          shellRoot.checkSystem()
+          shellRoot.checkBackground()
           if (shellRoot.cycleAt === shellRoot.cycle.length - 1) {
             var now = shellRoot.geometry()
             for (var key in now)
@@ -192,9 +194,9 @@ ShellRoot {
     }
   }
 
-  // Visible elements, in view coordinates.
+  // Visible elements and decoration surfaces, in view coordinates.
   function layoutRects() {
-    var out = { elements: {} }
+    var out = { elements: {}, surfaces: findNamed(view, "decoration").surfaces }
     for (var i = 0; i < elementNames.length; i++) {
       var item = findNamed(view, elementNames[i])
       if (item.visible) out.elements[elementNames[i]] = [item.x, item.y, item.width, item.height]
@@ -202,8 +204,8 @@ ShellRoot {
     return out
   }
 
-  // Right-to-left: every element sits where its left-to-right twin is,
-  // mirrored (within a pixel).
+  // Right-to-left: every element and decoration surface sits where its
+  // left-to-right twin is, mirrored (within a pixel).
   function checkMirror(ltr) {
     var rtl = layoutRects()
     function near(a, b) { return Math.abs(a - b) <= 1 }
@@ -213,10 +215,49 @@ ShellRoot {
       if (!near(r[0], view.width - l[0] - l[2]) || !near(r[1], l[1]) || !near(r[2], l[2]) || !near(r[3], l[3]))
         return fail(name + " doesn't mirror: " + r + " for " + l)
     }
+    if (rtl.surfaces.length !== ltr.surfaces.length) return fail("decoration surfaces differ in right-to-left")
+    for (var i = 0; i < ltr.surfaces.length; i++) {
+      var a = ltr.surfaces[i], b = rtl.surfaces[i]
+      if (!near(b.x, view.width - a.x - a.width) || !near(b.y, a.y) || !near(b.width, a.width) || !near(b.height, a.height))
+        return fail("decoration surface " + i + " doesn't mirror: " + JSON.stringify(b) + " for " + JSON.stringify(a))
+    }
   }
 
-  // The system panel has its readings (fixtures, not the real /proc).
-  function checkSystem() {
+  function contains(outer, inner) {
+    return inner.x >= outer.x - 1 && inner.y >= outer.y - 1 && inner.x + inner.width <= outer.x + outer.width + 1
+      && inner.y + inner.height <= outer.y + outer.height + 1
+  }
+
+  // Decorations are background: on screen, and each shown element (the
+  // field above all) wholly inside or wholly outside each surface, and
+  // inside a frame. A drawn background holds its still frame here (software
+  // renderer) and the system panel has its readings.
+  function checkBackground() {
+    var decoration = findNamed(view, "decoration")
+    var decor = view.effectiveLook.background.decor
+    if (decoration.visible !== (decor !== "none")) return fail("decoration " + decor + " visible: " + decoration.visible)
+    var surfaces = decoration.surfaces
+    if (decor !== "none" && surfaces.length === 0) return fail("decoration " + decor + " draws nothing")
+    for (var s = 0; s < surfaces.length; s++) {
+      var surface = surfaces[s]
+      if (!(surface.width > 0 && surface.height > 0) || surface.x < -1 || surface.y < -1
+          || surface.x + surface.width > view.width + 1 || surface.y + surface.height > view.height + 1)
+        return fail(decor + " surface outside the view: " + JSON.stringify(surface))
+      for (var i = 0; i < elementNames.length; i++) {
+        var item = findNamed(view, elementNames[i])
+        if (!item.visible) continue
+        // What draws: centred text is narrower than its full-width item.
+        var r = view.drawnRect(modelNames[elementNames[i]])
+        var inside = contains(surface, r)
+        if (surface.frame ? !inside : (!inside && Layout.intersects(surface, r, 1)))
+          return fail(elementNames[i] + " " + JSON.stringify(r) + " straddles the " + decor + " surface " + JSON.stringify(surface))
+      }
+    }
+    var backdrop = findNamed(view, "backdrop")
+    var drawn = Layout.DRAWN_SOURCES.indexOf(view.effectiveLook.background.source) !== -1
+    if (backdrop.visible !== drawn) return fail("backdrop visible: " + backdrop.visible + " for " + view.effectiveLook.background.source)
+    if (drawn && (backdrop.moving || backdrop.phase !== backdrop.stillPhase))
+      return fail("the drawn background moves under the software renderer: " + [backdrop.moving, backdrop.phase, backdrop.stillPhase, backdrop.source])
     if (view.placed.status.style === "system" && findNamed(view, "statusFooter").visible
         && !(view.systemUptime > 0 && view.memoryTotal > 0 && view.systemLoad !== ""))
       return fail("the system panel has no readings: " + [view.systemUptime, view.memoryTotal, view.systemLoad])
@@ -254,7 +295,7 @@ ShellRoot {
     if (!state[4] && account.visible) return fail("the account shows on a secondary screen")
     if (state[4] && shown && !account.visible) return fail("the account is missing on the primary screen")
     if (!state[4] && !state[3] && hint.visible) return fail("field chrome shows on a secondary screen while nothing is typed")
-    checkSystem()
+    checkBackground()
     // Whatever else is on screen stays inside it.
     var names = ["dateLabel", "clockLabel", "identityBlock", "mediaRow", "statusFooter", "calendarBlock"]
     for (var i = 0; i < names.length; i++) {

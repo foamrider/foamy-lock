@@ -685,7 +685,17 @@ fn look(test: &Test) -> R {
                             ))
                         })
                     })
-            }) && text(&catalog, "defaultPreset")? == "foamy",
+            })
+            && at(&catalog, "backgroundDecor")?
+                .as_array()
+                .is_some_and(|d| d.iter().any(|d| d == "cinema"))
+            && at(&catalog, "glassTints")?
+                .as_array()
+                .is_some_and(|t| t.iter().any(|t| t == "accent"))
+            && at(&catalog, "backgroundSources")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "aurora"))
+            && text(&catalog, "defaultPreset")? == "foamy",
         "{catalog}"
     );
     let custom =
@@ -1026,8 +1036,17 @@ fn settings_and_password(test: &Test) -> R {
         on(&test.status()?, "secure")?,
         "blanking must not unlock the session"
     );
+    // The view hears of it, so drawn backgrounds hold still while blank.
+    ensure!(
+        on(&test.status()?, "displayBlanked")?,
+        "blanking is reported"
+    );
     test.submit("test-password")?;
     test.wait_for(|s| Ok(!on(s, "locked")?))?;
+    ensure!(
+        !on(&test.status()?, "displayBlanked")?,
+        "the wake on unlock clears the blank"
+    );
     let replacement = test.config.with_extension("new");
     write(
         &replacement,

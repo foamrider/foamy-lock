@@ -20,8 +20,8 @@ test('the default look is the 1.2.0 lock screen', () => {
   assert.deepEqual(Layout.stack(look.elements, 'bottom-center'), ['account', 'password'])
   assert.deepEqual(Layout.stack(look.elements, 'bottom-start'), ['media'])
   assert.deepEqual(Layout.stack(look.elements, 'top-end'), ['status'])
-  assert.deepEqual(look.background, {source: 'omarchy', path: '', blur: 0, dim: 0.25})
-  assert.deepEqual(look.glass, {opacity: 1})
+  assert.deepEqual(look.background, {source: 'omarchy', path: '', blur: 0, dim: 0.25, decor: 'none'})
+  assert.deepEqual(look.glass, {opacity: 1, tint: 'none'})
   assert.equal(look.elements.calendar.hidden, true)
   assert.deepEqual(Layout.parseLook({}), {valid: true, look, error: ''})
   assert.deepEqual(Layout.parseLook(undefined).look, look)
@@ -71,7 +71,8 @@ test('mistakes in the look are reported, never guessed', () => {
     {background: {path: 'relative.png'}}, {background: {path: '/tmp/../etc/x.png'}}, {background: {path: '/tmp/x.gif'}},
     {background: {source: 'picture'}}, {background: {colour: 'red'}}, {background: []},
     {glass: {opacity: -0.1}}, {glass: {opacity: 1.5}}, {glass: {blur: true}}, {glass: 0.5},
-    {layout: {calendar: {style: 'month'}}}
+    {background: {decor: 'bars'}}, {background: {decor: true}}, {background: {source: 'snow'}},
+    {glass: {tint: 'red'}}, {glass: {tint: 1}}, {layout: {calendar: {style: 'month'}}}
   ]
   for (const entry of invalid) {
     const result = Layout.parseLook(entry)
@@ -146,4 +147,42 @@ test('every style is accepted on its own element and only there', () => {
     assert.equal(result.valid, false, `${name} ${style}`)
     assert.match(result.error, new RegExp(`layout\\.${name}\\.style must be one of`))
   }
+})
+
+test('every new background key, decoration and tint is accepted', () => {
+  for (const source of Layout.BACKGROUND_SOURCES.filter(s => s !== 'picture'))
+    assert.ok(Layout.parseLook({background: {source}}).valid, source)
+  for (const decor of Layout.DECORATIONS) {
+    const result = Layout.parseLook({background: {decor}})
+    assert.ok(result.valid, decor)
+    assert.equal(result.look.background.decor, decor)
+  }
+  for (const tint of Layout.GLASS_TINTS) assert.equal(Layout.parseLook({glass: {tint}}).look.glass.tint, tint)
+  // A preset's own glass merges under the user's.
+  assert.deepEqual(Layout.parseLook({preset: 'neon', glass: {opacity: 0.5}}).look.glass, {opacity: 0.5, tint: 'accent'})
+  assert.deepEqual(Layout.parseLook({preset: 'neon', glass: {tint: 'none'}}).look.glass, {opacity: 1, tint: 'none'})
+  for (const source of Layout.DRAWN_SOURCES) assert.ok(Layout.BACKGROUND_SOURCES.includes(source), source)
+})
+
+test('every selectable preset is valid, distinct and keeps the field in reach', () => {
+  const seen = new Map()
+  for (const name of Layout.SELECTABLE_PRESETS) {
+    const parsed = Layout.parseLook({preset: name})
+    assert.ok(parsed.valid, name + ': ' + parsed.error)
+    const {elements, background, glass} = parsed.look
+    assert.equal(elements.password.hidden, false, name)
+    assert.ok(Layout.PASSWORD_ZONES.includes(elements.password.zone), name)
+    assert.ok(Layout.DECORATIONS.includes(background.decor), name)
+    assert.ok(Layout.GLASS_TINTS.includes(glass.tint), name)
+    assert.equal(background.path, '', name)
+    const key = JSON.stringify({elements, background, glass})
+    assert.ok(!seen.has(key), name + ' repeats ' + seen.get(key))
+    seen.set(key, name)
+    assert.match(name, /^[a-z]+$/, 'short lowercase ids')
+  }
+  assert.equal(new Set(Layout.SELECTABLE_PRESETS).size, Layout.SELECTABLE_PRESETS.length)
+  assert.deepEqual(Object.keys(Layout.PRESETS).sort(), [...Layout.SELECTABLE_PRESETS, Layout.FALLBACK_PRESET].sort())
+  // The presets from 1.3.0's first four keep their names and shape.
+  assert.deepEqual(Layout.SELECTABLE_PRESETS.slice(0, 4), ['foamy', 'corner', 'editorial', 'zen'])
+  for (const name of ['foamy', 'corner', 'editorial', 'zen']) assert.equal(Layout.preset(name).elements.calendar.hidden, true)
 })

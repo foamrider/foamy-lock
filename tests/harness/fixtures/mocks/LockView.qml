@@ -27,6 +27,7 @@ Item {
   property var look: null
   property bool primary: true
   property bool backgroundPrepared: false
+  property bool displayAwake: true
   signal artworkFailed(string path)
   signal layoutFellBack(string error, string preset)
 }
