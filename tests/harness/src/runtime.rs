@@ -667,7 +667,10 @@ fn look(test: &Test) -> R {
             .is_some_and(|p| p.iter().any(|p| p["name"] == "foamy"))
             && at(&catalog, "styles.password")?
                 .as_array()
-                .is_some_and(|s| s.iter().any(|s| s == "pill"))
+                .is_some_and(|s| s.iter().any(|s| s == "pill") && s.iter().any(|s| s == "terminal"))
+            && at(&catalog, "styles.clock")?
+                .as_array()
+                .is_some_and(|s| s.len() == 8 && s.iter().any(|s| s == "analog"))
             && text(&catalog, "defaultPreset")? == "foamy",
         "{catalog}"
     );

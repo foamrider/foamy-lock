@@ -2,6 +2,8 @@
 # The offscreen QML tests (tests/harness, Rust, development only):
 #   tests/harness.sh render [--host 4.5|4.0|both] [--language CODE]
 #   tests/harness.sh parity [--host 4.5|4.0|both] [--baseline REV]
+#   tests/harness.sh layout [--host 4.5|4.0|both] [--preset NAME]
+#   tests/harness.sh styles [--host 4.5|4.0|both]
 #   tests/harness.sh runtime [--host 4.5|4.0|both]
 # Builds the harness outside the plugin, like foamy-kit's build-native.sh
 # (never a target/ inside the plugin), and runs it. parity needs git history.

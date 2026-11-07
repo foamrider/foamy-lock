@@ -5,6 +5,7 @@
 //! foamy-lock-harness render [--host 4.5|4.0|both] [--language CODE]
 //! foamy-lock-harness parity [--host 4.5|4.0|both] [--baseline REV]
 //! foamy-lock-harness layout [--host 4.5|4.0|both] [--preset NAME]
+//! foamy-lock-harness styles [--host 4.5|4.0|both]
 //! foamy-lock-harness runtime [--host 4.5|4.0|both]
 //! ```
 //!
@@ -27,7 +28,17 @@
 //! secondary screens, checking that the password field stays on screen,
 //! uncovered, live and focused, that a secondary screen hides the account
 //! and idle field chrome, and that no built-in preset falls back; the foamy
-//! run then forces the geometry fallback chain on a 320×240 screen.
+//! run then forces the geometry fallback chain on a 320×240 screen. Without
+//! `--preset` it also runs `styles`.
+//!
+//! `styles` puts every style of every element in each column of its row
+//! (1920×1080 and 800×1000, 12- and 24-hour time, typing and idle, primary
+//! and secondary) and checks that the field stays on screen, uncovered, live,
+//! focused and one size, that every element and its parts stay in place, the
+//! avatar square, and that nothing falls back; then it switches one view
+//! through every style, left-to-right and mirrored (each part must mirror),
+//! and back to the default, whose geometry must return exactly. Plugin QML
+//! warnings fail it. With `FOAMY_RENDER_OUT` it keeps two captures per case.
 //!
 //! `runtime` runs the real Service.qml with a simulated session lock, PAM and
 //! view, stand-in desktop commands, a fake Omarchy tree and shell.json, and
@@ -47,6 +58,7 @@ mod parity;
 mod png;
 mod render;
 mod runtime;
+mod styles;
 
 use std::process::ExitCode;
 
@@ -57,8 +69,9 @@ fn main() -> ExitCode {
         Some("parity") => parity::run(&args[1..]),
         Some("layout") => layout::run(&args[1..]),
         Some("runtime") => runtime::run(&args[1..]),
+        Some("styles") => styles::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness runtime [--host {hosts}]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]",
             hosts = host::CHOICES.join("|")
         )),
     };

@@ -1,11 +1,12 @@
 //! The layout test: every selectable preset through sizes, clock formats,
-//! typing and primary/non-primary states, plus the geometry fallback chain.
+//! typing and primary/non-primary states, plus the geometry fallback chain;
+//! without `--preset` it also runs the style sweep (styles.rs).
 
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::{app, host};
+use crate::{app, host, styles};
 
 const SHELL: &str = include_str!("layout.qml");
 /// Mirrors Layout.SELECTABLE_PRESETS.
@@ -46,6 +47,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 failed.push(format!("{name} {preset}"));
             }
         }
+        // The whole run also sweeps every style (see styles.rs).
+        if only.is_none()
+            && let Err(message) = styles::run_host(name, shell)
+        {
+            eprintln!("{message}");
+            failed.push(format!("{name} styles"));
+        }
     }
     if failed.is_empty() {
         Ok(())
@@ -74,18 +82,8 @@ fn run_preset(name: &str, shell: &Path, preset: &str) -> Result<(), String> {
             base.display()
         ));
     }
-    if let Some(out) = std::env::var_os("FOAMY_RENDER_OUT").filter(|value| !value.is_empty()) {
-        let out = Path::new(&out).join("layout");
-        fs::create_dir_all(&out).map_err(app::io(out.display()))?;
-        for entry in fs::read_dir(&dir)
-            .map_err(app::io(dir.display()))?
-            .flatten()
-        {
-            let file = entry.file_name().to_string_lossy().into_owned();
-            if file.starts_with("capture-") && file.ends_with(".png") {
-                fs::copy(entry.path(), out.join(&file)).map_err(app::io(&file))?;
-            }
-        }
+    if let Some(out) = app::render_out("layout") {
+        app::copy_captures(&dir, &out)?;
     }
     Ok(())
 }

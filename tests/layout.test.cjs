@@ -113,3 +113,34 @@ test('the geometry check finds a missing, offscreen or covered field', () => {
   assert.equal(Layout.geometryError(field, [{x: 1120, y: 700, width: 100, height: 51}], 1920, 1080, 8), '')
   assert.equal(Layout.geometryError(field, [{x: 800, y: 750.5, width: 320, height: 40}], 1920, 1080, 8), '')
 })
+
+test('every element offers its shipped styles, defaults first', () => {
+  assert.deepEqual(Layout.STYLES, {
+    date: ['long', 'caps', 'short', 'serif'],
+    clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog'],
+    account: ['avatar', 'chip', 'name'],
+    password: ['pill', 'underline', 'box', 'dots', 'terminal', 'card'],
+    media: ['card', 'line', 'pill', 'art'],
+    status: ['text', 'icons', 'pill']
+  })
+  // The foamy preset uses each element's first style.
+  for (const name of Layout.ELEMENTS) assert.equal(Layout.PRESETS.foamy.elements[name].style, Layout.STYLES[name][0], name)
+})
+
+test('every style is accepted on its own element and only there', () => {
+  for (const name of Layout.ELEMENTS) {
+    for (const style of Layout.STYLES[name]) {
+      const result = Layout.parseLook({layout: {[name]: {style}}})
+      assert.ok(result.valid, `${name} ${style}: ${result.error}`)
+      assert.equal(result.look.elements[name].style, style)
+    }
+  }
+  // Names shared between elements stay per element: "dots" is a clock and a
+  // password style, "pill" a password, media and status style, never a date.
+  for (const [name, style] of [['date', 'dots'], ['account', 'pill'], ['clock', 'card'], ['status', 'name'],
+    ['media', 'terminal'], ['date', 'Serif']]) {
+    const result = Layout.parseLook({layout: {[name]: {style}}})
+    assert.equal(result.valid, false, `${name} ${style}`)
+    assert.match(result.error, new RegExp(`layout\\.${name}\\.style must be one of`))
+  }
+})

@@ -172,3 +172,23 @@ pub fn run_quickshell(
         None => Err(format!("quickshell timed out after {timeout:?}:\n{output}")),
     }
 }
+
+/// `$FOAMY_RENDER_OUT/<sub>` when FOAMY_RENDER_OUT asks for a copy of the
+/// captures, else None.
+pub fn render_out(sub: &str) -> Option<PathBuf> {
+    std::env::var_os("FOAMY_RENDER_OUT")
+        .filter(|value| !value.is_empty())
+        .map(|out| Path::new(&out).join(sub))
+}
+
+/// Copy the app's `capture-*.png` files to `out`.
+pub fn copy_captures(app: &Path, out: &Path) -> Result<(), String> {
+    fs::create_dir_all(out).map_err(io(out.display()))?;
+    for entry in fs::read_dir(app).map_err(io(app.display()))?.flatten() {
+        let file = entry.file_name().to_string_lossy().into_owned();
+        if file.starts_with("capture-") && file.ends_with(".png") {
+            fs::copy(entry.path(), out.join(&file)).map_err(io(&file))?;
+        }
+    }
+    Ok(())
+}
