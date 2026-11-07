@@ -1,12 +1,31 @@
 //! `foamy-lock-helper`: bounded lock-screen artwork and the account avatar
-//! thumbnail. Replaces `artwork.py`; carries over every bound on purpose.
-//! Original images never enter the shell: both go through the same
-//! sandboxed decoder and come back as a freshly encoded 256x256 PNG.
+//! thumbnail, and the wallpaper probe. Replaces `artwork.py`; carries over
+//! every bound on purpose. Original images never enter the shell: both go
+//! through the same sandboxed decoder and come back as a freshly encoded
+//! 256x256 PNG.
 //!
 //! # Contract
 //!
-//! - **argv**: `foamy-lock-helper artwork`. Anything else replies
+//! - **argv**: `foamy-lock-helper artwork` (below) or `foamy-lock-helper
+//!   wallpaper <link>` (see `wallpaper`). Anything else replies
 //!   `invalid-request`.
+//! - **wallpaper**: `<link>` is an absolute path, normally
+//!   `~/.local/state/omarchy/current/background`. It is resolved like
+//!   `readlink -f` and must end at a regular file. No stdin, environment or
+//!   files are used and nothing is written. stdout is exactly one JSON line,
+//!   `{"ok": true, "path": "<absolute resolved path>", "signature":
+//!   "<dev>:<inode>:<size>:<mtime>:<ctime>"}` (times as
+//!   `<seconds>.<nanoseconds>`; the signature changes whenever the file's
+//!   size, mtime or ctime do, or another file takes its place, and is stable
+//!   while it doesn't) or `{"ok": false, "error": "<code>"}`: a dangling
+//!   link, a missing file or component or a link loop `wallpaper-missing`,
+//!   a directory or special file `not-regular-file`, a relative `<link>`
+//!   `invalid-request`, a path that isn't UTF-8 `invalid-path`, any other
+//!   error (such as a permission) `source-unavailable`. Exit status 0;
+//!   stderr nothing. The caller bounds it with `timeout`.
+//!
+//! The rest of this contract is `artwork`'s:
+//!
 //! - **stdin**: one JSON object on one line; the line, newline included, is
 //!   at most 32768 bytes (more: `invalid-request`). Bytes after the first
 //!   newline are ignored. Not JSON (or no input): `source-unavailable`; not
@@ -89,7 +108,7 @@
 //!   apply to the resolved addresses. The trust store follows
 //!   `SSL_CERT_FILE`/`SSL_CERT_DIR` like OpenSSL.
 
-use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -104,6 +123,7 @@ mod fetch;
 mod image;
 mod store;
 mod url;
+mod wallpaper;
 
 pub const MAX_INPUT: usize = 5 * 1024 * 1024;
 /// Account pictures are often camera photos, larger than track artwork.
@@ -379,12 +399,10 @@ fn main() -> ExitCode {
     // A reply on every path, even a helper bug (then exit 101, no core dump).
     json::run(
         || -> Result<Value, foamy_helper::Failure> {
-            match std::env::args_os()
-                .nth(1)
-                .as_deref()
-                .and_then(OsStr::to_str)
-            {
-                Some("artwork") if std::env::args_os().count() == 2 => Ok(artwork()),
+            let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+            match (args.first().and_then(|a| a.to_str()), args.len()) {
+                (Some("artwork"), 1) => Ok(artwork()),
+                (Some("wallpaper"), 2) => Ok(wallpaper::probe(&args[1])),
                 _ => Ok(failure("invalid-request")),
             }
         },

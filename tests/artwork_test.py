@@ -3,7 +3,8 @@ environment Quickshell gives it, one JSON request line on standard input and
 one JSON reply line on standard output.
 
 FOAMY_HELPER is the helper's argv prefix as a JSON list (default: this
-machine's bin/<arch>/foamy-lock-helper); the tests append "artwork".
+machine's bin/<arch>/foamy-lock-helper); the tests append "artwork" (or
+"wallpaper <link>" for the background probe).
 For the aarch64 build through qemu binfmt:
   FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py
 
@@ -374,6 +375,68 @@ class Requests(Workspace):
                 self.assertEqual(self.error({'kind': 'avatar', 'path': path}), code)
         self.assertEqual(self.error({'kind': 'avatar'}), 'invalid-avatar-path')
         self.assertEqual(self.leftovers(), [])
+
+
+class Wallpaper(unittest.TestCase):
+    """`wallpaper <link>`: the lock's background probe (argv in, one JSON line out)."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix='foamy-wallpaper-test-')
+        self.base = Path(self.temporary.name).resolve()
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def probe(self, *args):
+        result = subprocess.run([*HELPER, *args], stdin=subprocess.DEVNULL, capture_output=True,
+                                env={'PATH': '/usr/bin', 'LANG': 'C.UTF-8'}, timeout=10)
+        self.assertEqual(result.stderr, b'')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(result.stdout.endswith(b'\n') and result.stdout.count(b'\n') == 1, result.stdout)
+        reply = json.loads(result.stdout)
+        if reply.get('ok') is True:
+            self.assertEqual(set(reply), {'ok', 'path', 'signature'})
+        else:
+            self.assertEqual(set(reply), {'ok', 'error'}, reply)
+        return reply
+
+    def test_resolves_like_readlink_and_stat(self):
+        current = self.base / 'state/omarchy/current'
+        current.mkdir(parents=True)
+        theme = self.base / 'themes/one'
+        theme.mkdir(parents=True)
+        image = theme / 'wall # paper.png'
+        image.write_bytes(b'one')
+        (current / 'theme').symlink_to('../../../themes/one')
+        link = current / 'background'
+        link.symlink_to('theme/wall # paper.png')
+        reply = self.probe('wallpaper', str(link))
+        self.assertEqual(reply['path'], str(image))
+        expected = subprocess.check_output(['readlink', '-f', '--', str(link)], text=True).strip()
+        self.assertEqual(reply['path'], expected)
+        self.assertEqual(self.probe('wallpaper', str(link)), reply, 'stable while unchanged')
+        os.utime(image, ns=(10**18, 10**18))
+        touched = self.probe('wallpaper', str(link))
+        self.assertNotEqual(touched['signature'], reply['signature'])
+        image.write_bytes(b'rewritten')
+        self.assertNotEqual(self.probe('wallpaper', str(link))['signature'], touched['signature'])
+
+    def test_failures(self):
+        (self.base / 'dangling').symlink_to(self.base / 'nowhere')
+        (self.base / 'directory').mkdir()
+        os.mkfifo(self.base / 'fifo')
+        (self.base / 'loop').symlink_to(self.base / 'loop')
+        for args, code in [(['wallpaper', str(self.base / 'dangling')], 'wallpaper-missing'),
+                           (['wallpaper', str(self.base / 'missing')], 'wallpaper-missing'),
+                           (['wallpaper', str(self.base / 'loop')], 'wallpaper-missing'),
+                           (['wallpaper', str(self.base / 'directory')], 'not-regular-file'),
+                           (['wallpaper', str(self.base / 'fifo')], 'not-regular-file'),
+                           (['wallpaper', 'relative'], 'invalid-request'),
+                           (['wallpaper'], 'invalid-request'),
+                           (['wallpaper', str(self.base), 'extra'], 'invalid-request'),
+                           (['wallpapers', str(self.base)], 'invalid-request')]:
+            with self.subTest(args=args[:1] + [Path(a).name for a in args[1:]]):
+                self.assertEqual(self.probe(*args), {'ok': False, 'error': code})
 
 
 class Server:
