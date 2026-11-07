@@ -400,8 +400,51 @@ with log_path.open('w') as log:
         refresh_wallpaper()
         wait_for(lambda s: s['wallpaperError'] == 'wallpaper-unavailable')
         assert wallpaper_state()['path'] == ''
+        # The helper's probe: a relative link chain, a retargeted link, a touch,
+        # a dangling link and a directory, as Omarchy's theme switch leaves them.
+        other_dir = base / 'themes/other'
+        other_dir.mkdir(parents=True)
+        other = other_dir / 'other.svg'
+        other.write_text(static.read_text())
+        (background.parent / 'theme').symlink_to('../../../../themes/other')
+        background.symlink_to('theme/other.svg')
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['path'] == str(other) and not s['wallpaperError'])
+        version = wallpaper_state()['version']
+        os.utime(other, ns=(1_000_000_000 * 10**9, 1_000_000_000 * 10**9))
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['version'] > version)
+        assert wallpaper_state()['path'] == str(other), 'a touch keeps the path and reloads the image'
+        version = wallpaper_state()['version']
+        background.unlink()
+        background.symlink_to(static)
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['path'] == str(static))
+        assert wallpaper_state()['version'] > version, 'a retargeted link reloads the image'
+        for target in [base / 'gone.svg', other_dir]:
+            background.unlink()
+            background.symlink_to(target)
+            refresh_wallpaper()
+            wait_for(lambda s: s['wallpaperError'] == 'wallpaper-unavailable')
+            assert wallpaper_state()['path'] == '', target
+        # No helper binary for this CPU: helper-unavailable, and no retry loop.
+        (app / 'bin').unlink()
+        (app / 'bin').mkdir()
+        background.unlink()
+        background.symlink_to(static)
+        refresh_wallpaper()
+        wait_for(lambda s: s['wallpaperError'] == 'helper-unavailable')
+        assert wallpaper_state()['path'] == ''
+        (app / 'bin').rmdir()
+        (app / 'bin').symlink_to(source / 'bin', target_is_directory=True)
+        refresh_wallpaper()
+        time.sleep(0.3)
+        state = wallpaper_state()
+        assert (state['source'], state['error']) == ('', 'helper-unavailable'), \
+            f'an unavailable helper is not started again: {state}'
         assert not status()['locked'], 'wallpaper failures must not change lock state'
         print('PASS: static wallpaper invalidation/cache reuse, optional video poster success/failure/missing helper, stale result rejection')
+        print('PASS: helper wallpaper probe follows relative and retargeted links, touches; dangling link, directory and missing helper keep the themed background')
         # Simulate a stale QML property binding during a pre-suspend IPC call.
         ipc('test', 'staleLock', 'true')
         assert ipc('lock', 'isLocked') == 'false'
