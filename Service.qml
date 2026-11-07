@@ -98,6 +98,11 @@ Item {
   // (decoded, cropped to the largest screen, blurred). Qt never decodes the
   // original; without a prepared file the theme colour shows.
   readonly property bool pictureWanted: look.background.source === "picture" && look.background.path !== ""
+  // One prepared picture at a time, for the look on screen: the preview's,
+  // else the saved one. A view uses it only when it was made for its look.
+  readonly property var pictureLook: previewLook || look
+  readonly property string lookPictureKey: pictureKey(look)
+  readonly property string previewPictureKey: pictureKey(pictureLook)
   property string pictureRenderPath: ""
   property string pictureError: ""
   property string pictureRequestKey: ""
@@ -404,6 +409,7 @@ Item {
   }
 
   onPreviewVisibleChanged: if (!previewVisible) previewLook = null
+  onPreviewLookChanged: Qt.callLater(refreshPicture)
   // Fallback reports describe the views of the current lock and look.
   onLockRequestedChanged: {
     if (lockRequested) clearLayoutFallback()
@@ -430,18 +436,23 @@ Item {
     return [Math.min(width, 7680), Math.min(height, 4320)]
   }
 
+  // The helper request for a look's picture, "" when it has none.
+  function pictureKey(target) {
+    var background = target ? target.background : null
+    if (!background || background.source !== "picture" || !background.path) return ""
+    var size = pictureSize()
+    return JSON.stringify({ kind: "background", path: background.path, width: size[0], height: size[1],
+      blur: background.blur })
+  }
+
   function refreshPicture() {
-    var background = look.background
-    if (background.source !== "picture" || !background.path) {
+    var key = pictureKey(pictureLook)
+    if (!key) {
       pictureRequestKey = ""
       pictureRenderPath = ""
       pictureError = ""
       return
     }
-    var size = pictureSize()
-    var request = { kind: "background", path: background.path, width: size[0], height: size[1],
-      blur: background.blur }
-    var key = JSON.stringify(request)
     if (key === pictureRequestKey) return
     // Prepared while unlocked only: a lock keeps what it was shown with.
     if (currentlyLocked()) return
@@ -810,7 +821,9 @@ Item {
         primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
         onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
-        backgroundPath: root.pictureWanted ? root.pictureRenderPath : root.lockWallpaperPath
+        // Only a picture made for this look; otherwise the theme colour.
+        backgroundPath: !root.pictureWanted ? root.lockWallpaperPath
+          : root.pictureRequestKey === root.lookPictureKey ? root.pictureRenderPath : ""
         backgroundPrepared: root.pictureWanted
         backgroundVersion: root.backgroundVersion
         fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
@@ -851,8 +864,9 @@ Item {
 
     LockView {
       anchors.fill: parent
-      backgroundPath: !root.previewLook && root.pictureWanted ? root.pictureRenderPath : root.lockWallpaperPath
-      backgroundPrepared: !root.previewLook && root.pictureWanted
+      backgroundPath: !root.previewPictureKey ? root.lockWallpaperPath
+        : root.pictureRequestKey === root.previewPictureKey ? root.pictureRenderPath : ""
+      backgroundPrepared: root.previewPictureKey !== ""
       backgroundVersion: root.backgroundVersion
       fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
       fingerprintUnavailable: root.fingerprintUnavailable
@@ -1430,6 +1444,39 @@ Item {
     // The preview overlay with a built-in preset instead of the saved look.
     // Nothing is saved; `lock preview` and hidePreview go back to the look.
     // Like the rest of IPC, nothing here can unlock.
+    // Everything an editor needs to offer choices without hard-coding them:
+    // elements, zones, styles, presets (with their looks and thumbnails),
+    // background sources and the saved look. Read-only.
+    function catalog(): string {
+      var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
+      var presets = []
+      for (var i = 0; i < Layout.SELECTABLE_PRESETS.length; i++) {
+        var name = Layout.SELECTABLE_PRESETS[i]
+        presets.push({ name: name, look: Layout.preset(name), thumbnail: dir + "/previews/presets/" + name + ".png" })
+      }
+      return JSON.stringify({ version: 1, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+        zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
+        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, defaultPreset: Layout.DEFAULT_PRESET,
+        look: root.look, lookError: root.lookError })
+    }
+
+    // The preview overlay with an unsaved look: a JSON object with the same
+    // keys as the foamy.lock entry (preset, layout, background, glass),
+    // validated by the same rules. Nothing is saved; nothing can unlock.
+    function previewLook(look: string): string {
+      var entry = null
+      try { entry = JSON.parse(String(look || "")) } catch (error) { return "invalid-json" }
+      var parsed = Layout.parseLook(entry)
+      if (!parsed.valid) return "invalid: " + parsed.error
+      if (root.currentlyLocked()) return "locked"
+      root.refreshBackground()
+      root.refreshFingerprintStatus()
+      root.refreshUserIdentity()
+      root.previewLook = parsed.look
+      root.previewVisible = true
+      return "ok"
+    }
+
     function previewPreset(name: string): string {
       if (Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return "unknown-preset"
       if (root.currentlyLocked()) return "locked"

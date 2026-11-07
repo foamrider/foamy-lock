@@ -659,6 +659,29 @@ fn look(test: &Test) -> R {
     );
     ensure!(test.lock("hidePreview")? == "ok");
     ensure!(text(&test.status()?, "previewPreset")?.is_empty());
+    // catalog lists what an editor may offer; previewLook previews an unsaved look.
+    let catalog = parse(&test.ipc("foamy.lock", "catalog", &[])?)?;
+    ensure!(
+        at(&catalog, "presets")?
+            .as_array()
+            .is_some_and(|p| p.iter().any(|p| p["name"] == "foamy"))
+            && at(&catalog, "styles.password")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "pill"))
+            && text(&catalog, "defaultPreset")? == "foamy",
+        "{catalog}"
+    );
+    let custom =
+        json!({"preset": "corner", "layout": {"media": {"zone": "bottom-center"}}}).to_string();
+    ensure!(test.ipc("foamy.lock", "previewLook", &[&custom])? == "ok");
+    ensure!(text(&test.status()?, "previewPreset")? == "corner");
+    ensure!(test.lock("hidePreview")? == "ok");
+    let hidden = json!({"layout": {"password": {"hidden": true}}}).to_string();
+    ensure!(
+        test.ipc("foamy.lock", "previewLook", &[&hidden])?
+            .starts_with("invalid: ")
+    );
+    ensure!(test.ipc("foamy.lock", "previewLook", &["{not json"])? == "invalid-json");
     for name in ["field-only", "../editorial", ""] {
         ensure!(
             test.ipc("foamy.lock", "previewPreset", &[name])? == "unknown-preset",

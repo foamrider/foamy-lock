@@ -285,7 +285,7 @@ function geometryError(field, others, width, height, margin) {
 
 if (typeof module !== "undefined") module.exports = {
   ELEMENTS: ELEMENTS, ZONES: ZONES, STYLES: STYLES, PASSWORD_ZONES: PASSWORD_ZONES, PRESETS: PRESETS,
-  SELECTABLE_PRESETS: SELECTABLE_PRESETS, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
+  SELECTABLE_PRESETS: SELECTABLE_PRESETS, BACKGROUND_SOURCES: BACKGROUND_SOURCES, ELEMENT_KEYS: ELEMENT_KEYS, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
   merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError
