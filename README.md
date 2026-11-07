@@ -154,17 +154,23 @@ optional; without them the lock looks exactly as in 1.2.0.
 
 | Element | Styles |
 | --- | --- |
-| `date` | `long` (default), `caps` |
-| `clock` | `thin` (default), `bold` |
-| `account` | `avatar` (default), `chip` |
-| `password` | `pill` (default), `underline` |
-| `media` | `card` (default), `line` |
-| `status` | `text` (default), `icons` |
+| `date` | `long` (default), `caps`, `short` (abbreviated, "Sat 7 Nov"), `serif` (a large serif weekday over the spaced date) |
+| `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog` |
+| `account` | `avatar` (default), `chip`, `name` (the name alone) |
+| `password` | `pill` (default), `underline`, `box` (an always-visible glass box with the arrow), `dots` (no surface), `terminal` (a "Password:" prompt in the mono font), `card` (a greeting above the field) |
+| `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below) |
+| `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill) |
+
+Each password style has a fixed size, so the field never moves while you type.
+Every style reads the same with CPU rendering, except the artwork: the media
+pill and art then show it as a plain square instead of a round or rounded one,
+and the card's thumbnail still needs GPU rendering. Nothing on the lock screen
+animates.
 
 The password field can't be hidden, and it stays in the middle or bottom row.
 `showUserInfo: false` and `showMedia: false` still hide the account and media
-whatever the layout says. Artwork is prepared only while the media card is
-shown.
+whatever the layout says. Artwork is prepared only while a media style
+that shows it (`card`, `pill` or `art`) is shown.
 
 **Background.** These keys set what's behind the elements:
 
@@ -392,6 +398,7 @@ FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest disco
 python3 -I -B tests/artwork_runtime.py
 bash tests/harness.sh render                  # --language no renders in Norwegian
 bash tests/harness.sh parity                  # geometry against 1.2.0 (needs the git history)
+bash tests/harness.sh layout                  # every preset, then the style sweep (also: styles alone)
 bash tests/harness.sh runtime                 # service, PAM, fingerprint, wallpaper and IPC flows
 bash tests/kit-check.sh
 ```
@@ -435,7 +442,7 @@ and places the elements in `elements/` (date, clock, account, password field,
 media, status), which only draw what the view gives them. The render and parity
 tests replace those data sources in `LockView.qml` alone.
 
-The render, parity and runtime tests run through `tests/harness.sh`, which builds and
+The render, parity, layout, styles and runtime tests run through `tests/harness.sh`, which builds and
 runs `tests/harness`: a development-only Rust crate (std only apart from `serde_json`
 for the runtime test's status replies, its own workspace, so the helper's `native.pin`
 doesn't cover it; built under `~/.cache/foamy-native`, never inside the plugin;
@@ -447,6 +454,15 @@ named item, within 1 px, in nine states (sizes from 700 × 1200 to 3440 × 1440,
 12-hour time, failure, checking, hidden identity, no media or battery, fingerprint
 unavailable, no wallpaper, right-to-left). `--baseline REV` compares with another
 revision.
+
+The style sweep (`styles`, also run by `layout` without `--preset`) shows every
+style of every element in each column of its row at 1920 × 1080 and 800 × 1000,
+in 12- and 24-hour time, typing and idle, on primary and secondary screens. The
+field must stay on screen, uncovered, live, focused and one size; every element
+and its parts must stay in place, the avatar square, and nothing may fall back.
+It then switches one view through every style, left-to-right and mirrored, and
+back to the default, whose geometry must return exactly. With `FOAMY_RENDER_OUT`
+it keeps two captures per case.
 
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
