@@ -420,7 +420,7 @@ Item {
       z: 2
       alignment: root.elementAlignment("date")
       visible: root.elementShown("date")
-      width: root.textWidth("date", implicitWidth)
+      width: root.textWidth("date", naturalWidth)
       x: root.placeX("date", width)
       y: root.placeY("date")
     }
@@ -432,7 +432,7 @@ Item {
       z: 2
       alignment: root.elementAlignment("clock")
       visible: root.elementShown("clock")
-      width: root.textWidth("clock", implicitWidth)
+      width: root.textWidth("clock", naturalWidth)
       x: root.placeX("clock", width)
       y: root.placeY("clock")
     }

@@ -17,8 +17,8 @@ var ZONES = (function() {
   return zones
 })()
 var STYLES = {
-  date: ["long", "caps"],
-  clock: ["thin", "bold"],
+  date: ["long", "caps", "short", "serif"],
+  clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog"],
   account: ["avatar", "chip"],
   password: ["pill", "underline"],
   media: ["card", "line"],
