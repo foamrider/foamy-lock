@@ -156,6 +156,19 @@ ShellRoot {
         if (index >= 6 && index < 8 && !findNamed(view, "fingerprintNotice").visible)
           throw new Error("Fingerprint unavailable notice is missing")
         if (index === 1 && input.text !== "example") throw new Error("Password binding did not update")
+        // A translated unlock hint may be wider than the pill, never cut off.
+        var hint = findNamed(view, "unlockHint")
+        var hintText = findNamed(view, "unlockHintText")
+        if (hint.visible) {
+          var hintStart = hint.mapToItem(view, 0, 0).x
+          if (hintText.truncated || hintStart < 0 || hintStart + hint.width > view.width || hint.width > view.contentWidth)
+            throw new Error("Unlock hint does not fit: " + hintText.text + " (" + hint.width + " of " + view.contentWidth + ")")
+          for (var clipper = hint.parent; clipper && clipper !== view; clipper = clipper.parent) {
+            var inside = hint.mapToItem(clipper, 0, 0)
+            if (clipper.clip && (inside.x < 0 || inside.y < 0 || inside.x + hint.width > clipper.width || inside.y + hint.height > clipper.height))
+              throw new Error("Unlock hint is clipped by " + clipper + ": " + hintText.text)
+          }
+        }
         if (!view.grabToImage(function(result) {
           if (!result.saveToFile(Qt.resolvedUrl("capture-" + step.index + ".png").toString().replace("file://", "")))
             throw new Error("Screenshot save failed")
