@@ -10,9 +10,7 @@ The screenshot uses synthetic account and media details and a neutral wallpaper.
 
 ## Install
 
-This plugin targets Omarchy 4.5 (checked against 4.5.0). It keeps its Omarchy 4.0.6
-compatibility, which the tests check only when given a 4.0 shell (see Validation).
-It requires Omarchy's Quickshell build and the existing
+Requires Omarchy 4.5 (checked against 4.5.0), Omarchy's Quickshell build and the existing
 `/etc/pam.d/omarchy-lock-password` service. Fingerprint unlock also requires
 Omarchy's fingerprint setup and an enrolled fingerprint. The plugin does not
 install or change PAM configuration. The layout uses Adwaita Sans, URW Gothic,
@@ -139,8 +137,8 @@ Input, an arriving display, or resume detection restarts the loop. Status includ
 Static wallpapers are preloaded at each display size and refreshed when the
 selected file changes, including replacement at the same path. Video wallpapers
 use a cached still frame from Omarchy 4.5's optional `poster.sh` helper. Foamy Lock
-does not play video or require the new video QML module. On 4.0.6, or if extraction
-fails, videos use the plain themed background. Wallpaper failures do not block
+does not play video or require the new video QML module. If that helper is missing
+or extraction fails, videos use the plain themed background. Wallpaper failures do not block
 authentication; `lock status` reports them in `wallpaperError`.
 
 The bundled helper (`foamy-lock-helper wallpaper <link>`, at most 2 seconds) resolves
@@ -360,7 +358,7 @@ Licensed under [MIT](LICENSE), with the upstream [Omarchy notice](LICENSE-OMARCH
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5, including
 right-to-left layout for right-to-left languages (media transport buttons keep their
-order). Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin
-in English. Missing translations fall back to English.
+order). Plugin language overrides are no longer used.
+Missing translations fall back to English.
 
 Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed 4.5 shell. Set `OMARCHY_PATH` to another Omarchy tree to check that one.
