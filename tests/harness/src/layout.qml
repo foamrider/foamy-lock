@@ -11,6 +11,35 @@ ShellRoot {
   readonly property var sizes: [[1920, 1080], [3440, 1440], [1280, 720], [800, 1000]]
   property int fellBack: 0
   property var fellBackTo: []
+  // foamy only: one view switched through every preset (hidden account
+  // included) and back must end where it started.
+  readonly property var cycle: ["corner", "editorial", "zen", "foamy", "editorial", "corner", "zen", "foamy"]
+  property int cycleAt: -1
+  property var reference: null
+  readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter"]
+
+  function geometry() {
+    var out = {}
+    for (var i = 0; i < tracked.length; i++) {
+      var item = findNamed(view, tracked[i])
+      var at = item.mapToItem(view, 0, 0)
+      out[tracked[i]] = [Math.round(at.x), Math.round(at.y), Math.round(item.width), Math.round(item.height), item.visible].join(",")
+    }
+    return out
+  }
+
+  function checkAccountShape(label) {
+    var account = findNamed(view, "identityBlock")
+    var avatar = findNamed(view, "avatar")
+    var name = findNamed(view, "nameLabel")
+    if (Math.abs(avatar.width - avatar.height) > 1) return fail(label + ": avatar " + avatar.width + "x" + avatar.height)
+    var parts = [avatar, name]
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i]
+      if (p.x < -1 || p.y < -1 || p.x + p.width > account.width + 1 || p.y + p.height > account.height + 1)
+        return fail(label + ": " + p.objectName + " outside the account box: " + [p.x, p.y, p.width, p.height] + " in " + [account.width, account.height])
+    }
+  }
 
   FloatingWindow {
     visible: true
@@ -24,7 +53,9 @@ ShellRoot {
       activePlayer: player
       artworkPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
       fingerprintConfigured: true
-      look: Layout.preset(shellRoot.presetName)
+      // Start on foamy and switch at the first state, as previewPreset does.
+      look: Layout.defaults()
+      avatarPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
       onPasswordTextEdited: function(value) { passwordText = value }
       onLayoutFellBack: function(error, preset) { shellRoot.fellBack++; shellRoot.fellBackTo.push(preset + ":" + error) }
     }
@@ -81,6 +112,7 @@ ShellRoot {
           view.timeFormat = state[2] ? "12h" : "24h"
           view.passwordText = state[3] ? "example" : ""
           view.primary = state[4]
+          if (index === 0) view.look = Layout.preset(shellRoot.presetName)
           applied = true
           return
         }
@@ -93,6 +125,33 @@ ShellRoot {
         return
       }
       if (presetName !== "foamy") { shellRoot.finish(); return }
+      if (shellRoot.cycleAt < shellRoot.cycle.length) {
+        if (shellRoot.cycleAt === -1) {
+          view.width = 1920; view.height = 1080
+          view.timeFormat = "24h"; view.passwordText = ""; view.primary = true
+          view.look = Layout.defaults()
+          shellRoot.cycleAt = 0
+          return
+        }
+        if (shellRoot.reference === null) shellRoot.reference = shellRoot.geometry()
+        if (applied) {
+          var name = shellRoot.cycle[shellRoot.cycleAt]
+          label = "cycle " + shellRoot.cycleAt + " " + name
+          shellRoot.checkAccountShape(label)
+          if (shellRoot.cycleAt === shellRoot.cycle.length - 1) {
+            var now = shellRoot.geometry()
+            for (var key in now)
+              if (now[key] !== shellRoot.reference[key]) shellRoot.fail("after the cycle " + key + " is " + now[key] + ", was " + shellRoot.reference[key])
+            console.log("layout ok: preset cycle back to foamy")
+          }
+          applied = false
+          shellRoot.cycleAt++
+          return
+        }
+        view.look = Layout.preset(shellRoot.cycle[shellRoot.cycleAt])
+        applied = true
+        return
+      }
       // The fallback chain: a customised corner look on a screen too small
       // for it falls back to foamy, which doesn't fit either, then to the
       // field-only layout, which does; nothing falls back further.
@@ -140,6 +199,9 @@ ShellRoot {
       return fail("a built-in preset fell back: " + view.layoutError + " -> " + view.fallbackPreset)
     checkField(state[4])
     var account = findNamed(view, "identityBlock")
+    var avatar = findNamed(view, "avatar")
+    if (account.visible && Math.abs(avatar.width - avatar.height) > 1)
+      return fail("the avatar isn't round: " + avatar.width + "x" + avatar.height)
     var hint = findNamed(view, "unlockHint")
     var shown = view.placed.account.hidden === false
     if (!state[4] && account.visible) return fail("the account shows on a secondary screen")

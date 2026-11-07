@@ -238,11 +238,10 @@ Rectangle {
 
   Text {
     objectName: "fingerprintNotice"
-    anchors.top: parent.bottom
-    anchors.topMargin: Math.round(8 * field.view.uiScale)
-    anchors.horizontalCenter: field.alignment === "center" ? parent.horizontalCenter : undefined
-    anchors.left: field.alignment === "start" ? parent.left : undefined
-    anchors.right: field.alignment === "end" ? parent.right : undefined
+    // Plain x/y, mirrored here (see AccountElement: no anchors toggled at runtime).
+    y: field.height + Math.round(8 * field.view.uiScale)
+    x: field.alignment === "center" ? (field.width - width) / 2
+      : (field.alignment === "start") !== field.view.rightToLeft ? 0 : field.width - width
     width: field.alignment === "center" ? field.view.contentWidth : field.width
     visible: field.chromeShown && field.view.fingerprintUnavailable
     textFormat: Text.PlainText

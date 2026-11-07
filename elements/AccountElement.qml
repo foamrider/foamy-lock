@@ -14,13 +14,17 @@ Item {
   readonly property bool chip: styleName === "chip"
   readonly property real chipPadding: Math.round(7 * view.uiScale)
   readonly property real chipGap: Math.round(10 * view.uiScale)
+  readonly property real chipEnd: Math.round(18 * view.uiScale)
+  // Positions are plain x/y bindings, mirrored here: switching anchors on and
+  // off between styles at runtime leaves stale anchors behind.
+  readonly property bool mirrored: view.rightToLeft
   // The width it needs outside the center column (and the chip's width).
   readonly property real naturalWidth: chip
-    ? chipPadding + avatar.width + chipGap + nameLabel.implicitWidth + Math.round(18 * view.uiScale)
+    ? chipPadding + avatar.width + chipGap + nameLabel.implicitWidth + chipEnd
     : Math.max(avatar.width, nameLabel.implicitWidth)
 
   objectName: "identityBlock"
-  height: chip ? Math.round(48 * view.uiScale) : avatar.height + nameLabel.anchors.topMargin + nameLabel.height
+  height: chip ? Math.round(48 * view.uiScale) : avatar.height + nameLabel.topMargin + nameLabel.height
 
   Rectangle {
     objectName: "accountChip"
@@ -38,12 +42,13 @@ Item {
     width: Math.round((account.chip ? 34 : 84) * account.view.uiScale)
     height: width
     radius: width / 2
-    anchors.top: account.chip ? undefined : parent.top
-    anchors.verticalCenter: account.chip ? parent.verticalCenter : undefined
-    anchors.horizontalCenter: !account.chip && account.alignment === "center" ? parent.horizontalCenter : undefined
-    anchors.left: account.chip || account.alignment === "start" ? parent.left : undefined
-    anchors.leftMargin: account.chip ? account.chipPadding : 0
-    anchors.right: !account.chip && account.alignment === "end" ? parent.right : undefined
+    y: account.chip ? (account.height - height) / 2 : 0
+    x: {
+      if (account.chip) return account.mirrored ? account.width - account.chipPadding - width : account.chipPadding
+      if (account.alignment === "center") return (account.width - width) / 2
+      var atStart = account.alignment === "start"
+      return atStart !== account.mirrored ? 0 : account.width - width
+    }
     color: Qt.rgba(0.025, 0.03, 0.055, 0.55)
 
     Item {
@@ -108,14 +113,11 @@ Item {
     id: nameLabel
     objectName: "nameLabel"
     textFormat: Text.PlainText
-    anchors.top: account.chip ? undefined : avatar.bottom
-    anchors.topMargin: Math.round(7 * account.view.uiScale)
-    anchors.verticalCenter: account.chip ? parent.verticalCenter : undefined
-    anchors.left: account.chip ? avatar.right : parent.left
-    anchors.leftMargin: account.chip ? account.chipGap : 0
-    anchors.right: parent.right
-    anchors.rightMargin: account.chip ? Math.round(18 * account.view.uiScale) : 0
+    readonly property real topMargin: Math.round(7 * account.view.uiScale)
     height: Math.round((account.chip ? 24 : 34) * account.view.uiScale)
+    y: account.chip ? (account.height - height) / 2 : avatar.height + topMargin
+    width: account.chip ? Math.max(0, account.width - account.chipPadding - avatar.width - account.chipGap - account.chipEnd) : account.width
+    x: !account.chip ? 0 : account.mirrored ? account.chipEnd : account.chipPadding + avatar.width + account.chipGap
     text: account.view.displayName
     color: account.view.foreground
     font.family: account.view.textFontFamily

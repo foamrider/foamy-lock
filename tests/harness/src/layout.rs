@@ -61,7 +61,7 @@ fn run_preset(name: &str, shell: &Path, preset: &str) -> Result<(), String> {
     fs::write(dir.join("shell.qml"), SHELL.replace("__PRESET__", preset))
         .map_err(app::io("shell.qml"))?;
     app::register_types(&dir)?;
-    let (success, output) = app::run_quickshell(&base, &dir, shell, "en", Duration::from_secs(20))?;
+    let (success, output) = app::run_quickshell(&base, &dir, shell, "en", Duration::from_secs(45))?;
     for line in output.lines().filter(|line| {
         line.contains("layout ok") || line.contains("LAYOUT_") || line.contains("ERROR")
     }) {
