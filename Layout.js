@@ -19,10 +19,10 @@ var ZONES = (function() {
 var STYLES = {
   date: ["long", "caps", "short", "serif"],
   clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog"],
-  account: ["avatar", "chip"],
+  account: ["avatar", "chip", "name"],
   password: ["pill", "underline"],
   media: ["card", "line"],
-  status: ["text", "icons"]
+  status: ["text", "icons", "pill"]
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]

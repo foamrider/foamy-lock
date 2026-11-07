@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Effects
 
 // Avatar and display name. Styles: "avatar" (a large picture with the name
-// below; the host sets the width) and "chip" (a small picture and the name
-// in a glass pill, as wide as it needs).
+// below; the host sets the width), "chip" (a small picture and the name in a
+// glass pill, as wide as it needs) and "name" (the display name alone).
 Item {
   id: account
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
@@ -12,6 +12,7 @@ Item {
   property string alignment: "center"
   property string styleName: "avatar"
   readonly property bool chip: styleName === "chip"
+  readonly property bool nameOnly: styleName === "name"
   readonly property real chipPadding: Math.round(7 * view.uiScale)
   readonly property real chipGap: Math.round(10 * view.uiScale)
   readonly property real chipEnd: Math.round(18 * view.uiScale)
@@ -21,10 +22,11 @@ Item {
   // The width it needs outside the center column (and the chip's width).
   readonly property real naturalWidth: chip
     ? chipPadding + avatar.width + chipGap + nameLabel.implicitWidth + chipEnd
-    : Math.max(avatar.width, nameLabel.implicitWidth)
+    : nameOnly ? nameLabel.implicitWidth : Math.max(avatar.width, nameLabel.implicitWidth)
 
   objectName: "identityBlock"
-  height: chip ? Math.round(48 * view.uiScale) : avatar.height + nameLabel.topMargin + nameLabel.height
+  height: chip ? Math.round(48 * view.uiScale) : nameOnly ? nameLabel.height
+    : avatar.height + nameLabel.topMargin + nameLabel.height
 
   Rectangle {
     objectName: "accountChip"
@@ -39,6 +41,7 @@ Item {
   Rectangle {
     id: avatar
     objectName: "avatar"
+    visible: !account.nameOnly
     width: Math.round((account.chip ? 34 : 84) * account.view.uiScale)
     height: width
     radius: width / 2
@@ -114,15 +117,15 @@ Item {
     objectName: "nameLabel"
     textFormat: Text.PlainText
     readonly property real topMargin: Math.round(7 * account.view.uiScale)
-    height: Math.round((account.chip ? 24 : 34) * account.view.uiScale)
-    y: account.chip ? (account.height - height) / 2 : avatar.height + topMargin
+    height: Math.round((account.chip ? 24 : account.nameOnly ? 36 : 34) * account.view.uiScale)
+    y: account.chip ? (account.height - height) / 2 : account.nameOnly ? 0 : avatar.height + topMargin
     width: account.chip ? Math.max(0, account.width - account.chipPadding - avatar.width - account.chipGap - account.chipEnd) : account.width
     x: !account.chip ? 0 : account.mirrored ? account.chipEnd : account.chipPadding + avatar.width + account.chipGap
     text: account.view.displayName
     color: account.view.foreground
     font.family: account.view.textFontFamily
-    font.pixelSize: Math.round((account.chip ? 16 : 20) * account.view.uiScale)
-    font.weight: Font.Normal
+    font.pixelSize: Math.round((account.chip ? 16 : account.nameOnly ? 24 : 20) * account.view.uiScale)
+    font.weight: account.nameOnly ? Font.Medium : Font.Normal
     elide: Text.ElideRight
     horizontalAlignment: account.chip || account.alignment === "start" ? Text.AlignLeft
       : account.alignment === "end" ? Text.AlignRight : Text.AlignHCenter

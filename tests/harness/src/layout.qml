@@ -36,6 +36,7 @@ ShellRoot {
     var parts = [avatar, name]
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i]
+      if (!p.visible) continue
       if (p.x < -1 || p.y < -1 || p.x + p.width > account.width + 1 || p.y + p.height > account.height + 1)
         return fail(label + ": " + p.objectName + " outside the account box: " + [p.x, p.y, p.width, p.height] + " in " + [account.width, account.height])
     }
