@@ -31,7 +31,8 @@ and ADX: Intel Broadwell, AMD Zen or newer; on AArch64 the ARMv8 crypto extensio
 so not a Raspberry Pi 4); without them remote artwork reports `https-unsupported`.
 If the helper or its sandbox cannot run, the music icon (or the account initial) is
 shown. Artwork has no unsandboxed decoding fallback, and authentication depends on
-neither.
+neither. The same helper also finds the current wallpaper (see Wallpaper); on a CPU
+without a helper binary the lock shows the plain themed background.
 
 Install while your session is unlocked:
 
@@ -141,6 +142,15 @@ use a cached still frame from Omarchy 4.5's optional `poster.sh` helper. Foamy L
 does not play video or require the new video QML module. On 4.0.6, or if extraction
 fails, videos use the plain themed background. Wallpaper failures do not block
 authentication; `lock status` reports them in `wallpaperError`.
+
+The bundled helper (`foamy-lock-helper wallpaper <link>`, at most 2 seconds) resolves
+`~/.local/state/omarchy/current/background` like `readlink -f` and stats the file it
+ends at; no shell tools such as `stat` or `jq` are involved. A change of the file's
+size, modification or change time, or another file in its place, reloads the image;
+an unchanged file keeps the cached one. A dangling link, a missing file, a directory
+or another non-regular file leaves the plain themed background with
+`wallpaperError: "wallpaper-unavailable"`. `helper-unavailable` means there is no
+helper binary for this CPU; the probe is then not run again until the shell reloads.
 
 ## Account name and avatar
 
@@ -271,9 +281,10 @@ them at runtime). `artwork_test.py` runs the helper as a process: it checks the
 request/reply contract, the exact Bubblewrap command line, environment, rlimits,
 inherited descriptors, policy and seccomp program (through stand-in `bwrap` and
 `magick` scripts in an outer Bubblewrap namespace), HTTPS against a local TLS
-server, and the real sandbox. `FOAMY_HELPER` selects another build; the aarch64
-binary runs through qemu binfmt, which has no seccomp, so its real-sandbox tests
-are skipped. The HTTPS tests use the helper's test-only `FOAMY_LOCK_TEST_RESOLVE`
+server, and the real sandbox. It also covers the `wallpaper` subcommand (link chains,
+touches, rewrites and failures against `readlink -f`). `FOAMY_HELPER` selects another
+build; the aarch64 binary runs through qemu binfmt, which has no seccomp, so its
+real-sandbox tests are skipped. The HTTPS tests use the helper's test-only `FOAMY_LOCK_TEST_RESOLVE`
 and `FOAMY_LOCK_TEST_CONNECT` overrides (documented in `native/src/main.rs`; the
 shell clears the helper's environment, so they never apply there).
 
@@ -311,6 +322,8 @@ They require host support for unprivileged namespaces and a private session bus;
 a restricted agent/container sandbox may prevent these even when the desktop
 supports them. The runtime test uses an isolated home and session bus with simulated
 PAM and session-lock objects; it does not lock the desktop or authenticate a user.
+It runs the real helper against a temporary wallpaper link: relative and retargeted
+links, touched and rewritten files, dangling links, directories and a missing helper.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
 
