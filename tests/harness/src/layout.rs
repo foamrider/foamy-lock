@@ -1,6 +1,8 @@
 //! The layout test: every selectable preset through sizes, clock formats,
-//! typing and primary/non-primary states, plus the geometry fallback chain;
-//! without `--preset` it also runs the style sweep (styles.rs).
+//! typing, primary/non-primary and right-to-left states, plus the preset
+//! cycle and the geometry fallback chain; without `--preset` it also runs
+//! the style sweep (styles.rs). Presets run a few at a time, each in its own
+//! quickshell.
 
 use std::fs;
 use std::path::Path;
@@ -9,8 +11,8 @@ use std::time::Duration;
 use crate::{app, host, styles};
 
 const SHELL: &str = include_str!("layout.qml");
-/// Mirrors Layout.SELECTABLE_PRESETS.
-const PRESETS: [&str; 4] = ["foamy", "corner", "editorial", "zen"];
+/// Quickshell runs at once.
+const PARALLEL: usize = 4;
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut choice = "4.5".to_string();
@@ -24,27 +26,49 @@ pub fn run(args: &[String]) -> Result<(), String> {
             other => return Err(format!("unknown argument {other:?}")),
         }
     }
+    let presets = app::selectable_presets()?;
     if let Some(name) = &only
-        && !PRESETS.contains(&name.as_str())
+        && !presets.contains(name)
     {
         return Err(format!(
             "unknown preset {name:?}; use {}",
-            PRESETS.join(", ")
+            presets.join(", ")
         ));
     }
+    let chosen: Vec<&str> = presets
+        .iter()
+        .map(String::as_str)
+        .filter(|preset| only.as_deref().is_none_or(|o| o == *preset))
+        .collect();
     let hosts = host::selected(&choice)?;
     let mut failed = Vec::new();
     for (name, shell) in &hosts {
         if hosts.len() > 1 {
             println!("== host {name}: {}", shell.display());
         }
-        for preset in PRESETS
-            .iter()
-            .filter(|preset| only.as_deref().is_none_or(|o| o == **preset))
-        {
-            if let Err(message) = run_preset(name, shell, preset) {
-                eprintln!("{message}");
-                failed.push(format!("{name} {preset}"));
+        for batch in chosen.chunks(PARALLEL) {
+            let results: Vec<(&str, Result<String, String>)> = std::thread::scope(|scope| {
+                let runs: Vec<_> = batch
+                    .iter()
+                    .map(|preset| (*preset, scope.spawn(|| run_preset(name, shell, preset))))
+                    .collect();
+                runs.into_iter()
+                    .map(|(preset, run)| {
+                        let result = run
+                            .join()
+                            .unwrap_or_else(|_| Err(format!("layout {preset} panicked")));
+                        (preset, result)
+                    })
+                    .collect()
+            });
+            for (preset, result) in results {
+                match result {
+                    Ok(lines) => print!("{lines}"),
+                    Err(message) => {
+                        eprintln!("{message}");
+                        failed.push(format!("{name} {preset}"));
+                    }
+                }
             }
         }
         // The whole run also sweeps every style (see styles.rs).
@@ -62,22 +86,27 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-fn run_preset(name: &str, shell: &Path, preset: &str) -> Result<(), String> {
+/// One preset's run; its log lines on success.
+fn run_preset(name: &str, shell: &Path, preset: &str) -> Result<String, String> {
     let base = app::temp_dir("foamy-lock-layout")?;
     let dir = base.join("app");
     app::prepare(&dir, shell)?;
     fs::write(dir.join("shell.qml"), SHELL.replace("__PRESET__", preset))
         .map_err(app::io("shell.qml"))?;
     app::register_types(&dir)?;
-    let (success, output) = app::run_quickshell(&base, &dir, shell, "en", Duration::from_secs(45))?;
-    for line in output.lines().filter(|line| {
-        line.contains("layout ok") || line.contains("LAYOUT_") || line.contains("ERROR")
-    }) {
-        println!("{line}");
-    }
+    // foamy also cycles through every preset.
+    let timeout = Duration::from_secs(if preset == "foamy" { 150 } else { 60 });
+    let (success, output) = app::run_quickshell(&base, &dir, shell, "en", timeout)?;
+    let lines: String = output
+        .lines()
+        .filter(|line| {
+            line.contains("layout ok") || line.contains("LAYOUT_") || line.contains("ERROR")
+        })
+        .map(|line| format!("{line}\n"))
+        .collect();
     if !success || !output.contains("LAYOUT_PASS") {
         return Err(format!(
-            "layout {preset} failed ({name} {}); log: {}",
+            "{lines}layout {preset} failed ({name} {}); log: {}",
             shell.display(),
             base.display()
         ));
@@ -85,5 +114,5 @@ fn run_preset(name: &str, shell: &Path, preset: &str) -> Result<(), String> {
     if let Some(out) = app::render_out("layout") {
         app::copy_captures(&dir, &out)?;
     }
-    Ok(())
+    Ok(lines)
 }

@@ -14,6 +14,12 @@ const NETWORKING: &str = include_str!("../fixtures/Networking.qml");
 const POWER: &str = include_str!("../fixtures/Power.qml");
 const WALLPAPER: &str = include_str!("../fixtures/wallpaper.svg");
 const ARTWORK: &str = include_str!("../fixtures/artwork.svg");
+/// Fixed readings for the "system" status style in place of /proc.
+const PROC: [(&str, &str); 3] = [
+    ("uptime", include_str!("../fixtures/proc/uptime")),
+    ("loadavg", include_str!("../fixtures/proc/loadavg")),
+    ("meminfo", include_str!("../fixtures/proc/meminfo")),
+];
 /// The fixed time every render shows.
 const FIXED_DATE: &str = "new Date(2026, 8, 26, 10, 24)";
 
@@ -70,7 +76,16 @@ pub fn prepare(app: &Path, host_shell: &Path) -> Result<(), String> {
         write(app.join(script), &text)?;
     }
     let view = fs::read_to_string(root.join("LockView.qml")).map_err(io("LockView.qml"))?;
-    write(app.join("LockView.qml"), &patch_view(&view))?;
+    let proc = app.join("fixtures/proc");
+    fs::create_dir_all(&proc).map_err(io(proc.display()))?;
+    for (name, text) in PROC {
+        write(proc.join(name), text)?;
+    }
+    let view = patch_view(&view).replace(
+        "property string procRoot: \"/proc\"",
+        &format!("property string procRoot: \"{}\"", proc.display()),
+    );
+    write(app.join("LockView.qml"), &view)?;
     write(
         app.join("fixtures/qmldir"),
         "module Fixture\nsingleton Networking 1.0 Networking.qml\nsingleton Power 1.0 Power.qml\n",
@@ -173,6 +188,25 @@ pub fn run_quickshell(
     }
 }
 
+/// The selectable presets, read from Layout.js (`var SELECTABLE_PRESETS = [...]`),
+/// so the harness never lags behind the model.
+pub fn selectable_presets() -> Result<Vec<String>, String> {
+    let layout = fs::read_to_string(plugin_root().join("Layout.js")).map_err(io("Layout.js"))?;
+    parse_presets(&layout).ok_or_else(|| "no SELECTABLE_PRESETS in Layout.js".to_string())
+}
+
+fn parse_presets(layout: &str) -> Option<Vec<String>> {
+    let start = layout.find("var SELECTABLE_PRESETS = [")?;
+    let list = &layout[start..];
+    let list = &list[list.find('[')? + 1..list.find(']')?];
+    let names: Vec<String> = list
+        .split(',')
+        .map(|item| item.trim().trim_matches('"').to_string())
+        .filter(|name| !name.is_empty())
+        .collect();
+    (!names.is_empty()).then_some(names)
+}
+
 /// `$FOAMY_RENDER_OUT/<sub>` when FOAMY_RENDER_OUT asks for a copy of the
 /// captures, else None.
 pub fn render_out(sub: &str) -> Option<PathBuf> {
@@ -191,4 +225,19 @@ pub fn copy_captures(app: &Path, out: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_presets;
+
+    #[test]
+    fn presets_come_from_layout_js() {
+        let layout = "var X = [\"no\"]\nvar SELECTABLE_PRESETS = [\"foamy\", \"corner\",\n  \"dock\"]\nvar DEFAULT_PRESET = \"foamy\"";
+        assert_eq!(parse_presets(layout).unwrap(), ["foamy", "corner", "dock"]);
+        assert!(parse_presets("var SELECTABLE_PRESETS = []").is_none());
+        assert!(parse_presets("").is_none());
+        let real = super::selectable_presets().unwrap();
+        assert_eq!(&real[..4], ["foamy", "corner", "editorial", "zen"]);
+    }
 }

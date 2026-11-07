@@ -11,5 +11,14 @@
   "Checking…": "Checking…",
   "Authentication failed (%1)": "Authentication failed (%1)",
   "Welcome back": "Welcome back",
-  "Password:": "Password:"
+  "Password:": "Password:",
+  "Uptime": "Uptime",
+  "Memory": "Memory",
+  "Load": "Load",
+  "Battery": "Battery",
+  "Network": "Network",
+  "%1 / %2 GB": "%1 / %2 GB",
+  "%1 d %2 h": "%1 d %2 h",
+  "%1 h %2 min": "%1 h %2 min",
+  "%1 min": "%1 min"
 }

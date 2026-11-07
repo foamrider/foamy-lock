@@ -13,18 +13,19 @@ ShellRoot {
   readonly property var columns: ["start", "center", "end"]
   readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField",
     "editorArea", "passwordInput", "unlockHint", "submitArrow", "fingerprintNotice", "mediaRow", "albumArt",
-    "mediaControls", "statusFooter", "networkStatus", "batteryStatus"]
+    "mediaControls", "statusFooter", "networkStatus", "batteryStatus", "calendarBlock"]
   // Parts drawn by a style, each inside its element (when visible).
   readonly property var parts: ({
     dateLabel: ["dateDetail"],
-    clockLabel: ["clockStacked", "clockOutline", "clockDots", "clockFlip", "clockAnalog"],
+    clockLabel: ["clockStacked", "clockOutline", "clockDots", "clockFlip", "clockAnalog", "clockPoster", "clockRing"],
     identityBlock: ["avatar", "nameLabel"],
     inputField: ["editorArea", "passwordInput", "cardGreeting", "cardPill", "terminalPrompt", "submitArrow"],
     mediaRow: ["albumArt", "mediaTitle", "mediaArtist", "mediaControls", "mediaLine"],
-    statusFooter: ["networkStatus", "batteryStatus"]
+    statusFooter: ["networkStatus", "batteryStatus", "systemPanel"],
+    calendarBlock: ["calendarCard", "calendarTitle"]
   })
   readonly property var elementItems: ({ date: "dateLabel", clock: "clockLabel", account: "identityBlock",
-    password: "inputField", media: "mediaRow", status: "statusFooter" })
+    password: "inputField", media: "mediaRow", status: "statusFooter", calendar: "calendarBlock" })
 
   // One case per element, style and column: the layout overrides that put
   // the element (and its usual partner) in that column of its row, moving
@@ -46,6 +47,10 @@ ShellRoot {
       // In the center, above the account and the field.
       layout.media.zone = "bottom-" + column
       if (column === "center") layout.media.order = -1
+    } else if (element === "calendar") {
+      // Hidden by default: shown alone in the middle row.
+      layout.calendar.hidden = false
+      layout.calendar.zone = "middle-" + column
     } else {
       layout.status.zone = "top-" + column
       // Above the date and clock in the center.
@@ -83,6 +88,7 @@ ShellRoot {
       for (var s = 1; s < Layout.STYLES[element].length; s++) {
         var layout = {}
         layout[element] = { style: Layout.STYLES[element][s] }
+        if (element === "calendar") layout.calendar.hidden = false
         out.push({ name: element + " " + Layout.STYLES[element][s], layout: layout })
       }
     }

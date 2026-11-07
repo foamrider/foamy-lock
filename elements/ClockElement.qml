@@ -10,6 +10,9 @@ import "../kit"
 // - "dots": a dot-matrix LED face (a 5×7 dot font on a Canvas).
 // - "flip": hours and minutes on two dark rounded cards with a seam.
 // - "analog": a round face with hour and minute hands (a Canvas).
+// - "small": one line in the text face, for a bar or a card.
+// - "poster": huge heavy hours over minutes, the minutes in the accent.
+// - "ring": the time inside a ring that fills with the minutes of the hour.
 // The host sets the width in the center column; elsewhere it is
 // `naturalWidth`. Nothing here animates.
 Item {
@@ -21,15 +24,16 @@ Item {
   property string styleName: "thin"
   readonly property bool bold: styleName === "bold"
   readonly property bool mono: styleName === "mono"
+  readonly property bool small: styleName === "small"
   // The styles drawn by the single text line below.
-  readonly property bool textual: styleName === "thin" || bold || mono
+  readonly property bool textual: styleName === "thin" || bold || mono || small
   readonly property bool twelveHour: view.timeFormat === "12h"
   readonly property real uiScale: view.uiScale
   // Stacked under another element, the numerals' top bearing would leave a
   // gap: pull the clock up instead of the zone's usual spacing. The drawn
   // faces have no bearing and keep a small gap.
   readonly property real stackGap: Math.round((bold ? -12 : styleName === "thin" ? -20 : mono ? -14
-    : styleName === "stacked" ? -14 : styleName === "outline" ? -8 : 10) * uiScale)
+    : styleName === "stacked" ? -14 : styleName === "outline" ? -8 : small ? 2 : styleName === "poster" ? -10 : 10) * uiScale)
   // The main line, as the tests read it.
   readonly property alias text: label.text
   readonly property alias font: label.font
@@ -46,6 +50,8 @@ Item {
     case "dots": return dots.naturalWidth
     case "flip": return flip.naturalWidth
     case "analog": return analog.diameter
+    case "poster": return poster.naturalWidth
+    case "ring": return ring.diameter
     }
     return label.implicitWidth
   }
@@ -58,6 +64,8 @@ Item {
     case "dots": return dots.height
     case "flip": return flip.height
     case "analog": return analog.height
+    case "poster": return poster.height
+    case "ring": return ring.height
     }
     return label.height
   }
@@ -83,11 +91,11 @@ Item {
     textFormat: Text.PlainText
     text: clock.view.userLocale.toString(clock.view.now, clock.twelveHour ? "h:mm AP" : "HH:mm")
     fontSizeMode: Text.Fit
-    minimumPixelSize: Math.round(48 * clock.uiScale)
+    minimumPixelSize: Math.round((clock.small ? 18 : 48) * clock.uiScale)
     color: clock.view.foreground
-    font.family: clock.mono ? FoamyStyle.monoFamily : clock.bold ? clock.view.textFontFamily : clock.view.displayFontFamily
-    font.pixelSize: Math.round((clock.bold ? 150 : clock.mono ? 140 : 192) * clock.uiScale)
-    font.weight: clock.bold ? Font.Bold : clock.mono ? Font.Medium : Font.Normal
+    font.family: clock.mono ? FoamyStyle.monoFamily : clock.bold || clock.small ? clock.view.textFontFamily : clock.view.displayFontFamily
+    font.pixelSize: Math.round((clock.bold ? 150 : clock.mono ? 140 : clock.small ? 34 : 192) * clock.uiScale)
+    font.weight: clock.bold ? Font.Bold : clock.mono ? Font.Medium : clock.small ? Font.DemiBold : Font.Normal
     font.letterSpacing: clock.bold ? Math.round(-4 * clock.uiScale) : clock.mono ? Math.round(-6 * clock.uiScale) : 0
     horizontalAlignment: clock.textAlignment
   }
@@ -402,6 +410,163 @@ Item {
       context.beginPath()
       context.arc(center, center, 6 * unit, 0, Math.PI * 2)
       context.fill()
+    }
+  }
+
+  // "poster": hours over minutes, very large and heavy, the lines overlapping
+  // a little as on a print; the minutes take the theme's accent.
+  Item {
+    id: poster
+    objectName: "clockPoster"
+    readonly property real fontSize: Math.round(250 * clock.uiScale)
+    readonly property real lineStep: Math.round(fontSize * 0.84)
+    readonly property real naturalWidth: Math.max(posterHours.implicitWidth, posterMinutes.implicitWidth)
+
+    visible: clock.styleName === "poster"
+    x: clock.blockX(width)
+    width: Math.min(clock.width, Math.ceil(naturalWidth))
+    height: posterMeridiem.visible ? posterMeridiem.y + posterMeridiem.height : posterMinutes.y + posterMinutes.height
+
+    Text {
+      id: posterHours
+      width: poster.width
+      height: poster.lineStep
+      textFormat: Text.PlainText
+      text: clock.hours
+      color: clock.view.foreground
+      font.family: clock.view.textFontFamily
+      font.pixelSize: poster.fontSize
+      font.weight: Font.Black
+      font.letterSpacing: Math.round(-8 * clock.uiScale)
+      horizontalAlignment: clock.textAlignment
+      verticalAlignment: Text.AlignVCenter
+    }
+
+    Text {
+      id: posterMinutes
+      y: poster.lineStep
+      width: poster.width
+      height: poster.lineStep
+      textFormat: Text.PlainText
+      text: clock.minutes
+      color: clock.view.accent
+      font: posterHours.font
+      horizontalAlignment: clock.textAlignment
+      verticalAlignment: Text.AlignVCenter
+    }
+
+    Text {
+      id: posterMeridiem
+      visible: clock.twelveHour
+      y: posterMinutes.y + posterMinutes.height + Math.round(4 * clock.uiScale)
+      width: poster.width
+      textFormat: Text.PlainText
+      text: clock.meridiem
+      color: clock.view.foreground
+      opacity: 0.86
+      font.family: clock.view.textFontFamily
+      font.pixelSize: Math.round(22 * clock.uiScale)
+      font.weight: Font.Bold
+      font.letterSpacing: Math.round(4 * clock.uiScale)
+      horizontalAlignment: clock.textAlignment
+    }
+  }
+
+  // "ring": a faint track with the minutes of the hour drawn over it in the
+  // accent, and the time in the middle. It changes once a minute, like the
+  // other faces.
+  Item {
+    id: ring
+    objectName: "clockRing"
+    readonly property real diameter: Math.round(300 * clock.uiScale)
+    readonly property real size: Math.min(diameter, clock.width)
+    readonly property real unit: clock.uiScale * size / diameter
+
+    visible: clock.styleName === "ring"
+    x: clock.blockX(width)
+    width: size
+    height: size
+
+    Canvas {
+      id: ringFace
+      readonly property string paintKey: [clock.view.now.getMinutes(), ring.size, clock.view.accent,
+        clock.view.foreground, clock.view.glass].join("|")
+      anchors.fill: parent
+      antialiasing: true
+      onPaintKeyChanged: requestPaint()
+      onVisibleChanged: if (visible) requestPaint()
+      onPaint: {
+        var context = getContext("2d")
+        context.reset()
+        context.clearRect(0, 0, width, height)
+        var center = ring.size / 2
+        var line = Math.max(3, 9 * ring.unit)
+        var radius = center - line / 2 - 1
+        context.fillStyle = clock.view.glass
+        context.beginPath()
+        context.arc(center, center, radius - line / 2, 0, Math.PI * 2)
+        context.fill()
+        context.lineWidth = line
+        context.lineCap = "round"
+        context.strokeStyle = clock.view.foreground
+        context.globalAlpha = 0.14
+        context.beginPath()
+        context.arc(center, center, radius, 0, Math.PI * 2)
+        context.stroke()
+        // Twelve faint marks inside the track.
+        context.globalAlpha = 0.4
+        context.lineWidth = Math.max(1, 2 * ring.unit)
+        for (var mark = 0; mark < 12; mark++) {
+          var angle = mark * Math.PI / 6
+          var outer = radius - line - 6 * ring.unit
+          var inner = outer - (mark % 3 === 0 ? 10 : 5) * ring.unit
+          context.beginPath()
+          context.moveTo(center + Math.sin(angle) * inner, center - Math.cos(angle) * inner)
+          context.lineTo(center + Math.sin(angle) * outer, center - Math.cos(angle) * outer)
+          context.stroke()
+        }
+        // The minutes so far, clockwise from the top; a dot at minute 0.
+        var minutes = clock.view.now.getMinutes()
+        context.globalAlpha = 1
+        context.strokeStyle = clock.view.accent
+        context.lineWidth = line
+        context.beginPath()
+        if (minutes > 0) {
+          context.arc(center, center, radius, -Math.PI / 2, -Math.PI / 2 + minutes / 60 * Math.PI * 2, false)
+          context.stroke()
+        } else {
+          context.fillStyle = clock.view.accent
+          context.arc(center, center - radius, line / 2, 0, Math.PI * 2)
+          context.fill()
+        }
+      }
+    }
+
+    Text {
+      id: ringTime
+      anchors.centerIn: parent
+      anchors.verticalCenterOffset: ringMeridiem.visible ? -Math.round(10 * ring.unit) : 0
+      textFormat: Text.PlainText
+      text: clock.view.userLocale.toString(clock.view.now, clock.twelveHour ? "h:mm" : "HH:mm")
+      color: clock.view.foreground
+      font.family: clock.view.displayFontFamily
+      font.pixelSize: Math.round(78 * ring.unit)
+    }
+
+    Text {
+      id: ringMeridiem
+      visible: clock.twelveHour
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: ringTime.bottom
+      anchors.topMargin: -Math.round(6 * ring.unit)
+      textFormat: Text.PlainText
+      text: clock.meridiem
+      color: clock.view.foreground
+      opacity: 0.8
+      font.family: clock.view.textFontFamily
+      font.pixelSize: Math.round(16 * ring.unit)
+      font.weight: Font.DemiBold
+      font.letterSpacing: Math.round(3 * ring.unit)
     }
   }
 }

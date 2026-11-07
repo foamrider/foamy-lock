@@ -661,6 +661,7 @@ fn look(test: &Test) -> R {
     ensure!(text(&test.status()?, "previewPreset")?.is_empty());
     // catalog lists what an editor may offer; previewLook previews an unsaved look.
     let catalog = parse(&test.ipc("foamy.lock", "catalog", &[])?)?;
+    let preset_count = app::selectable_presets()?.len();
     ensure!(
         at(&catalog, "presets")?
             .as_array()
@@ -670,8 +671,21 @@ fn look(test: &Test) -> R {
                 .is_some_and(|s| s.iter().any(|s| s == "pill") && s.iter().any(|s| s == "terminal"))
             && at(&catalog, "styles.clock")?
                 .as_array()
-                .is_some_and(|s| s.len() == 8 && s.iter().any(|s| s == "analog"))
-            && text(&catalog, "defaultPreset")? == "foamy",
+                .is_some_and(|s| s.len() == 11 && s.iter().any(|s| s == "ring"))
+            && at(&catalog, "styles.calendar")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "card"))
+            && at(&catalog, "presets")?.as_array().is_some_and(|p| {
+                p.len() == preset_count
+                    && p.iter().all(|p| {
+                        p["thumbnail"].as_str().is_some_and(|t| {
+                            t.ends_with(&format!(
+                                "/previews/presets/{}.png",
+                                p["name"].as_str().unwrap_or("?")
+                            ))
+                        })
+                    })
+            }) && text(&catalog, "defaultPreset")? == "foamy",
         "{catalog}"
     );
     let custom =

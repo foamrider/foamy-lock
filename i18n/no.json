@@ -11,5 +11,14 @@
   "Checking…": "Kontrollerer…",
   "Authentication failed (%1)": "Godkjenning mislyktes (%1)",
   "Welcome back": "Velkommen tilbake",
-  "Password:": "Passord:"
+  "Password:": "Passord:",
+  "Uptime": "Oppetid",
+  "Memory": "Minne",
+  "Load": "Belastning",
+  "Battery": "Batteri",
+  "Network": "Nettverk",
+  "%1 / %2 GB": "%1 / %2 GB",
+  "%1 d %2 h": "%1 d %2 t",
+  "%1 h %2 min": "%1 t %2 min",
+  "%1 min": "%1 min"
 }

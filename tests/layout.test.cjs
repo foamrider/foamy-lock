@@ -22,6 +22,7 @@ test('the default look is the 1.2.0 lock screen', () => {
   assert.deepEqual(Layout.stack(look.elements, 'top-end'), ['status'])
   assert.deepEqual(look.background, {source: 'omarchy', path: '', blur: 0, dim: 0.25})
   assert.deepEqual(look.glass, {opacity: 1})
+  assert.equal(look.elements.calendar.hidden, true)
   assert.deepEqual(Layout.parseLook({}), {valid: true, look, error: ''})
   assert.deepEqual(Layout.parseLook(undefined).look, look)
 })
@@ -69,7 +70,8 @@ test('mistakes in the look are reported, never guessed', () => {
     {background: {source: 'video'}}, {background: {blur: 2}}, {background: {dim: 0.95}}, {background: {dim: '0.2'}},
     {background: {path: 'relative.png'}}, {background: {path: '/tmp/../etc/x.png'}}, {background: {path: '/tmp/x.gif'}},
     {background: {source: 'picture'}}, {background: {colour: 'red'}}, {background: []},
-    {glass: {opacity: -0.1}}, {glass: {opacity: 1.5}}, {glass: {blur: true}}, {glass: 0.5}
+    {glass: {opacity: -0.1}}, {glass: {opacity: 1.5}}, {glass: {blur: true}}, {glass: 0.5},
+    {layout: {calendar: {style: 'month'}}}
   ]
   for (const entry of invalid) {
     const result = Layout.parseLook(entry)
@@ -117,11 +119,12 @@ test('the geometry check finds a missing, offscreen or covered field', () => {
 test('every element offers its shipped styles, defaults first', () => {
   assert.deepEqual(Layout.STYLES, {
     date: ['long', 'caps', 'short', 'serif'],
-    clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog'],
+    clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog', 'small', 'poster', 'ring'],
     account: ['avatar', 'chip', 'name'],
     password: ['pill', 'underline', 'box', 'dots', 'terminal', 'card'],
     media: ['card', 'line', 'pill', 'art'],
-    status: ['text', 'icons', 'pill']
+    status: ['text', 'icons', 'pill', 'system'],
+    calendar: ['card', 'plain']
   })
   // The foamy preset uses each element's first style.
   for (const name of Layout.ELEMENTS) assert.equal(Layout.PRESETS.foamy.elements[name].style, Layout.STYLES[name][0], name)

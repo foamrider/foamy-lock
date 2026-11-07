@@ -1,6 +1,8 @@
 // Layout shell: one preset (__PRESET__) through sizes, clock formats, typing
-// and primary/non-primary states; then, for foamy, the fallback chain on a
-// screen too small for it. Written into a temporary app by the harness.
+// and primary/non-primary states, then right-to-left (everything must
+// mirror); then, for foamy, every preset on one
+// view and back, and the fallback chain on a screen too small for it.
+// Written into a temporary app by the harness.
 import QtQuick
 import Quickshell
 import "fixtures" as Fixture
@@ -12,11 +14,17 @@ ShellRoot {
   property int fellBack: 0
   property var fellBackTo: []
   // foamy only: one view switched through every preset (hidden account
-  // included) and back must end where it started.
-  readonly property var cycle: ["corner", "editorial", "zen", "foamy", "editorial", "corner", "zen", "foamy"]
+  // included), forwards and backwards, must end where it started.
+  readonly property var cycle: {
+    var forward = Layout.SELECTABLE_PRESETS.slice(1)
+    return forward.concat(["foamy"], forward.slice().reverse(), ["foamy"])
+  }
+  // State 0 (1920×1080, primary, idle), the mirror state's reference.
+  property var leftToRight: null
   property int cycleAt: -1
   property var reference: null
-  readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter"]
+  readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter", "calendarBlock"]
+  readonly property var elementNames: ["dateLabel", "clockLabel", "identityBlock", "inputField", "mediaRow", "statusFooter", "calendarBlock"]
 
   function geometry() {
     var out = {}
@@ -86,12 +94,13 @@ ShellRoot {
     Qt.exit(1)
   }
 
-  // Each state: [width, height, 12h, typing, primary].
+  // Each state: [width, height, 12h, typing, primary, right-to-left].
   readonly property var states: {
     var out = []
     for (var i = 0; i < sizes.length; i++)
       for (var primary = 1; primary >= 0; primary--)
-        out.push([sizes[i][0], sizes[i][1], i % 2 === 1, primary === 0, primary === 1])
+        out.push([sizes[i][0], sizes[i][1], i % 2 === 1, primary === 0, primary === 1, false])
+    out.push([1920, 1080, false, false, true, true])
     return out
   }
 
@@ -109,6 +118,8 @@ ShellRoot {
         var state = shellRoot.states[index]
         if (!applied) {
           label = state[0] + "x" + state[1] + (state[2] ? " 12h" : "") + (state[3] ? " typing" : "") + (state[4] ? "" : " secondary")
+            + (state[5] ? " right-to-left" : "")
+          view.rightToLeft = state[5]
           view.width = state[0]; view.height = state[1]
           view.timeFormat = state[2] ? "12h" : "24h"
           view.passwordText = state[3] ? "example" : ""
@@ -118,6 +129,8 @@ ShellRoot {
           return
         }
         shellRoot.check(state)
+        if (index === 0) shellRoot.leftToRight = shellRoot.layoutRects()
+        if (state[5]) shellRoot.checkMirror(shellRoot.leftToRight)
         var capture = Qt.resolvedUrl("capture-" + shellRoot.presetName + "-" + index + ".png").toString().replace("file://", "")
         if (!view.grabToImage(function(result) { result.saveToFile(capture) })) shellRoot.fail("capture failed")
         console.log("layout ok: " + presetName + " " + label)
@@ -129,7 +142,7 @@ ShellRoot {
       if (shellRoot.cycleAt < shellRoot.cycle.length) {
         if (shellRoot.cycleAt === -1) {
           view.width = 1920; view.height = 1080
-          view.timeFormat = "24h"; view.passwordText = ""; view.primary = true
+          view.timeFormat = "24h"; view.passwordText = ""; view.primary = true; view.rightToLeft = false
           view.look = Layout.defaults()
           shellRoot.cycleAt = 0
           return
@@ -139,6 +152,8 @@ ShellRoot {
           var name = shellRoot.cycle[shellRoot.cycleAt]
           label = "cycle " + shellRoot.cycleAt + " " + name
           shellRoot.checkAccountShape(label)
+          if (view.fallbackPreset !== "") shellRoot.fail("fell back: " + view.layoutError)
+          shellRoot.checkSystem()
           if (shellRoot.cycleAt === shellRoot.cycle.length - 1) {
             var now = shellRoot.geometry()
             for (var key in now)
@@ -160,6 +175,7 @@ ShellRoot {
         label = "fallback"
         view.primary = true
         view.passwordText = ""
+        view.rightToLeft = false
         view.look = Layout.parseLook({ preset: "corner", layout: { media: { zone: "bottom-center" } } }).look
         view.width = 320; view.height = 240
         applied = true
@@ -174,6 +190,36 @@ ShellRoot {
       console.log("layout ok: fallback " + JSON.stringify(shellRoot.fellBackTo))
       shellRoot.finish()
     }
+  }
+
+  // Visible elements, in view coordinates.
+  function layoutRects() {
+    var out = { elements: {} }
+    for (var i = 0; i < elementNames.length; i++) {
+      var item = findNamed(view, elementNames[i])
+      if (item.visible) out.elements[elementNames[i]] = [item.x, item.y, item.width, item.height]
+    }
+    return out
+  }
+
+  // Right-to-left: every element sits where its left-to-right twin is,
+  // mirrored (within a pixel).
+  function checkMirror(ltr) {
+    var rtl = layoutRects()
+    function near(a, b) { return Math.abs(a - b) <= 1 }
+    for (var name in ltr.elements) {
+      var l = ltr.elements[name], r = rtl.elements[name]
+      if (!r) return fail(name + " vanished in right-to-left")
+      if (!near(r[0], view.width - l[0] - l[2]) || !near(r[1], l[1]) || !near(r[2], l[2]) || !near(r[3], l[3]))
+        return fail(name + " doesn't mirror: " + r + " for " + l)
+    }
+  }
+
+  // The system panel has its readings (fixtures, not the real /proc).
+  function checkSystem() {
+    if (view.placed.status.style === "system" && findNamed(view, "statusFooter").visible
+        && !(view.systemUptime > 0 && view.memoryTotal > 0 && view.systemLoad !== ""))
+      return fail("the system panel has no readings: " + [view.systemUptime, view.memoryTotal, view.systemLoad])
   }
 
   function finish() {
@@ -208,8 +254,9 @@ ShellRoot {
     if (!state[4] && account.visible) return fail("the account shows on a secondary screen")
     if (state[4] && shown && !account.visible) return fail("the account is missing on the primary screen")
     if (!state[4] && !state[3] && hint.visible) return fail("field chrome shows on a secondary screen while nothing is typed")
+    checkSystem()
     // Whatever else is on screen stays inside it.
-    var names = ["dateLabel", "clockLabel", "identityBlock", "mediaRow", "statusFooter"]
+    var names = ["dateLabel", "clockLabel", "identityBlock", "mediaRow", "statusFooter", "calendarBlock"]
     for (var i = 0; i < names.length; i++) {
       var item = findNamed(view, names[i])
       if (!item.visible) continue

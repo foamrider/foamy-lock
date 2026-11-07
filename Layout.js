@@ -7,7 +7,8 @@
 // end); start and end mean left and right in left-to-right languages and
 // mirror in right-to-left ones. Elements in one zone stack by `order`.
 
-var ELEMENTS = ["date", "clock", "account", "password", "media", "status"]
+// `calendar` came last (1.3.0), so the tie-break order of the others holds.
+var ELEMENTS = ["date", "clock", "account", "password", "media", "status", "calendar"]
 var ROWS = ["top", "middle", "bottom"]
 var COLUMNS = ["start", "center", "end"]
 var ZONES = (function() {
@@ -18,11 +19,12 @@ var ZONES = (function() {
 })()
 var STYLES = {
   date: ["long", "caps", "short", "serif"],
-  clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog"],
+  clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog", "small", "poster", "ring"],
   account: ["avatar", "chip", "name"],
   password: ["pill", "underline", "box", "dots", "terminal", "card"],
   media: ["card", "line", "pill", "art"],
-  status: ["text", "icons", "pill"]
+  status: ["text", "icons", "pill", "system"],
+  calendar: ["card", "plain"]
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]
@@ -32,6 +34,11 @@ var PICTURE_PATTERN = /\.(png|jpe?g|webp)$/i
 
 function element(zone, style, order, hidden) {
   return { zone: zone, style: style, order: order, hidden: !!hidden }
+}
+
+// The calendar is new in 1.3.0; the older presets keep it hidden.
+function noCalendar() {
+  return element("middle-end", "card", 0, true)
 }
 
 // Built-in presets. `foamy` is the 1.2.0 lock screen and the default;
@@ -44,7 +51,8 @@ var PRESETS = {
       account: element("bottom-center", "avatar", 0),
       password: element("bottom-center", "pill", 1),
       media: element("bottom-start", "card", 0),
-      status: element("top-end", "text", 0)
+      status: element("top-end", "text", 0),
+      calendar: noCalendar()
     },
     background: { source: "omarchy", path: "", blur: 0, dim: 0.25 }
   },
@@ -55,7 +63,8 @@ var PRESETS = {
       account: element("bottom-end", "chip", 0),
       password: element("bottom-end", "underline", 1),
       media: element("top-start", "line", 0),
-      status: element("top-end", "icons", 0)
+      status: element("top-end", "icons", 0),
+      calendar: noCalendar()
     },
     background: { source: "omarchy", path: "", blur: 0, dim: 0.3 }
   },
@@ -66,7 +75,8 @@ var PRESETS = {
       account: element("middle-start", "chip", 2),
       password: element("middle-start", "underline", 3),
       media: element("bottom-start", "line", 0),
-      status: element("top-end", "text", 0)
+      status: element("top-end", "text", 0),
+      calendar: noCalendar()
     },
     background: { source: "omarchy", path: "", blur: 0, dim: 0.45 }
   },
@@ -77,7 +87,8 @@ var PRESETS = {
       account: element("bottom-center", "avatar", 0, true),
       password: element("middle-center", "underline", 0),
       media: element("bottom-start", "card", 0, true),
-      status: element("top-end", "text", 0, true)
+      status: element("top-end", "text", 0, true),
+      calendar: noCalendar()
     },
     background: { source: "omarchy", path: "", blur: 1, dim: 0.4 }
   },
@@ -88,7 +99,8 @@ var PRESETS = {
       account: element("bottom-center", "avatar", 0, true),
       password: element("middle-center", "pill", 0),
       media: element("bottom-start", "card", 0, true),
-      status: element("top-end", "text", 0, true)
+      status: element("top-end", "text", 0, true),
+      calendar: noCalendar()
     },
     background: { source: "theme", path: "", blur: 0, dim: 0.25 }
   }

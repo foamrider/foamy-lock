@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import Quickshell
+import Quickshell.Io
 import Quickshell.Networking
 import Quickshell.Services.UPower
 // Qualify the theme singleton to avoid QtQuick.Color taking precedence.
@@ -70,6 +71,7 @@ Item {
   readonly property color foreground: themeLock("text", Commons.Color.lock.text, Qt.rgba(0.98, 0.98, 1, 0.96))
   readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
   readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
+  readonly property color accent: Commons.Color.accent
   // The look's glass opacity scales the theme's (or default) glass alpha.
   readonly property color glass: Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * effectiveLook.glass.opacity)
   readonly property color glassBorder: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
@@ -93,6 +95,15 @@ Item {
   // Keep the editor focused while invisible so the first character is retained.
   readonly property bool compactLayout: width < 1100 * uiScale
   readonly property bool showPassword: passwordText.length > 0 || authenticatingPassword || errorState
+  // The "system" status style reads /proc while it shows, and only then;
+  // nothing is read or kept while it doesn't. procRoot is for the tests.
+  property string procRoot: "/proc"
+  readonly property bool systemShown: placed.status.style === "system" && elementShown("status") && visible
+    && loadBackground
+  property real systemUptime: -1
+  property string systemLoad: ""
+  property real memoryTotal: 0
+  property real memoryAvailable: 0
 
   signal submitPassword(string password)
   signal passwordTextEdited(string password)
@@ -195,6 +206,7 @@ Item {
 
   function elementItem(name) {
     switch (name) {
+    case "calendar": return calendarBlock
     case "date": return dateLabel
     case "clock": return clockLabel
     case "account": return identityBlock
@@ -261,6 +273,9 @@ Item {
     var zone = placed[name].zone
     var row = Layout.zoneRow(zone)
     var column = Layout.screenColumn(zone, rightToLeft)
+    // Narrow screens put the middle row's end zone under its start zone.
+    if (row === "middle" && Layout.zoneColumn(zone) === "end" && middleStacked())
+      column = rightToLeft ? "end" : "start"
     // Narrow screens stack the bottom corners under the field.
     if (column === "center" || (row === "bottom" && compactLayout)) {
       return column === "center" ? (width - itemWidth) / 2 : Math.round((width - itemWidth) / 2)
@@ -275,7 +290,12 @@ Item {
     var total = stackHeight(zone, name)
     var top
     if (row === "top") top = center ? Math.max(Math.round(42 * uiScale), Math.round(height * 0.09)) : edgeMargin(row)
-    else if (row === "middle") top = Math.round((height - total) / 2)
+    else if (row === "middle" && !center && middleStacked()) {
+      var own = Layout.zoneColumn(zone)
+      var above = stackHeight("middle-start", own === "start" ? name : undefined)
+      var first = Math.round((height - above - 2 * zoneGap - stackHeight("middle-end", own === "end" ? name : undefined)) / 2)
+      top = own === "start" ? first : first + above + 2 * zoneGap
+    } else if (row === "middle") top = Math.round((height - total) / 2)
     else if (center) top = Math.min(height * 0.65, height - total - bottomReserve())
     else if (!compactLayout || Layout.zoneColumn(zone) === "start") top = height - edgeMargin(row) - total
     else {
@@ -284,6 +304,12 @@ Item {
       top = height - edgeMargin(row) - (below > 0 ? below + 2 * zoneGap : 0) - total
     }
     return top + offsetInZone(name)
+  }
+
+  // Narrow screens with both middle side zones in use stack them, the start
+  // zone above, both at the start edge (side by side they could collide).
+  function middleStacked() {
+    return compactLayout && stackHeight("middle-start") > 0 && stackHeight("middle-end") > 0
   }
 
   // The space the bottom-center stack keeps free below it. Narrow screens
@@ -334,11 +360,58 @@ Item {
   readonly property string geometryKey: [width, height, inputField.x, inputField.y, inputField.width,
     inputField.height, dateLabel.x, dateLabel.y, dateLabel.height, clockLabel.y, clockLabel.height,
     identityBlock.y, identityBlock.height, mediaRow.x, mediaRow.y, statusFooter.x, statusFooter.width,
-    JSON.stringify(shownMap())].join(",")
+    statusFooter.y, statusFooter.height, calendarBlock.x, calendarBlock.y, JSON.stringify(shownMap())].join(",")
   onGeometryKeyChanged: geometryTimer.restart()
   onLookChanged: {
     fallbackPreset = ""
     layoutError = ""
+  }
+
+  onSystemShownChanged: {
+    if (systemShown) return
+    systemUptime = -1
+    systemLoad = ""
+    memoryTotal = 0
+    memoryAvailable = 0
+  }
+
+  FileView {
+    id: uptimeFile
+    path: root.systemShown ? root.procRoot + "/uptime" : ""
+    printErrors: false
+    onLoaded: root.systemUptime = Number(String(text()).split(" ")[0])
+  }
+
+  FileView {
+    id: loadFile
+    path: root.systemShown ? root.procRoot + "/loadavg" : ""
+    printErrors: false
+    onLoaded: root.systemLoad = String(text()).split(" ").slice(0, 3).join(" ")
+  }
+
+  FileView {
+    id: memoryFile
+    path: root.systemShown ? root.procRoot + "/meminfo" : ""
+    printErrors: false
+    onLoaded: {
+      var info = String(text())
+      var total = /MemTotal:\s+(\d+)/.exec(info)
+      var available = /MemAvailable:\s+(\d+)/.exec(info)
+      root.memoryTotal = total ? Number(total[1]) : 0
+      root.memoryAvailable = available ? Number(available[1]) : 0
+    }
+  }
+
+  // A slow refresh, only while the panel shows.
+  Timer {
+    interval: 5000
+    repeat: true
+    running: root.systemShown
+    onTriggered: {
+      uptimeFile.reload()
+      loadFile.reload()
+      memoryFile.reload()
+    }
   }
 
   Timer {
@@ -466,6 +539,16 @@ Item {
       visible: root.elementShown("media")
       x: root.placeX("media", width)
       y: root.placeY("media")
+    }
+
+    CalendarElement {
+      id: calendarBlock
+      view: root
+      styleName: root.placed.calendar.style
+      alignment: root.elementAlignment("calendar")
+      visible: root.elementShown("calendar")
+      x: root.placeX("calendar", width)
+      y: root.placeY("calendar")
     }
 
     StatusElement {
