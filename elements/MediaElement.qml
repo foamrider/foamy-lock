@@ -1,25 +1,68 @@
 import QtQuick
 import QtQuick.Effects
 
-// Now playing: artwork thumbnail, title, artist and transport controls.
+// Now playing. Styles: "card" (artwork thumbnail, title, artist and
+// transport controls on glass) and "line" (title and artist on one line).
 // Only the service's sandboxed thumbnail reaches this view.
 Rectangle {
   id: media
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  property string styleName: "card"
+  readonly property bool line: styleName === "line"
 
   objectName: "mediaRow"
-  width: Math.min(Math.round(470 * view.uiScale), view.width - 48 * view.uiScale)
-  height: Math.round(92 * view.uiScale)
-  visible: view.hasMedia
+  width: line
+    ? Math.min(mediaLine.implicitWidth, view.contentWidth)
+    : Math.min(Math.round(470 * view.uiScale), view.width - 48 * view.uiScale)
+  height: Math.round((line ? 30 : 92) * view.uiScale)
   radius: Math.round(22 * view.uiScale)
-  color: view.glass
-  border.width: 1
+  color: line ? "transparent" : view.glass
+  border.width: line ? 0 : 1
   border.color: view.glassBorder
+
+  Row {
+    id: mediaLine
+    objectName: "mediaLine"
+    visible: media.line
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    spacing: Math.round(8 * media.view.uiScale)
+
+    LineIcon {
+      id: lineIcon
+      anchors.verticalCenter: parent.verticalCenter
+      width: Math.round(18 * media.view.uiScale)
+      height: width
+      pathData: "M9 18V5l12-2v13 M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z M21 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z"
+      opacity: 0.8
+    }
+
+    Text {
+      objectName: "mediaLineText"
+      anchors.verticalCenter: parent.verticalCenter
+      width: Math.min(implicitWidth, media.view.contentWidth - lineIcon.width - parent.spacing)
+      textFormat: Text.PlainText
+      text: {
+        var player = media.view.activePlayer
+        if (!player) return ""
+        var title = String(player.trackTitle || "")
+        var artist = String(player.trackArtist || "")
+        return title && artist ? title + " · " + artist : title || artist
+      }
+      color: media.view.foreground
+      opacity: 0.88
+      font.family: media.view.textFontFamily
+      font.pixelSize: Math.round(15 * media.view.uiScale)
+      elide: Text.ElideRight
+    }
+  }
 
   Rectangle {
     id: albumArt
     objectName: "albumArt"
+    visible: !media.line
     width: Math.round(64 * media.view.uiScale)
     height: width
     radius: Math.round(9 * media.view.uiScale)
@@ -80,6 +123,7 @@ Rectangle {
 
   Column {
     id: trackInfo
+    visible: !media.line
     anchors.left: albumArt.right
     anchors.leftMargin: Math.round(17 * media.view.uiScale)
     anchors.right: mediaControls.left
@@ -115,6 +159,7 @@ Rectangle {
   Row {
     id: mediaControls
     objectName: "mediaControls"
+    visible: !media.line
     // Transport controls keep their left-to-right order in every language:
     // mirroring flips this Row's direction, so ask for the opposite.
     layoutDirection: media.view.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight

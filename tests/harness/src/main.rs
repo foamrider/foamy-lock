@@ -4,6 +4,7 @@
 //! ```text
 //! foamy-lock-harness render [--host 4.5|4.0|both] [--language CODE]
 //! foamy-lock-harness parity [--host 4.5|4.0|both] [--baseline REV]
+//! foamy-lock-harness layout [--host 4.5|4.0|both] [--preset NAME]
 //! foamy-lock-harness runtime [--host 4.5|4.0|both]
 //! ```
 //!
@@ -21,6 +22,13 @@
 //! the same fonts in the same run, so the result doesn't depend on which
 //! fonts the machine has. It needs the plugin's git history for the baseline.
 //!
+//! `layout` renders each selectable preset (or `--preset NAME`) through
+//! four screen sizes, 12- and 24-hour time, typing, and primary and
+//! secondary screens, checking that the password field stays on screen,
+//! uncovered, live and focused, that a secondary screen hides the account
+//! and idle field chrome, and that no built-in preset falls back; the foamy
+//! run then forces the geometry fallback chain on a 320×240 screen.
+//!
 //! `runtime` runs the real Service.qml with a simulated session lock, PAM and
 //! view, stand-in desktop commands, a fake Omarchy tree and shell.json, and
 //! drives it over `quickshell ipc` (hermetic HOME, runtime dir and session
@@ -34,6 +42,7 @@
 
 mod app;
 mod host;
+mod layout;
 mod parity;
 mod png;
 mod render;
@@ -46,9 +55,10 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("render") => render::run(&args[1..]),
         Some("parity") => parity::run(&args[1..]),
+        Some("layout") => layout::run(&args[1..]),
         Some("runtime") => runtime::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness runtime [--host {hosts}]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness runtime [--host {hosts}]",
             hosts = host::CHOICES.join("|")
         )),
     };

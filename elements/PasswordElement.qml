@@ -10,6 +10,17 @@ Rectangle {
   id: field
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // "start", "center" or "end" (logical: mirrors with the language).
+  property string alignment: "center"
+  // Off on a surface that doesn't get the keys: the editor stays live and
+  // focused there, only the field's chrome is hidden (see LockView.primary).
+  property bool chromeVisible: true
+  // "pill" (glass pill once typing starts) or "underline" (a line under the
+  // text, no surface). Only the surround changes; the editor is the same.
+  property string styleName: "pill"
+  readonly property bool underline: styleName === "underline"
+  // A password being typed is never invisible, whichever surface has it.
+  readonly property bool chromeShown: chromeVisible || view.passwordText.length > 0
   readonly property alias input: passwordInput
   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
@@ -18,13 +29,24 @@ Rectangle {
   objectName: "inputField"
   width: view.fieldWidth
   height: view.fieldHeight
-  radius: height / 2
-  color: view.showPassword ? view.glass : "transparent"
-  border.width: view.showPassword ? 1 : 0
+  radius: underline ? 0 : height / 2
+  color: !underline && chromeShown && view.showPassword ? view.glass : "transparent"
+  border.width: !underline && chromeShown && view.showPassword ? 1 : 0
   border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
   // Not clipped: the unlock hint below shows only while the field has no
   // fill or border, and a translated hint can be wider than the pill.
   // The editor and its placeholder clip and elide on their own.
+
+  Rectangle {
+    objectName: "fieldUnderline"
+    visible: field.underline && field.chromeShown
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    height: Math.max(1, Math.round(1.5 * field.view.uiScale))
+    color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+    opacity: field.view.errorState ? 1 : (field.view.showPassword ? 0.85 : 0.5)
+  }
 
   TextMetrics {
     id: dotMetrics
@@ -41,7 +63,7 @@ Rectangle {
     objectName: "unlockHint"
     anchors.centerIn: parent
     spacing: Math.round(10 * field.view.uiScale)
-    visible: !field.view.showPassword
+    visible: field.chromeShown && !field.view.showPassword
 
     FingerprintIcon {
       id: unlockHintIcon
@@ -73,7 +95,7 @@ Rectangle {
     id: passwordInput
     objectName: "passwordInput"
     // Kept focused while invisible so the first character is retained.
-    opacity: field.view.showPassword ? 1 : 0
+    opacity: field.chromeShown && field.view.showPassword ? 1 : 0
     anchors.left: parent.left
     anchors.leftMargin: field.view.fieldLeadingInset
     anchors.right: parent.right
@@ -132,7 +154,7 @@ Rectangle {
     text: field.view.authenticatingPassword
       ? FoamyI18n.t("Checking…")
       : (field.view.failureMessage.length > 0 ? field.view.failedAttempts > 0 ? FoamyI18n.t("Authentication failed (%1)", FoamyI18n.number(field.view.failedAttempts)) : FoamyI18n.t(field.view.failureMessage) : field.view.placeholderText)
-    visible: field.view.showPassword && passwordInput.text.length === 0
+    visible: field.chromeShown && field.view.showPassword && passwordInput.text.length === 0
     color: field.view.authenticatingPassword
       ? field.view.foreground
       : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
@@ -145,7 +167,7 @@ Rectangle {
   }
 
   Item {
-    visible: field.view.showPassword
+    visible: field.chromeShown && field.view.showPassword
     width: Math.round(70 * field.view.uiScale)
     anchors.right: parent.right
     anchors.top: parent.top
@@ -212,5 +234,23 @@ Rectangle {
       cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
       onClicked: field.view.submitCurrentPassword()
     }
+  }
+
+  Text {
+    objectName: "fingerprintNotice"
+    anchors.top: parent.bottom
+    anchors.topMargin: Math.round(8 * field.view.uiScale)
+    anchors.horizontalCenter: field.alignment === "center" ? parent.horizontalCenter : undefined
+    anchors.left: field.alignment === "start" ? parent.left : undefined
+    anchors.right: field.alignment === "end" ? parent.right : undefined
+    width: field.alignment === "center" ? field.view.contentWidth : field.width
+    visible: field.chromeShown && field.view.fingerprintUnavailable
+    textFormat: Text.PlainText
+    text: FoamyI18n.t("Fingerprint reader unavailable")
+    color: field.view.foreground
+    font.family: field.view.textFontFamily
+    font.pixelSize: Math.round(13 * field.view.uiScale)
+    horizontalAlignment: field.alignment === "start" ? Text.AlignLeft : field.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
+    wrapMode: Text.WordWrap
   }
 }

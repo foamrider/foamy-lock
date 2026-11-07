@@ -1,12 +1,14 @@
 import QtQuick
 import "../kit"
 
-// Network and battery status. The host view owns the data sources
+// Network and battery status. Styles: "text" (icons and labels) and "icons". The host view owns the data sources
 // (Networking, UPower); this only draws them.
 Row {
   id: status
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // "text" (icons and labels) or "icons" (icons only).
+  property string styleName: "text"
 
   objectName: "statusFooter"
   height: Math.round(38 * view.uiScale)
@@ -40,6 +42,7 @@ Row {
         textFormat: Text.PlainText
         height: status.height
         text: FoamyI18n.t(status.view.networkLabel)
+        visible: status.styleName !== "icons"
         color: status.view.foreground
         opacity: 0.88
         font.family: status.view.textFontFamily
@@ -79,6 +82,7 @@ Row {
         textFormat: Text.PlainText
         height: status.height
         text: FoamyI18n.number(status.view.batteryPercentage) + "%"
+        visible: status.styleName !== "icons"
         color: status.view.foreground
         opacity: 0.88
         font.family: status.view.textFontFamily

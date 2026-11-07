@@ -6,6 +6,7 @@ import Quickshell.Services.UPower
 import qs.Commons as Commons
 import "kit"
 import "Model.js" as Model
+import "Layout.js" as Layout
 import "elements"
 
 Item {
@@ -30,6 +31,17 @@ Item {
   property string userDisplayName: ""
   property string avatarPath: ""
   property int avatarVersion: 0
+  // The look (Layout.js): preset, element zones and styles, background, glass.
+  property var look: Layout.defaults()
+  // This surface gets the keystrokes (or no surface is known to): it shows
+  // the account and the field. Every surface keeps a live password input.
+  property bool primary: true
+  // Geometry fallback: "" shows `look`; otherwise the preset shown instead,
+  // latched until the look changes (each lock creates a new view).
+  property string fallbackPreset: ""
+  property string layoutError: ""
+  readonly property var effectiveLook: fallbackPreset ? Layout.preset(fallbackPreset) : look
+  readonly property var placed: effectiveLook.elements
 
   readonly property string displayName: String(userDisplayName || "").trim()
     || String(userName || "").trim()
@@ -81,6 +93,9 @@ Item {
   signal clearFailureRequested()
   signal wakeRequested()
   signal artworkFailed(string path)
+  // The geometry check replaced the look: `error` is the reason, `preset` the
+  // one now shown.
+  signal layoutFellBack(string error, string preset)
 
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
@@ -168,6 +183,164 @@ Item {
     forcePasswordFocus()
   }
 
+  // Layout: each element sits in its zone, stacked by order. The zone rules
+  // reproduce the 1.2.0 positions for the foamy preset (tests/harness parity).
+  readonly property real zoneGap: Math.round(14 * uiScale)
+
+  function elementItem(name) {
+    switch (name) {
+    case "date": return dateLabel
+    case "clock": return clockLabel
+    case "account": return identityBlock
+    case "password": return inputField
+    case "media": return mediaRow
+    case "status": return statusFooter
+    }
+    return null
+  }
+
+  function elementShown(name) {
+    var item = placed[name]
+    if (!item || item.hidden) return name === "password"
+    if (name === "account") return showUserInfo && primary
+    if (name === "media") return hasMedia
+    return true
+  }
+
+  function shownMap() {
+    var shown = {}
+    for (var i = 0; i < Layout.ELEMENTS.length; i++) shown[Layout.ELEMENTS[i]] = elementShown(Layout.ELEMENTS[i])
+    return shown
+  }
+
+  // Logical alignment inside the element: mirroring flips it with the text.
+  function elementAlignment(name) {
+    var column = Layout.zoneColumn(placed[name].zone)
+    return column === "center" ? "center" : column
+  }
+
+  function gapBefore(name) {
+    var item = elementItem(name)
+    return item && item.stackGap !== undefined ? item.stackGap : zoneGap
+  }
+
+  // The zone's stack as `self` sees it: an element always counts itself, so a
+  // hidden one keeps the place it would take (as the 1.2.0 anchors did).
+  function zoneStack(zone, self) {
+    var shown = shownMap()
+    if (self) shown[self] = true
+    return Layout.stack(placed, zone, shown)
+  }
+
+  function stackHeight(zone, self) {
+    var names = zoneStack(zone, self)
+    var total = 0
+    for (var i = 0; i < names.length; i++) total += (i > 0 ? gapBefore(names[i]) : 0) + elementItem(names[i]).height
+    return total
+  }
+
+  function offsetInZone(name) {
+    var names = zoneStack(placed[name].zone, name)
+    var offset = 0
+    for (var i = 0; i < names.length && names[i] !== name; i++)
+      offset += elementItem(names[i]).height + gapBefore(names[i + 1])
+    return offset
+  }
+
+  function edgeMargin(row) {
+    return Math.round((row === "top" ? 24 : row === "middle" ? 64 : 32) * uiScale)
+  }
+
+  function placeX(name, itemWidth) {
+    var zone = placed[name].zone
+    var row = Layout.zoneRow(zone)
+    var column = Layout.screenColumn(zone, rightToLeft)
+    // Narrow screens stack the bottom corners under the field.
+    if (column === "center" || (row === "bottom" && compactLayout)) {
+      return column === "center" ? (width - itemWidth) / 2 : Math.round((width - itemWidth) / 2)
+    }
+    return column === "start" ? edgeMargin(row) : width - itemWidth - edgeMargin(row)
+  }
+
+  function placeY(name) {
+    var zone = placed[name].zone
+    var row = Layout.zoneRow(zone)
+    var center = Layout.zoneColumn(zone) === "center"
+    var total = stackHeight(zone, name)
+    var top
+    if (row === "top") top = center ? Math.max(Math.round(42 * uiScale), Math.round(height * 0.09)) : edgeMargin(row)
+    else if (row === "middle") top = Math.round((height - total) / 2)
+    else if (center) top = Math.min(height * 0.65, height - total - bottomReserve())
+    else if (!compactLayout || Layout.zoneColumn(zone) === "start") top = height - edgeMargin(row) - total
+    else {
+      // Narrow: the end zone sits above the start zone, both centred.
+      var below = stackHeight("bottom-start")
+      top = height - edgeMargin(row) - (below > 0 ? below + 2 * zoneGap : 0) - total
+    }
+    return top + offsetInZone(name)
+  }
+
+  // The space the bottom-center stack keeps free below it. Narrow screens
+  // stack the bottom corners under it (1.2.0 reserved 140 for the media card).
+  function bottomReserve() {
+    if (!compactLayout) return 36 * uiScale
+    var start = stackHeight("bottom-start")
+    var end = stackHeight("bottom-end")
+    var corners = start + end + (start > 0 && end > 0 ? 2 * zoneGap : 0)
+    return Math.max(140 * uiScale, corners > 0 ? corners + edgeMargin("bottom") + zoneGap : 0)
+  }
+
+  // Full content width in the center column, natural width at the sides.
+  function textWidth(name, naturalWidth) {
+    return Layout.zoneColumn(placed[name].zone) === "center" ? contentWidth : Math.min(contentWidth, naturalWidth)
+  }
+
+  function rectOf(item) {
+    return { x: item.x, y: item.y, width: item.width, height: item.height }
+  }
+
+  // The field must be on screen and uncovered; otherwise fall back a stage.
+  function checkGeometry() {
+    // Nothing to judge before the surface has its size.
+    if (!(width > 0 && height > 0)) return
+    var others = []
+    for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+      var name = Layout.ELEMENTS[i]
+      if (name !== "password" && elementShown(name)) others.push(rectOf(elementItem(name)))
+    }
+    var error = Layout.geometryError(rectOf(inputField), others, width, height, Math.round(4 * uiScale))
+    if (!error) return
+    // The user's look falls back to plain foamy (unless it is plain foamy),
+    // then to the field-only layout, then nothing more.
+    var next
+    if (!fallbackPreset) {
+      var plainFoamy = JSON.stringify(look) === JSON.stringify(Layout.defaults())
+      next = plainFoamy ? Layout.FALLBACK_PRESET : Layout.DEFAULT_PRESET
+    } else next = Layout.fallbackAfter(fallbackPreset)
+    if (!next) return
+    layoutError = error
+    fallbackPreset = next
+    layoutFellBack(error, next)
+    Qt.callLater(forcePasswordFocus)
+  }
+
+  // Everything the check depends on; any change re-arms the debounce.
+  readonly property string geometryKey: [width, height, inputField.x, inputField.y, inputField.width,
+    inputField.height, dateLabel.x, dateLabel.y, dateLabel.height, clockLabel.y, clockLabel.height,
+    identityBlock.y, identityBlock.height, mediaRow.x, mediaRow.y, statusFooter.x, statusFooter.width,
+    JSON.stringify(shownMap())].join(",")
+  onGeometryKeyChanged: geometryTimer.restart()
+  onLookChanged: {
+    fallbackPreset = ""
+    layoutError = ""
+  }
+
+  Timer {
+    id: geometryTimer
+    interval: 300
+    onTriggered: root.checkGeometry()
+  }
+
   onPasswordTextChanged: syncPasswordText()
   onInputEnabledChanged: {
     if (inputEnabled) Qt.callLater(forcePasswordFocus)
@@ -210,83 +383,68 @@ Item {
       id: lockClock
     }
 
-    Column {
-      id: mainColumn
+    DateElement {
+      id: dateLabel
+      view: root
+      styleName: root.placed.date.style
       z: 2
-      width: root.contentWidth
-      anchors.horizontalCenter: parent.horizontalCenter
-      y: Math.max(Math.round(42 * root.uiScale), Math.round(parent.height * 0.09))
-      // Offset the clock font’s top bearing to bring the visible numerals closer to the date.
-      spacing: Math.round(-20 * root.uiScale)
-
-      DateElement {
-        id: dateLabel
-        view: root
-        width: parent.width
-      }
-
-      ClockElement {
-        id: clockLabel
-        view: root
-        width: parent.width
-      }
+      alignment: root.elementAlignment("date")
+      visible: root.elementShown("date")
+      width: root.textWidth("date", implicitWidth)
+      x: root.placeX("date", width)
+      y: root.placeY("date")
     }
 
-    Column {
-      id: loginColumn
-      width: root.contentWidth
-      anchors.horizontalCenter: parent.horizontalCenter
-      // Reserve authentication space independently of media and input state.
-      y: Math.min(root.height * 0.65, root.height - height - (root.compactLayout ? 140 : 36) * root.uiScale)
-      spacing: Math.round(14 * root.uiScale)
-
-      AccountElement {
-        id: identityBlock
-        view: root
-        width: parent.width
-      }
-
-      PasswordElement {
-        id: inputField
-        view: root
-        x: Math.round((parent.width - width) / 2)
-      }
+    ClockElement {
+      id: clockLabel
+      view: root
+      styleName: root.placed.clock.style
+      z: 2
+      alignment: root.elementAlignment("clock")
+      visible: root.elementShown("clock")
+      width: root.textWidth("clock", implicitWidth)
+      x: root.placeX("clock", width)
+      y: root.placeY("clock")
     }
 
-    Text {
-      objectName: "fingerprintNotice"
-      anchors.top: loginColumn.bottom
-      anchors.topMargin: Math.round(8 * root.uiScale)
-      anchors.horizontalCenter: loginColumn.horizontalCenter
-      width: root.contentWidth
-      visible: root.fingerprintUnavailable
-      textFormat: Text.PlainText
-      text: FoamyI18n.t("Fingerprint reader unavailable")
-      color: root.foreground
-      font.family: root.textFontFamily
-      font.pixelSize: Math.round(13 * root.uiScale)
-      horizontalAlignment: Text.AlignHCenter
-      wrapMode: Text.WordWrap
+    AccountElement {
+      id: identityBlock
+      view: root
+      styleName: root.placed.account.style
+      alignment: root.elementAlignment("account")
+      visible: root.elementShown("account")
+      width: chip ? naturalWidth : root.textWidth("account", naturalWidth)
+      x: root.placeX("account", width)
+      y: root.placeY("account")
+    }
+
+    // Always visible: an invisible item can't keep keyboard focus.
+    PasswordElement {
+      id: inputField
+      view: root
+      chromeVisible: root.primary
+      styleName: root.placed.password.style
+      alignment: root.elementAlignment("password")
+      x: root.placeX("password", width)
+      y: root.placeY("password")
     }
 
     MediaElement {
       id: mediaRow
       view: root
-      anchors.left: parent.left
-      // Stack below authentication on narrow displays to avoid overlap.
-      anchors.leftMargin: root.compactLayout
-        ? Math.round((root.width - width) / 2)
-        : Math.round(32 * root.uiScale)
-      anchors.bottom: parent.bottom
-      anchors.bottomMargin: Math.round(32 * root.uiScale)
+      styleName: root.placed.media.style
+      visible: root.elementShown("media")
+      x: root.placeX("media", width)
+      y: root.placeY("media")
     }
 
     StatusElement {
       id: statusFooter
       view: root
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.margins: Math.round(24 * root.uiScale)
+      styleName: root.placed.status.style
+      visible: root.elementShown("status")
+      x: root.placeX("status", width)
+      y: root.placeY("status")
     }
   }
 }

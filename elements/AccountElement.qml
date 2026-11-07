@@ -1,24 +1,49 @@
 import QtQuick
 import QtQuick.Effects
 
-// Avatar and display name. The host sets the width.
+// Avatar and display name. Styles: "avatar" (a large picture with the name
+// below; the host sets the width) and "chip" (a small picture and the name
+// in a glass pill, as wide as it needs).
 Item {
   id: account
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // "start", "center" or "end" (logical: mirrors with the language).
+  property string alignment: "center"
+  property string styleName: "avatar"
+  readonly property bool chip: styleName === "chip"
+  readonly property real chipPadding: Math.round(7 * view.uiScale)
+  readonly property real chipGap: Math.round(10 * view.uiScale)
+  // The width it needs outside the center column (and the chip's width).
+  readonly property real naturalWidth: chip
+    ? chipPadding + avatar.width + chipGap + nameLabel.implicitWidth + Math.round(18 * view.uiScale)
+    : Math.max(avatar.width, nameLabel.implicitWidth)
 
   objectName: "identityBlock"
-  visible: view.showUserInfo
-  height: avatar.height + nameLabel.anchors.topMargin + nameLabel.height
+  height: chip ? Math.round(48 * view.uiScale) : avatar.height + nameLabel.anchors.topMargin + nameLabel.height
+
+  Rectangle {
+    objectName: "accountChip"
+    anchors.fill: parent
+    visible: account.chip
+    radius: height / 2
+    color: account.view.glass
+    border.width: 1
+    border.color: account.view.glassBorder
+  }
 
   Rectangle {
     id: avatar
     objectName: "avatar"
-    width: Math.round(84 * account.view.uiScale)
+    width: Math.round((account.chip ? 34 : 84) * account.view.uiScale)
     height: width
     radius: width / 2
-    anchors.top: parent.top
-    anchors.horizontalCenter: parent.horizontalCenter
+    anchors.top: account.chip ? undefined : parent.top
+    anchors.verticalCenter: account.chip ? parent.verticalCenter : undefined
+    anchors.horizontalCenter: !account.chip && account.alignment === "center" ? parent.horizontalCenter : undefined
+    anchors.left: account.chip || account.alignment === "start" ? parent.left : undefined
+    anchors.leftMargin: account.chip ? account.chipPadding : 0
+    anchors.right: !account.chip && account.alignment === "end" ? parent.right : undefined
     color: Qt.rgba(0.025, 0.03, 0.055, 0.55)
 
     Item {
@@ -66,7 +91,7 @@ Item {
       text: account.view.displayName.length > 0 ? account.view.displayName.charAt(0).toLocaleUpperCase() : "?"
       color: account.view.foreground
       font.family: account.view.textFontFamily
-      font.pixelSize: Math.round(34 * account.view.uiScale)
+      font.pixelSize: Math.round((account.chip ? 15 : 34) * account.view.uiScale)
       font.weight: Font.Light
     }
 
@@ -83,17 +108,22 @@ Item {
     id: nameLabel
     objectName: "nameLabel"
     textFormat: Text.PlainText
-    anchors.top: avatar.bottom
+    anchors.top: account.chip ? undefined : avatar.bottom
     anchors.topMargin: Math.round(7 * account.view.uiScale)
-    anchors.left: parent.left
+    anchors.verticalCenter: account.chip ? parent.verticalCenter : undefined
+    anchors.left: account.chip ? avatar.right : parent.left
+    anchors.leftMargin: account.chip ? account.chipGap : 0
     anchors.right: parent.right
-    height: Math.round(34 * account.view.uiScale)
+    anchors.rightMargin: account.chip ? Math.round(18 * account.view.uiScale) : 0
+    height: Math.round((account.chip ? 24 : 34) * account.view.uiScale)
     text: account.view.displayName
     color: account.view.foreground
     font.family: account.view.textFontFamily
-    font.pixelSize: Math.round(20 * account.view.uiScale)
+    font.pixelSize: Math.round((account.chip ? 16 : 20) * account.view.uiScale)
     font.weight: Font.Normal
-    horizontalAlignment: Text.AlignHCenter
+    elide: Text.ElideRight
+    horizontalAlignment: account.chip || account.alignment === "start" ? Text.AlignLeft
+      : account.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
   }
 }

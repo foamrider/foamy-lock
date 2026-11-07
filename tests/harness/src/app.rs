@@ -65,8 +65,10 @@ pub fn prepare(app: &Path, host_shell: &Path) -> Result<(), String> {
         symlink(root.join(name), app.join(name)).map_err(io(name))?;
     }
     write(app.join("qmldir"), "")?;
-    let model = fs::read_to_string(root.join("Model.js")).map_err(io("Model.js"))?;
-    write(app.join("Model.js"), &model)?;
+    for script in ["Model.js", "Layout.js"] {
+        let text = fs::read_to_string(root.join(script)).map_err(io(script))?;
+        write(app.join(script), &text)?;
+    }
     let view = fs::read_to_string(root.join("LockView.qml")).map_err(io("LockView.qml"))?;
     write(app.join("LockView.qml"), &patch_view(&view))?;
     write(
