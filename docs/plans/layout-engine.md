@@ -1,6 +1,6 @@
 # Plan: lock-screen layout engine (foamy-lock 1.3.0)
 
-Status: offline work done (steps 0–6; see Progress); live validation pending · reviewed, revision 2 · 2026-11-07 · branch `feat/layout-engine` off `dev`
+Status: offline work done (steps 0–6 and 8; see Progress); live validation pending · reviewed, revision 2 · 2026-11-07 · branch `feat/layout-engine` off `dev`
 
 ## Goal
 
@@ -17,9 +17,12 @@ sources (Omarchy wallpaper, own picture, theme colour, black) with blur and
 dim, glass opacity, one-layout-on-every-screen with the field on the active
 screen, safety checks, and a preset preview over IPC.
 
+**Added after the first review (step 8):** more styles per element, a
+calendar element, background decorations, drawn (animated) backgrounds,
+glass tints and 22 presets inspired by Lock Designs, with thumbnails.
+
 **Deferred to 1.4+:** the editor popup and on-screen editor, element `size`,
-more styles per element, blur behind glass, animated backgrounds (aurora,
-rain), per-monitor layouts, and the remaining Lock Designs-inspired presets.
+per-monitor layouts.
 
 ## Requirements
 
@@ -51,7 +54,9 @@ rain), per-monitor layouts, and the remaining Lock Designs-inspired presets.
    - effects gated off under the software renderer;
    - RTL via anchors;
    - i18n (en + no) for every new string;
-   - the lock stays free of animation in 1.3.0, so FoamyMotion isn't needed.
+   - only the drawn backgrounds move (step 8). FoamyMotion isn't in this
+    plugin's kit, so the view reads Omarchy's `Style.reduceMotion` (what
+    FoamyMotion wraps) and drives them with a guarded Timer.
 
 ## Layout model
 
@@ -305,6 +310,62 @@ What changed from the plan while building:
   on the next lock or look change.
 - **The geometry check** waits until the view has a size. A 0×0 view at
   creation would otherwise always "fail".
+
+### Step 8: Lock Designs-inspired presets (2026-11-07)
+
+Presets inspired by the layouts of
+[Lock Designs](https://github.com/KamradSmeshnyavy/omarchy-lock-designs)
+(KamradSmeshnyavy, MIT), re-implemented from this model; no code is copied.
+Everything new is data in Layout.js plus generic view parts:
+
+- **Element and styles.** A seventh element, `calendar` (`card`, `plain`),
+  hidden in the older presets. It is an element, not a clock style, because
+  the design shows it *beside* a clock, and an element can sit in any zone.
+  Clock `small`, `poster` and `ring` (minutes of the hour, so it changes
+  once a minute like every face); status `system`.
+- **System panel.** Uptime, memory and load come from FileViews on
+  `/proc/uptime`, `/proc/loadavg` and `/proc/meminfo`, whose path is set
+  only while the panel is shown, the view visible and the display awake; a
+  5 s timer reloads them then, and the values are cleared when it hides.
+  The fourth row is the battery, or the network without one.
+- **`background.decor`.** `none`, `split`, `sheet`, `cinema`, `strip`,
+  `island`, `frame`, `card` (elements/Decoration.qml). Each is fitted to the
+  union of the shown elements' drawn rectangles in its zones
+  (`LockView.zonesRect`), so it follows narrow screens and mirrors with the
+  elements. The geometry check ignores it; the layout test checks that every
+  element is wholly inside or outside each surface (inside a frame).
+  `cinema` and `strip` drop the bottom-center stack to the bottom edge.
+  The sheet and card frost the wallpaper behind them with GPU rendering only.
+- **Drawn sources.** `aurora`, `rain`, `constellation`
+  (elements/Backdrop.qml): Rectangles and Canvas gradients painted once, in
+  the theme accent and FoamyPalette's green and cyan. A Timer advances one
+  phase (every motion repeats exactly after 60 s) only while
+  `LockView.motionAllowed`: visible, `loadBackground`, `displayAwake`, not
+  reduced motion, not the software renderer. The service clears
+  `displayAwake` in `runBlank` and sets it in `runWake` and on lock.
+- **`glass.tint`.** `none`, `accent`, `solid`.
+- **Narrow screens.** With both middle side zones in use, the end zone
+  stacks under the start zone (calendar, system).
+- **Presets.** dock, island, split, sheet, card, cinema, poster, analog,
+  flip, ring, calendar, terminal, neon, system, music, aurora, rain,
+  constellation, dotmatrix, and three finishes of the dot-matrix layout:
+  flat (solid tint), frosted (blurred glass), fluent (card, accent tint).
+  `classic` is our `foamy` (the stock look) and `zen` already existed.
+- **Skipped style variants.** `paper` (handwriting font and paper
+  textures), `neumorph` (paired soft shadows: effects only, unreadable
+  under CPU rendering), `brutal` (thick borders and hard offset shadows on
+  every surface, more than a tint), `retro` (a pixel font and window chrome
+  with a title bar, a widget of its own). Their `neon` variant is the
+  `neon` preset.
+- **Tests.** The layout run reads the presets from Layout.js, runs four at
+  a time, adds a right-to-left state (elements and decorations mirror), the
+  decoration and still-frame checks, and cycles one view through every
+  preset and back. `thumbnails` renders `previews/presets/<name>.png`.
+- **GPU check** (a floating window on the real display): the frosted
+  sheet and card, the moving aurora, rain and neon glow draw. A Canvas
+  must request its paint again once `available` under the threaded
+  renderer. `grabToImage` can miss a just-reloaded wallpaper that the
+  screen shows.
 
 ## Steps
 

@@ -119,8 +119,8 @@ avatar thumbnail at `$XDG_CACHE_HOME/omarchy/foamy.lock/avatar.png`, falling bac
 
 ## Look: presets, layout and background
 
-The lock screen is made of six elements (date, clock, account, password field,
-media, status) on a background. A preset chooses where each element sits and how
+The lock screen is made of seven elements (date, clock, account, password field,
+media, status, calendar) on a background. A preset chooses where each element sits and how
 it looks. `layout` changes single elements, and `background` and `glass` change
 what is behind them. All four keys sit on the same `foamy.lock` entry and are
 optional; without them the lock looks exactly as in 1.2.0.
@@ -141,6 +141,33 @@ optional; without them the lock looks exactly as in 1.2.0.
 | `corner` | The date and a bold clock bottom left; the account chip and an underline field bottom right. |
 | `editorial` | The date, clock, account and field stacked on the left, in the middle of the screen. |
 | `zen` | Only the field, centred, over a blurred and dimmed wallpaper. |
+| `dock` | A band along the bottom: a small clock, the field box and the short date. |
+| `island` | The time and date in a black pill at the top; the field in the middle. |
+| `split` | A solid panel on the left with the date, a bold clock, your name and the field; the wallpaper on the right. |
+| `sheet` | A frosted panel on the right with the avatar, clock, date and field. |
+| `card` | A glass card in the middle: avatar, small clock, date and field. |
+| `cinema` | Black bars: the time and date in the top one, an underline field in the bottom one. |
+| `poster` | Huge hours over minutes (the minutes in the accent) on the left; the field bottom left. |
+| `analog` | An analogue clock, the date and the field in the middle. |
+| `flip` | Flip-card hours and minutes over the date and field. |
+| `ring` | The time inside a ring that fills with the minutes of the hour. |
+| `calendar` | The date, a bold clock and the field on the left; this month's calendar on the right. |
+| `terminal` | A console login on black: mono clock, your name and a `Password:` prompt. |
+| `neon` | An outlined clock and accent edges inside a glowing accent frame, over a dark wallpaper. |
+| `system` | The clock and field beside a panel with uptime, memory, load and battery. |
+| `music` | Now playing with large artwork in the middle, the field below it. |
+| `aurora` | Soft bands of the theme's colours drifting behind the clock and field. |
+| `rain` | Thin streaks falling behind a card with a mono clock and a terminal field. |
+| `constellation` | A star field; each typed character lights the next star of a figure. |
+| `dotmatrix` | A dot-matrix clock and dotted field inside a dark bezel. |
+| `flat` | The clock, date and field in the middle, on solid surfaces without edges. |
+| `frosted` | The same on glass over a strongly blurred wallpaper (blur needs GPU rendering). |
+| `fluent` | A bold clock and a greeting card with accent edges. |
+
+Presets from `dock` on are inspired by the layouts of
+[Lock Designs](https://github.com/KamradSmeshnyavy/omarchy-lock-designs) (MIT),
+rebuilt from the elements, decorations and backgrounds here; no code is shared.
+The editor's thumbnails are in `previews/presets` (`tests/harness.sh thumbnails`).
 
 **Layout.** Each element takes `zone`, `style`, `order` and `hidden`:
 
@@ -150,22 +177,29 @@ optional; without them the lock looks exactly as in 1.2.0.
   languages.
 - **`order`.** Elements in one zone stack by `order`, an integer from -99 to 99.
 - **On narrow screens** the bottom corners are centred and stacked under the
-  field.
+  field, and when both middle sides are used the end side moves under the
+  start side.
+- **The calendar** is its own element rather than a clock style, so it can sit
+  beside any clock; it keeps one size (six weeks) whatever the month.
+- **The `system` panel** reads `/proc/uptime`, `/proc/loadavg` and
+  `/proc/meminfo` every five seconds, only while it is shown and the display
+  is on; nothing is read or kept otherwise.
 
 | Element | Styles |
 | --- | --- |
 | `date` | `long` (default), `caps`, `short` (abbreviated, "Sat 7 Nov"), `serif` (a large serif weekday over the spaced date) |
-| `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog` |
+| `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog`, `small` (one line, for a bar or card), `poster` (huge hours over accent minutes), `ring` (the time in a ring that fills over the hour) |
 | `account` | `avatar` (default), `chip`, `name` (the name alone) |
 | `password` | `pill` (default), `underline`, `box` (an always-visible glass box with the arrow), `dots` (no surface), `terminal` (a "Password:" prompt in the mono font), `card` (a greeting above the field) |
 | `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below) |
-| `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill) |
+| `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill), `system` (a panel with uptime, memory, load and the battery, or the network without one) |
+| `calendar` | `card` (default; this month on glass, today ringed in the accent), `plain`. Hidden unless a preset or `hidden: false` shows it. |
 
 Each password style has a fixed size, so the field never moves while you type.
 Every style reads the same with CPU rendering, except the artwork: the media
 pill and art then show it as a plain square instead of a round or rounded one,
-and the card's thumbnail still needs GPU rendering. Nothing on the lock screen
-animates.
+and the card's thumbnail still needs GPU rendering. Only the drawn backgrounds
+move (see below).
 
 The password field can't be hidden, and it stays in the middle or bottom row.
 `showUserInfo: false` and `showMedia: false` still hide the account and media
@@ -178,7 +212,32 @@ that shows it (`card`, `pill` or `art`) is shown.
   - `omarchy` (default): the current wallpaper, as before;
   - `picture`: the file in `path`, an absolute `.png`, `.jpg` or `.webp`;
   - `theme`: the theme's background colour;
-  - `black`.
+  - `black`;
+  - `aurora`: soft bands of the theme accent, green and cyan drifting slowly;
+  - `rain`: thin accent streaks falling at different speeds;
+  - `constellation`: stars and one figure whose stars light up as you type.
+
+  The last three are drawn in the theme's colours over its background. They
+  move only while the lock screen is shown, the display is on, Omarchy's
+  animations are on and the GPU renders; otherwise (reduced motion, CPU
+  rendering, a blanked display) they hold a still frame.
+- **`decor`.** A shape over the background and behind the elements, fitted to
+  the zones it belongs to (it follows them to narrow screens and mirrors in
+  right-to-left languages). It is background: it never covers an element.
+  - `none` (default);
+  - `split`: a solid panel on the start side, as wide as its column needs
+    (at least 38%), with an accent edge; it fills a narrow screen;
+  - `sheet`: a frosted panel on the end side;
+  - `cinema`: black bars at the top and bottom;
+  - `strip`: a band behind the bottom row;
+  - `island`: a pill around the top-center zone;
+  - `frame`: a border inset from the edges: a glow with the `accent` glass
+    tint, otherwise a dark bezel;
+  - `card`: a glass card behind the middle-center zone.
+
+  With `cinema` and `strip` the bottom-center stack sits at the bottom edge,
+  in the band, instead of at 65% height. The frosting behind `sheet` and
+  `card` needs GPU rendering.
 - **`blur`.** From 0 to 1.
 - **`dim`.** The darkening scrim, from 0 to 0.9; the default is 0.25.
 - **Picture preparation.** Your picture is decoded, cropped to the screen and
@@ -190,7 +249,10 @@ that shows it (`card`, `pill` or `art`) is shown.
   0.15 dim behind it.
 
 **Glass.** `opacity` (0 to 1, default 1) scales the transparency of the glass
-behind the media card, the account chip and the field.
+behind the media card, the account chip, the field and the decorations.
+`tint` is `none` (default, white glass), `accent` (the theme accent on the
+edges, and the outline clock drawn in it) or `solid` (opaque surfaces without
+edges).
 
 **Mistakes and safety.** A mistake in these keys, such as an unknown name or a
 value out of range, leaves the previous look in place and shows up as
@@ -211,7 +273,7 @@ the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
 Editors use three more calls on the same target: `catalog` lists the elements, zones,
-styles, presets and the saved look; `previewLook '<json>'` previews an unsaved look;
+styles, presets (with their thumbnails), background sources, decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
@@ -406,6 +468,7 @@ bash tests/harness.sh render                  # --language no renders in Norwegi
 bash tests/harness.sh parity                  # geometry against 1.2.0 (needs the git history)
 bash tests/harness.sh layout                  # every preset, then the style sweep (also: styles alone)
 bash tests/harness.sh runtime                 # service, PAM, fingerprint, wallpaper and IPC flows
+bash tests/harness.sh thumbnails              # re-render previews/presets/*.png (480 × 270)
 bash tests/kit-check.sh
 ```
 
@@ -448,7 +511,7 @@ and places the elements in `elements/` (date, clock, account, password field,
 media, status), which only draw what the view gives them. The render and parity
 tests replace those data sources in `LockView.qml` alone.
 
-The render, parity, layout, styles and runtime tests run through `tests/harness.sh`, which builds and
+The render, parity, layout, styles, runtime and thumbnails commands run through `tests/harness.sh`, which builds and
 runs `tests/harness`: a development-only Rust crate (std only apart from `serde_json`
 for the runtime test's status replies, its own workspace, so the helper's `native.pin`
 doesn't cover it; built under `~/.cache/foamy-native`, never inside the plugin;
@@ -460,6 +523,21 @@ named item, within 1 px, in nine states (sizes from 700 × 1200 to 3440 × 1440,
 12-hour time, failure, checking, hidden identity, no media or battery, fingerprint
 unavailable, no wallpaper, right-to-left). `--baseline REV` compares with another
 revision.
+
+The layout test runs every preset in `Layout.SELECTABLE_PRESETS` (four
+quickshells at a time) through four sizes, 12- and 24-hour time, typing,
+secondary screens and right-to-left, where every element and decoration must
+mirror. No preset may fall back; the field and every element must sit wholly
+inside or outside each decoration surface (and inside a frame); a drawn
+background must hold its still frame under the software renderer; the system
+panel must have its readings (from fixtures, not the real `/proc`). The foamy
+run also switches one view through every preset and back, which must restore
+its geometry exactly, and forces the fallback chain.
+
+The thumbnails show each preset at 1920 × 1080 with the synthetic data and a
+fixed dark theme, scaled to 480 × 270. The offscreen platform has no GPU, so
+they show CPU rendering: no blur, and the avatar's initial instead of a
+picture.
 
 The style sweep (`styles`, also run by `layout` without `--preset`) shows every
 style of every element in each column of its row at 1920 × 1080 and 800 × 1000,
@@ -521,6 +599,8 @@ the plugin directory are retained unless you remove them separately.
 `kit/` holds shared components copied from [foamy-kit](https://github.com/foamrider/foamy-kit); edit them there, not here.
 
 Licensed under [MIT](LICENSE), with the upstream [Omarchy notice](LICENSE-OMARCHY).
+Presets inspired by [Lock Designs](https://github.com/KamradSmeshnyavy/omarchy-lock-designs)
+by KamradSmeshnyavy (MIT); they are new implementations and share no code.
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5, including
 right-to-left layout for right-to-left languages (media transport buttons keep their
