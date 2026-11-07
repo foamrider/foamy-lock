@@ -665,6 +665,16 @@ fn look(test: &Test) -> R {
             "previewPreset {name:?}"
         );
     }
+    // Omarchy saves shell.json by rename (FileView atomicWrites): the watch
+    // must follow the new file, more than once.
+    for preset in ["editorial", "corner"] {
+        let staged = test.path(".config/omarchy/shell.json.saving");
+        let config = json!({"version": 1, "plugins": [{"id": "foamy.lock", "preset": preset}],
+            "disabledPlugins": STOCK_OFF});
+        write(&staged, config.to_string())?;
+        std::fs::rename(&staged, &test.config).map_err(|e| format!("rename: {e}"))?;
+        test.wait_for(|s| Ok(text(s, "preset")? == preset))?;
+    }
     // A picture goes through the helper's sandbox; the view gets only the
     // prepared PNG, and a missing file leaves the theme colour.
     let picture = test.path("lake.png");
