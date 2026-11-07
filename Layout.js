@@ -21,7 +21,7 @@ var STYLES = {
   clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog"],
   account: ["avatar", "chip", "name"],
   password: ["pill", "underline", "box", "dots", "terminal", "card"],
-  media: ["card", "line"],
+  media: ["card", "line", "pill", "art"],
   status: ["text", "icons", "pill"]
 }
 // The field stays where a hand and an eye expect it: never in the top row.

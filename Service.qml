@@ -124,9 +124,10 @@ Item {
   Artwork {
     id: artwork
     player: root.activePlayer
-    // Only the card shows artwork: a hidden or one-line player prepares none.
+    // Only the card, pill and art styles show artwork: a hidden or one-line
+    // player prepares none.
     allowed: root.settings.showMedia && root.settings.showArtwork
-      && !root.look.elements.media.hidden && root.look.elements.media.style === "card"
+      && !root.look.elements.media.hidden && ["card", "pill", "art"].indexOf(root.look.elements.media.style) !== -1
     locked: root.locked
     hosts: root.settings.artworkHosts
     fileRoots: root.settings.artworkFileRoots
