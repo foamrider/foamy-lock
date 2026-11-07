@@ -269,12 +269,13 @@ node --test tests/*.test.cjs
 python3 -I -B -m unittest discover -s tests -p artwork_test.py -v
 FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py
 python3 -I -B tests/artwork_runtime.py
-python3 -I -B tests/render.py                 # --language no renders in Norwegian
+bash tests/harness.sh render                  # --language no renders in Norwegian
+bash tests/harness.sh parity                  # geometry against 1.2.0 (needs the git history)
 python3 -I -B tests/runtime.py
 bash tests/kit-check.sh
 ```
 
-The tests are Python 3 and Node (development only; the plugin does not need
+The tests are Rust (`tests/harness`), Python 3 and Node (development only; the plugin does not need
 them at runtime). `artwork_test.py` runs the helper as a process: it checks the
 request/reply contract, the exact Bubblewrap command line, environment, rlimits,
 inherited descriptors, policy and seccomp program (through stand-in `bwrap` and
@@ -306,6 +307,23 @@ Shared foamy components (translations, IPC, style tokens) live in `kit/`, copied
 from [foamy-kit](https://github.com/foamrider/foamy-kit); `tests/kit-check.sh`
 verifies they are unedited.
 
+`LockView.qml` owns the view's data sources (network, battery, the wall clock)
+and places the elements in `elements/` (date, clock, account, password field,
+media, status), which only draw what the view gives them. The render and parity
+tests replace those data sources in `LockView.qml` alone.
+
+The render and parity tests run through `tests/harness.sh`, which builds and
+runs `tests/harness`: a development-only Rust crate (std only, its own workspace,
+so the helper's `native.pin` doesn't cover it; built under `~/.cache/foamy-native`,
+never inside the plugin; `cargo test` covers its own PNG and argument helpers).
+
+The parity test renders the current view next to 1.2.0's `LockView.qml` (from git) with the same synthetic
+data, and compares the position, size, visibility, text and font size of every
+named item, within 1 px, in nine states (sizes from 700 × 1200 to 3440 × 1440,
+12-hour time, failure, checking, hidden identity, no media or battery, fingerprint
+unavailable, no wallpaper, right-to-left). `--baseline REV` compares with another
+revision.
+
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
 folder, including populated artwork and icon fallbacks; set `FOAMY_RENDER_OUT` to
@@ -325,7 +343,7 @@ links, touched and rewritten files, dangling links, directories and a missing he
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
 
-`tests/runtime.py` and `tests/render.py` run on Omarchy 4.5: `FOAMY_HOST_45` (a
+`tests/runtime.py` and the harness tests run on Omarchy 4.5: `FOAMY_HOST_45` (a
 `shell` directory), else `$OMARCHY_TEST_ROOT/shell`, else the installed
 `/usr/share/omarchy/shell`. `--host 4.0` and `--host both` run 4.0 only when
 `FOAMY_HOST_40` names a 4.0 shell; otherwise they print a SKIP line for it.

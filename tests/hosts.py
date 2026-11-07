@@ -1,4 +1,4 @@
-"""Host shells for the offscreen tests (render.py, runtime.py): Omarchy 4.5.
+"""Host shells for the offscreen Python test (runtime.py): Omarchy 4.5; tests/harness (Rust) mirrors these rules.
 
 4.5 is FOAMY_HOST_45, else $OMARCHY_TEST_ROOT/shell, else the installed
 /usr/share/omarchy/shell. 4.0 runs only when FOAMY_HOST_40 names a 4.0 shell
