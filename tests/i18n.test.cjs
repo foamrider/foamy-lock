@@ -20,6 +20,10 @@ const service = fs.readFileSync(path.join(__dirname, '../Service.qml'), 'utf8');
 assert.match(service, /Keys\.onPressed: function\(event\) \{ root\.previewKeyPressed\(event\) \}/);
 assert.ok(!/\bIpcHandler\s*\{/.test(service), 'IPC goes through FoamyIpc');
 const artworkQml = fs.readFileSync(path.join(__dirname, '../Artwork.qml'), 'utf8');
-assert.ok(artworkQml.includes('"/usr/bin/python3", "-I", "-B"'), 'helper must not write __pycache__');
-assert.match(service, /"timeout", "--kill-after=1s", "10s", "\/usr\/bin\/python3", "-I", "-B"/, 'avatar helper is bounded');
+// Both jobs run the bundled native helper; the avatar job keeps its outer timeout.
+assert.ok(artworkQml.includes('FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"])'),
+  'artwork runs the native helper');
+assert.match(service, /\["timeout", "--kill-after=1s", "10s"\]\.concat\(FoamyNative\.command\(\s*FoamyNative\.localPath\(Qt\.resolvedUrl\("\."\)\), "foamy-lock-helper", \["artwork"\]\)\)/,
+  'avatar helper is bounded');
+assert.ok(!/python3|artwork\.py/.test(artworkQml + service), 'no Python helper remains');
 assert.ok(!/exec magick/.test(service), 'no unsandboxed ImageMagick call');

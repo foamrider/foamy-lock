@@ -414,14 +414,21 @@ Item {
         color: root.showPassword ? root.glass : "transparent"
         border.width: root.showPassword ? 1 : 0
         border.color: root.errorState ? Commons.Color.lock.borderError : root.glassBorder
-        clip: true
+        // Not clipped: the unlock hint below shows only while the field has no
+        // fill or border, and a translated hint can be wider than the pill.
+        // The editor and its placeholder clip and elide on their own.
 
+        // The hint is bounded by the login column, not the pill: it wraps to a
+        // second line (two lines fit the field's height) and elides only beyond.
         Row {
+          id: unlockHint
+          objectName: "unlockHint"
           anchors.centerIn: parent
           spacing: Math.round(10 * root.uiScale)
           visible: !root.showPassword
 
           FingerprintIcon {
+            id: unlockHintIcon
             width: Math.round(26 * root.uiScale)
             height: width
             anchors.verticalCenter: parent.verticalCenter
@@ -429,11 +436,18 @@ Item {
           }
 
           Text {
+            objectName: "unlockHintText"
             textFormat: Text.PlainText
             text: root.fingerprintConfigured && !root.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
+            width: Math.min(implicitWidth, root.contentWidth
+              - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
             color: root.foreground
             font.family: root.textFontFamily
             font.pixelSize: Math.round(15 * root.uiScale)
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
             anchors.verticalCenter: parent.verticalCenter
           }
         }

@@ -8,6 +8,7 @@ import Quickshell.Wayland
 import qs.Commons as Commons
 import "kit"
 import "kit/FoamyIpcResolver.js" as IpcResolver
+import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
 // Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
@@ -55,6 +56,9 @@ Item {
   property string videoPosterPath: ""
   property string wallpaperError: ""
   property bool backgroundProbePending: false
+  // No helper binary for this CPU (exit 126/127): the plain themed background
+  // stays, wallpaperError is helper-unavailable and the probe is not run again.
+  property bool wallpaperHelperUnavailable: false
   readonly property bool videoBackground: Model.isVideoPath(backgroundPath)
   readonly property string lockWallpaperPath: videoBackground ? videoPosterPath : backgroundPath
   readonly property string lockWallpaperUrl: Model.fileUrl(lockWallpaperPath, backgroundVersion)
@@ -63,6 +67,9 @@ Item {
   property string userAvatarRenderPath: ""
   property int userAvatarVersion: 0
   property bool avatarThumbnailPending: false
+  // No helper binary for this CPU (exit 126/127): the initial is shown and
+  // the helper is not started again.
+  property bool avatarHelperUnavailable: false
   property string lastEvent: "init"
   property string lastEventAt: ""
   property bool strandedLock: false
@@ -230,12 +237,13 @@ Item {
 
   function refreshBackground() {
     // Coalesce theme/lock requests while the filesystem probe is in flight.
-    if (readlinkProc.running) {
+    if (wallpaperProbeProc.running) {
       backgroundProbePending = true
       return
     }
     backgroundProbePending = false
-    readlinkProc.running = true
+    if (wallpaperHelperUnavailable) return
+    wallpaperProbeProc.running = true
   }
 
   function refreshPoster() {
@@ -302,8 +310,12 @@ Item {
       avatarThumbnailPending = true
       return
     }
+    if (avatarHelperUnavailable) {
+      applyAvatarResult('{"ok":false,"error":"helper-unavailable"}')
+      return
+    }
 
-    // The same sandboxed decoder as media artwork (artwork.py), bounded by
+    // The same sandboxed decoder as media artwork (foamy-lock-helper), bounded by
     // its own alarm and an outer timeout, so a pathological picture can
     // neither run ImageMagick delegates nor hang the refresh.
     avatarThumbnailProc.request = JSON.stringify({ kind: "avatar", path: userAvatarPath })
@@ -873,20 +885,27 @@ Item {
   }
 
   Process {
-    id: readlinkProc
-    command: ["timeout", "--kill-after=1s", "2s", "bash", "-c",
-      'path=$(readlink -f -- "$1") && signature=$(stat -Lc "%s:%y:%z" -- "$path") && jq -cn --arg path "$path" --arg signature "$signature" \'{path:$path,signature:$signature}\'',
-      "foamy-lock-wallpaper", root.currentBackgroundLink]
+    id: wallpaperProbeProc
+    // The helper resolves the link like readlink -f and stats the target:
+    // {"ok":true,"path":"/…","signature":"…"}, the signature changing with the
+    // file's size, mtime or ctime. Any failure keeps the themed background.
+    command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["wallpaper", root.currentBackgroundLink]))
+    clearEnvironment: true
+    environment: ({ PATH: "/usr/bin", LANG: "C.UTF-8" })
     stdout: StdioCollector { id: backgroundOutput; waitForEnd: true }
     onExited: function(exitCode, exitStatus) {
       var data = null
-      if (exitCode === 0 && exitStatus === 0) {
+      if (FoamyNative.unavailable(exitCode)) {
+        root.wallpaperHelperUnavailable = true
+      } else if (exitCode === 0 && exitStatus === 0) {
         try { data = JSON.parse(backgroundOutput.text) } catch (error) { data = null }
       }
-      if (!data || typeof data.path !== "string" || data.path[0] !== "/" || typeof data.signature !== "string") {
+      if (!data || data.ok !== true || typeof data.path !== "string" || data.path[0] !== "/"
+          || typeof data.signature !== "string" || data.signature.length === 0) {
         root.backgroundPath = ""
         root.videoPosterPath = ""
-        root.wallpaperError = "wallpaper-unavailable"
+        root.wallpaperError = root.wallpaperHelperUnavailable ? "helper-unavailable" : "wallpaper-unavailable"
       } else {
         if (data.path !== root.backgroundPath || data.signature !== root.backgroundSignature) {
           root.videoPosterPath = ""
@@ -958,8 +977,8 @@ Item {
   Process {
     id: avatarThumbnailProc
     property string request: ""
-    command: ["timeout", "--kill-after=1s", "10s", "/usr/bin/python3", "-I", "-B",
-      decodeURIComponent(Qt.resolvedUrl("artwork.py").toString().replace(/^file:\/\//, ""))]
+    command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
     clearEnvironment: true
     environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
       PATH: "/usr/bin", LANG: "C.UTF-8" })
@@ -969,7 +988,12 @@ Item {
     }
     stdout: StdioCollector { id: avatarOutput; waitForEnd: true }
     onExited: function(exitCode) {
-      root.applyAvatarResult(avatarOutput.text)
+      if (FoamyNative.unavailable(exitCode)) {
+        root.avatarHelperUnavailable = true
+        root.applyAvatarResult('{"ok":false,"error":"helper-unavailable"}')
+      } else {
+        root.applyAvatarResult(avatarOutput.text)
+      }
 
       if (avatarThumbnailPending) {
         avatarThumbnailPending = false

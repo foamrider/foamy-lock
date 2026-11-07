@@ -1,4 +1,9 @@
-"""Exercise service settings and lock flow with simulated PAM and compositor boundaries."""
+"""Exercise service settings and lock flow with simulated PAM and compositor boundaries.
+
+Usage: tests/runtime.py [--host 4.5|4.0|both]
+
+The host is Omarchy 4.5 (tests/hosts.py); 4.0 runs only with FOAMY_HOST_40."""
+import argparse
 import importlib.util
 import json
 import os
@@ -7,14 +12,29 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 source = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('artwork', source / 'artwork.py')
-artwork = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(artwork)
-commons = Path(os.environ.get('FOAMY_TEST_COMMONS', '/usr/share/omarchy/shell/Commons'))
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, source / 'tests' / f'{name}.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Fixture images (the helper itself is tested in artwork_test.py).
+artwork = load('png_fixture')
+hosts = load('hosts')
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument('--host', default='4.5', choices=hosts.CHOICES)
+args = parser.parse_args()
+host_name, host_shell = hosts.current(__file__, args.host, sys.argv[1:])
+print(f'Host {host_name}: {host_shell}', flush=True)
+commons = host_shell / 'Commons'
 has_registry = (commons / 'IpcRegistry.qml').exists()
 base = Path(tempfile.mkdtemp(prefix='foamy-lock-runtime-'))
 app = base / 'app'
@@ -27,7 +47,7 @@ app.mkdir()
 shutil.copy(source / 'Model.js', app)
 shutil.copy(source / 'FingerprintModel.js', app)
 shutil.copy(source / 'Artwork.qml', app)
-shutil.copy(source / 'artwork.py', app)
+(app / 'bin').symlink_to(source / 'bin', target_is_directory=True)
 mock = app / 'mocks'
 mock.mkdir()
 (mock / 'SessionLock.qml').write_text('''import QtQuick
@@ -254,11 +274,11 @@ with (app / 'qmldir').open('a') as registry:
         if qml.name[0].isupper():
             registry.write(f'{qml.stem} 1.0 {qml.name}\n')
 
-env = dict(os.environ, HOME=str(base), USER='fixture', LOGNAME='fixture', XDG_RUNTIME_DIR=str(runtime),
-           XDG_CACHE_HOME=str(base / 'cache'), OMARCHY_PATH=str(host), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
+# No desktop config, language, compositor or session bus reaches the shell.
+env = hosts.hermetic(os.environ, base, runtime)
+env.update(USER='fixture', LOGNAME='fixture', XDG_CACHE_HOME=str(base / 'cache'), OMARCHY_PATH=str(host),
+           QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic',
            QT_STYLE_OVERRIDE='Fusion', PATH=str(bin_dir) + ':' + os.environ['PATH'])
-env.pop('DISPLAY', None)
-env.pop('WAYLAND_DISPLAY', None)
 def ipc(target, method, *args):
     return subprocess.check_output(['quickshell', 'ipc', '-p', str(app), 'call', target, method, *args],
                                    env=env, text=True, stderr=subprocess.DEVNULL, timeout=3).strip()
@@ -345,7 +365,7 @@ with log_path.open('w') as log:
         background.symlink_to(video)
         refresh_wallpaper()
         wait_for(lambda s: s['wallpaperError'] == 'video-poster-unavailable')
-        assert wallpaper_state()['path'] == '', '4.0.6 must never send video to Image'
+        assert wallpaper_state()['path'] == '', 'without poster.sh (as on 4.0) video must never reach Image'
         poster.write_text('#!/bin/sh\nexit 1\n')
         refresh_wallpaper()
         wait_for(lambda s: s['wallpaperError'] == 'video-poster-failed')
@@ -380,8 +400,51 @@ with log_path.open('w') as log:
         refresh_wallpaper()
         wait_for(lambda s: s['wallpaperError'] == 'wallpaper-unavailable')
         assert wallpaper_state()['path'] == ''
+        # The helper's probe: a relative link chain, a retargeted link, a touch,
+        # a dangling link and a directory, as Omarchy's theme switch leaves them.
+        other_dir = base / 'themes/other'
+        other_dir.mkdir(parents=True)
+        other = other_dir / 'other.svg'
+        other.write_text(static.read_text())
+        (background.parent / 'theme').symlink_to('../../../../themes/other')
+        background.symlink_to('theme/other.svg')
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['path'] == str(other) and not s['wallpaperError'])
+        version = wallpaper_state()['version']
+        os.utime(other, ns=(1_000_000_000 * 10**9, 1_000_000_000 * 10**9))
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['version'] > version)
+        assert wallpaper_state()['path'] == str(other), 'a touch keeps the path and reloads the image'
+        version = wallpaper_state()['version']
+        background.unlink()
+        background.symlink_to(static)
+        refresh_wallpaper()
+        wait_for(lambda s: wallpaper_state()['path'] == str(static))
+        assert wallpaper_state()['version'] > version, 'a retargeted link reloads the image'
+        for target in [base / 'gone.svg', other_dir]:
+            background.unlink()
+            background.symlink_to(target)
+            refresh_wallpaper()
+            wait_for(lambda s: s['wallpaperError'] == 'wallpaper-unavailable')
+            assert wallpaper_state()['path'] == '', target
+        # No helper binary for this CPU: helper-unavailable, and no retry loop.
+        (app / 'bin').unlink()
+        (app / 'bin').mkdir()
+        background.unlink()
+        background.symlink_to(static)
+        refresh_wallpaper()
+        wait_for(lambda s: s['wallpaperError'] == 'helper-unavailable')
+        assert wallpaper_state()['path'] == ''
+        (app / 'bin').rmdir()
+        (app / 'bin').symlink_to(source / 'bin', target_is_directory=True)
+        refresh_wallpaper()
+        time.sleep(0.3)
+        state = wallpaper_state()
+        assert (state['source'], state['error']) == ('', 'helper-unavailable'), \
+            f'an unavailable helper is not started again: {state}'
         assert not status()['locked'], 'wallpaper failures must not change lock state'
         print('PASS: static wallpaper invalidation/cache reuse, optional video poster success/failure/missing helper, stale result rejection')
+        print('PASS: helper wallpaper probe follows relative and retargeted links, touches; dangling link, directory and missing helper keep the themed background')
         # Simulate a stale QML property binding during a pre-suspend IPC call.
         ipc('test', 'staleLock', 'true')
         assert ipc('lock', 'isLocked') == 'false'

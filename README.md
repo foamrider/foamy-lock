@@ -10,8 +10,7 @@ The screenshot uses synthetic account and media details and a neutral wallpaper.
 
 ## Install
 
-This plugin supports Omarchy 4.0.6 and targets Omarchy 4.5 (checked against 4.5.0-rc2).
-It requires Omarchy's Quickshell build and the existing
+Requires Omarchy 4.5 (checked against 4.5.0), Omarchy's Quickshell build and the existing
 `/etc/pam.d/omarchy-lock-password` service. Fingerprint unlock also requires
 Omarchy's fingerprint setup and an enrolled fingerprint. The plugin does not
 install or change PAM configuration. The layout uses Adwaita Sans, URW Gothic,
@@ -21,11 +20,17 @@ font. A theme that styles the stock lock (`[lock]` colours in `shell.toml`: `tex
 `placeholder`, `background`, `border`, `selection`, `text-error`, `border-error`)
 recolours the glass; without those entries the lock keeps its white-on-glass look.
 
-Artwork and the avatar thumbnail additionally use system Python 3, ImageMagick 7,
-and Bubblewrap with unprivileged namespaces and seccomp support (x86-64 or AArch64
-Linux). If the helper or its sandbox cannot run, the music icon (or the account
-initial) is shown. Artwork has no unsandboxed decoding fallback, and authentication
-depends on neither.
+Artwork and the avatar thumbnail additionally use ImageMagick 7 and Bubblewrap
+with unprivileged namespaces and seccomp support. They are prepared by the plugin's
+bundled helper, `bin/<arch>/foamy-lock-helper` (static binaries for x86-64 and
+AArch64 Linux; no Python or other runtime). Remote artwork over HTTPS also needs a
+CPU with AES and carry-less multiplication instructions (on x86-64 also AVX2, BMI2
+and ADX: Intel Broadwell, AMD Zen or newer; on AArch64 the ARMv8 crypto extensions,
+so not a Raspberry Pi 4); without them remote artwork reports `https-unsupported`.
+If the helper or its sandbox cannot run, the music icon (or the account initial) is
+shown. Artwork has no unsandboxed decoding fallback, and authentication depends on
+neither. The same helper also finds the current wallpaper (see Wallpaper); on a CPU
+without a helper binary the lock shows the plain themed background.
 
 Install while your session is unlocked:
 
@@ -132,9 +137,18 @@ Input, an arriving display, or resume detection restarts the loop. Status includ
 Static wallpapers are preloaded at each display size and refreshed when the
 selected file changes, including replacement at the same path. Video wallpapers
 use a cached still frame from Omarchy 4.5's optional `poster.sh` helper. Foamy Lock
-does not play video or require the new video QML module. On 4.0.6, or if extraction
-fails, videos use the plain themed background. Wallpaper failures do not block
+does not play video or require the new video QML module. If that helper is missing
+or extraction fails, videos use the plain themed background. Wallpaper failures do not block
 authentication; `lock status` reports them in `wallpaperError`.
+
+The bundled helper (`foamy-lock-helper wallpaper <link>`, at most 2 seconds) resolves
+`~/.local/state/omarchy/current/background` like `readlink -f` and stats the file it
+ends at; no shell tools such as `stat` or `jq` are involved. A change of the file's
+size, modification or change time, or another file in its place, reloads the image;
+an unchanged file keeps the cached one. A dangling link, a missing file, a directory
+or another non-regular file leaves the plain themed background with
+`wallpaperError: "wallpaper-unavailable"`. `helper-unavailable` means there is no
+helper binary for this CPU; the probe is then not run again until the shell reloads.
 
 ## Account name and avatar
 
@@ -173,7 +187,7 @@ separate helper reads permitted artwork and decodes it in a Bubblewrap sandbox
 without network, home-directory, session-bus, or desktop-socket access. It accepts
 static PNG, JPEG, and WebP only. ImageMagick delegates and other image coders are
 disabled, and the decoder cannot create subprocesses or additional namespaces.
-The sandbox returns exactly 256 × 256 RGB pixels. The Python supervisor checks
+The sandbox returns exactly 256 × 256 RGB pixels. The helper checks
 their length and creates a minimal PNG without copying source metadata or source
 compressed data. Only that thumbnail reaches the lock view.
 
@@ -243,6 +257,8 @@ works again. `host-not-allowed` means remote artwork was not opted in;
 `file-outside-roots` means the cover is outside the permitted directories.
 `decoder-unavailable` means Bubblewrap or ImageMagick is missing; `decode-failed`
 can indicate a rejected image, a resource limit, or unavailable sandbox support.
+`helper-unavailable` means there is no helper binary for this CPU; artwork then
+stays on the music icon and no helper is started again until the shell reloads.
 
 ## Validation
 
@@ -251,11 +267,40 @@ omarchy plugin validate .
 /usr/lib/qt6/bin/qmllint Artwork.qml Service.qml LockView.qml
 node --test tests/*.test.cjs
 python3 -I -B -m unittest discover -s tests -p artwork_test.py -v
+FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py
 python3 -I -B tests/artwork_runtime.py
-python3 -I -B tests/render.py
+python3 -I -B tests/render.py                 # --language no renders in Norwegian
 python3 -I -B tests/runtime.py
 bash tests/kit-check.sh
 ```
+
+The tests are Python 3 and Node (development only; the plugin does not need
+them at runtime). `artwork_test.py` runs the helper as a process: it checks the
+request/reply contract, the exact Bubblewrap command line, environment, rlimits,
+inherited descriptors, policy and seccomp program (through stand-in `bwrap` and
+`magick` scripts in an outer Bubblewrap namespace), HTTPS against a local TLS
+server, and the real sandbox. It also covers the `wallpaper` subcommand (link chains,
+touches, rewrites and failures against `readlink -f`). `FOAMY_HELPER` selects another
+build; the aarch64 binary runs through qemu binfmt, which has no seccomp, so its
+real-sandbox tests are skipped. The HTTPS tests use the helper's test-only `FOAMY_LOCK_TEST_RESOLVE`
+and `FOAMY_LOCK_TEST_CONNECT` overrides (documented in `native/src/main.rs`; the
+shell clears the helper's environment, so they never apply there).
+
+### Rebuilding the helper
+
+The helper's source is `native/` (Rust; its contract is the doc comment at the top
+of `native/src/main.rs`), built with foamy-kit's tool, which needs rustup with the
+toolchain in `rust-toolchain.toml`:
+
+```sh
+export CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-lock   # never a target/ inside the plugin
+~/GitHub/Personal/foamy-kit/tools/build-native.sh . --test  # fmt, clippy, unit tests
+~/GitHub/Personal/foamy-kit/tools/build-native.sh .         # both arches into bin/, writes native/native.pin
+~/GitHub/Personal/foamy-kit/tools/build-native.sh . --verify
+```
+
+Commit the binaries with `native/native.pin`; `tests/kit-check.sh` refuses
+binaries that are stale or don't match the pin.
 
 Shared foamy components (translations, IPC, style tokens) live in `kit/`, copied
 from [foamy-kit](https://github.com/foamrider/foamy-kit); `tests/kit-check.sh`
@@ -263,18 +308,27 @@ verifies they are unedited.
 
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
-folder, including populated artwork and icon fallbacks. Artwork tests exercise
+folder, including populated artwork and icon fallbacks; set `FOAMY_RENDER_OUT` to
+a directory to keep a copy. It is hermetic: a temporary home and config, English
+unless `--language CODE` picks another Omarchy language, whatever the desktop uses;
+it also checks that the unlock hint is never truncated or clipped. `preview.png` is the first
+1920 × 1080 capture with `artworkPath` cleared: the offscreen software renderer
+draws no masked artwork, so the screenshot shows the music icon. Artwork tests exercise
 the real sandbox with small synthetic images, a local TLS fixture, URL and file
 restrictions, byte and decoder limits, caching, cancellation, and stale results.
 They require host support for unprivileged namespaces and a private session bus;
 a restricted agent/container sandbox may prevent these even when the desktop
 supports them. The runtime test uses an isolated home and session bus with simulated
 PAM and session-lock objects; it does not lock the desktop or authenticate a user.
+It runs the real helper against a temporary wallpaper link: relative and retargeted
+links, touched and rewritten files, dangling links, directories and a missing helper.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
 
-For a second host-version check, set `FOAMY_TEST_COMMONS` to that Omarchy source
-tree's `shell/Commons` directory when running `tests/runtime.py` and `tests/render.py`.
+`tests/runtime.py` and `tests/render.py` run on Omarchy 4.5: `FOAMY_HOST_45` (a
+`shell` directory), else `$OMARCHY_TEST_ROOT/shell`, else the installed
+`/usr/share/omarchy/shell`. `--host 4.0` and `--host both` run 4.0 only when
+`FOAMY_HOST_40` names a 4.0 shell; otherwise they print a SKIP line for it.
 The runtime suite supplies both PAM-file fixtures and simulated authentication;
 it does not require an enrolled fingerprint or change the host session.
 
@@ -304,7 +358,7 @@ Licensed under [MIT](LICENSE), with the upstream [Omarchy notice](LICENSE-OMARCH
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5, including
 right-to-left layout for right-to-left languages (media transport buttons keep their
-order). Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin
-in English. Missing translations fall back to English.
+order). Plugin language overrides are no longer used.
+Missing translations fall back to English.
 
-Translation checks: `python3 tests/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.
+Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed 4.5 shell. Set `OMARCHY_PATH` to another Omarchy tree to check that one.
