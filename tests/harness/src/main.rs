@@ -4,6 +4,7 @@
 //! ```text
 //! foamy-lock-harness render [--host 4.5|4.0|both] [--language CODE]
 //! foamy-lock-harness parity [--host 4.5|4.0|both] [--baseline REV]
+//! foamy-lock-harness runtime [--host 4.5|4.0|both]
 //! ```
 //!
 //! `render` drives the real LockView through wide, narrow, failure, busy,
@@ -20,7 +21,14 @@
 //! the same fonts in the same run, so the result doesn't depend on which
 //! fonts the machine has. It needs the plugin's git history for the baseline.
 //!
-//! Hosts follow the Python tests (tests/hosts.py): 4.5 is `FOAMY_HOST_45`,
+//! `runtime` runs the real Service.qml with a simulated session lock, PAM and
+//! view, stand-in desktop commands, a fake Omarchy tree and shell.json, and
+//! drives it over `quickshell ipc` (hermetic HOME, runtime dir and session
+//! bus): settings reloads and errors, the stock-lock conflict, the avatar and
+//! wallpaper helpers, password and fingerprint flows, blanking, stranded-lock
+//! recovery and, on 4.5, the IpcRegistry route. It never locks the desktop.
+//!
+//! Hosts: 4.5 is `FOAMY_HOST_45`,
 //! else `$OMARCHY_TEST_ROOT/shell`, else `/usr/share/omarchy/shell`; 4.0 runs
 //! only when `FOAMY_HOST_40` names a 4.0 shell directory.
 
@@ -29,6 +37,7 @@ mod host;
 mod parity;
 mod png;
 mod render;
+mod runtime;
 
 use std::process::ExitCode;
 
@@ -37,8 +46,9 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("render") => render::run(&args[1..]),
         Some("parity") => parity::run(&args[1..]),
+        Some("runtime") => runtime::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness runtime [--host {hosts}]",
             hosts = host::CHOICES.join("|")
         )),
     };

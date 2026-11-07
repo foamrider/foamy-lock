@@ -1,4 +1,4 @@
-//! Host shells and the hermetic environment, as in tests/hosts.py.
+//! Host shells and the hermetic environment for the offscreen tests.
 
 use std::path::{Path, PathBuf};
 

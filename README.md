@@ -271,7 +271,7 @@ FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest disco
 python3 -I -B tests/artwork_runtime.py
 bash tests/harness.sh render                  # --language no renders in Norwegian
 bash tests/harness.sh parity                  # geometry against 1.2.0 (needs the git history)
-python3 -I -B tests/runtime.py
+bash tests/harness.sh runtime                 # service, PAM, fingerprint, wallpaper and IPC flows
 bash tests/kit-check.sh
 ```
 
@@ -312,10 +312,11 @@ and places the elements in `elements/` (date, clock, account, password field,
 media, status), which only draw what the view gives them. The render and parity
 tests replace those data sources in `LockView.qml` alone.
 
-The render and parity tests run through `tests/harness.sh`, which builds and
-runs `tests/harness`: a development-only Rust crate (std only, its own workspace,
-so the helper's `native.pin` doesn't cover it; built under `~/.cache/foamy-native`,
-never inside the plugin; `cargo test` covers its own PNG and argument helpers).
+The render, parity and runtime tests run through `tests/harness.sh`, which builds and
+runs `tests/harness`: a development-only Rust crate (std only apart from `serde_json`
+for the runtime test's status replies, its own workspace, so the helper's `native.pin`
+doesn't cover it; built under `~/.cache/foamy-native`, never inside the plugin;
+`cargo test` covers its own PNG, argument, Service.qml patch and JSON helpers).
 
 The parity test renders the current view next to 1.2.0's `LockView.qml` (from git) with the same synthetic
 data, and compares the position, size, visibility, text and font size of every
@@ -336,14 +337,16 @@ the real sandbox with small synthetic images, a local TLS fixture, URL and file
 restrictions, byte and decoder limits, caching, cancellation, and stale results.
 They require host support for unprivileged namespaces and a private session bus;
 a restricted agent/container sandbox may prevent these even when the desktop
-supports them. The runtime test uses an isolated home and session bus with simulated
-PAM and session-lock objects; it does not lock the desktop or authenticate a user.
+supports them. The runtime test runs the real `Service.qml` with an isolated home,
+runtime directory and session bus, simulated PAM, session-lock and view objects, and
+stand-in desktop commands, and drives it over `quickshell ipc`; it does not lock the
+desktop or authenticate a user.
 It runs the real helper against a temporary wallpaper link: relative and retargeted
 links, touched and rewritten files, dangling links, directories and a missing helper.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle
 still require supervised validation after installation.
 
-`tests/runtime.py` and the harness tests run on Omarchy 4.5: `FOAMY_HOST_45` (a
+The harness tests run on Omarchy 4.5: `FOAMY_HOST_45` (a
 `shell` directory), else `$OMARCHY_TEST_ROOT/shell`, else the installed
 `/usr/share/omarchy/shell`. `--host 4.0` and `--host both` run 4.0 only when
 `FOAMY_HOST_40` names a 4.0 shell; otherwise they print a SKIP line for it.

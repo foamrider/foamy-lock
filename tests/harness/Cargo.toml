@@ -10,5 +10,6 @@ description = "Development-only offscreen test harness for foamy-lock (not shipp
 # helper's build input, hashed into native/native.pin; this crate stays out of it.
 [workspace]
 
-# No dependencies: std only.
+# Otherwise std only: serde_json reads the runtime test's `lock status` replies.
 [dependencies]
+serde_json = "1"
