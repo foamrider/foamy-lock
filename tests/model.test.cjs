@@ -7,7 +7,8 @@ test('defaults and all documented settings', () => {
   assert.deepEqual(Model.parseConfig(config()).settings, Model.defaults())
   const custom = {...Model.defaults(), timeFormat: '12h', showUserInfo: false, showMedia: false, blankAfterSec: null,
     showArtwork: false, artworkHosts: ['images.example.com'], artworkFileRoots: ['/tmp/album-covers']}
-  assert.deepEqual(Model.parseConfig(config(custom)), {valid: true, settings: custom, error: '', stockLockEnabled: true})
+  assert.deepEqual(Model.parseConfig(config(custom)), {valid: true, settings: custom, error: '', stockLockEnabled: true,
+    entry: {id: 'foamy.lock', ...custom}})
   assert.equal(Model.parseConfig(config({blankAfterSec: 2147483})).valid, true)
 })
 
@@ -28,6 +29,19 @@ test('invalid configuration returns an error without replacement preferences', (
     ...[0, -1, 1.5, '30', false, 2147484].map(blankAfterSec => ({blankAfterSec}))]) {
     assert.equal(Model.parseConfig(config(settings)).valid, false, JSON.stringify(settings))
   }
+})
+
+test('the foamy.lock entry is returned for the look keys, even when a setting is invalid', () => {
+  const look = {preset: 'corner', layout: {media: {hidden: true}}}
+  assert.deepEqual(Model.parseConfig(config(look)).entry, {id: 'foamy.lock', ...look})
+  const invalid = Model.parseConfig(config({...look, timeFormat: 'system'}))
+  assert.equal(invalid.valid, false)
+  assert.deepEqual(invalid.entry, {id: 'foamy.lock', ...look, timeFormat: 'system'})
+  for (const source of ['{', JSON.stringify({version: 1, plugins: []}),
+    JSON.stringify({version: 1, plugins: [{id: 'foamy.lock'}, {id: 'foamy.lock'}]})])
+    assert.equal(Model.parseConfig(source).entry, null, source)
+  // Look keys are not settings: they never invalidate or appear in them.
+  assert.deepEqual(Model.parseConfig(config({preset: 'nonsense'})).settings, Model.defaults())
 })
 
 test('artwork keys distinguish tracks and bound untrusted metadata', () => {

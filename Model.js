@@ -21,7 +21,13 @@ function stockLockEnabled(config) {
     && config.disabledPlugins.indexOf("omarchy.lock") !== -1)
 }
 
+// Returns { valid, settings, error, stockLockEnabled, entry }. `entry` is the
+// foamy.lock entry whenever the file has exactly one, even when a setting in
+// it is invalid: the look keys in it (Layout.parseLook) are validated on
+// their own, so a mistake there never resets these settings, and the other
+// way round.
 function parseConfig(text) {
+  var entry = null
   try {
     var config = JSON.parse(text)
     if (!config || config.version !== 1 || !Array.isArray(config.plugins))
@@ -30,6 +36,7 @@ function parseConfig(text) {
       return entry && entry.id === "foamy.lock"
     })
     if (entries.length !== 1) throw new Error("Keep exactly one foamy.lock entry in plugins")
+    entry = entries[0]
     var settings = defaults()
     for (var key in settings) {
       if (entries[0][key] !== undefined) settings[key] = entries[0][key]
@@ -59,9 +66,9 @@ function parseConfig(text) {
     if (timeout !== null && (typeof timeout !== "number" || !isFinite(timeout)
         || Math.floor(timeout) !== timeout || timeout < 1 || timeout > 2147483))
       throw new Error("blankAfterSec must be null or an integer from 1 to 2147483")
-    return { valid: true, settings: settings, error: "", stockLockEnabled: stockLockEnabled(config) }
+    return { valid: true, settings: settings, error: "", stockLockEnabled: stockLockEnabled(config), entry: entry }
   } catch (error) {
-    return { valid: false, settings: null, error: String(error.message || error), stockLockEnabled: null }
+    return { valid: false, settings: null, error: String(error.message || error), stockLockEnabled: null, entry: entry }
   }
 }
 
