@@ -1,7 +1,8 @@
 //! Sources and the cache: artwork.py's `read_local`, `read_avatar`,
-//! `prepare` and `prepare_avatar`. Files are read as bounded snapshots;
-//! thumbnails are staged in a private job directory and renamed into the
-//! cache, which keeps at most `MAX_CACHE` thumbnails.
+//! `prepare` and `prepare_avatar`, and `prepare_background`. Files are read
+//! as bounded snapshots; thumbnails are staged in a private job directory
+//! and renamed into the cache, which keeps at most `MAX_CACHE` thumbnails
+//! (and `MAX_BACKGROUNDS` backgrounds).
 
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -18,9 +19,11 @@ use rustix::process::getuid;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::{Fail, MAX_AVATAR_INPUT, MAX_INPUT, fetch, image, state, url};
+use crate::{Fail, MAX_AVATAR_INPUT, MAX_BACKGROUND_INPUT, MAX_INPUT, fetch, image, state, url};
 
 const MAX_CACHE: usize = 16;
+/// Backgrounds are screen-sized (up to ~95 MiB each as a stored PNG).
+const MAX_BACKGROUNDS: usize = 4;
 const NAME_CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789_";
 
 /// `str(pathlib.Path(text))`: repeated and trailing slashes and `.`
@@ -297,24 +300,46 @@ fn read_local(parts: &url::Parsed, roots: &[String]) -> Result<Vec<u8>, Fail> {
 /// AccountsService record or ~/.face, so symlinks and root-owned icons are
 /// allowed; special files and inputs over `MAX_AVATAR_INPUT` are not.
 fn read_avatar(path: Option<&Value>) -> Result<Vec<u8>, Fail> {
-    let path = match path {
+    read_picture(
+        path,
+        MAX_AVATAR_INPUT,
+        "invalid-avatar-path",
+        "avatar-missing",
+    )
+}
+
+/// An absolute path of at most 4096 characters without NUL.
+fn picture_path(path: Option<&Value>) -> Option<&str> {
+    match path {
         Some(Value::String(path))
             if path.starts_with('/') && path.chars().count() <= 4096 && !path.contains('\0') =>
         {
-            path
+            Some(path)
         }
-        _ => return Err(Fail("invalid-avatar-path")),
-    };
+        _ => None,
+    }
+}
+
+/// A user-chosen picture (`read_avatar`'s rules): symlinks and root-owned
+/// files are allowed, a regular file of at most `limit` bytes is required.
+/// A bad path is `invalid`, a missing file (or dangling link) `missing`.
+fn read_picture(
+    path: Option<&Value>,
+    limit: usize,
+    invalid: &'static str,
+    missing: &'static str,
+) -> Result<Vec<u8>, Fail> {
+    let path = picture_path(path).ok_or(Fail(invalid))?;
     let fd = match rustix::fs::open(
-        path.as_str(),
+        path,
         OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
     ) {
         Ok(fd) => fd,
-        Err(rustix::io::Errno::NOENT) => return Err(Fail("avatar-missing")),
+        Err(rustix::io::Errno::NOENT) => return Err(Fail(missing)),
         Err(error) => return Err(io::Error::from(error).into()),
     };
-    snapshot(fd, MAX_AVATAR_INPUT, false, "not-regular-file")
+    snapshot(fd, limit, false, "not-regular-file")
 }
 
 /// One label of `HOST`: 1-63 of `[a-z0-9-]`, alphanumeric at both ends,
@@ -389,7 +414,7 @@ fn reclaim_jobs(cache: &Path) -> Result<(), Fail> {
     Ok(())
 }
 
-fn prune(cache: &Path) -> Result<(), Fail> {
+fn prune(cache: &Path, keep: usize) -> Result<(), Fail> {
     let mut entries = Vec::new();
     for entry in fs::read_dir(cache)? {
         let entry = entry?;
@@ -399,7 +424,7 @@ fn prune(cache: &Path) -> Result<(), Fail> {
         }
     }
     entries.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    for (_, path) in entries.iter().skip(MAX_CACHE) {
+    for (_, path) in entries.iter().skip(keep) {
         fs::remove_file(path)?;
     }
     Ok(())
@@ -440,7 +465,7 @@ pub fn prepare(request: &serde_json::Map<String, Value>) -> Result<Value, Fail> 
     let target = cache.join(&name);
     staging.publish("thumbnail.png", &encoded, &target)?;
     staging.finish()?;
-    prune(&cache)?;
+    prune(&cache, MAX_CACHE)?;
     Ok(json!({"ok": true, "path": path_text(&target)}))
 }
 
@@ -468,6 +493,43 @@ pub fn prepare_avatar(request: &serde_json::Map<String, Value>) -> Result<Value,
     let target = directory.join("avatar.png");
     staging.publish("avatar.png", &encoded, &target)?;
     staging.finish()?;
+    Ok(json!({"ok": true, "path": path_text(&target)}))
+}
+
+/// A lock-screen background as `<cache>/background/<sha256>.png`: the
+/// picture at `path` cover-scaled to `width` x `height`, optionally blurred.
+pub fn prepare_background(request: &serde_json::Map<String, Value>) -> Result<Value, Fail> {
+    prepare_background_in(&lock_cache(), request)
+}
+
+fn prepare_background_in(
+    root: &Path,
+    request: &serde_json::Map<String, Value>,
+) -> Result<Value, Fail> {
+    let background = image::Background::parse(request)?;
+    let data = read_picture(
+        request.get("path"),
+        MAX_BACKGROUND_INPUT,
+        "invalid-background-path",
+        "background-missing",
+    )?;
+    // The artwork cache's rules, in a directory of its own.
+    let cache = root.join("background");
+    checked_dir(&cache, true)?;
+    let _lock = FileLock::try_exclusive(&cache.join(".lock"))?.ok_or(Fail("cache-busy"))?;
+    reclaim_jobs(&cache)?;
+    let staging = Staging::create(&cache, ".job-")?;
+    let encoded = image::encode_rgb(
+        background.width,
+        background.height,
+        &image::decode_background(&data, &staging, &background)?,
+    )?;
+    drop(data);
+    let name = format!("{:x}.png", Sha256::digest(&encoded));
+    let target = cache.join(&name);
+    staging.publish("background.png", &encoded, &target)?;
+    staging.finish()?;
+    prune(&cache, MAX_BACKGROUNDS)?;
     Ok(json!({"ok": true, "path": path_text(&target)}))
 }
 
@@ -538,5 +600,279 @@ mod tests {
             "0F".repeat(32)
         ))));
         assert!(!is_thumbnail_name(OsStr::new("a.png")));
+    }
+
+    /// A fresh private directory under the system temp dir.
+    fn scratch() -> PathBuf {
+        let dir = std::env::temp_dir().join(random_name("foamy-lock-test-").unwrap());
+        fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();
+        dir
+    }
+
+    fn request(value: Value) -> serde_json::Map<String, Value> {
+        value.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn picture_paths_are_absolute_bounded_strings() {
+        let text = |path: &str| Value::String(path.into());
+        assert_eq!(picture_path(Some(&text("/a.png"))), Some("/a.png"));
+        let long = format!("/{}", "é".repeat(4095));
+        assert_eq!(picture_path(Some(&text(&long))), Some(long.as_str()));
+        for bad in [
+            text("relative.png"),
+            text(""),
+            text("/tmp/\0"),
+            text(&format!("/{}", "a".repeat(4096))),
+            json!(5),
+            json!(null),
+            json!(["/a.png"]),
+        ] {
+            assert_eq!(picture_path(Some(&bad)), None, "{bad}");
+        }
+        assert_eq!(picture_path(None), None);
+    }
+
+    #[test]
+    fn background_sources_follow_the_avatar_rules() {
+        let dir = scratch();
+        let read = |path: &Path| {
+            read_picture(
+                Some(&Value::String(path_text(path))),
+                MAX_BACKGROUND_INPUT,
+                "invalid-background-path",
+                "background-missing",
+            )
+        };
+        let file = dir.join("wall.png");
+        fs::write(&file, b"picture").unwrap();
+        std::os::unix::fs::symlink(&file, dir.join("link")).unwrap();
+        std::os::unix::fs::symlink(dir.join("gone"), dir.join("dangling")).unwrap();
+        let fifo = dir.join("fifo");
+        rustix::fs::mknodat(
+            rustix::fs::CWD,
+            &fifo,
+            FileType::Fifo,
+            Mode::from_raw_mode(0o600),
+            0,
+        )
+        .unwrap();
+        let exact = dir.join("exact");
+        File::create(&exact)
+            .unwrap()
+            .set_len(MAX_BACKGROUND_INPUT as u64)
+            .unwrap();
+        let large = dir.join("large");
+        File::create(&large)
+            .unwrap()
+            .set_len(MAX_BACKGROUND_INPUT as u64 + 1)
+            .unwrap();
+        assert_eq!(read(&file).unwrap(), b"picture");
+        assert_eq!(read(&dir.join("link")).unwrap(), b"picture");
+        assert_eq!(read(&exact).unwrap().len(), MAX_BACKGROUND_INPUT);
+        for (path, code) in [
+            (dir.join("gone"), "background-missing"),
+            (dir.join("dangling"), "background-missing"),
+            (fifo, "not-regular-file"),
+            (dir.clone(), "not-regular-file"),
+            (large, "input-too-large"),
+        ] {
+            assert_eq!(read(&path).unwrap_err().0, code, "{path:?}");
+        }
+        for path in [json!("wall.png"), json!(1), json!(null)] {
+            let body = request(json!({"path": path, "width": 64, "height": 36, "blur": 0}));
+            assert_eq!(
+                prepare_background_in(&dir, &body).unwrap_err().0,
+                "invalid-background-path"
+            );
+        }
+        let body = request(json!({"width": 64, "height": 36, "blur": 0}));
+        assert_eq!(
+            prepare_background_in(&dir, &body).unwrap_err().0,
+            "invalid-background-path"
+        );
+        // The size and blur are checked before the file is opened.
+        let missing = path_text(&dir.join("gone"));
+        for (body, code) in [
+            (
+                json!({"path": missing, "width": 8, "height": 36, "blur": 0}),
+                "invalid-size",
+            ),
+            (
+                json!({"path": missing, "width": 64, "height": 36, "blur": 2}),
+                "invalid-request",
+            ),
+            (
+                json!({"path": missing, "width": 64, "height": 36, "blur": 0}),
+                "background-missing",
+            ),
+        ] {
+            assert_eq!(
+                prepare_background_in(&dir, &request(body)).unwrap_err().0,
+                code
+            );
+        }
+        // Nothing was created for refused requests.
+        assert!(!dir.join("background").exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn background_cache_is_private_and_locked() {
+        let dir = scratch();
+        let source = dir.join("wall.png");
+        fs::write(&source, image::encode_rgb(2, 2, &[0; 12]).unwrap()).unwrap();
+        let body =
+            request(json!({"path": path_text(&source), "width": 64, "height": 36, "blur": 0}));
+        let cache = dir.join("background");
+        fs::DirBuilder::new().mode(0o755).create(&cache).unwrap();
+        fs::set_permissions(&cache, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(
+            prepare_background_in(&dir, &body).unwrap_err().0,
+            "unsafe-cache"
+        );
+        fs::set_permissions(&cache, fs::Permissions::from_mode(0o700)).unwrap();
+        let held = FileLock::try_exclusive(&cache.join(".lock"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            prepare_background_in(&dir, &body).unwrap_err().0,
+            "cache-busy"
+        );
+        drop(held);
+        fs::remove_dir_all(&cache).unwrap();
+        std::os::unix::fs::symlink(&dir, &cache).unwrap();
+        assert_eq!(
+            prepare_background_in(&dir, &body).unwrap_err().0,
+            "unsafe-cache"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn prune_keeps_the_newest() {
+        let dir = scratch();
+        let names: Vec<String> = (0..6)
+            .map(|i| format!("{}.png", format!("{i:x}").repeat(64)))
+            .collect();
+        for (age, name) in names.iter().enumerate() {
+            let file = File::create(dir.join(name)).unwrap();
+            let time = SystemTime::now() - Duration::from_secs(100 * age as u64);
+            file.set_times(fs::FileTimes::new().set_modified(time))
+                .unwrap();
+        }
+        fs::write(dir.join("other.png"), b"").unwrap();
+        prune(&dir, MAX_BACKGROUNDS).unwrap();
+        let mut left: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        let mut expected: Vec<String> = names[..4].to_vec();
+        expected.push("other.png".into());
+        expected.sort();
+        assert_eq!(left, expected);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// bubblewrap with namespaces, ImageMagick and a seccomp architecture.
+    fn real_sandbox() -> bool {
+        Path::new("/usr/bin/magick").is_file()
+            && foamy_helper::sandbox::BpfFilter::decoder().is_ok()
+            && std::process::Command::new("/usr/bin/bwrap")
+                .args([
+                    "--unshare-all",
+                    "--die-with-parent",
+                    "--ro-bind",
+                    "/usr",
+                    "/usr",
+                    "--symlink",
+                    "usr/lib",
+                    "/lib",
+                    "--symlink",
+                    "usr/lib",
+                    "/lib64",
+                    "--symlink",
+                    "usr/bin",
+                    "/bin",
+                    "--proc",
+                    "/proc",
+                    "--dev",
+                    "/dev",
+                    "--",
+                    "/usr/bin/true",
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+    }
+
+    #[test]
+    fn background_decodes_in_the_real_sandbox() {
+        if !real_sandbox() {
+            eprintln!("skipped: needs bubblewrap with namespaces and ImageMagick");
+            return;
+        }
+        let dir = scratch();
+        // A 120x80 checkerboard (so a blur changes it), as a PNG.
+        let (width, height) = (120, 80);
+        let mut pixels = Vec::new();
+        for y in 0..height {
+            for x in 0..width {
+                let on = (x / 4 + y / 4) % 2 == 0;
+                pixels.extend_from_slice(if on { &[250, 40, 10] } else { &[10, 60, 240] });
+            }
+        }
+        let input = image::encode_rgb(width, height, &pixels).unwrap();
+        let source = dir.join("wall.png");
+        fs::write(&source, &input).unwrap();
+        std::os::unix::fs::symlink(&source, dir.join("link")).unwrap();
+        let mut outputs = Vec::new();
+        for blur in [0.0, 0.5] {
+            let body = request(json!({
+                "kind": "background",
+                "path": path_text(&dir.join("link")),
+                "width": 64,
+                "height": 36,
+                "blur": blur,
+            }));
+            let reply = prepare_background_in(&dir, &body).unwrap();
+            assert_eq!(reply["ok"], json!(true));
+            let path = PathBuf::from(reply["path"].as_str().unwrap());
+            assert_eq!(path.parent().unwrap(), dir.join("background"));
+            assert!(is_thumbnail_name(path.file_name().unwrap()));
+            let png = fs::read(&path).unwrap();
+            assert_eq!(
+                path.file_name().unwrap().to_str().unwrap(),
+                format!("{:x}.png", Sha256::digest(&png))
+            );
+            assert_eq!(fs::metadata(&path).unwrap().mode() & 0o777, 0o600);
+            assert_eq!(&png[..8], image::PNG_MAGIC);
+            assert_eq!(&png[16..24], &[0, 0, 0, 64, 0, 0, 0, 36]);
+            let rows = 36 * (64 * 3 + 1);
+            assert_eq!(png.len(), 8 + 25 + 12 + 2 + 5 + rows + 4 + 12);
+            assert_ne!(png, input);
+            outputs.push(png);
+        }
+        assert_ne!(outputs[0], outputs[1]);
+        let cache = dir.join("background");
+        assert_eq!(fs::metadata(&cache).unwrap().mode() & 0o777, 0o700);
+        let mut left: Vec<String> = fs::read_dir(&cache)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left.len(), 3, "{left:?}"); // two backgrounds and .lock
+        assert_eq!(left[0], ".lock");
+        // An animated or foreign input is refused before the sandbox.
+        fs::write(&source, b"GIF89a").unwrap();
+        let body =
+            request(json!({"path": path_text(&source), "width": 64, "height": 36, "blur": 0}));
+        assert_eq!(
+            prepare_background_in(&dir, &body).unwrap_err().0,
+            "unsupported-format"
+        );
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

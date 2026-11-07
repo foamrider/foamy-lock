@@ -20,8 +20,9 @@ font. A theme that styles the stock lock (`[lock]` colours in `shell.toml`: `tex
 `placeholder`, `background`, `border`, `selection`, `text-error`, `border-error`)
 recolours the glass; without those entries the lock keeps its white-on-glass look.
 
-Artwork and the avatar thumbnail additionally use ImageMagick 7 and Bubblewrap
-with unprivileged namespaces and seccomp support. They are prepared by the plugin's
+Artwork, the avatar thumbnail and background pictures additionally use ImageMagick
+7 and Bubblewrap with unprivileged namespaces and seccomp support. They are
+prepared by the plugin's
 bundled helper, `bin/<arch>/foamy-lock-helper` (static binaries for x86-64 and
 AArch64 Linux; no Python or other runtime). Remote artwork over HTTPS also needs a
 CPU with AES and carry-less multiplication instructions (on x86-64 also AVX2, BMI2
@@ -348,6 +349,38 @@ can indicate a rejected image, a resource limit, or unavailable sandbox support.
 `helper-unavailable` means there is no helper binary for this CPU; artwork then
 stays on the music icon and no helper is started again until the shell reloads.
 
+### Background picture preparation
+
+Background pictures (the look's `picture` source) are
+prepared by the same helper and sandbox as artwork (`foamy-lock-helper artwork`
+with the request `{"kind": "background", "path": "/absolute/path", "width": W, "height": H, "blur": B}`;
+the full contract is at the top of `native/src/main.rs`). The path may be a symlink
+or root-owned, like Omarchy's theme wallpapers, but must be a regular static PNG,
+JPEG or WebP file. The sandbox returns exactly W × H RGB pixels, cover-scaled and
+centre-cropped like Qt's `PreserveAspectCrop`; the helper checks their length and
+writes a minimal PNG, so no source metadata or compressed data reaches the lock.
+Blur 0 is none; otherwise it is a Gaussian with a sigma of B × min(W, H) / 40
+pixels (27 px at full blur on a 1080-pixel-high screen), computed at a reduced
+scale and scaled back up. Large JPEGs are decoded at a reduced scale that still
+covers the screen.
+
+| Boundary | Limit |
+| --- | --- |
+| Input | 32 MiB |
+| Output (the screen in logical pixels) | 16 to 7680 wide, 16 to 4320 high |
+| Source | 16384 pixels a side, under 64 megapixels |
+| Decoder (P = W × H) | 768 MiB + 32 bytes × P address space (about 1.7 GiB at 7680 × 4320); 2 CPU seconds + 1 per started 3840 × 2160 of P (3 to 6); 1 more wall-clock second |
+| Result | W × H RGB; a stored PNG of about W × H × 3 bytes (24 MiB at 3840 × 2160) |
+| Cached backgrounds | 4 files, newest kept |
+
+Very large screens on slow CPUs can reach the decoder or 9-second job limit
+(`decode-timeout`, `job-timeout`). Results are kept in a private directory,
+`$XDG_CACHE_HOME/omarchy/foamy.lock/background` (or
+`~/.cache/omarchy/foamy.lock/background`), as `<sha256>.png`, under the same
+ownership, permission, locking and staging rules as the artwork cache. Its own
+error codes are `invalid-size` (width or height), `invalid-background-path` and
+`background-missing`; a blur outside 0 to 1 is `invalid-request`.
+
 ## Validation
 
 ```sh
@@ -369,7 +402,9 @@ request/reply contract, the exact Bubblewrap command line, environment, rlimits,
 inherited descriptors, policy and seccomp program (through stand-in `bwrap` and
 `magick` scripts in an outer Bubblewrap namespace), HTTPS against a local TLS
 server, and the real sandbox. It also covers the `wallpaper` subcommand (link chains,
-touches, rewrites and failures against `readlink -f`). `FOAMY_HELPER` selects another
+touches, rewrites and failures against `readlink -f`). The `background` job's request
+checks, limits, PNG writer and a real-sandbox decode are Rust unit tests in `native/`
+(run by `build-native.sh --test`). `FOAMY_HELPER` selects another
 build; the aarch64 binary runs through qemu binfmt, which has no seccomp, so its
 real-sandbox tests are skipped. The HTTPS tests use the helper's test-only `FOAMY_LOCK_TEST_RESOLVE`
 and `FOAMY_LOCK_TEST_CONNECT` overrides (documented in `native/src/main.rs`; the

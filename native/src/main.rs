@@ -1,8 +1,9 @@
 //! `foamy-lock-helper`: bounded lock-screen artwork and the account avatar
-//! thumbnail, and the wallpaper probe. Replaces `artwork.py`; carries over
-//! every bound on purpose. Original images never enter the shell: both go
-//! through the same sandboxed decoder and come back as a freshly encoded
-//! 256x256 PNG.
+//! thumbnail, the lock-screen background, and the wallpaper probe. Replaces
+//! `artwork.py`; carries over every bound on purpose. Original images never
+//! enter the shell: all go through the same sandboxed decoder and come
+//! back as a freshly encoded PNG (256x256, or the screen's size for a
+//! background).
 //!
 //! # Contract
 //!
@@ -24,14 +25,16 @@
 //!   error (such as a permission) `source-unavailable`. Exit status 0;
 //!   stderr nothing. The caller bounds it with `timeout`.
 //!
-//! The rest of this contract is `artwork`'s:
+//! The rest of this contract is `artwork`'s (all three request kinds):
 //!
 //! - **stdin**: one JSON object on one line; the line, newline included, is
 //!   at most 32768 bytes (more: `invalid-request`). Bytes after the first
 //!   newline are ignored. Not JSON (or no input): `source-unavailable`; not
 //!   an object: `invalid-request`.
 //!   - artwork: `{"url": "<file:… or https:…>", "hosts": [...], "roots": [...]}`;
-//!   - avatar: `{"kind": "avatar", "path": "/absolute/path"}`.
+//!   - avatar: `{"kind": "avatar", "path": "/absolute/path"}`;
+//!   - background: `{"kind": "background", "path": "/absolute/path",
+//!     "width": W, "height": H, "blur": B}`.
 //! - **stdout**: exactly one JSON line, `{"ok": true, "path": "<file>"}` or
 //!   `{"ok": false, "error": "<code>"}`, also on cancel and timeout. A code
 //!   never contains a URL, path or decoder message. Exit status 0 (101 only
@@ -47,7 +50,8 @@
 //!   `animated-image`, `decoder-unavailable`,
 //!   `sandbox-architecture-unsupported`, `decode-failed`, `decode-timeout`,
 //!   `invalid-pixels`, `unsafe-cache`, `cache-busy`, `invalid-avatar-path`,
-//!   `avatar-missing`, `not-regular-file`, `cancelled`, `job-timeout`,
+//!   `avatar-missing`, `invalid-background-path`, `background-missing`,
+//!   `invalid-size`, `not-regular-file`, `cancelled`, `job-timeout`,
 //!   `parent-watch-failed`, `timeout`, `source-unavailable`,
 //!   `helper-failed`.
 //! - **Options**: `hosts` at most 32 lowercase DNS names (at least two
@@ -73,6 +77,21 @@
 //!   `MAX_INPUT` bytes (Content-Length checked first).
 //! - **Avatar**: the path may be a symlink or root-owned; a regular file of
 //!   at most 16 MiB.
+//! - **Background**: checked in this order: `width` and `height` integers
+//!   from 16 to 7680 and 16 to 4320 (the screen in logical pixels; else
+//!   `invalid-size`), `blur` a number from 0 to 1 (else `invalid-request`),
+//!   `path` as for the avatar (absolute, at most 4096 characters, no NUL,
+//!   else `invalid-background-path`; missing or dangling
+//!   `background-missing`) but a regular file of at most 32 MiB. The
+//!   output is exactly W x H, cover-scaled and centre-cropped (`-resize
+//!   WxH^ -gravity center -extent WxH`, Qt's `PreserveAspectCrop`), alpha
+//!   over `#171b26`. Blur 0 is none; otherwise a Gaussian of sigma
+//!   `B x min(W, H) / 40` output pixels (27 px at 1 on a 1080-pixel-high
+//!   screen), computed at a reduced scale `min(1/2, 2/sigma)` (sigma
+//!   scaled alike) and scaled back with a triangle filter. A JPEG whose
+//!   frame header shows both sides above max(W, H) is decoded with
+//!   `jpeg:size=SxS`, S = max(W, H) (a DCT-scaled decode that still covers
+//!   the screen in any orientation).
 //! - **Decoder**: static PNG, JPEG and WebP only. `/usr/bin/magick` in
 //!   `/usr/bin/bwrap` (see `image::command`: every namespace unshared,
 //!   capabilities dropped, new session, read-only `/usr`, the private
@@ -83,7 +102,14 @@
 //!   on aarch64 `mount`, `unshare`, `ptrace`, `clone`, `setns`, `bpf`,
 //!   `clone3`). Limits: 256 MiB address space, 2 s CPU, files up to the
 //!   pixel size, no core dumps, 64 fds, a 3 s deadline and exactly 196608
-//!   bytes (256x256 RGB) of output. Environment `PATH=/usr/bin`; stdin
+//!   bytes (256x256 RGB) of output. A background (P = W x H pixels) has
+//!   768 MiB + 32 x P bytes of address space (1781 MiB at 7680x4320),
+//!   2 s + 1 s per started 3840x2160 of P of CPU (3 to 6 s), that plus 1 s of
+//!   deadline (4 to 7 s, inside the job's 9 s), files up to and exactly
+//!   W x H x 3 bytes of output; its policy is `image::POLICY` with sources
+//!   up to 16384 pixels a side and under 64 megapixels (`area`), memory
+//!   128 MiB under the address space and `time` the CPU seconds
+//!   (`Background::policy`). Environment `PATH=/usr/bin`; stdin
 //!   /dev/null; an empty signal mask; no descriptor but the filter is
 //!   inherited (all inherited descriptors are made close-on-exec at start).
 //! - **Files**: `$XDG_CACHE_HOME` (unset or empty: `$HOME/.cache`)
@@ -91,9 +117,14 @@
 //!   other access, else `unsafe-cache`; lock `artwork/.lock`, `flock`
 //!   without waiting, else `cache-busy`), thumbnails
 //!   `artwork/<sha256 of the PNG>.png` (0600, at most 16 kept, newest by
-//!   mtime), `avatar.png` (0600). Jobs stage in `artwork/.job-XXXXXXXX` or
-//!   `.avatar-XXXXXXXX` (0700, removed afterwards); abandoned `.job-*`
-//!   directories are removed under the lock, `.avatar-*` ones after 60 s.
+//!   mtime), `avatar.png` (0600), `background/` (the same rules as
+//!   `artwork/`: 0700, this user's, else `unsafe-cache`; lock
+//!   `background/.lock`, else `cache-busy`) with backgrounds
+//!   `background/<sha256 of the PNG>.png` (0600, at most 4 kept, newest by
+//!   mtime). Jobs stage in `artwork/.job-XXXXXXXX`,
+//!   `background/.job-XXXXXXXX` or `.avatar-XXXXXXXX` (0700, removed
+//!   afterwards); abandoned `.job-*` directories are removed under their
+//!   lock, `.avatar-*` ones after 60 s.
 //! - **Lifetime**: `PR_SET_PDEATHSIG(SIGTERM)`; a parent that already left
 //!   is `cancelled`. SIGTERM replies `cancelled`, SIGALRM or 9 s in total
 //!   `job-timeout`; the job directory is removed and the decoder (which
@@ -128,6 +159,8 @@ mod wallpaper;
 pub const MAX_INPUT: usize = 5 * 1024 * 1024;
 /// Account pictures are often camera photos, larger than track artwork.
 pub const MAX_AVATAR_INPUT: usize = 16 * 1024 * 1024;
+/// Lock-screen backgrounds: wallpapers and full-size photos.
+pub const MAX_BACKGROUND_INPUT: usize = 32 * 1024 * 1024;
 const MAX_REQUEST: usize = 32768;
 const JOB_DEADLINE: Duration = Duration::from_secs(9);
 
@@ -360,10 +393,10 @@ fn job() -> Result<Value, Fail> {
     let Value::Object(request) = request else {
         return Err(Fail("invalid-request"));
     };
-    if request.get("kind").and_then(Value::as_str) == Some("avatar") {
-        store::prepare_avatar(&request)
-    } else {
-        store::prepare(&request)
+    match request.get("kind").and_then(Value::as_str) {
+        Some("avatar") => store::prepare_avatar(&request),
+        Some("background") => store::prepare_background(&request),
+        _ => store::prepare(&request),
     }
 }
 
