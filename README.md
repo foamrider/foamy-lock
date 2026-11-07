@@ -298,7 +298,11 @@ verifies they are unedited.
 
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
-folder, including populated artwork and icon fallbacks. Artwork tests exercise
+folder, including populated artwork and icon fallbacks; set `FOAMY_RENDER_OUT` to
+a directory to keep a copy. Strings follow the desktop's Omarchy language unless
+`OMARCHY_LANGUAGE_FILE` names a file containing `en`. `preview.png` is the first
+1920 × 1080 capture with `artworkPath` cleared: the offscreen software renderer
+draws no masked artwork, so the screenshot shows the music icon. Artwork tests exercise
 the real sandbox with small synthetic images, a local TLS fixture, URL and file
 restrictions, byte and decoder limits, caching, cancellation, and stale results.
 They require host support for unprivileged namespaces and a private session bus;
