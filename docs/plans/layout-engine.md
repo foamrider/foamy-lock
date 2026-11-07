@@ -1,6 +1,6 @@
 # Plan: lock-screen layout engine (foamy-lock 1.3.0)
 
-Status: reviewed, revision 2 · 2026-11-07 · branch `feat/layout-engine` off `dev`
+Status: in progress (steps 0–3, 5, 6 done; see Progress) · reviewed, revision 2 · 2026-11-07 · branch `feat/layout-engine` off `dev`
 
 ## Goal
 
@@ -95,7 +95,7 @@ wallpaper, including video posters, as today. See Background preparation.
 **Glass.** `{ "opacity": 0–1 }` scales the alpha of the existing `glass`
 colour; a theme's `[lock] background` still sets the colour.
 
-**Presets** (1.3.0), each a full layout object in `Presets.js`:
+**Presets** (1.3.0), each a full layout object in `Layout.js`:
 - `foamy`: the default, today's layout.
 - `corner`: the clock bottom-start, the field bottom-end.
 - `editorial`: date and clock middle-start, the field below them.
@@ -216,10 +216,8 @@ blur go through the helper:
 ```
 LockView.qml           data sources (clock, Networking, UPower, MPRIS state), background,
                        zones, primary, geometry check, fallback stage
-layout/Zones.qml       nine anchored zone containers
 elements/Clock.qml  Date.qml  Account.qml  Password.qml  Media.qml  Status.qml
 Layout.js              parse/validate/merge, presets lookup, zone rules, primary rule (pure JS)
-Presets.js             preset definitions
 ```
 
 - Elements are presentational: they get the time, network, battery and
@@ -268,6 +266,43 @@ Presets.js             preset definitions
   overlay with that preset. The name is checked against `Presets`. It
   applies only to the preview's view, never the lock's, and saves nothing.
   `lock preview` is unchanged. Nothing new can unlock anything.
+
+## Progress (2026-11-07)
+
+Done on `feat/layout-engine`, all offline. Nothing has run on the real lock
+screen yet; that waits for the user's go.
+
+- **0:** spike (`Window.active`).
+- **1:** extraction.
+- **1b:** runtime test in Rust.
+- **2:** Layout.js, the zones and the safety net.
+- **3:** second styles and presets.
+- **5:** primary surface.
+- **6:** status fields and `previewPreset`.
+- **4:** the QML half is done: sources, dim, glass, GPU blur. The helper's
+  `background` kind, which decodes and blurs your picture in the sandbox, is
+  in progress.
+
+What changed from the plan while building:
+- **One JavaScript file.** Presets live in Layout.js. A second `.js`
+  imported from it would need `.import`, which node can't load.
+- **No zone containers.** Elements are positioned by bindings
+  (`placeX`/`placeY`), never re-parented. The zone rules reproduce 1.2.0's
+  positions exactly, and the parity test proves it.
+- **Narrow screens** (1.2.0's `compactLayout`) centre the bottom corners and
+  stack them: the start zone at the bottom, the end zone above it. The
+  bottom-center zone reserves room for both, at least 1.2.0's 140 px.
+- **A hidden element keeps its place,** as 1.2.0's anchors did.
+- **Blur of the Omarchy wallpaper** uses MultiEffect with GPU rendering and
+  stays sharp under the software renderer. The helper prepares only the
+  `picture` source (decode, crop and blur in the sandbox). Pictures are
+  never decoded by Qt.
+- **Fallback order.** The user's look falls back to plain foamy (or straight
+  to field-only when it already is plain foamy), then to field-only. Each
+  stage is latched for the view's lifetime; the service resets its report
+  on the next lock or look change.
+- **The geometry check** waits until the view has a size. A 0×0 view at
+  creation would otherwise always "fail".
 
 ## Steps
 

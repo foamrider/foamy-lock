@@ -116,6 +116,93 @@ The plugin reads the same `~/.config/omarchy/shell.json` and
 avatar thumbnail at `$XDG_CACHE_HOME/omarchy/foamy.lock/avatar.png`, falling back to
 `~/.cache/omarchy/foamy.lock/avatar.png`.
 
+## Look: presets, layout and background
+
+The lock screen is made of six elements (date, clock, account, password field,
+media, status) on a background. A preset chooses where each element sits and how
+it looks. `layout` changes single elements, and `background` and `glass` change
+what is behind them. All four keys sit on the same `foamy.lock` entry and are
+optional; without them the lock looks exactly as in 1.2.0.
+
+```json
+{
+  "id": "foamy.lock",
+  "preset": "corner",
+  "layout": { "media": { "zone": "bottom-center" }, "status": { "hidden": true } },
+  "background": { "source": "picture", "path": "/home/you/Pictures/lake.jpg", "blur": 0.4, "dim": 0.3 },
+  "glass": { "opacity": 0.6 }
+}
+```
+
+| Preset | |
+| --- | --- |
+| `foamy` | The default: the date and a large clock at the top, the account and field below the middle, media bottom left, status top right. |
+| `corner` | The date and a bold clock bottom left; the account chip and an underline field bottom right. |
+| `editorial` | The date, clock, account and field stacked on the left, in the middle of the screen. |
+| `zen` | Only the field, centred, over a blurred and dimmed wallpaper. |
+
+**Layout.** Each element takes `zone`, `style`, `order` and `hidden`:
+
+- **`zone`.** One of `top-start`, `top-center`, `top-end`, `middle-start`,
+  `middle-center`, `middle-end`, `bottom-start`, `bottom-center` and
+  `bottom-end`. Start and end mean left and right, and swap in right-to-left
+  languages.
+- **`order`.** Elements in one zone stack by `order`, an integer from -99 to 99.
+- **On narrow screens** the bottom corners are centred and stacked under the
+  field.
+
+| Element | Styles |
+| --- | --- |
+| `date` | `long` (default), `caps` |
+| `clock` | `thin` (default), `bold` |
+| `account` | `avatar` (default), `chip` |
+| `password` | `pill` (default), `underline` |
+| `media` | `card` (default), `line` |
+| `status` | `text` (default), `icons` |
+
+The password field can't be hidden, and it stays in the middle or bottom row.
+`showUserInfo: false` and `showMedia: false` still hide the account and media
+whatever the layout says. Artwork is prepared only while the media card is
+shown.
+
+**Background.** These keys set what's behind the elements:
+
+- **`source`.** One of:
+  - `omarchy` (default): the current wallpaper, as before;
+  - `picture`: the file in `path`, an absolute `.png`, `.jpg` or `.webp`;
+  - `theme`: the theme's background colour;
+  - `black`.
+- **`blur`.** From 0 to 1.
+- **`dim`.** The darkening scrim, from 0 to 0.9; the default is 0.25.
+- **Picture preparation.** Your picture is decoded, cropped to the screen and
+  blurred by the bundled helper in its sandbox while you are unlocked. The
+  original file never reaches the lock screen.
+- **Blur of the Omarchy wallpaper** needs GPU rendering. With CPU rendering
+  the wallpaper stays sharp, and the dim still applies.
+- **Underline field.** It has no surface of its own, so it keeps at least
+  0.15 dim behind it.
+
+**Glass.** `opacity` (0 to 1, default 1) scales the transparency of the glass
+behind the media card, the account chip and the field.
+
+**Mistakes and safety.** A mistake in these keys, such as an unknown name or a
+value out of range, leaves the previous look in place and shows up as
+`lookError` in `omarchy-shell foamy.lock status`. It never resets the other
+settings, and a mistake in the other settings never resets the look. Each time
+the lock screen is shown, it checks that the field is on the screen and not
+covered by another element. If it is, that screen shows the `foamy` preset
+instead, and if even that doesn't fit, only the field, centred. `status`
+reports this as `layoutError` and `fallbackPreset`.
+
+**Several monitors.** Every monitor shows the same layout. The account and the
+field's surround show only on the monitor that receives your keystrokes, or on
+every monitor until one does. A password field that accepts typing stays on
+every monitor, so a keystroke is never lost.
+
+**Previewing a preset.** `omarchy-shell foamy.lock previewPreset corner` opens
+the preview overlay with a preset without saving anything. `omarchy-shell lock
+preview` shows your saved look.
+
 ## Fingerprint recovery
 
 Temporary reader or daemon errors are retried with increasing delays. If the
@@ -239,6 +326,7 @@ processes already running as your Unix user.
 
 ```sh
 omarchy-shell lock preview
+omarchy-shell foamy.lock previewPreset zen   # a preset, not saved
 omarchy-shell lock hidePreview
 omarchy-shell lock status
 ```
