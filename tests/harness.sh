@@ -5,6 +5,7 @@
 #   tests/harness.sh layout [--host 4.5|4.0|both] [--preset NAME]
 #   tests/harness.sh styles [--host 4.5|4.0|both]
 #   tests/harness.sh runtime [--host 4.5|4.0|both]
+#   tests/harness.sh thumbnails [--host 4.5|4.0] [--preset NAME]... [--out DIR]
 # Builds the harness outside the plugin, like foamy-kit's build-native.sh
 # (never a target/ inside the plugin), and runs it. parity needs git history.
 set -euo pipefail

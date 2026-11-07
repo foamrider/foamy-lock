@@ -20,6 +20,8 @@ const PROC: [(&str, &str); 3] = [
     ("loadavg", include_str!("../fixtures/proc/loadavg")),
     ("meminfo", include_str!("../fixtures/proc/meminfo")),
 ];
+/// The theme the thumbnails are drawn in (a hermetic HOME has none).
+pub const THEME_COLORS: &str = include_str!("../fixtures/theme-colors.toml");
 /// The fixed time every render shows.
 const FIXED_DATE: &str = "new Date(2026, 8, 26, 10, 24)";
 
@@ -205,6 +207,14 @@ fn parse_presets(layout: &str) -> Option<Vec<String>> {
         .filter(|name| !name.is_empty())
         .collect();
     (!names.is_empty()).then_some(names)
+}
+
+/// Write the thumbnails' theme into `base`'s hermetic HOME (before
+/// run_quickshell), where Omarchy's Color singleton looks for it.
+pub fn install_theme(base: &Path) -> Result<(), String> {
+    let theme = base.join("home/.local/state/omarchy/current/theme");
+    fs::create_dir_all(&theme).map_err(io(theme.display()))?;
+    fs::write(theme.join("colors.toml"), THEME_COLORS).map_err(io("colors.toml"))
 }
 
 /// `$FOAMY_RENDER_OUT/<sub>` when FOAMY_RENDER_OUT asks for a copy of the

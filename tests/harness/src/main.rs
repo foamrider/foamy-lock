@@ -7,6 +7,7 @@
 //! foamy-lock-harness layout [--host 4.5|4.0|both] [--preset NAME]
 //! foamy-lock-harness styles [--host 4.5|4.0|both]
 //! foamy-lock-harness runtime [--host 4.5|4.0|both]
+//! foamy-lock-harness thumbnails [--host 4.5|4.0] [--preset NAME]... [--out DIR]
 //! ```
 //!
 //! `render` drives the real LockView through wide, narrow, failure, busy,
@@ -47,6 +48,12 @@
 //! wallpaper helpers, password and fingerprint flows, blanking, stranded-lock
 //! recovery and, on 4.5, the IpcRegistry route. It never locks the desktop.
 //!
+//! `thumbnails` renders every selectable preset (or each `--preset`) at
+//! 1920×1080 with the synthetic data and a fixed dark theme, scaled to
+//! 480×270, into `previews/presets/<name>.png` (or `--out`); drawn
+//! backgrounds show their still frame. `FOAMY_RENDER_OUT` keeps full-size
+//! captures too.
+//!
 //! Hosts: 4.5 is `FOAMY_HOST_45`,
 //! else `$OMARCHY_TEST_ROOT/shell`, else `/usr/share/omarchy/shell`; 4.0 runs
 //! only when `FOAMY_HOST_40` names a 4.0 shell directory.
@@ -59,6 +66,7 @@ mod png;
 mod render;
 mod runtime;
 mod styles;
+mod thumbnails;
 
 use std::process::ExitCode;
 
@@ -70,8 +78,9 @@ fn main() -> ExitCode {
         Some("layout") => layout::run(&args[1..]),
         Some("runtime") => runtime::run(&args[1..]),
         Some("styles") => styles::run(&args[1..]),
+        Some("thumbnails") => thumbnails::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]",
             hosts = host::CHOICES.join("|")
         )),
     };
