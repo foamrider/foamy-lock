@@ -10,7 +10,8 @@ The screenshot uses synthetic account and media details and a neutral wallpaper.
 
 ## Install
 
-This plugin supports Omarchy 4.0.6 and targets Omarchy 4.5 (checked against 4.5.0-rc2).
+This plugin targets Omarchy 4.5 (checked against 4.5.0). It keeps its Omarchy 4.0.6
+compatibility, which the tests check only when given a 4.0 shell (see Validation).
 It requires Omarchy's Quickshell build and the existing
 `/etc/pam.d/omarchy-lock-password` service. Fingerprint unlock also requires
 Omarchy's fingerprint setup and an enrolled fingerprint. The plugin does not
