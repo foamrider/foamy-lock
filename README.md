@@ -264,7 +264,7 @@ stays on the music icon and no helper is started again until the shell reloads.
 
 ```sh
 omarchy plugin validate .
-/usr/lib/qt6/bin/qmllint Artwork.qml Service.qml LockView.qml
+/usr/lib/qt6/bin/qmllint Artwork.qml Service.qml LockView.qml elements/*.qml
 node --test tests/*.test.cjs
 python3 -I -B -m unittest discover -s tests -p artwork_test.py -v
 FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest discover -s tests -p artwork_test.py

@@ -45,9 +45,10 @@ pixels = bytes(channel for y in range(256) for x in range(256)
                for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
 (app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
 (app / 'Commons').symlink_to(host_shell / 'Commons', target_is_directory=True)
-# The plugin's stamped kit (FoamyI18n, FoamyStyle) and catalogs, unmodified.
+# The plugin's stamped kit (FoamyI18n, FoamyStyle), catalogs and elements, unmodified.
 (app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
+(app / 'elements').symlink_to(source / 'elements', target_is_directory=True)
 (app / 'qmldir').write_text('')
 shutil.copy(source / 'Model.js', app)
 view = (source / 'LockView.qml').read_text()

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell
 import Quickshell.Networking
 import Quickshell.Services.UPower
@@ -7,6 +6,7 @@ import Quickshell.Services.UPower
 import qs.Commons as Commons
 import "kit"
 import "Model.js" as Model
+import "elements"
 
 Item {
   id: root
@@ -68,9 +68,8 @@ Item {
   readonly property string networkLabel: networkStatusLabel()
   readonly property string networkIcon: wiredConnected ? "\u{ef09}" : (networkLabel === "Offline" ? "\u{f092e}" : "\u{f1eb}")
   readonly property var userLocale: Qt.locale(FoamyI18n.formatLocale)
-  readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
-    ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
-    : 1
+  // The clock and date read this; the render harness replaces lockClock.date.
+  readonly property var now: lockClock.date
   readonly property bool showPasswordCursor: inputEnabled && !authenticatingPassword && failureMessage.length === 0
   readonly property bool errorState: failureMessage.length > 0
   // Keep the editor focused while invisible so the first character is retained.
@@ -82,8 +81,6 @@ Item {
   signal clearFailureRequested()
   signal wakeRequested()
   signal artworkFailed(string path)
-
-
 
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
@@ -112,13 +109,13 @@ Item {
   }
 
   function forcePasswordFocus() {
-    passwordInput.forceActiveFocus()
+    inputField.input.forceActiveFocus()
   }
 
   function syncPasswordText() {
-    if (passwordInput.text === passwordText) return
+    if (inputField.input.text === passwordText) return
     syncingPasswordText = true
-    passwordInput.text = passwordText
+    inputField.input.text = passwordText
     syncingPasswordText = false
   }
 
@@ -180,61 +177,6 @@ Item {
     if (inputEnabled) Qt.callLater(forcePasswordFocus)
   }
 
-  component LineIcon: Image {
-    property string pathData: ""
-    source: "data:image/svg+xml," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'
-      + '<path d="' + pathData + '" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>')
-    sourceSize.width: Math.ceil(width * 2)
-    sourceSize.height: Math.ceil(height * 2)
-  }
-
-  component FingerprintIcon: Canvas {
-    property color lineColor: root.foreground
-
-    antialiasing: true
-    onLineColorChanged: requestPaint()
-    onWidthChanged: requestPaint()
-    onHeightChanged: requestPaint()
-
-    onPaint: {
-      var context = getContext("2d")
-      var centerX = width / 2
-      var centerY = height / 2
-      var unit = Math.min(width, height)
-      context.clearRect(0, 0, width, height)
-      context.strokeStyle = lineColor
-      context.fillStyle = lineColor
-      context.lineWidth = Math.max(1.4, unit * 0.075)
-      context.lineCap = "round"
-      context.lineJoin = "round"
-
-      context.beginPath()
-      context.arc(centerX, centerY + unit * 0.02, unit * 0.34, Math.PI * 1.06, Math.PI * 1.94)
-      context.stroke()
-      context.beginPath()
-      context.arc(centerX, centerY + unit * 0.08, unit * 0.24, Math.PI * 1.04, Math.PI * 1.96)
-      context.stroke()
-      context.beginPath()
-      context.arc(centerX, centerY + unit * 0.13, unit * 0.13, Math.PI * 1.02, Math.PI * 1.98)
-      context.stroke()
-      context.beginPath()
-      context.moveTo(centerX - unit * 0.31, centerY + unit * 0.12)
-      context.quadraticCurveTo(centerX - unit * 0.25, centerY + unit * 0.38, centerX - unit * 0.09, centerY + unit * 0.45)
-      context.moveTo(centerX + unit * 0.31, centerY + unit * 0.12)
-      context.quadraticCurveTo(centerX + unit * 0.25, centerY + unit * 0.38, centerX + unit * 0.09, centerY + unit * 0.45)
-      context.stroke()
-    }
-  }
-
-  TextMetrics {
-    id: dotMetrics
-    font.family: root.textFontFamily
-    font.pixelSize: root.passwordDotFontSize
-    font.letterSpacing: root.passwordDotLetterSpacing
-    text: "●".repeat(passwordInput.text.length)
-  }
-
   Rectangle {
     anchors.fill: parent
     color: Commons.Color.background
@@ -277,31 +219,16 @@ Item {
       // Offset the clock font’s top bearing to bring the visible numerals closer to the date.
       spacing: Math.round(-20 * root.uiScale)
 
-      Text {
-        textFormat: Text.PlainText
+      DateElement {
         id: dateLabel
+        view: root
         width: parent.width
-        text: lockClock.date.toLocaleString(root.userLocale, "dddd, d MMMM")
-        color: root.foreground
-        font.family: root.displayFontFamily
-        font.pixelSize: Math.round(30 * root.uiScale)
-        font.weight: Font.Normal
-        horizontalAlignment: Text.AlignHCenter
-        elide: Text.ElideRight
       }
 
-      Text {
-        textFormat: Text.PlainText
+      ClockElement {
         id: clockLabel
+        view: root
         width: parent.width
-        text: root.userLocale.toString(lockClock.date, root.timeFormat === "12h" ? "h:mm AP" : "HH:mm")
-        fontSizeMode: Text.Fit
-        minimumPixelSize: Math.round(48 * root.uiScale)
-        color: root.foreground
-        font.family: root.displayFontFamily
-        font.pixelSize: Math.round(192 * root.uiScale)
-        font.weight: Font.Normal
-        horizontalAlignment: Text.AlignHCenter
       }
     }
 
@@ -313,290 +240,17 @@ Item {
       y: Math.min(root.height * 0.65, root.height - height - (root.compactLayout ? 140 : 36) * root.uiScale)
       spacing: Math.round(14 * root.uiScale)
 
-      Item {
+      AccountElement {
         id: identityBlock
-        visible: root.showUserInfo
+        view: root
         width: parent.width
-        height: avatar.height + nameLabel.anchors.topMargin + nameLabel.height
-
-        Rectangle {
-          id: avatar
-          width: Math.round(84 * root.uiScale)
-          height: width
-          radius: width / 2
-          anchors.top: parent.top
-          anchors.horizontalCenter: parent.horizontalCenter
-          color: Qt.rgba(0.025, 0.03, 0.055, 0.55)
-
-          Item {
-            id: avatarMask
-            anchors.fill: parent
-            visible: false
-            layer.enabled: true
-
-            Rectangle {
-              anchors.fill: parent
-              radius: width / 2
-              color: "white"
-            }
-          }
-
-          Image {
-            id: avatarImage
-            anchors.fill: parent
-            source: root.avatarPath ? root.fileUrl(root.avatarPath, root.avatarVersion) : ""
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            cache: false
-            smooth: true
-            // The service provides a Lanczos-filtered runtime thumbnail so Qt
-            // only performs the small final scale to the physical output.
-            sourceSize.width: 256
-            sourceSize.height: 256
-            visible: false
-          }
-
-          MultiEffect {
-            anchors.fill: parent
-            source: avatarImage
-            visible: avatarImage.status === Image.Ready
-            maskEnabled: true
-            maskSource: avatarMask
-            maskThresholdMin: 0.5
-            maskSpreadAtMin: 0.05
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            anchors.centerIn: parent
-            visible: avatarImage.status !== Image.Ready
-            text: root.displayName.length > 0 ? root.displayName.charAt(0).toLocaleUpperCase() : "?"
-            color: root.foreground
-            font.family: root.textFontFamily
-            font.pixelSize: Math.round(34 * root.uiScale)
-            font.weight: Font.Light
-          }
-
-          Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: "transparent"
-            border.width: 1
-            border.color: Qt.rgba(1, 1, 1, 0.22)
-          }
-        }
-
-        Text {
-          textFormat: Text.PlainText
-          id: nameLabel
-          anchors.top: avatar.bottom
-          anchors.topMargin: Math.round(7 * root.uiScale)
-          anchors.left: parent.left
-          anchors.right: parent.right
-          height: Math.round(34 * root.uiScale)
-          text: root.displayName
-          color: root.foreground
-          font.family: root.textFontFamily
-          font.pixelSize: Math.round(20 * root.uiScale)
-          font.weight: Font.Normal
-          horizontalAlignment: Text.AlignHCenter
-          verticalAlignment: Text.AlignVCenter
-        }
       }
 
-      Rectangle {
+      PasswordElement {
         id: inputField
-        objectName: "inputField"
-        width: root.fieldWidth
+        view: root
         x: Math.round((parent.width - width) / 2)
-        height: root.fieldHeight
-        radius: height / 2
-        color: root.showPassword ? root.glass : "transparent"
-        border.width: root.showPassword ? 1 : 0
-        border.color: root.errorState ? Commons.Color.lock.borderError : root.glassBorder
-        // Not clipped: the unlock hint below shows only while the field has no
-        // fill or border, and a translated hint can be wider than the pill.
-        // The editor and its placeholder clip and elide on their own.
-
-        // The hint is bounded by the login column, not the pill: it wraps to a
-        // second line (two lines fit the field's height) and elides only beyond.
-        Row {
-          id: unlockHint
-          objectName: "unlockHint"
-          anchors.centerIn: parent
-          spacing: Math.round(10 * root.uiScale)
-          visible: !root.showPassword
-
-          FingerprintIcon {
-            id: unlockHintIcon
-            width: Math.round(26 * root.uiScale)
-            height: width
-            anchors.verticalCenter: parent.verticalCenter
-            visible: root.fingerprintConfigured && !root.fingerprintUnavailable
-          }
-
-          Text {
-            objectName: "unlockHintText"
-            textFormat: Text.PlainText
-            text: root.fingerprintConfigured && !root.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
-            width: Math.min(implicitWidth, root.contentWidth
-              - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
-            color: root.foreground
-            font.family: root.textFontFamily
-            font.pixelSize: Math.round(15 * root.uiScale)
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            maximumLineCount: 2
-            elide: Text.ElideRight
-            anchors.verticalCenter: parent.verticalCenter
-          }
-        }
-
-        TextInput {
-          id: passwordInput
-          objectName: "passwordInput"
-          opacity: root.showPassword ? 1 : 0
-          anchors.left: parent.left
-          anchors.leftMargin: root.fieldLeadingInset
-          anchors.right: parent.right
-          anchors.rightMargin: Math.round(70 * root.uiScale)
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          verticalAlignment: TextInput.AlignVCenter
-          horizontalAlignment: TextInput.AlignLeft
-          activeFocusOnPress: true
-          clip: true
-          enabled: root.inputEnabled && !root.authenticatingPassword
-          readOnly: root.authenticatingPassword
-          echoMode: TextInput.Password
-          passwordCharacter: "\u25CF"
-          passwordMaskDelay: 0
-          color: root.foreground
-          selectionColor: root.selection
-          selectedTextColor: root.foreground
-          font.family: root.textFontFamily
-          font.pixelSize: text.length > 0
-            ? Math.max(1, Math.floor(root.passwordDotFontSize * root.passwordDotScale))
-            : root.fieldFontSize
-          font.letterSpacing: text.length > 0 ? root.passwordDotLetterSpacing * root.passwordDotScale : 0
-          cursorVisible: activeFocus && root.showPasswordCursor && text.length > 0
-          cursorDelegate: Rectangle {
-            width: 2
-            color: root.foreground
-            visible: passwordInput.cursorVisible
-          }
-
-          onTextChanged: {
-            if (!root.syncingPasswordText) root.passwordTextEdited(text)
-            if (text.length > 0) root.wakeRequested()
-            if (text.length > 0 && root.failureMessage.length > 0) root.clearFailureRequested()
-          }
-
-          onAccepted: root.submitCurrentPassword()
-
-          Keys.onPressed: function(event) {
-            if (event.isAutoRepeat && root.dropsAutoRepeat(event.key)) {
-              event.accepted = true
-              return
-            }
-            root.wakeRequested()
-            if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
-              root.passwordTextEdited("")
-              root.clearFailureRequested()
-              event.accepted = true
-            }
-          }
-        }
-
-        Text {
-          textFormat: Text.PlainText
-          anchors.fill: passwordInput
-          text: root.authenticatingPassword
-            ? FoamyI18n.t("Checking…")
-            : (root.failureMessage.length > 0 ? root.failedAttempts > 0 ? FoamyI18n.t("Authentication failed (%1)", FoamyI18n.number(root.failedAttempts)) : FoamyI18n.t(root.failureMessage) : root.placeholderText)
-          visible: root.showPassword && passwordInput.text.length === 0
-          color: root.authenticatingPassword
-            ? root.foreground
-            : (root.errorState ? Commons.Color.lock.textError : root.secondary)
-          font.family: root.textFontFamily
-          font.pixelSize: root.fieldFontSize
-          font.italic: root.errorState
-          horizontalAlignment: Text.AlignLeft
-          verticalAlignment: Text.AlignVCenter
-          elide: Text.ElideRight
-        }
-
-        Item {
-          visible: root.showPassword
-          width: Math.round(70 * root.uiScale)
-          anchors.right: parent.right
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          opacity: root.authenticatingPassword ? 0.55 : (root.passwordText.length > 0 ? 1 : 0.9)
-
-          Rectangle {
-            anchors.centerIn: parent
-            width: Math.round(38 * root.uiScale)
-            height: width
-            radius: width / 2
-            color: submitMouse.containsMouse && submitMouse.enabled
-              ? Qt.rgba(1, 1, 1, 0.1)
-              : "transparent"
-          }
-
-          Item {
-            id: submitArrow
-            objectName: "submitArrow"
-            anchors.centerIn: parent
-            width: Math.round(30 * root.uiScale)
-            height: Math.round(26 * root.uiScale)
-            // The submit arrow points along the reading direction, mirrored
-            // around its own centre (a bare `width` inside Scale is the view's).
-            transform: Scale { origin.x: submitArrow.width / 2; xScale: root.rightToLeft ? -1 : 1 }
-
-            Rectangle {
-              x: Math.round(2 * root.uiScale)
-              width: Math.round(23 * root.uiScale)
-              height: Math.max(1, Math.round(1.6 * root.uiScale))
-              anchors.verticalCenter: parent.verticalCenter
-              radius: height / 2
-              color: root.foreground
-            }
-
-            Rectangle {
-              x: Math.round(15 * root.uiScale)
-              width: Math.round(10 * root.uiScale)
-              height: Math.max(1, Math.round(1.6 * root.uiScale))
-              anchors.verticalCenter: parent.verticalCenter
-              transformOrigin: Item.Right
-              rotation: 45
-              radius: height / 2
-              color: root.foreground
-            }
-
-            Rectangle {
-              x: Math.round(15 * root.uiScale)
-              width: Math.round(10 * root.uiScale)
-              height: Math.max(1, Math.round(1.6 * root.uiScale))
-              anchors.verticalCenter: parent.verticalCenter
-              transformOrigin: Item.Right
-              rotation: -45
-              radius: height / 2
-              color: root.foreground
-            }
-          }
-
-          MouseArea {
-            id: submitMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: root.inputEnabled && !root.authenticatingPassword && root.passwordText.length > 0
-            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: root.submitCurrentPassword()
-          }
-        }
       }
-
     }
 
     Text {
@@ -615,11 +269,9 @@ Item {
       wrapMode: Text.WordWrap
     }
 
-    Rectangle {
+    MediaElement {
       id: mediaRow
-      objectName: "mediaRow"
-      width: Math.min(Math.round(470 * root.uiScale), root.width - 48 * root.uiScale)
-      height: Math.round(92 * root.uiScale)
+      view: root
       anchors.left: parent.left
       // Stack below authentication on narrow displays to avoid overlap.
       anchors.leftMargin: root.compactLayout
@@ -627,297 +279,14 @@ Item {
         : Math.round(32 * root.uiScale)
       anchors.bottom: parent.bottom
       anchors.bottomMargin: Math.round(32 * root.uiScale)
-      visible: root.hasMedia
-      radius: Math.round(22 * root.uiScale)
-      color: root.glass
-      border.width: 1
-      border.color: root.glassBorder
-
-      Rectangle {
-        id: albumArt
-        width: Math.round(64 * root.uiScale)
-        height: width
-        radius: Math.round(9 * root.uiScale)
-        anchors.left: parent.left
-        anchors.leftMargin: Math.round(14 * root.uiScale)
-        anchors.verticalCenter: parent.verticalCenter
-        color: Qt.rgba(0.025, 0.035, 0.065, 0.55)
-        border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.12)
-        clip: true
-
-        Image {
-          id: artworkImage
-          objectName: "artworkImage"
-          anchors.fill: parent
-          anchors.margins: albumArt.border.width
-          // Rectangle.clip is rectangular; mask artwork to the inside of its border.
-          layer.enabled: true
-          layer.effect: MultiEffect {
-            maskEnabled: true
-            maskSource: artworkMask
-            maskThresholdMin: 0.5
-            maskSpreadAtMin: 1.0
-          }
-          // Only the isolated helper's fixed-size thumbnail reaches Qt.
-          source: root.artworkPath ? root.fileUrl(root.artworkPath, 0) : ""
-          sourceSize.width: 256
-          sourceSize.height: 256
-          fillMode: Image.PreserveAspectCrop
-          asynchronous: true
-          visible: status === Image.Ready
-          onStatusChanged: if (status === Image.Error) root.artworkFailed(root.artworkPath)
-        }
-
-        Rectangle {
-          id: artworkMask
-          width: artworkImage.width
-          height: artworkImage.height
-          radius: Math.max(0, albumArt.radius - albumArt.border.width)
-          color: "white"
-          visible: false
-          layer.enabled: true
-        }
-
-        Text {
-          objectName: "artworkFallback"
-          textFormat: Text.PlainText
-          anchors.centerIn: parent
-          visible: artworkImage.status !== Image.Ready
-          text: "\u{f075a}"
-          color: root.secondary
-          opacity: 0.78
-          font.family: root.iconFontFamily
-          font.pixelSize: Math.round(20 * root.uiScale)
-          font.weight: Font.Light
-        }
-      }
-
-      Column {
-        id: trackInfo
-        anchors.left: albumArt.right
-        anchors.leftMargin: Math.round(17 * root.uiScale)
-        anchors.right: mediaControls.left
-        anchors.rightMargin: Math.round(16 * root.uiScale)
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Math.round(3 * root.uiScale)
-
-        Text {
-          textFormat: Text.PlainText
-          width: parent.width
-          text: root.activePlayer ? String(root.activePlayer.trackTitle || "") : ""
-          color: root.foreground
-          font.family: root.textFontFamily
-          font.pixelSize: Math.round(17 * root.uiScale)
-          font.weight: Font.Medium
-          elide: Text.ElideRight
-        }
-
-        Text {
-          textFormat: Text.PlainText
-          width: parent.width
-          text: root.activePlayer ? String(root.activePlayer.trackArtist || "") : ""
-          color: root.secondary
-          font.family: root.textFontFamily
-          font.pixelSize: Math.round(15 * root.uiScale)
-          font.weight: Font.Light
-          elide: Text.ElideRight
-        }
-      }
-
-      Row {
-        id: mediaControls
-        objectName: "mediaControls"
-        // Transport controls keep their left-to-right order in every language:
-        // mirroring flips this Row's direction, so ask for the opposite.
-        layoutDirection: root.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight
-        anchors.right: parent.right
-        anchors.rightMargin: Math.round(12 * root.uiScale)
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Math.round(5 * root.uiScale)
-
-        Item {
-          width: Math.round(42 * root.uiScale)
-          height: width
-          opacity: root.activePlayer && root.activePlayer.canGoPrevious ? 1 : 0.38
-
-          Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: previousMouse.containsMouse && previousMouse.enabled
-              ? Qt.rgba(1, 1, 1, 0.1)
-              : "transparent"
-          }
-
-          LineIcon {
-            anchors.centerIn: parent
-            width: Math.round(21 * root.uiScale)
-            height: width
-            pathData: "M6 5v14 M19 5 8 12l11 7Z"
-            opacity: 0.9
-          }
-
-          MouseArea {
-            id: previousMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: root.activePlayer && root.activePlayer.canGoPrevious
-            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: root.runMediaAction("previous")
-          }
-        }
-
-        Item {
-          width: Math.round(46 * root.uiScale)
-          height: width
-          opacity: root.activePlayer
-            && (root.activePlayer.canTogglePlaying || root.activePlayer.canPlay || root.activePlayer.canPause) ? 1 : 0.38
-
-          Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: playMouse.containsMouse && playMouse.enabled
-              ? Qt.rgba(1, 1, 1, 0.1)
-              : "transparent"
-          }
-
-          LineIcon {
-            anchors.centerIn: parent
-            width: Math.round(26 * root.uiScale)
-            height: width
-            pathData: root.activePlayer && root.activePlayer.isPlaying ? "M8 5v14 M16 5v14" : "M7 4 20 12 7 20Z"
-            opacity: 0.9
-          }
-
-          MouseArea {
-            id: playMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: root.activePlayer
-              && (root.activePlayer.canTogglePlaying || root.activePlayer.canPlay || root.activePlayer.canPause)
-            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: root.runMediaAction("playPause")
-          }
-        }
-
-        Item {
-          width: Math.round(42 * root.uiScale)
-          height: width
-          opacity: root.activePlayer && root.activePlayer.canGoNext ? 1 : 0.38
-
-          Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: nextMouse.containsMouse && nextMouse.enabled
-              ? Qt.rgba(1, 1, 1, 0.1)
-              : "transparent"
-          }
-
-          LineIcon {
-            anchors.centerIn: parent
-            width: Math.round(21 * root.uiScale)
-            height: width
-            pathData: "M18 5v14 M5 5l11 7-11 7Z"
-            opacity: 0.9
-          }
-
-          MouseArea {
-            id: nextMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: root.activePlayer && root.activePlayer.canGoNext
-            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: root.runMediaAction("next")
-          }
-        }
-      }
     }
 
-    Row {
+    StatusElement {
       id: statusFooter
-      objectName: "statusFooter"
+      view: root
       anchors.right: parent.right
       anchors.top: parent.top
       anchors.margins: Math.round(24 * root.uiScale)
-      height: Math.round(38 * root.uiScale)
-      spacing: Math.round(10 * root.uiScale)
-
-      Item {
-        id: networkPill
-        width: networkStatusContent.implicitWidth + Math.round(24 * root.uiScale)
-        height: parent.height
-
-
-        Row {
-          id: networkStatusContent
-          anchors.centerIn: parent
-          spacing: Math.round(8 * root.uiScale)
-
-          Text {
-            textFormat: Text.PlainText
-            height: statusFooter.height
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.networkIcon
-            color: root.foreground
-            opacity: 0.76
-            font.family: root.iconFontFamily
-            font.pixelSize: Math.round(18 * root.uiScale)
-            font.weight: Font.Light
-            verticalAlignment: Text.AlignVCenter
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            height: statusFooter.height
-            text: FoamyI18n.t(root.networkLabel)
-            color: root.foreground
-            opacity: 0.88
-            font.family: root.textFontFamily
-            font.pixelSize: Math.round(15 * root.uiScale)
-            font.weight: Font.Normal
-            verticalAlignment: Text.AlignVCenter
-          }
-        }
-      }
-
-      Item {
-        id: batteryPill
-        width: batteryStatusContent.implicitWidth + Math.round(24 * root.uiScale)
-        height: parent.height
-        visible: root.hasBattery
-
-
-        Row {
-          id: batteryStatusContent
-          anchors.centerIn: parent
-          spacing: Math.round(7 * root.uiScale)
-
-          Text {
-            textFormat: Text.PlainText
-            height: statusFooter.height
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.batteryIcon(root.batteryPercentage)
-            color: root.foreground
-            opacity: 0.76
-            font.family: root.iconFontFamily
-            font.pixelSize: Math.round(18 * root.uiScale)
-            font.weight: Font.Light
-            verticalAlignment: Text.AlignVCenter
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            height: statusFooter.height
-            text: FoamyI18n.number(root.batteryPercentage) + "%"
-            color: root.foreground
-            opacity: 0.88
-            font.family: root.textFontFamily
-            font.pixelSize: Math.round(15 * root.uiScale)
-            font.weight: Font.Normal
-            verticalAlignment: Text.AlignVCenter
-          }
-        }
-      }
     }
   }
 }
