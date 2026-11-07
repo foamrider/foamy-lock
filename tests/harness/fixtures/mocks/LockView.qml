@@ -24,5 +24,8 @@ Item {
   signal submitPassword(string password)
   signal clearFailureRequested()
   signal wakeRequested()
+  property var look: null
+  property bool primary: true
   signal artworkFailed(string path)
+  signal layoutFellBack(string error, string preset)
 }

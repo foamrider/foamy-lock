@@ -496,6 +496,7 @@ fn run_host(shell: &Path) -> R {
 fn scenarios(test: &Test) -> R {
     identity_conflict_registry(test)?;
     preview(test)?;
+    look(test)?;
     wallpaper(test)?;
     settings_and_password(test)?;
     fingerprint(test)?;
@@ -610,6 +611,65 @@ fn preview(test: &Test) -> R {
     ensure!(test.lock("preview")? == "ok" && test.test("previewState")? == "true");
     ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
     ensure!(test.lock("preview")? == "ok");
+    Ok(())
+}
+
+/// The look (preset, layout, background, glass) reloads live, is validated
+/// apart from the settings, and previewPreset shows a preset without saving.
+fn look(test: &Test) -> R {
+    let state = test.status()?;
+    ensure!(
+        text(&state, "preset")? == "foamy" && text(&state, "lookError")?.is_empty(),
+        "{state}"
+    );
+    test.write_config(
+        STOCK_OFF,
+        json!({"preset": "corner", "layout": {"media": {"hidden": true}}}),
+    )?;
+    test.wait_for(|s| Ok(text(s, "preset")? == "corner" && on(s, "look.elements.media.hidden")?))?;
+    // A look mistake keeps the previous look and never touches the settings.
+    test.write_config(
+        STOCK_OFF,
+        json!({"preset": "corner", "layout": {"password": {"hidden": true}}, "timeFormat": "12h"}),
+    )?;
+    let state = test.wait_for(|s| Ok(text(s, "lookError")?.contains("password")))?;
+    ensure!(
+        text(&state, "preset")? == "corner"
+            && *at(&state, "settings.timeFormat")? == "12h"
+            && text(&state, "configError")?.is_empty(),
+        "{state}"
+    );
+    // A settings mistake keeps the settings and still applies the look.
+    test.write_config(STOCK_OFF, json!({"preset": "zen", "timeFormat": "system"}))?;
+    let state = test.wait_for(|s| Ok(text(s, "preset")? == "zen"))?;
+    ensure!(
+        text(&state, "configError")?.contains("timeFormat")
+            && *at(&state, "settings.timeFormat")? == "12h"
+            && text(&state, "lookError")?.is_empty(),
+        "{state}"
+    );
+    // The preview overlay shows a preset without saving it.
+    ensure!(test.ipc("foamy.lock", "previewPreset", &["editorial"])? == "ok");
+    let state = test.status()?;
+    ensure!(
+        text(&state, "previewPreset")? == "editorial"
+            && text(&state, "preset")? == "zen"
+            && test.test("previewState")? == "true",
+        "{state}"
+    );
+    ensure!(test.lock("hidePreview")? == "ok");
+    ensure!(text(&test.status()?, "previewPreset")?.is_empty());
+    for name in ["field-only", "../editorial", ""] {
+        ensure!(
+            test.ipc("foamy.lock", "previewPreset", &[name])? == "unknown-preset",
+            "previewPreset {name:?}"
+        );
+    }
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(text(s, "preset")? == "foamy" && text(s, "configError")?.is_empty()))?;
+    println!(
+        "PASS: look presets and overrides reload live, look and settings mistakes stay apart, previewPreset shows without saving"
+    );
     Ok(())
 }
 

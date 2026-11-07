@@ -12,6 +12,7 @@ import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
 // Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
+import "Layout.js" as Layout
 
 Item {
   id: root
@@ -81,6 +82,18 @@ Item {
   // null until shell.json has been read once.
   property var stockLockEnabled: null
   property string conflictLogged: ""
+  // The look (Layout.js): validated apart from `settings`, so a mistake in
+  // one never resets the other. The last valid look stays (foamy on start).
+  property var look: Layout.defaults()
+  property string lookError: ""
+  // The preview overlay's own look (previewPreset); null shows `look`.
+  property var previewLook: null
+  // Lock surfaces that have keyboard focus: the field shows there, or on
+  // every surface while none does (Layout.isPrimary).
+  property int activeSurfaces: 0
+  // The last geometry fallback a lock view reported ("" when none).
+  property string layoutError: ""
+  property string fallbackPreset: ""
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -97,7 +110,9 @@ Item {
   Artwork {
     id: artwork
     player: root.activePlayer
+    // Only the card shows artwork: a hidden or one-line player prepares none.
     allowed: root.settings.showMedia && root.settings.showArtwork
+      && !root.look.elements.media.hidden && root.look.elements.media.style === "card"
     locked: root.locked
     hosts: root.settings.artworkHosts
     fileRoots: root.settings.artworkFileRoots
@@ -111,6 +126,14 @@ Item {
       settings = result.settings
       stockLockEnabled = result.stockLockEnabled
     } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
+    // The look keys are read whenever the file has one foamy.lock entry.
+    if (result.entry) {
+      var parsed = Layout.parseLook(result.entry)
+      lookError = parsed.error
+      if (parsed.valid) {
+        if (JSON.stringify(parsed.look) !== JSON.stringify(look)) look = parsed.look
+      } else console.warn("foamy.lock: " + lookError + "; keeping the previous look")
+    }
     // Services may have been added or removed with this edit.
     Qt.callLater(checkLockRoute)
   }
@@ -369,6 +392,22 @@ Item {
     if (realName) userDisplayName = realName
     userAvatarPath = iconFile || userAvatarPath || accountHome + "/.face"
     refreshAvatarThumbnail()
+  }
+
+  onPreviewVisibleChanged: if (!previewVisible) previewLook = null
+  // Fallback reports describe the views of the current lock and look.
+  onLockRequestedChanged: if (lockRequested) clearLayoutFallback()
+  onLookChanged: clearLayoutFallback()
+
+  function clearLayoutFallback() {
+    layoutError = ""
+    fallbackPreset = ""
+  }
+
+  function noteLayoutFallback(error, preset) {
+    layoutError = error
+    fallbackPreset = preset
+    logEvent("layout-fallback: " + error + " -> " + preset)
   }
 
   function logEvent(event) {
@@ -687,6 +726,13 @@ Item {
 
       LockView {
         id: lockView
+        // Keystrokes arrive at the focused surface; Window.active follows it.
+        readonly property bool surfaceActive: Window.active
+        onSurfaceActiveChanged: root.activeSurfaces = Math.max(0, root.activeSurfaces + (surfaceActive ? 1 : -1))
+        Component.onDestruction: if (surfaceActive) root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
+        look: root.look
+        primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
+        onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
         backgroundPath: root.lockWallpaperPath
         backgroundVersion: root.backgroundVersion
@@ -747,6 +793,9 @@ Item {
       userDisplayName: root.userDisplayName
       avatarPath: root.userAvatarRenderPath
       avatarVersion: root.userAvatarVersion
+      look: root.previewLook || root.look
+      primary: true
+      onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
     }
 
     MouseArea {
@@ -1173,6 +1222,13 @@ Item {
     return JSON.stringify({
       settings: root.settings,
       configError: root.configError,
+      preset: root.look.preset,
+      look: root.look,
+      lookError: root.lookError,
+      layoutError: root.layoutError,
+      fallbackPreset: root.fallbackPreset,
+      activeSurfaces: root.activeSurfaces,
+      previewPreset: root.previewLook ? root.previewLook.preset : "",
       locked: root.currentlyLocked(),
       requested: root.lockRequested,
       pending: root.pendingSessionLock,
@@ -1232,12 +1288,14 @@ Item {
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
+      root.previewLook = null
       root.previewVisible = true
       return "ok"
     }
 
     function hidePreview(): string {
       root.previewVisible = false
+      root.previewLook = null
       return "ok"
     }
   }
@@ -1258,6 +1316,20 @@ Item {
 
     function status(): string {
       return root.statusJson()
+    }
+
+    // The preview overlay with a built-in preset instead of the saved look.
+    // Nothing is saved; `lock preview` and hidePreview go back to the look.
+    // Like the rest of IPC, nothing here can unlock.
+    function previewPreset(name: string): string {
+      if (Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return "unknown-preset"
+      if (root.currentlyLocked()) return "locked"
+      root.refreshBackground()
+      root.refreshFingerprintStatus()
+      root.refreshUserIdentity()
+      root.previewLook = Layout.preset(name)
+      root.previewVisible = true
+      return "ok"
     }
   }
 }

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Networking
 import Quickshell.Services.UPower
@@ -31,6 +32,9 @@ Item {
   property string userDisplayName: ""
   property string avatarPath: ""
   property int avatarVersion: 0
+  // backgroundPath is already blurred to the look's amount (prepared by the
+  // helper); otherwise a GPU renderer blurs it here.
+  property bool backgroundPrepared: false
   // The look (Layout.js): preset, element zones and styles, background, glass.
   property var look: Layout.defaults()
   // This surface gets the keystrokes (or no surface is known to): it shows
@@ -65,7 +69,9 @@ Item {
   readonly property int passwordDotLetterSpacing: Math.round(2 * uiScale)
   readonly property color foreground: themeLock("text", Commons.Color.lock.text, Qt.rgba(0.98, 0.98, 1, 0.96))
   readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
-  readonly property color glass: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
+  readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
+  // The look's glass opacity scales the theme's (or default) glass alpha.
+  readonly property color glass: Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * effectiveLook.glass.opacity)
   readonly property color glassBorder: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
   readonly property color selection: themeLock("selection", Commons.Color.lock.selection, Qt.rgba(1, 1, 1, 0.25))
   readonly property bool hasMedia: activePlayer !== null
@@ -354,22 +360,46 @@ Item {
     anchors.fill: parent
     color: Commons.Color.background
 
+    // The theme's background colour (above) shows for source "theme", and
+    // while no image is available.
+    Rectangle {
+      objectName: "blackBackground"
+      anchors.fill: parent
+      visible: root.effectiveLook.background.source === "black"
+      color: Qt.rgba(0, 0, 0, 1)
+    }
+
     Image {
       id: wallpaper
       objectName: "lockWallpaper"
       anchors.fill: parent
-      source: root.loadBackground && width > 0 && height > 0 ? root.fileUrl(root.backgroundPath, root.backgroundVersion) : ""
+      readonly property bool wanted: ["omarchy", "picture"].indexOf(root.effectiveLook.background.source) !== -1
+      source: wanted && root.loadBackground && width > 0 && height > 0 ? root.fileUrl(root.backgroundPath, root.backgroundVersion) : ""
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
       cache: true
       sourceSize.width: width
       sourceSize.height: height
+      // Blur needs a GPU renderer (DESIGN.md "Effects"); under the software
+      // renderer the wallpaper stays sharp and the dim still applies.
+      readonly property real blurAmount: root.backgroundPrepared ? 0 : root.effectiveLook.background.blur
+      layer.enabled: blurAmount > 0 && GraphicsInfo.api !== GraphicsInfo.Software
+      layer.effect: MultiEffect {
+        blurEnabled: true
+        blur: wallpaper.blurAmount
+        blurMax: 64
+        autoPaddingEnabled: false
+      }
     }
 
-    // A light scrim preserves wallpaper detail while keeping white type legible.
+    // A scrim keeps white type legible; 0.25 (the default) preserves
+    // wallpaper detail. The look's `dim` sets it, but an underline field has
+    // no surface of its own, so it keeps at least 0.15 behind it.
     Rectangle {
+      objectName: "scrim"
       anchors.fill: parent
-      color: Qt.rgba(0.005, 0.01, 0.025, 0.25)
+      color: Qt.rgba(0.005, 0.01, 0.025, Math.max(root.effectiveLook.background.dim,
+        root.placed.password.style === "underline" ? 0.15 : 0))
     }
 
     MouseArea {
