@@ -210,6 +210,12 @@ every monitor, so a keystroke is never lost.
 the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
+Editors use three more calls on the same target: `catalog` lists the elements, zones,
+styles, presets and the saved look; `previewLook '<json>'` previews an unsaved look;
+`saveLook '<json>'` saves one. Both take the look keys above, validated by the same
+rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
+Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
+
 ## Fingerprint recovery
 
 Temporary reader or daemon errors are retried with increasing delays. If the

@@ -4,11 +4,24 @@ import Quickshell.Io
 ShellRoot {
   id: shell
   property var stock: null
-  Service { id: service }
+  // Stands in for Omarchy's shell: records what saveLook asks it to write.
+  QtObject {
+    id: fakeShell
+    property string module: ""
+    property var entry: null
+    function updateEntryInline(moduleName, settings) {
+      var changed = JSON.stringify(entry) !== JSON.stringify(settings)
+      module = moduleName
+      entry = settings
+      return changed
+    }
+  }
+  Service { id: service; shell: fakeShell }
   IpcHandler {
     target: "test"
     function submit(value: string): string { service.submitPassword(value); return "ok" }
     function failures(): string { return String(service.failedAttempts) }
+    function savedEntry(): string { return JSON.stringify({module: fakeShell.module, entry: fakeShell.entry}) }
     function fingerprintState(): string {
       return JSON.stringify({starts: service.testFingerprintPam.starts,
         generation: service.testFingerprintPam.generation,

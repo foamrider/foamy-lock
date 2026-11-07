@@ -679,7 +679,36 @@ fn look(test: &Test) -> R {
     ensure!(test.ipc("foamy.lock", "previewLook", &[&custom])? == "ok");
     ensure!(text(&test.status()?, "previewPreset")? == "corner");
     ensure!(test.lock("hidePreview")? == "ok");
+    // saveLook writes the look keys through Omarchy's updateEntryInline and
+    // keeps every other key of the entry.
+    test.write_config(
+        STOCK_OFF,
+        json!({"timeFormat": "12h", "background": {"dim": 0.5}, "layout": {"date": {"hidden": true}}}),
+    )?;
+    test.wait_for(|s| Ok(*at(s, "settings.timeFormat")? == "12h"))?;
+    let save = json!({"preset": "editorial", "layout": {"clock": {"hidden": true}}}).to_string();
+    ensure!(test.ipc("foamy.lock", "saveLook", &[&save])? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        text(&saved, "module")? == "foamy.lock"
+            && *at(&saved, "entry.timeFormat")? == "12h"
+            && text(&saved, "entry.preset")? == "editorial"
+            && on(&saved, "entry.layout.clock.hidden")?
+            && at(&saved, "entry.background").is_err()
+            && at(&saved, "entry.id").is_err(),
+        "{saved}"
+    );
+    ensure!(test.ipc("foamy.lock", "saveLook", &[&save])? == "unchanged");
+    let extra = json!({"preset": "zen", "timeFormat": "24h"}).to_string();
+    ensure!(
+        test.ipc("foamy.lock", "saveLook", &[&extra])?
+            .starts_with("invalid: unknown key")
+    );
     let hidden = json!({"layout": {"password": {"hidden": true}}}).to_string();
+    ensure!(
+        test.ipc("foamy.lock", "saveLook", &[&hidden])?
+            .starts_with("invalid: ")
+    );
     ensure!(
         test.ipc("foamy.lock", "previewLook", &[&hidden])?
             .starts_with("invalid: ")

@@ -85,6 +85,8 @@ Item {
   // The look (Layout.js): validated apart from `settings`, so a mistake in
   // one never resets the other. The last valid look stays (foamy on start).
   property var look: Layout.defaults()
+  // The foamy.lock entry as last read, so saveLook can keep its other keys.
+  property var lastEntry: null
   property string lookError: ""
   // The preview overlay's own look (previewPreset); null shows `look`.
   property var previewLook: null
@@ -143,6 +145,7 @@ Item {
     } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
     // The look keys are read whenever the file has one foamy.lock entry.
     if (result.entry) {
+      lastEntry = result.entry
       var parsed = Layout.parseLook(result.entry)
       lookError = parsed.error
       if (parsed.valid) {
@@ -1476,6 +1479,33 @@ Item {
       root.previewLook = parsed.look
       root.previewVisible = true
       return "ok"
+    }
+
+    // Save a look from an editor: the foamy.lock entry's look keys (preset,
+    // layout, background, glass), validated like shell.json. They replace the
+    // entry's look keys (omitted ones are removed, so a reset drops its
+    // overrides); every other setting in the entry is kept. Written through
+    // Omarchy's own updateEntryInline (FileView atomicWrites: a symlinked
+    // shell.json stays a symlink), so the change comes back through the
+    // normal config watch. Nothing here can unlock.
+    function saveLook(look: string): string {
+      var keys = ["preset", "layout", "background", "glass"]
+      var request = null
+      try { request = JSON.parse(String(look || "")) } catch (error) { return "invalid-json" }
+      if (!request || typeof request !== "object" || Array.isArray(request)) return "invalid: expected an object"
+      for (var key in request)
+        if (keys.indexOf(key) === -1) return "invalid: unknown key " + key
+      var parsed = Layout.parseLook(request)
+      if (!parsed.valid) return "invalid: " + parsed.error
+      if (root.currentlyLocked()) return "locked"
+      if (!root.shell || typeof root.shell.updateEntryInline !== "function") return "unsupported"
+      if (!root.lastEntry) return "no-entry"
+      var next = {}
+      for (var existing in root.lastEntry)
+        if (existing !== "id" && keys.indexOf(existing) === -1) next[existing] = root.lastEntry[existing]
+      for (var i = 0; i < keys.length; i++)
+        if (request[keys[i]] !== undefined) next[keys[i]] = request[keys[i]]
+      return root.shell.updateEntryInline("foamy.lock", next) ? "ok" : "unchanged"
     }
 
     function previewPreset(name: string): string {
