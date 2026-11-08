@@ -434,3 +434,90 @@ test('comparisons ignore key order; saving restores the lock\'s order', () => {
   assert.deepEqual(Object.keys(Draft.ordered({ glass: {}, layout: {}, preset: 'zen', background: {} })), ['preset', 'layout', 'background', 'glass'])
   assert.deepEqual(Object.keys(Draft.ordered({ preset: 'zen' })), ['preset'])
 })
+
+test('a module dragged in from the library is shown where it lands, in one step', () => {
+  const shown = Draft.place({ preset: 'foamy' }, 'calendar', 'top-start', { x: 0.05, y: 0.02 }, true)
+  assert.deepEqual(plain(shown), { preset: 'foamy', layout: { calendar: { zone: 'top-start', hidden: false, offset: { x: 0.05, y: 0.02 } } } })
+  // Already in that zone: only shown (and moved).
+  assert.deepEqual(plain(Draft.place({ preset: 'foamy' }, 'calendar', 'middle-end', null, true)),
+    { preset: 'foamy', layout: { calendar: { hidden: false } } })
+  assert.ok(Layout.parseLook(shown).valid)
+})
+
+test('styles, opacity, glass and screens keep to the lock\'s rules', () => {
+  const base = { preset: 'foamy' }
+  assert.deepEqual(plain(Draft.setStyle(base, 'clock', 'analog')), { preset: 'foamy', layout: { clock: { style: 'analog' } } })
+  assert.deepEqual(plain(Draft.setStyle(base, 'clock', 'thin')), base, 'the preset style is no change')
+  assert.equal(Draft.setStyle(base, 'clock', 'pill'), base, 'a style of another module is refused')
+  assert.deepEqual(plain(Draft.setOpacity(base, 'media', 0.456)), { preset: 'foamy', layout: { media: { opacity: 0.46 } } })
+  assert.deepEqual(plain(Draft.setOpacity(base, 'media', 0.1)), { preset: 'foamy', layout: { media: { opacity: 0.3 } } })
+  assert.deepEqual(plain(Draft.setOpacity(base, 'password', 0.4)), { preset: 'foamy', layout: { password: { opacity: 0.7 } } })
+  assert.equal(Draft.setOpacity(base, 'media', ''), base)
+  assert.equal(Draft.setOpacity(base, 'media', 'x'), base)
+  // Glass: hundredths within the limits (the field's floor), null clears it.
+  const glass = Draft.setGlass(base, 'password', 0.02)
+  assert.deepEqual(plain(glass), { preset: 'foamy', layout: { password: { glass: 0.08 } } })
+  assert.deepEqual(plain(Draft.setGlass(glass, 'password', null)), base)
+  assert.equal(Draft.setGlass(base, 'date', 0.5), base, 'the date has no glass')
+  assert.equal(Draft.setGlass(base, 'media', NaN), base)
+  const look = Draft.lookOf(Draft.setGlass(base, 'media', 0.4))
+  assert.equal(Draft.glassOf(look, 'media'), 0.4)
+  assert.equal(Draft.glassOf(look, 'clock'), 1, 'the look\'s glass otherwise')
+  assert.ok(Draft.hasGlass(look, 'media'), 'the media card is glass')
+  assert.ok(!Draft.hasGlass(look, 'clock'), 'the thin clock is not')
+  assert.ok(!Draft.hasGlass(look, 'date'))
+  // Screens: only the modules that take them.
+  assert.deepEqual(plain(Draft.setScreens(base, 'media', 'primary')), { preset: 'foamy', layout: { media: { screens: 'primary' } } })
+  assert.equal(Draft.setScreens(base, 'account', 'primary'), base)
+  assert.equal(Draft.setScreens(base, 'media', 'some'), base)
+  // Reset position clears the offset only.
+  const moved = { preset: 'foamy', layout: { media: { zone: 'bottom-end', offset: { x: 0.1, y: 0 } } } }
+  assert.deepEqual(plain(Draft.resetOffset(moved, 'media')), { preset: 'foamy', layout: { media: { zone: 'bottom-end' } } })
+  for (const entry of [glass, moved]) assert.ok(Layout.parseLook(entry).valid)
+})
+
+test('offsets as pixels and grid steps', () => {
+  assert.deepEqual(plain(Draft.offsetPixels({ x: 0.016667, y: -0.043519 }, W, H)), { x: 32, y: -47 })
+  assert.deepEqual(plain(Draft.offsetPixels(undefined, W, H)), { x: 0, y: 0 })
+  assert.equal(Draft.pixelsToSteps(45, H), 2)
+  assert.equal(Draft.pixelsToSteps(-47, H), -2.1)
+  assert.equal(Draft.stepsToPixels(2, H), 45)
+  assert.equal(Draft.stepsToPixels(-1, 720), -15)
+})
+
+test('background and glass edits stay within the lock\'s ranges', () => {
+  const base = { preset: 'foamy' }
+  assert.deepEqual(plain(Draft.setBackground(base, 'source', 'aurora')), { preset: 'foamy', background: { source: 'aurora' } })
+  assert.equal(Draft.setBackground(base, 'source', 'picture'), base, 'a picture needs a path')
+  assert.equal(Draft.setBackground(base, 'source', 'video'), base)
+  assert.equal(Draft.setBackground(base, 'path', '/a.png'), base, 'the path comes with the source')
+  assert.deepEqual(plain(Draft.setBackground(base, 'blur', 1.7)), { preset: 'foamy', background: { blur: 1 } })
+  assert.deepEqual(plain(Draft.setBackground(base, 'dim', 0.95)), { preset: 'foamy', background: { dim: 0.9 } })
+  assert.deepEqual(plain(Draft.setBackground(base, 'dim', 0.25)), base, 'the preset value is no change')
+  assert.equal(Draft.setBackground(base, 'dim', ''), base)
+  assert.deepEqual(plain(Draft.setBackground(base, 'decor', 'frame')), { preset: 'foamy', background: { decor: 'frame' } })
+  assert.equal(Draft.setBackground(base, 'decor', 'stars'), base)
+  const picture = Draft.setPicture(base, '/home/you/Pictures/lake.jpg')
+  assert.deepEqual(plain(picture), { preset: 'foamy', background: { source: 'picture', path: '/home/you/Pictures/lake.jpg' } })
+  assert.equal(Draft.setPicture(base, 'lake.jpg'), base, 'a relative path is refused')
+  assert.equal(Draft.setPicture(base, '/home/you/../lake.jpg'), base)
+  assert.equal(Draft.setPicture(base, '/home/you/lake.gif'), base)
+  // Back to the wallpaper keeps the path (the lock ignores it there).
+  assert.ok(Layout.parseLook(Draft.setBackground(picture, 'source', 'omarchy')).valid)
+  assert.deepEqual(plain(Draft.setGlassLook(base, 'tint', 'accent')), { preset: 'foamy', glass: { tint: 'accent' } })
+  assert.equal(Draft.setGlassLook(base, 'tint', 'gold'), base)
+  assert.deepEqual(plain(Draft.setGlassLook(base, 'opacity', 0.333)), { preset: 'foamy', glass: { opacity: 0.33 } })
+  assert.equal(Draft.setGlassLook(base, 'blur', 1), base)
+})
+
+test('a new preset can keep the draft\'s changes', () => {
+  const draft = { preset: 'foamy', layout: { clock: { scale: 1.5 }, media: { zone: 'bottom-end' } }, background: { dim: 0.5 } }
+  assert.deepEqual(plain(Draft.presetKeeping(draft, 'corner')),
+    { preset: 'corner', layout: { clock: { scale: 1.5 }, media: { zone: 'bottom-end' } }, background: { dim: 0.5 } })
+  // What equals the new preset is no longer a change.
+  assert.deepEqual(plain(Draft.presetKeeping({ preset: 'foamy', layout: { password: { style: 'underline' } } }, 'corner')), { preset: 'corner' })
+  assert.deepEqual(plain(Draft.presetKeeping({ preset: 'zen' }, 'foamy')), { preset: 'foamy' })
+  assert.equal(Draft.presetKeeping(draft, 'field-only'), null)
+  assert.equal(Draft.presetKeeping(draft, 'nope'), null)
+  assert.deepEqual(plain(Draft.setPreset(draft, 'corner')), { preset: 'corner' })
+})

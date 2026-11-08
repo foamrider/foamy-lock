@@ -203,8 +203,9 @@ function setZone(draft, name, zone) {
   return place(draft, name, zone, { x: 0, y: 0 })
 }
 
-// The drop: `zone`, last in its stack when it changes, and `offset`.
-function place(draft, name, zone, offset) {
+// The drop: `zone`, last in its stack when it changes, and `offset`; with
+// `show`, also shown (a module dragged in from the library), in one step.
+function place(draft, name, zone, offset, show) {
   if (name === "password" && Layout.PASSWORD_ZONES.indexOf(zone) === -1) return draft
   if (Layout.ZONES.indexOf(zone) === -1) return draft
   return editElement(draft, name, function(item, look) {
@@ -213,6 +214,7 @@ function place(draft, name, zone, offset) {
       item.zone = zone
     }
     item.offset = cleanOffset(name, offset || { x: 0, y: 0 })
+    if (show) item.hidden = false
   })
 }
 
@@ -243,6 +245,132 @@ function setHidden(draft, name, hidden) {
 // Start over from a preset: its look without any of the draft's changes.
 function setPreset(draft, name) {
   return Layout.SELECTABLE_PRESETS.indexOf(name) === -1 ? draft : { preset: name }
+}
+
+// The draft's changes carried over to another preset: its layout,
+// background and glass overrides on `name`, kept sparse against it. null
+// when the lock would refuse the result (or `name` isn't selectable).
+function presetKeeping(draft, name) {
+  if (Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return null
+  var next = { preset: name }
+  var keys = ["layout", "background", "glass"]
+  for (var i = 0; i < keys.length; i++) if (draft && draft[keys[i]] !== undefined) next[keys[i]] = copy(draft[keys[i]])
+  var parsed = Layout.parseLook(next)
+  return parsed.valid ? entry(parsed.look) : null
+}
+
+// --- the inspector's edits -------------------------------------------------
+
+function setStyle(draft, name, style) {
+  if (!Layout.STYLES[name] || Layout.STYLES[name].indexOf(style) === -1) return draft
+  return editElement(draft, name, function(item) { item.style = style })
+}
+
+// An opacity within the element's limits, in hundredths.
+function cleanOpacity(name, value) {
+  var limits = limitsFor(name).opacity
+  return roundTo(clamp(Number(value), limits.min, limits.max), 2)
+}
+
+function setOpacity(draft, name, value) {
+  if (value === null || value === "" || !isFinite(Number(value))) return draft
+  return editElement(draft, name, function(item) { item.opacity = cleanOpacity(name, value) })
+}
+
+// The element's own glass (hundredths, within its limits), or with null the
+// look's glass again. Only elements with a glass style take one.
+function setGlass(draft, name, value) {
+  if (!Layout.GLASS_STYLES[name]) return draft
+  var clear = value === null || value === undefined
+  if (!clear && (value === "" || !isFinite(Number(value)))) return draft
+  var limits = limitsFor(name).glass
+  return editElement(draft, name, function(item) {
+    if (clear) delete item.glass
+    else item.glass = roundTo(clamp(Number(value), limits.min, limits.max), 2)
+  })
+}
+
+// The glass the element shows: its own, else the look's.
+function glassOf(look, name) {
+  var item = look.elements[name]
+  return item && item.glass !== undefined ? item.glass : look.glass.opacity
+}
+
+// Whether the element's current style draws a glass surface.
+function hasGlass(look, name) {
+  var item = look.elements[name]
+  return !!item && !!Layout.GLASS_STYLES[name] && Layout.GLASS_STYLES[name].indexOf(item.style) !== -1
+}
+
+function setScreens(draft, name, screens) {
+  if (Layout.SCREENS_ELEMENTS.indexOf(name) === -1 || Layout.SCREENS.indexOf(screens) === -1) return draft
+  return editElement(draft, name, function(item) { item.screens = screens })
+}
+
+// Back to the zone position (no offset).
+function resetOffset(draft, name) {
+  return setOffset(draft, name, { x: 0, y: 0 })
+}
+
+// An offset in whole pixels of a `width` × `height` screen: the inspector
+// shows grid steps and pixels, the look keeps fractions.
+function offsetPixels(offset, width, height) {
+  return { x: Math.round((offset ? offset.x : 0) * width), y: Math.round((offset ? offset.y : 0) * height) }
+}
+
+// Pixels in grid steps (one decimal), and grid steps in whole pixels.
+function pixelsToSteps(pixels, height) {
+  return roundTo(pixels / gridStep(height), 1)
+}
+
+function stepsToPixels(steps, height) {
+  return Math.round(steps * gridStep(height))
+}
+
+// --- the scene: background and glass ----------------------------------------
+
+// Apply `edit(look)` to the entry's look; an edit the lock would refuse
+// returns the entry unchanged.
+function editLook(draft, edit) {
+  var look = lookOf(draft)
+  edit(look)
+  var next = entry(look)
+  return Layout.parseLook(next).valid ? next : draft
+}
+
+// The ranges the scene's sliders keep to (the lock's, in its own units).
+var SCENE_LIMITS = { blur: { min: 0, max: 1 }, dim: { min: 0, max: 0.9 }, opacity: { min: 0, max: 1 } }
+
+function cleanScene(key, value) {
+  var limits = SCENE_LIMITS[key]
+  return limits ? roundTo(clamp(Number(value), limits.min, limits.max), 2) : value
+}
+
+function isNumber(value) {
+  return value !== null && value !== "" && typeof value !== "boolean" && isFinite(Number(value))
+}
+
+// One background key: source, blur, dim or decor. The picture source needs
+// a path, so it is refused here without one (see setPicture).
+function setBackground(draft, key, value) {
+  if (Layout.BACKGROUND_KEYS.indexOf(key) === -1 || key === "path") return draft
+  if ((key === "blur" || key === "dim") && !isNumber(value)) return draft
+  return editLook(draft, function(look) { look.background[key] = cleanScene(key, value) })
+}
+
+// The picture background: source "picture" with `path`, in one step.
+function setPicture(draft, path) {
+  return editLook(draft, function(look) {
+    look.background.source = "picture"
+    look.background.path = String(path || "")
+  })
+}
+
+// One glass key: opacity or tint.
+function setGlassLook(draft, key, value) {
+  if (Layout.GLASS_KEYS.indexOf(key) === -1) return draft
+  if (key === "opacity" && !isNumber(value)) return draft
+  return editLook(draft, function(look) { look.glass[key] = cleanScene(key, value) })
 }
 
 // --- undo history ------------------------------------------------------------
@@ -564,7 +692,10 @@ if (typeof module !== "undefined") module.exports = {
   DISPLAY_ORDER: DISPLAY_ORDER, GRID_DIVISIONS: GRID_DIVISIONS, SNAP_RADIUS: SNAP_RADIUS, HISTORY_LIMIT: HISTORY_LIMIT,
   same: same, stable: stable, ordered: ordered, entry: entry, parse: parse, elementValue: elementValue, lookOf: lookOf, changeCount: changeCount, lastOrder: lastOrder,
   place: place, setZone: setZone, setOffset: setOffset, setScale: setScale, scaleBy: scaleBy, setOrder: setOrder,
-  setHidden: setHidden, setPreset: setPreset, cleanOffset: cleanOffset, cleanScale: cleanScale,
+  setHidden: setHidden, setPreset: setPreset, presetKeeping: presetKeeping, cleanOffset: cleanOffset, cleanScale: cleanScale,
+  setStyle: setStyle, setOpacity: setOpacity, cleanOpacity: cleanOpacity, setGlass: setGlass, glassOf: glassOf, hasGlass: hasGlass,
+  setScreens: setScreens, resetOffset: resetOffset, offsetPixels: offsetPixels, pixelsToSteps: pixelsToSteps, stepsToPixels: stepsToPixels,
+  SCENE_LIMITS: SCENE_LIMITS, setBackground: setBackground, setPicture: setPicture, setGlassLook: setGlassLook,
   history: history, push: push, undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo,
   gridStep: gridStep, snapRadius: snapRadius, dragAxis: dragAxis, zonesFor: zonesFor, bounds: bounds, clampRect: clampRect,
   nearestAnchor: nearestAnchor, snap: snap, drop: drop, offsetFrom: offsetFrom, neighbourZone: neighbourZone, nudge: nudge, gridMove: gridMove,
