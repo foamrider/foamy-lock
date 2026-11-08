@@ -38,6 +38,14 @@ Rectangle {
   readonly property bool card: styleName === "card"
   // A password being typed is never invisible, whichever surface has it.
   readonly property bool chromeShown: chromeVisible || view.passwordText.length > 0
+  // "always" (the default) or "typing": the underline, box, terminal and
+  // card hide their surface, border, line, prompt, greeting and arrow while
+  // nothing is typed and no failure or check shows. The unlock hint and the
+  // fingerprint notice stay, the editor stays focused (at opacity 0, as on
+  // every idle surface) and the field keeps its size, so nothing moves when
+  // it appears. The pill and dots already show only the hint when idle.
+  property string reveal: "always"
+  readonly property bool surfaceIdleHidden: reveal === "typing" && (underline || box || terminal || card) && !view.showPassword
   // The centre column at this element's scale (it bounds the hint and the
   // notice), and the field's own sizes.
   readonly property real contentWidth: view.contentWidthAt(uiScale)
@@ -55,11 +63,12 @@ Rectangle {
   readonly property string editorFontFamily: terminal ? FoamyStyle.monoFamily : view.textFontFamily
   // The surface behind everything: glass for the pill while typing, always
   // for the box and card, a dark panel for the terminal, none otherwise.
-  readonly property bool surfaceShown: chromeShown && (box || card || terminal || (styleName === "pill" && view.showPassword))
+  readonly property bool surfaceShown: chromeShown && !surfaceIdleHidden
+    && (box || card || terminal || (styleName === "pill" && view.showPassword))
   readonly property real submitWidth: Math.round(70 * uiScale)
   // The submit arrow: the pill and card while typing, the box always; the
   // dots and terminal submit with Enter alone.
-  readonly property bool submitShown: chromeShown && (box || (!dotsOnly && !terminal && view.showPassword))
+  readonly property bool submitShown: chromeShown && !surfaceIdleHidden && (box || (!dotsOnly && !terminal && view.showPassword))
   // The editor's inset from the leading and trailing edges of its area.
   readonly property real inset: Math.round(16 * uiScale)
   readonly property real editorLeading: terminal ? 0 : dotsOnly ? inset : fieldLeadingInset
@@ -91,19 +100,21 @@ Rectangle {
     height: field.card ? Math.round(50 * field.uiScale) : field.height
   }
 
-  // Where the idle hint sits: the editor area without the box's arrow segment.
+  // Where the idle hint sits: the editor area without the box's arrow
+  // segment (the whole area while the box is hidden).
   Item {
     id: hintArea
-    x: editorArea.x + (field.box && field.mirrored ? field.submitWidth : 0)
+    readonly property bool segment: field.box && !field.surfaceIdleHidden
+    x: editorArea.x + (segment && field.mirrored ? field.submitWidth : 0)
     y: editorArea.y
-    width: editorArea.width - (field.box ? field.submitWidth : 0)
+    width: editorArea.width - (segment ? field.submitWidth : 0)
     height: editorArea.height
   }
 
   Text {
     id: greeting
     objectName: "cardGreeting"
-    visible: field.card && field.chromeShown
+    visible: field.card && field.chromeShown && !field.surfaceIdleHidden
     x: Math.round(22 * field.uiScale)
     y: Math.round(20 * field.uiScale)
     width: field.width - 2 * x
@@ -120,7 +131,7 @@ Rectangle {
   // The card's inner pill, around the editor.
   Rectangle {
     objectName: "cardPill"
-    visible: field.card && field.chromeShown
+    visible: field.card && field.chromeShown && !field.surfaceIdleHidden
     x: editorArea.x
     y: editorArea.y
     width: editorArea.width
@@ -134,7 +145,7 @@ Rectangle {
   Text {
     id: prompt
     objectName: "terminalPrompt"
-    visible: field.terminal && field.chromeShown
+    visible: field.terminal && field.chromeShown && !field.surfaceIdleHidden
     x: field.mirrored ? field.width - field.inset - width : field.inset
     y: Math.round((field.height - height) / 2)
     textFormat: Text.PlainText
@@ -148,7 +159,8 @@ Rectangle {
 
   // The box's submit segment: a divider before the arrow.
   Rectangle {
-    visible: field.box && field.chromeShown
+    objectName: "boxDivider"
+    visible: field.box && field.chromeShown && !field.surfaceIdleHidden
     x: field.mirrored ? field.submitWidth : field.width - field.submitWidth - width
     y: Math.round(10 * field.uiScale)
     width: 1
@@ -158,7 +170,7 @@ Rectangle {
 
   Rectangle {
     objectName: "fieldUnderline"
-    visible: field.underline && field.chromeShown
+    visible: field.underline && field.chromeShown && !field.surfaceIdleHidden
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom

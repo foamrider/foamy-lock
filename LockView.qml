@@ -597,8 +597,9 @@ Item {
     Rectangle {
       objectName: "scrim"
       anchors.fill: parent
+      // The same holds for a field shown only while typing (password.reveal).
       color: Qt.rgba(0.005, 0.01, 0.025, Math.max(root.effectiveLook.background.dim,
-        ["underline", "dots"].indexOf(root.placed.password.style) !== -1 ? 0.15 : 0))
+        ["underline", "dots"].indexOf(root.placed.password.style) !== -1 || root.placed.password.reveal === "typing" ? 0.15 : 0))
     }
 
     MouseArea {
@@ -672,6 +673,7 @@ Item {
       glassOpacity: root.elementGlass("password")
       chromeVisible: root.primary
       styleName: root.placed.password.style
+      reveal: root.placed.password.reveal || "always"
       alignment: root.elementAlignment("password")
       x: root.placeX("password", width)
       y: root.placeY("password")
