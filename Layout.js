@@ -254,19 +254,10 @@ var PRESETS = {
     account: ["middle-start", "name", 2], password: ["middle-start", "underline", 3],
     media: ["bottom-start", "minimal"], status: ["top-end", "text"] },
   background("omarchy", 0, 0.45, [{ kind: "frame", radius: 0, style: "line" }])),
-  "zen": {
-    elements: {
-      date: element("top-center", "long", 0, true),
-      clock: element("top-center", "thin", 1, true),
-      account: element("bottom-center", "avatar", 0, true),
-      password: element("middle-center", "underline", 0),
-      media: element("bottom-start", "card", 0, true),
-      status: element("top-end", "text", 0, true),
-      calendar: noCalendar(),
-      weather: noWeather()
-    },
-    background: background("omarchy", 1, 0.4)
-  },
+  // A summer night: fireflies over a dark meadow, a quiet greeting and the
+  // field, nothing else.
+  "zen": compose({ account: ["middle-center", "greeting"], password: ["middle-center", "underline", 1] },
+    background("fireflies", 0, 0.1)),
   // A dock along the bottom: the time and date, the field and the player.
   "dock": compose({ clock: ["bottom-start", "small"], date: ["bottom-start", "short", 1], password: ["bottom-center", "box"],
     media: ["bottom-end", "pill"], status: ["top-end", "icons"] }, background("omarchy", 0.3, 0.2, "strip")),
@@ -287,9 +278,10 @@ var PRESETS = {
   "card": compose({ account: ["middle-center", "avatar"], clock: ["middle-center", "thin", 1, { scale: 0.5 }],
     date: ["middle-center", "caps", 2], password: ["middle-center", "box", 3], media: ["bottom-start", "minimal"],
     status: ["top-end", "icons"] }, background("omarchy", 0.5, 0.3, "card")),
-  // Black bars top and bottom: the time in one, the field in the other.
-  "cinema": compose({ clock: ["top-center", "small"], date: ["top-center", "caps", 1], password: ["bottom-center", "underline"] },
-    background("omarchy", 0, 0.1, "cinema")),
+  // A film still: black bars over a moonlit sea, the title in the top bar,
+  // the field and the music as a subtitle in the bottom one.
+  "cinema": compose({ date: ["top-center", "caps"], clock: ["top-center", "small", 1], password: ["bottom-center", "underline"],
+    media: ["bottom-center", "minimal", 1], status: ["top-end", "icons"] }, background("ocean", 0, 0.1, "cinema")),
   // Huge hours over minutes in the accent, printed on the wallpaper.
   "poster": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "poster", 1], password: ["bottom-start", "underline"],
     media: ["bottom-end", "minimal"], status: ["top-end", "text"] }, background("omarchy", 0, 0.4)),
@@ -322,23 +314,30 @@ var PRESETS = {
   // Now playing: the cover large in the middle over a blurred wallpaper.
   "music": compose({ clock: ["top-center", "small"], date: ["top-center", "short", 1], media: ["middle-center", "art", 0, { scale: 1.35 }],
     password: ["middle-center", "pill", 1], status: ["top-end", "icons"] }, background("omarchy", 0.6, 0.4)),
-  "aurora": compose({ date: ["middle-center", "long"], clock: ["middle-center", "thin", 1], password: ["middle-center", "pill", 2],
-    media: ["bottom-start", "card"], status: ["top-end", "text"] }, background("aurora", 0, 0.1)),
+  // Northern lights over a dark ridge; the time and field below it.
+  "aurora": compose({ date: ["bottom-center", "caps"], clock: ["bottom-center", "thin", 1, { scale: 0.75 }],
+    password: ["bottom-center", "pill", 2], status: ["top-end", "text"] }, background("aurora", 0, 0.1)),
+  // Rain at night behind a dark window: a mono clock and a terminal field.
   "rain": compose({ clock: ["middle-center", "mono"], date: ["middle-center", "caps", 1], password: ["middle-center", "terminal", 2],
     status: ["top-end", "icons"] }, background("rain", 0, 0, "card")),
-  "constellation": compose({ date: ["top-center", "long"], clock: ["top-center", "thin", 1], password: ["middle-center", "dots"],
-    status: ["top-end", "icons"] }, background("constellation", 0, 0)),
-  // A dot-matrix clock inside a dark bezel.
-  "dotmatrix": compose({ clock: ["middle-center", "dots"], date: ["middle-center", "caps", 1], password: ["middle-center", "dots", 2],
-    media: ["bottom-start", "line"], status: ["top-end", "icons"] }, background("omarchy", 0, 0.5, "frame")),
-  // The dot-matrix layout in three finishes: flat (solid surfaces),
-  // frosted (blurred glass) and fluent (a card with accent edges).
-  "flat": compose({ clock: ["middle-center", "thin"], date: ["middle-center", "caps", 1], password: ["middle-center", "box", 2],
-    media: ["bottom-start", "card"], status: ["top-end", "pill"] }, background("omarchy", 0, 0.3), { opacity: 1, tint: "solid" }),
+  // Stars; each typed character lights the next star of a figure.
+  "constellation": compose({ date: ["top-center", "caps"], clock: ["top-center", "thin", 1, { scale: 0.8 }],
+    password: ["middle-center", "dots"], status: ["top-end", "icons"] }, background("constellation", 0, 0)),
+  // An LED dot-matrix clock over digital rain in 5 × 7 glyphs, in a bezel.
+  "dotmatrix": compose({ clock: ["middle-center", "dots", 0, { scale: 1.2 }], date: ["middle-center", "caps", 1],
+    password: ["middle-center", "dots", 2], media: ["bottom-start", "line"], status: ["top-end", "icons"] },
+  background("matrix", 0, 0.2, [{ kind: "box", wrap: { zones: ["middle-center"] }, pad: { x: 48, y: 36 }, radius: 20,
+    fill: { color: "black", opacity: 0.78 } }, { kind: "frame" }])),
+  // Flat: a solid colour, solid surfaces, no edges.
+  "flat": compose({ clock: ["middle-center", "bold", 0, { scale: 1.1 }], date: ["middle-center", "caps", 1],
+    password: ["middle-center", "box", 2], media: ["bottom-start", "card"], status: ["top-end", "pill"] },
+  solid("accent", 0, 0.45), { opacity: 1, tint: "solid" }),
+  // Snow falling behind frosted glass.
   "frosted": compose({ date: ["middle-center", "long"], clock: ["middle-center", "thin", 1], password: ["middle-center", "box", 2],
-    media: ["bottom-start", "pill"], status: ["top-end", "pill"] }, background("omarchy", 0.8, 0.2)),
+    media: ["bottom-start", "pill"], status: ["top-end", "pill"] }, background("snow", 0, 0.15)),
+  // Soft colour flowing behind accent-edged glass and a greeting card.
   "fluent": compose({ clock: ["middle-center", "bold"], date: ["middle-center", "short", 1], password: ["middle-center", "card", 2],
-    media: ["bottom-start", "pill"], status: ["top-end", "pill"] }, background("omarchy", 0.4, 0.25), { opacity: 1, tint: "accent" }),
+    media: ["bottom-start", "pill"], status: ["top-end", "pill"] }, background("gradient", 0, 0.1), { opacity: 1, tint: "accent" }),
   "field-only": {
     elements: {
       date: element("top-center", "long", 0, true),

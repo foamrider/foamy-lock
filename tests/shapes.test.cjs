@@ -115,10 +115,12 @@ test('the canonical form: key order, defaults out, sorted wraps, list order kept
 
 test('the presets are templates or their own shapes, and the others have none', () => {
   const decorated = {dock: 'strip', island: 'island', split: 'split', sheet: 'sheet', card: 'card', cinema: 'cinema',
-    neon: 'frame', rain: 'card', dotmatrix: 'frame'}
-  // Their own: a thin page rule (editorial).
+    neon: 'frame', rain: 'card'}
+  // Their own: a thin page rule (editorial); an LED panel and the bezel (dotmatrix).
   const own = {
-    editorial: [{kind: 'frame', radius: 0, style: 'line'}]
+    editorial: [{kind: 'frame', radius: 0, style: 'line'}],
+    dotmatrix: [{kind: 'box', wrap: {zones: ['middle-center']}, pad: {x: 48, y: 36}, radius: 20, fill: {color: 'black', opacity: 0.78}},
+      {kind: 'frame'}]
   }
   for (const name of Object.keys(Layout.PRESETS)) {
     const look = Layout.preset(name)
