@@ -370,6 +370,15 @@ element off screen, two elements overlapping, the password field covered or too
 high) is listed under the canvas and stops Apply, one only at a reference size is
 a warning.
 
+**Element options.** The inspector also sets each element's own keys: the
+password field's **Show the field** (Always, or While typing for the styles that
+draw a surface), the status's items (a checklist: tick what it shows, reorder by
+the grip or with Alt+Up and Alt+Down; a new style starts from its own contents),
+and the weather's details and place name (off by default). The canvas shows sample
+volume, Bluetooth, keyboard layout and weather, never yours, and the problem check
+uses the widest samples. When the lock screen can't reach Foamy Weather, the
+Weather row says **Needs Foamy Weather**.
+
 | Keys | |
 | --- | --- |
 | Arrows | Move one grid step |

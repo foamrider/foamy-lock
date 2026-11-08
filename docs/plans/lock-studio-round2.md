@@ -640,6 +640,70 @@ quickshell). studio/, native/, bin/ and the studio harness are untouched.
   `keyboardLayout`, `weather` (`{temperature, unit, code, condition, high,
   low, location, updatedAtMs}`; never the real place).
 
+### R2-3/R2-4 (app side)
+
+On `feat/layout-engine` after the merge (3536636), 2026-11-08; offscreen only
+(the studio harness's fake omarchy-shell; nothing locked, no real
+omarchy-shell, hyprctl dispatch or desktop quickshell). native/, bin/,
+Backdrop.qml and the background page are untouched.
+- **After the merge:** the studio harness expects the hidden weather, and a
+  module dropped in `top-start` orders after it (`order: 1`). `Draft.entry`
+  reads `Layout.elementKeys(name)` (and `elementValue` fills the own keys'
+  defaults); `DISPLAY_ORDER` ends with `weather`.
+- **Lock fix found here:** the status's `naturalWidth` and the weather's
+  line geometry read `visible`, which is false in a view never drawn, so
+  the canvas's anchor probe and the checker measured an empty status and a
+  weather without its lower lines. Each part has its own `shown` now (pill:
+  a part count, not `visibleChildren`). Parity, styles, placement, layout,
+  render and runtime pass.
+- **Samples (SampleView):** `liveSources: false`; volume 64 %, Bluetooth on
+  with one device, a translated keyboard layout, and weather (12°, partly
+  cloudy, "Sample Town"/"Eksempelby"). `widest` (the Checker's views): -150°,
+  the 64-character condition, an 80-character place, volume 100 %, eight
+  devices, a long layout name, and /proc samples (the view is asleep, so it
+  reads nothing). Network, battery and the clock stay real; the battery
+  can't be sampled (`hasBattery` is the view's own UPower reading).
+- **Inspector:** a "Field" section for `reveal` (Segmented, values from
+  `elementLimits().password.options.reveal`; disabled outside
+  `reveal.styles`, with "%1 already shows only the hint until you type");
+  a "Shows" section for the status: an inline `ItemChecklist` (rows from
+  `Draft.statusRows`: shown items in order, then the rest; click/Space
+  switch, never the last; the grip drags with the canvas following through
+  `app.preview` and one undo step on release; Alt+Up/Down move; Up, Down,
+  Home, End walk), a note on items without data, and "Use the style's own";
+  for the weather, Details (Temperature / Full), "Show the place name"
+  (StudioToggle) with the privacy note and "the canvas shows sample
+  weather". Draft: `setOption`, `optionOf`, `statusItems`, `statusRows`,
+  `setItems` (a line style's own contents drop `items`; the system panel's
+  stay a list), `clearItems`, `toggleItem`, `moveItem`; `setStyle` clears
+  `items` on a new status style.
+- **Weather availability:** LockSources asks `foamy.lock catalog` (the same
+  omarchy-shell lookup as Preview, read only) on start and when the window
+  shows; only a version 3 catalog with a boolean `weather.target` changes
+  `weatherTarget` (null: unknown, never disables). Without Foamy Weather the
+  library row is disabled with "Needs Foamy Weather", the drag, Insert and
+  Shown can't show it, and Up/Down and `[`/`]` skip it
+  (`Draft.libraryStep`, `neighbourModule(…, usable)`); a weather already
+  shown stays usable so it can be hidden. The inspector says why.
+- **Style tiles:** drawings for date numeric, stacked, week; calendar
+  week, mini; weather compact, pill, detailed (the kit's `cloud-sun`
+  FoamyIcon: the tiles' Canvas icons don't draw in offscreen captures).
+- **Tips:** "Status can show your keyboard layout…" joined (nine tips).
+- **Tests:** node (own keys through the entry, the checklist edits, the
+  skipping walks); i18n built keys (reveal, details, items, the tip); studio
+  harness en/no/ar: samples and the widest checker views, probe = canvas for
+  status and weather, every style has a drawing, reveal, items (keys, drag,
+  never empty, reset, style change), weather details and place, the
+  catalog (yes, no, older, failing, back). The fake omarchy-shell answers
+  `catalog` from a file, counted apart. Captures: `studio-items`,
+  `studio-weather`, `studio-needs-weather`, `studio-date-styles`,
+  `studio-calendar-styles`, `studio-weather-styles`.
+- **Lint:** in a copied root, the same warning kinds as at 3536636 (more
+  `FoamyStyle.font.*` instances); the inspector's inline component had an
+  id clash qmllint reports as an error (fixed).
+- **Live app:** no new files, so the open app hot-reloads; LockSources
+  now runs `omarchy-shell foamy.lock catalog` (read only) when it loads.
+
 ## Open questions for the user
 
 None. Settled by the user on 2026-11-08:
