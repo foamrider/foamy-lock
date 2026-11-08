@@ -1138,13 +1138,14 @@ FocusScope {
 
   // A label on the reading start and a control on the end.
   component Labelled: RowLayout {
+    id: labelled
     property string text: ""
     default property alias control: slot.data
     spacing: FoamyStyle.gap
     Text {
       textFormat: Text.PlainText
       Layout.fillWidth: true
-      text: parent.text
+      text: labelled.text
       horizontalAlignment: Text.AlignLeft
       color: FoamyPalette.secondaryText
       font.family: FoamyStyle.fontFamily
