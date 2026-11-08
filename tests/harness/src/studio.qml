@@ -46,7 +46,16 @@ Item {
   function near(a, b, slack) { return Math.abs(a - b) <= (slack === undefined ? 1 : slack) }
   function reset() {
     canvas.cancelGesture()
+    // Saving: the lock's look is the default again; nothing asked or ending.
+    studio.session = "ready"
+    studio.restoreReport = null
+    studio.savedDraft = { preset: "foamy" }
+    studio.quitAsked = false
+    studio.quitAfterApply = false
+    studio.quitting = false
+    studio.quitDone = false
     studio.history = Draft.history({ preset: "foamy" })
+    studio.notice = null
     studio.previewDraft = null
     studio.previewState = "idle"
     studio.shortcutsOpen = false
@@ -111,6 +120,121 @@ Item {
     var started = Date.now()
     for (var i = 0; i < count; i++) studio.commit(i % 2 === 0 ? a : b)
     return (Date.now() - started) / count
+  }
+
+  // --- saving: the fake omarchy-shell, the draft file, waiting ---------------
+  // The harness's stand-in for omarchy-shell is first on PATH; its answer is
+  // the mode written here, and it records every call (count, call-<n>).
+  readonly property string fake: Quickshell.env("FOAMY_LOCK_STUDIO_FAKE") || ""
+  readonly property string draftPath: Quickshell.env("XDG_STATE_HOME") + "/foamy-lock/studio-draft.json"
+  property int caughtQuits: 0
+  // shell.qml calls this instead of Qt.quit() while the driver runs.
+  function catchQuit() { caughtQuits++ }
+  // Synchronous, and "" for a file that isn't there (a FileView keeps the
+  // last text it read). The harness sets QML_XHR_ALLOW_FILE_READ.
+  function readFile(file) {
+    var request = new XMLHttpRequest()
+    request.open("GET", "file://" + file, false)
+    try {
+      request.send()
+    } catch (error) {
+      return ""
+    }
+    return String(request.responseText || "")
+  }
+  function writeFile(file, text) {
+    writer.path = file
+    writer.setText(text)
+  }
+  function fakeCalls() { return Number(readFile(fake + "/count").trim()) || 0 }
+  function fakeCall(n) { return readFile(fake + "/call-" + n).replace(/\n$/, "").split("\n") }
+  function setMode(mode) { writeFile(fake + "/mode", mode + "\n") }
+  function hasDraft() { return readFile(draftPath).trim() !== "" }
+  // Poll `condition` every 50 ms, then next(); fail after `limit` ms.
+  function waitFor(condition, what, next, limit) {
+    var deadline = Date.now() + (limit || 15000)
+    poller.check = function() {
+      try {
+        if (condition()) next()
+        else if (Date.now() > deadline) fail("timed out waiting for " + what)
+        else poller.restart()
+      } catch (error) {
+        fail(error + (error.stack ? "\n" + error.stack : ""))
+      }
+    }
+    poller.restart()
+  }
+  // A look the lock doesn't have yet: the saved one, dimmed by `dim`.
+  function unappliedEdit(dim) {
+    studio.commit(Draft.setBackground(studio.savedDraft, "dim", dim))
+  }
+  function settled() { return !studio.checker.pending && studio.session === "ready" && studio.unapplied }
+  function noticeIs(key, kind) {
+    return studio.notice && studio.notice.kind === kind && studio.notice.text === key
+  }
+  // Apply's result for each fake answer: the words, the kind, whether it is
+  // saved, and how many calls (two when the first didn't answer).
+  readonly property var applyCases: [
+    { mode: "ok", text: "studio.applied", kind: "ok", saved: true, calls: 1 },
+    { mode: "unchanged", text: "studio.applied", kind: "ok", saved: true, calls: 1 },
+    { mode: "invalid-json", text: "studio.result.invalid-json", kind: "error", saved: false, calls: 1 },
+    { mode: "invalid", text: "studio.result.invalid", value: "layout has an unknown element: x", kind: "error", saved: false, calls: 1 },
+    { mode: "locked", text: "studio.result.locked.apply", kind: "warning", saved: false, calls: 1 },
+    { mode: "unsupported", text: "studio.result.unsupported", kind: "error", saved: false, calls: 1 },
+    { mode: "no-entry", text: "studio.result.no-entry", kind: "error", saved: false, calls: 1 },
+    { mode: "unexpected", text: "studio.result.unexpected", kind: "error", saved: false, calls: 1 },
+    { mode: "not-ready", text: "studio.result.not-ready", kind: "warning", saved: false, calls: 1 },
+    { mode: "not-running", text: "studio.result.not-running", kind: "error", saved: false, calls: 1 },
+    { mode: "target-not-found", text: "studio.result.target-not-found", kind: "error", saved: false, calls: 1 },
+    { mode: "function-not-found", text: "studio.result.function-not-found", kind: "error", saved: false, calls: 1 },
+    { mode: "failed", text: "studio.result.failed", kind: "error", saved: false, calls: 1 },
+    { mode: "not-responding", text: "studio.result.not-responding.apply", kind: "warning", saved: false, calls: 2 },
+    { mode: "not-responding-once", text: "studio.applied", kind: "ok", saved: true, calls: 2 }
+  ]
+  // One Apply against the fake, checked: a step body.
+  function applyCase(index, next) {
+    var c = applyCases[index]
+    reset()
+    setMode(c.mode === "not-responding-once" ? c.mode + ":" + Date.now() : c.mode)
+    var before = fakeCalls()
+    var saved = studio.savedDraft
+    unappliedEdit(0.31 + index / 100)
+    var sent = studio.draft
+    waitFor(settled, "the checker", function() {
+      expect(studio.canApply, "Apply is enabled with a change: " + json(studio.draft))
+      studio.apply()
+      expect(studio.notice && studio.notice.kind === "busy" && !studio.canApply, "applying shows and holds Apply")
+      waitFor(function() { return !studio.sources.applying && studio.notice && studio.notice.kind !== "busy" }, "the apply result", function() {
+        var expected = c.value ? FoamyI18n.t(c.text, c.value) : FoamyI18n.t(c.text)
+        expect(noticeIs(expected, c.kind), c.mode + ": notice " + json(studio.notice) + ", expected " + expected)
+        expect(studio.notice.text.indexOf("Saved") === -1 && studio.notice.text.indexOf("in time") === -1, "never the helper's words")
+        var calls = fakeCalls() - before
+        expect(calls === c.calls, c.mode + ": " + calls + " calls to omarchy-shell")
+        var args = fakeCall(fakeCalls())
+        expect(args[0] === "foamy.lock" && args[1] === "saveLook" && args.length === 3, "the call: " + json(args))
+        expect(args[2] === JSON.stringify(Draft.ordered(sent)), "the look in the lock's key order: " + args[2])
+        if (c.saved) {
+          expect(Draft.same(studio.savedDraft, sent) && !studio.unapplied && !studio.canApply, c.mode + ": the draft is the saved look")
+        } else {
+          expect(Draft.same(studio.savedDraft, saved) && studio.unapplied && studio.canApply, c.mode + ": nothing changes, Apply stays")
+        }
+        // The draft file: deleted after a save, kept otherwise.
+        waitFor(function() { return studio.sources.draftIdle && hasDraft() === !c.saved }, c.mode + ": the draft file " + (c.saved ? "deleted" : "kept"), next)
+      })
+    })
+  }
+
+  FileView { id: writer; printErrors: false; blockWrites: true; atomicWrites: false }
+  Timer {
+    id: poller
+    interval: 50
+    property var check: null
+    onTriggered: check()
+  }
+  Process {
+    id: whichShell
+    command: ["bash", "-c", "command -v omarchy-shell"]
+    stdout: StdioCollector { id: whichOutput; waitForEnd: true }
   }
 
   FileView { id: status; path: "/proc/self/status"; printErrors: false; blockLoading: true }
@@ -327,6 +451,7 @@ Item {
         expect(shown && shown.code === "element-overlap" && shown.names.indexOf("status") !== -1, "on the canvas: " + json(shown))
         expect(json(canvas.problemNames) === json(shown.names), "outlined " + json(canvas.problemNames))
         expect(studio.applyBlocked === problems.some(function(p) { return !p.reference }), "only a connected screen's problem blocks Apply")
+        expect(!studio.applyBlocked || !studio.canApply, "a blocking problem disables Apply")
         ok("checker: " + studio.checker.viewCount + " views, check " + studio.checker.lastCheckMs + " ms; " + studio.problemText(shown))
         capture("studio-problem", next)
       } },
@@ -631,6 +756,248 @@ Item {
         canvas.forceActiveFocus()
         next()
       } },
+    // --- saving ---------------------------------------------------------------
+    { name: "the fake omarchy-shell comes first", wait: 0, run: function(next) {
+        expect(test.fake !== "", "FOAMY_LOCK_STUDIO_FAKE is set")
+        whichShell.running = true
+        waitFor(function() { return !whichShell.running && whichOutput.text !== "" }, "command -v omarchy-shell", function() {
+          var found = whichOutput.text.trim()
+          // Never the real shell: stop here if anything else would answer.
+          if (found !== test.fake + "/bin/omarchy-shell") {
+            console.error("STUDIO_FAIL [" + label + "] omarchy-shell resolves to " + found)
+            Qt.exit(1)
+            return
+          }
+          next()
+        })
+      } },
+    { name: "the saved look and the draft on open", wait: 0, run: function(next) {
+        reset()
+        // shell.json has the lock's entry without look keys: the default.
+        expect(Draft.same(studio.savedDraft, { preset: "foamy" }), "saved look " + json(studio.savedDraft))
+        expect(studio.session === "ready" && !studio.unapplied && !studio.canApply, "no changes: nothing to apply")
+        var status = find(studio, "studioStatus")
+        expect(status && status.text === FoamyI18n.t("studio.matchesLock"), "status: " + (status ? status.text : "none"))
+        // The canvas moves only while the window can be seen and has the keyboard.
+        expect(view.displayAwake === (studio.awake && studio.Window.active), "displayAwake follows the window")
+        studio.commit({ preset: "zen" })
+        expect(studio.unapplied && status.text === FoamyI18n.t("studio.unapplied"), "an edit is not applied: " + status.text)
+        waitFor(function() { return studio.sources.draftIdle && readFile(test.draftPath).indexOf('"zen"') !== -1 },
+          "the draft written after an edit", next, 5000)
+      } },
+    { name: "the draft file holds the look and its undo steps", wait: 0, run: function(next) {
+        var stored = JSON.parse(readFile(test.draftPath))
+        expect(stored.version === 1 && Draft.same(stored.look, { preset: "zen" }), "look " + json(stored.look))
+        expect(stored.history.length >= 1 && Draft.same(stored.history[stored.history.length - 1], { preset: "foamy" }), "history " + json(stored.history))
+        next()
+      } },
+    { name: "a draft that differs asks on open", wait: 0, run: function(next) {
+        // As on a new start: the draft on disk and shell.json are read again.
+        studio.history = Draft.history({ preset: "foamy" })
+        studio.session = "loading"
+        studio.draftReport = null
+        studio.sources.loadDraft()
+        waitFor(function() { return studio.session === "ask" }, "the question", function() {
+          var dialog = find(studio, "studioRestoreDialog")
+          expect(dialog && dialog.visible && studio.questionOpen, "the restore question shows")
+          expect(Draft.same(studio.draft, { preset: "zen" }), "the draft shows behind it: " + json(studio.draft))
+          expect(Draft.canUndo(studio.history), "with its undo steps")
+          expect(find(studio, "studioRestoreContinue").activeFocus, "Continue editing has the keyboard")
+          expect(!studio.appKey(Qt.Key_Z, Qt.ControlModifier, "") && Draft.same(studio.draft, { preset: "zen" }), "keys behind it do nothing")
+          capture("studio-restore", next)
+        })
+      } },
+    { name: "start from saved deletes the draft", wait: 0, run: function(next) {
+        find(studio, "studioRestoreSaved").clicked()
+        expect(studio.session === "ready" && Draft.same(studio.draft, { preset: "foamy" }) && !Draft.canUndo(studio.history), "from the saved look")
+        waitFor(function() { return studio.sources.draftIdle && !hasDraft() }, "the draft deleted", next)
+      } },
+    { name: "continue editing keeps it", wait: 0, run: function(next) {
+        studio.commit({ preset: "corner" })
+        waitFor(function() { return studio.sources.draftIdle && hasDraft() }, "the draft written", function() {
+          studio.history = Draft.history({ preset: "foamy" })
+          studio.session = "loading"
+          studio.draftReport = null
+          studio.sources.loadDraft()
+          waitFor(function() { return studio.session === "ask" }, "the question", function() {
+            // Esc keeps it too.
+            expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, ""), "Esc answers")
+            expect(studio.session === "ready" && Draft.same(studio.draft, { preset: "corner" }) && hasDraft(), "continuing: " + json(studio.draft))
+            next()
+          })
+        })
+      } },
+    { name: "the lock's own look with undo steps doesn't ask", wait: 0, run: function(next) {
+        studio.commit({ preset: "foamy" })
+        waitFor(function() { return studio.sources.draftIdle && readFile(test.draftPath).indexOf('"look":{"preset":"foamy"}') !== -1 }, "the draft written", function() {
+          studio.history = Draft.history({ preset: "zen" })
+          studio.session = "loading"
+          studio.draftReport = null
+          studio.sources.loadDraft()
+          waitFor(function() { return studio.session !== "loading" }, "the start", function() {
+            expect(studio.session === "ready" && Draft.same(studio.draft, { preset: "foamy" }) && Draft.canUndo(studio.history),
+              "the same look starts with its steps: " + json(studio.history))
+            next()
+          })
+        })
+      } },
+    { name: "a corrupt draft is reported once", wait: 0, run: function(next) {
+        reset()
+        writeFile(test.draftPath, "{ not a draft")
+        studio.session = "loading"
+        studio.draftReport = null
+        studio.sources.loadDraft()
+        waitFor(function() { return studio.session === "ready" }, "the start", function() {
+          expect(noticeIs(FoamyI18n.t("studio.draft.corrupt"), "warning"), "notice " + json(studio.notice))
+          expect(Draft.same(studio.draft, { preset: "foamy" }), "from the saved look")
+          expect(readFile(test.draftPath.replace("studio-draft.json", "studio-draft.corrupt.json")).indexOf("not a draft") !== -1, "set aside")
+          expect(!hasDraft(), "the broken file is gone")
+          studio.commit({ preset: "zen" })
+          expect(studio.notice === null, "an edit clears it")
+          // A helper that can't start, or another failure, never stops the app.
+          studio.sources.applyDraft("draft-save", 127, "")
+          expect(noticeIs(FoamyI18n.t("studio.draft.saveFailed", FoamyI18n.t("studio.helperUnavailable")), "warning"), "save failed: " + json(studio.notice))
+          next()
+        })
+      } }
+  ].concat(applyCases.map(function(c, index) {
+    return { name: "apply: " + c.mode, wait: 0, run: function(next) { applyCase(index, next) } }
+  })).concat([
+    { name: "apply: answers without the fake", wait: 0, run: function(next) {
+        reset()
+        unappliedEdit(0.5)
+        var entry = Draft.ordered(studio.draft)
+        studio.sources.applyApply(127, "", entry)
+        expect(noticeIs(FoamyI18n.t("studio.helperUnavailable"), "error"), "unavailable: " + json(studio.notice))
+        studio.sources.applyApply(1, '{"ok":false,"code":"INVALID_REQUEST","error":"the look isn\'t JSON"}', entry)
+        expect(noticeIs(FoamyI18n.t("studio.result.error", "INVALID_REQUEST"), "error"), "refused: " + json(studio.notice))
+        studio.sources.applyApply(0, '{"ok":false,"result":"no-omarchy-shell","message":"omarchy-shell isn\'t installed.","confirmed":true,"attempts":0}', entry)
+        expect(noticeIs(FoamyI18n.t("studio.result.no-omarchy-shell"), "error"), "no omarchy-shell: " + json(studio.notice))
+        expect(studio.unapplied && Draft.same(studio.savedDraft, { preset: "foamy" }), "nothing saved")
+        next()
+      } },
+    { name: "apply needs a change and no problem on a screen", wait: 0, run: function(next) {
+        reset()
+        expect(!studio.canApply && !find(studio, "studioApply").enabled, "nothing to apply")
+        studio.commit({ preset: "foamy", layout: { status: { offset: { x: -0.4, y: 0.07 } } } })
+        waitFor(function() { return !studio.checker.pending }, "the checker", function() {
+          expect(studio.applyBlocked && !studio.canApply, "a problem on a connected screen blocks it")
+          next()
+        })
+      } },
+    { name: "preview full screen", wait: 0, run: function(next) {
+        reset()
+        setMode("ok")
+        unappliedEdit(0.45)
+        var before = fakeCalls()
+        studio.previewFull()
+        waitFor(function() { return !studio.sources.previewing && studio.notice && studio.notice.kind !== "busy" }, "the preview", function() {
+          expect(noticeIs(FoamyI18n.t("studio.previewShown"), "ok"), "notice " + json(studio.notice))
+          var args = fakeCall(fakeCalls())
+          expect(fakeCalls() - before === 1 && args[0] === "foamy.lock" && args[1] === "previewLook"
+            && args[2] === JSON.stringify(Draft.ordered(studio.draft)), "the call: " + json(args))
+          expect(studio.unapplied && Draft.same(studio.savedDraft, { preset: "foamy" }), "a preview saves nothing")
+          setMode("locked")
+          studio.previewFull()
+          waitFor(function() { return !studio.sources.previewing && studio.notice.kind !== "busy" }, "the preview", function() {
+            expect(noticeIs(FoamyI18n.t("studio.result.locked.preview"), "warning"), "locked: " + json(studio.notice))
+            setMode("not-running")
+            studio.previewFull()
+            waitFor(function() { return !studio.sources.previewing && studio.notice.kind !== "busy" }, "the preview", function() {
+              expect(noticeIs(FoamyI18n.t("studio.result.not-running"), "error"), "not running: " + json(studio.notice))
+              studio.sources.applyPreview(124, "", "")
+              expect(noticeIs(FoamyI18n.t("studio.result.not-responding"), "warning"), "timed out: " + json(studio.notice))
+              studio.sources.applyPreview(127, "", "bash: omarchy-shell: No such file or directory")
+              expect(noticeIs(FoamyI18n.t("studio.result.no-omarchy-shell"), "error"), "missing: " + json(studio.notice))
+              next()
+            })
+          })
+        })
+      } },
+    { name: "quitting without changes", wait: 0, run: function(next) {
+        reset()
+        var quits = test.caughtQuits
+        expect(studio.appKey(Qt.Key_Q, Qt.ControlModifier, "") && !studio.quitAsked, "Ctrl+Q doesn't ask")
+        waitFor(function() { return test.caughtQuits === quits + 1 }, "the quit", next, 4000)
+      } },
+    { name: "quitting with changes asks", wait: 0, run: function(next) {
+        reset()
+        unappliedEdit(0.55)
+        waitFor(settled, "the checker", function() {
+          var quits = test.caughtQuits
+          expect(studio.appKey(Qt.Key_Q, Qt.ControlModifier, "") && studio.quitAsked, "Ctrl+Q asks")
+          expect(find(studio, "studioQuitDialog").visible && find(studio, "studioQuitApply").activeFocus, "Apply and quit has the keyboard")
+          expect(test.caughtQuits === quits, "not yet")
+          capture("studio-quit", next)
+        })
+      } },
+    { name: "quit: cancel, and closing the window asks too", wait: 0, run: function(next) {
+        expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && !studio.quitAsked, "Esc cancels")
+        var quits = test.caughtQuits
+        window.closed()
+        expect(studio.quitAsked && test.caughtQuits === quits, "closing asks")
+        find(studio, "studioQuitCancel").clicked()
+        expect(!studio.quitAsked && window.visible, "cancelled; the window stays")
+        waitFor(function() { return studio.sources.draftIdle && hasDraft() }, "the draft kept", next)
+      } },
+    { name: "quit: apply fails, nothing quits", wait: 0, run: function(next) {
+        setMode("locked")
+        var quits = test.caughtQuits
+        studio.requestQuit()
+        find(studio, "studioQuitApply").clicked()
+        waitFor(function() { return !studio.sources.applying && !studio.quitAsked }, "the apply", function() {
+          expect(noticeIs(FoamyI18n.t("studio.result.locked.apply"), "warning") && test.caughtQuits === quits && !studio.quitting,
+            "the problem shows and the app stays: " + json(studio.notice))
+          next()
+        })
+      } },
+    { name: "quit: apply and quit", wait: 0, run: function(next) {
+        setMode("ok")
+        var quits = test.caughtQuits
+        var sent = studio.draft
+        studio.requestQuit()
+        find(studio, "studioQuitApply").clicked()
+        waitFor(function() { return test.caughtQuits === quits + 1 }, "the quit", function() {
+          expect(Draft.same(studio.savedDraft, sent) && !hasDraft(), "applied, the draft deleted")
+          next()
+        })
+      } },
+    { name: "quit: discard deletes the draft", wait: 0, run: function(next) {
+        reset()
+        unappliedEdit(0.65)
+        waitFor(function() { return settled() && studio.sources.draftIdle && hasDraft() }, "the draft", function() {
+          var quits = test.caughtQuits
+          studio.requestQuit()
+          find(studio, "studioQuitDiscard").clicked()
+          waitFor(function() { return test.caughtQuits === quits + 1 }, "the quit", function() {
+            expect(!hasDraft(), "the draft is deleted")
+            next()
+          })
+        })
+      } },
+    { name: "screens plugged in and out during a check", wait: 0, run: function(next) {
+        reset()
+        studio.commit({ preset: "foamy", layout: { status: { offset: { x: -0.4, y: 0.07 } } } })
+        var all = studio.monitors
+        var extra = { key: "screen:HDMI-A-9", name: "HDMI-A-9", label: "HDMI-A-9 · 1280 × 1024", reference: false, width: 1280, height: 1024 }
+        // Mid-debounce: one screen gone, then a new one, then a check at once.
+        studio.checker.sizes = all.slice(1)
+        studio.checker.sizes = all.slice(1).concat([extra])
+        studio.checker.check()
+        studio.monitorKey = "screen:gone"
+        expect(studio.monitor.key === all[0].key, "a gone screen falls back to the first: " + studio.monitor.key)
+        waitFor(function() { return !studio.checker.pending }, "the check", function() {
+          var keys = studio.checker.sizes.map(function(s) { return s.key })
+          var problems = studio.checker.problems
+          expect(problems.length > 0 && problems.every(function(p) { return keys.indexOf(p.key) !== -1 }), "problems only for screens there: " + json(problems))
+          expect(problems.some(function(p) { return p.key === extra.key && p.width === 1280 }), "the new screen is checked at its size")
+          studio.checker.sizes = Qt.binding(function() { return studio.monitors })
+          studio.monitorKey = "reference:1920x1080"
+          reset()
+          next()
+        })
+      } }
+  ]).concat([
     { name: "costs", wait: 600, run: function(next) {
         var a = { preset: "foamy" }, b = { preset: "foamy", layout: { clock: { scale: 1.1 }, media: { zone: "bottom-end" } } }
         var withChecker = commitCost(a, b, 20)
@@ -686,7 +1053,7 @@ Item {
         expect(window.visible, "the window stays shown")
         next()
       } }
-  ]
+  ])
 
   Timer {
     id: runner

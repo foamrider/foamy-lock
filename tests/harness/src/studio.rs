@@ -17,6 +17,15 @@
 //! sandbox. The file chooser itself is never started: its replies are fed
 //! to the app's handler.
 //!
+//! Saving runs for real against a stand-in: a fake `omarchy-shell` first on
+//! PATH (`FAKE_SHELL`; the driver stops before any Apply unless
+//! `command -v omarchy-shell` finds it), whose answer the driver sets. The
+//! app's draft, Apply and Preview go through the real helper's `studio`
+//! subcommands into the temporary HOME. The driver checks every Apply
+//! result (the retry when the shell doesn't answer included), the restore
+//! question on open, a corrupt draft, Preview, the quit guard (shell.qml
+//! hands quitting to the driver) and screens coming and going mid-check.
+//!
 //! The driver checks the window, focus and drawing, drives drags, resizes
 //! and keys through the canvas's hooks, the inspector's, library's, preset
 //! menu's and scene page's controls, and compares the look JSON; it
@@ -52,7 +61,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 ];
 const COMMONS: &str = "Commons";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 11] = [
+const CAPTURES: [&str; 13] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -64,10 +73,61 @@ const CAPTURES: [&str; 11] = [
     "studio-preset-dialog",
     "studio-background",
     "studio-glass",
+    "studio-restore",
+    "studio-quit",
 ];
 /// The lock's entry the app reads (read-only) for the canvas.
 const SHELL_JSON: &str =
     r#"{"version": 1, "plugins": [{"id": "foamy.lock", "timeFormat": "12h"}]}"#;
+
+/// The stand-in for omarchy-shell, first on the app's PATH: never the real
+/// shell. It answers what `$dir/mode` says (a result of `studio apply`;
+/// "not-responding-once:<token>" doesn't answer once per token, then says
+/// "unchanged") and records each call's arguments in `$dir/call-<n>`, the
+/// number of calls in `$dir/count`. Anything but `foamy.lock saveLook` or
+/// `previewLook` with one argument is refused.
+const FAKE_SHELL: &str = r#"#!/bin/bash
+dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
+echo "$n" > "$dir/count"
+printf '%s\n' "$@" > "$dir/call-$n"
+if [[ $# -ne 3 || $1 != foamy.lock || ( $2 != saveLook && $2 != previewLook ) ]]; then
+  echo "fake omarchy-shell: unexpected call" >&2
+  exit 2
+fi
+mode=$(cat "$dir/mode" 2>/dev/null || echo ok)
+not_responding() { echo 'omarchy-shell is not responding' >&2; exit 1; }
+case $mode in
+  ok|unchanged|invalid-json|locked|unsupported|no-entry) echo "$mode" ;;
+  invalid) echo 'invalid: layout has an unknown element: x' ;;
+  unexpected) echo 'saved, probably' ;;
+  not-responding) not_responding ;;
+  not-responding-once:*)
+    marker="$dir/once-${mode#*:}"
+    [[ -e $marker ]] || { : > "$marker"; not_responding; }
+    echo unchanged ;;
+  not-ready) echo 'omarchy-shell is not ready' >&2; exit 1 ;;
+  not-running) echo 'omarchy-shell is not running' >&2; exit 1 ;;
+  target-not-found) echo 'Target not found.' >&2; exit 1 ;;
+  function-not-found) echo 'Function not found.' >&2; exit 1 ;;
+  failed) echo 'qs: something broke' >&2; exit 3 ;;
+  *) echo "fake omarchy-shell: unknown mode $mode" >&2; exit 2 ;;
+esac
+"#;
+
+/// The fake omarchy-shell in `base/fake-shell/bin`; returns its directory.
+fn fake_shell(base: &Path) -> Result<PathBuf, String> {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = base.join("fake-shell");
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).map_err(app::io(bin.display()))?;
+    let script = bin.join("omarchy-shell");
+    fs::write(&script, FAKE_SHELL).map_err(app::io("omarchy-shell"))?;
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
+        .map_err(app::io("omarchy-shell"))?;
+    fs::write(dir.join("mode"), "ok\n").map_err(app::io("mode"))?;
+    Ok(dir)
+}
 
 /// A `width` × `height` diagonal gradient between two colours, as a PNG.
 fn gradient(width: u32, height: u32, from: [u8; 3], to: [u8; 3]) -> Vec<u8> {
@@ -391,6 +451,15 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
     build_root(&root, shell, &base)?;
     app::install_theme(&base)?;
     let picture = desktop(&base)?.display().to_string();
+    let fake = fake_shell(&base)?;
+    let fake_text = fake.display().to_string();
+    // The fake comes first, so neither the app nor the helper reaches the
+    // real omarchy-shell.
+    let path = format!(
+        "{}:{}",
+        fake.join("bin").display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
     let out_text = out.display().to_string();
     let mut raised = None;
     let mut tick = |log: &str, env: &[(String, String)]| -> Result<(), String> {
@@ -411,6 +480,9 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
             ("FOAMY_LOCK_STUDIO_TEST", "1"),
             ("FOAMY_LOCK_STUDIO_OUT", &out_text),
             ("FOAMY_LOCK_STUDIO_PICTURE", &picture),
+            ("FOAMY_LOCK_STUDIO_FAKE", &fake_text),
+            ("PATH", &path),
+            ("QML_XHR_ALLOW_FILE_READ", "1"),
         ],
         &mut tick,
     )?;
@@ -434,6 +506,11 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
         ));
     }
     check_drawn(&output, &out)?;
+    let calls = fs::read_to_string(fake.join("count")).unwrap_or_default();
+    println!(
+        "studio ok: {} calls to the fake omarchy-shell",
+        calls.trim()
+    );
     println!(
         "studio ok: raised over IPC ({})",
         raised.unwrap_or_default()
