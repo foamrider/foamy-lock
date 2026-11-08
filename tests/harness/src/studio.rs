@@ -48,6 +48,8 @@ use serde_json::Value;
 use crate::{app, host, png, styles};
 
 const DRIVER: &str = include_str!("studio.qml");
+/// The acceptance test's recipes (the driver imports it as Recipe.js).
+const RECIPE: &str = include_str!("../../studio-recipe.js");
 /// The root's links into the plugin, and whether they're required (root.rs).
 const PLUGIN_LINKS: [(&str, bool); 8] = [
     ("elements", true),
@@ -396,6 +398,7 @@ fn build_root(root: &Path, shell: &Path, out: &Path) -> Result<(), String> {
     let _ = fs::remove_dir_all(&scratch);
     let driver = root.join("StudioTest.qml");
     fs::write(&driver, DRIVER).map_err(app::io("StudioTest.qml"))?;
+    fs::write(root.join("Recipe.js"), RECIPE).map_err(app::io("Recipe.js"))?;
     let mut registered = links.clone();
     registered.insert("LockView.qml".into(), root.join("LockView.qml"));
     registered.insert("StudioTest.qml".into(), driver);

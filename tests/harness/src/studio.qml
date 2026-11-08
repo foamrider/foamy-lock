@@ -12,6 +12,7 @@ import "kit"
 import "Layout.js" as Layout
 import "Draft.js" as Draft
 import "Model.js" as Model
+import "Recipe.js" as Recipe
 
 Item {
   id: test
@@ -78,6 +79,37 @@ Item {
     studio.applyAfterPreset = null
     studio.presetMenu.close()
   }
+  // Run one recipe step on the real control (Recipe.js): open its page from
+  // the library (a module's row, a scene page, a shape's row), find the
+  // control there by its objectName, and do to it what a person would.
+  function recipeStep(step) {
+    var root = studio.scenePage
+    if (step.page === "module") {
+      find(studio.library, "studioLibrary-" + step.module).clicked()
+      root = studio.inspector
+    } else if (step.page === "background") find(studio.library, "studioSceneBackground").clicked()
+    else if (step.page === "glass") find(studio.library, "studioSceneGlass").clicked()
+    else {
+      find(studio.library, "studioSceneShapes").clicked()
+      if (step.shape !== undefined && step.control !== "studioShape-" + step.shape) find(root, "studioShape-" + step.shape).clicked()
+    }
+    var control = find(root, step.control)
+    expect(control !== null && control.visible && control.enabled, "the control " + step.control + " on " + step.page + " ("
+      + (control ? [control.visible, control.enabled] : "missing") + ")")
+    switch (step.act) {
+    case "toggle": control.toggled(); break
+    case "click": control.clicked(); break
+    case "choose": control.choose(); break
+    case "commit": control.committed(step.value); break
+    case "pick":
+      // Tiles choose by their place (as a click or the keyboard does).
+      if (control.choose !== undefined && control.options !== undefined) control.choose(control.options.indexOf(step.value))
+      else control.picked(step.value)
+      break
+    default: fail("a step without an act: " + json(step))
+    }
+  }
+
   // The first item under `item` with this objectName, or null.
   function find(item, name) {
     if (!item) return null
@@ -184,7 +216,7 @@ Item {
     poller.check = function() {
       try {
         if (condition()) next()
-        else if (Date.now() > deadline) fail("timed out waiting for " + what)
+        else if (Date.now() > deadline) fail("timed out waiting for " + (typeof what === "function" ? what() : what))
         else poller.restart()
       } catch (error) {
         fail(error + (error.stack ? "\n" + error.stack : ""))
@@ -1796,6 +1828,51 @@ Item {
         expect(!studio.applyBlocked && json(canvas.problemNames) === "[]", "advice never blocks Apply nor outlines a problem")
         expect(studio.problemText(advice[0]) === FoamyI18n.t("studio.problem.shape-empty", [1, advice[0].label]), "in words: " + studio.problemText(advice[0]))
         next()
+      } },
+    // The acceptance test: every built-in preset made from plain foamy with
+    // the real controls (a generated recipe; tests/studio-recipe.js), equal
+    // to the preset's look, and drawn as a view of the preset draws it.
+    { name: "acceptance: every preset from Lock Studio's controls", wait: 0, run: function(next) {
+        test.saved.acceptAt = 0
+        test.saved.acceptSteps = 0
+        next()
+      } },
+    { name: "acceptance: one preset", wait: 0, run: function(next) {
+        var name = Layout.SELECTABLE_PRESETS[test.saved.acceptAt]
+        var target = Layout.preset(name)
+        var recipe = Recipe.recipeFor(target)
+        expect(recipe.problems.length === 0, name + ": " + json(recipe.problems))
+        reset()
+        for (var i = 0; i < recipe.steps.length; i++) recipeStep(recipe.steps[i])
+        expect(Recipe.sameLook(studio.look, target), name + ": made " + json(Recipe.comparable(studio.look)) + ", the preset is "
+          + json(Recipe.comparable(target)))
+        expect(Draft.same(studio.look.background, target.background) && Draft.same(studio.look.glass, target.glass), name + ": the background and glass")
+        test.saved.acceptSteps += recipe.steps.length
+        var reference = Qt.createQmlObject('import QtQuick; SampleView { opacity: 0; z: -1 }', studio, Qt.resolvedUrl("AcceptView.qml"))
+        reference.width = view.width
+        reference.height = view.height
+        reference.rightToLeft = view.rightToLeft
+        reference.timeFormat = view.timeFormat
+        reference.showUserInfo = view.showUserInfo
+        reference.showMedia = view.showMedia
+        reference.previewState = view.previewState
+        reference.look = target
+        // Once the reference view has laid out (its fonts and images).
+        function drawnAlike() {
+          return json(find(view, "decoration").surfaces) === json(find(reference, "decoration").surfaces)
+            && json(view.elementRects) === json(reference.elementRects)
+        }
+        test.saved.acceptWhat = function() {
+          return name + ": the canvas draws " + json(find(view, "decoration").surfaces) + " " + json(view.elementRects) + ", the preset "
+            + json(find(reference, "decoration").surfaces) + " " + json(reference.elementRects)
+        }
+        waitFor(drawnAlike, test.saved.acceptWhat, function() {
+          reference.destroy()
+          ok(name + " recreated in " + recipe.steps.length + " steps")
+          if (++test.saved.acceptAt < Layout.SELECTABLE_PRESETS.length) test.at--
+          else ok("acceptance: " + Layout.SELECTABLE_PRESETS.length + " presets, " + test.saved.acceptSteps + " control steps")
+          next()
+        }, 4000)
       } },
     { name: "Move up and Move down in zone", wait: 0, run: function(next) {
         reset()
