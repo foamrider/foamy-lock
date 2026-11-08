@@ -44,7 +44,11 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
     'not-responding.preset'].map(r => 'result.' + r),
   // User preset operations (StudioWindow.resultText) and the tips (Tips.qml).
   ...['save', 'rename', 'delete'].map(op => 'presets.done.' + op),
-  ...['mugshot', 'library', 'drag', 'keys', 'look', 'presets', 'preview', 'shortcuts'].map(t => 'tip.' + t)];
+  ...['mugshot', 'library', 'drag', 'keys', 'look', 'presets', 'preview', 'shortcuts'].map(t => 'tip.' + t),
+  // Each element's own keys (Inspector.qml): their values, and the status items.
+  ...Layout.ELEMENT_OPTIONS.password.reveal.values.map(v => 'reveal.' + v),
+  ...Layout.ELEMENT_OPTIONS.weather.details.values.map(v => 'details.' + v),
+  ...Layout.STATUS_ITEMS.map(i => 'item.' + i)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);

@@ -859,6 +859,118 @@ Item {
         expectDraft('{"preset":"foamy"}')
         next()
       } },
+    { name: "inspector: the password field's reveal", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("password")
+        var reveal = find(studio.inspector, "studioReveal"), note = find(studio.inspector, "studioRevealNote")
+        expect(reveal.visible && reveal.options.length === 2 && reveal.value === "always", "the reveal choice: " + json(reveal.options))
+        expect(reveal.options[1].label === FoamyI18n.t("studio.reveal.typing"), "labelled: " + reveal.options[1].label)
+        // Foamy's pill already shows only the hint: disabled, with the reason.
+        expect(!reveal.enabled && note.text === FoamyI18n.t("studio.reveal.notHere", FoamyI18n.t("studio.style.pill")), "disabled for the pill: " + note.text)
+        find(studio.inspector, "studioStyles").picked("box")
+        expect(reveal.enabled && note.text === FoamyI18n.t("studio.reveal.hint"), "enabled for the box")
+        reveal.picked("typing")
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","reveal":"typing"}}}')
+        var field = view.elementItem("password")
+        expect(field.surfaceIdleHidden === true, "idle on the canvas: the surface hides")
+        studio.previewState = "typing"
+        expect(field.surfaceIdleHidden === false, "typing: it shows")
+        studio.previewState = "idle"
+        reveal.picked("always")
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box"}}}')
+        reveal.picked("typing")
+        // Another style that ignores it keeps the key, and says why.
+        find(studio.inspector, "studioStyles").picked("dots")
+        expect(!reveal.enabled && reveal.value === "typing" && note.text === FoamyI18n.t("studio.reveal.notHere", FoamyI18n.t("studio.style.dots")),
+          "the dots: kept, disabled")
+        expect(!find(studio.inspector, "studioItems").visible && !find(studio.inspector, "studioDetails").visible, "only the field's own keys")
+        var undos = 0
+        while (Draft.canUndo(studio.history)) { studio.undo(); undos++ }
+        expect(undos === 5, "undo steps " + undos)
+        next()
+      } },
+    { name: "inspector: the status items", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("status")
+        var list = find(studio.inspector, "studioItems")
+        expect(list.visible && list === studio.inspector.checklist, "the checklist")
+        var names = function() { return list.rows.map(function(r) { return r.name + (r.on ? "+" : "-") }).join() }
+        // From the style's own contents (elementLimits' defaults).
+        expect(names() === Layout.elementLimits().status.options.items.defaults.text.map(function(n) { return n + "+" })
+          .concat(["volume-", "bluetooth-", "keyboard-", "uptime-", "load-", "memory-"]).join(), "rows " + names())
+        var row = find(list, "studioItem-keyboard")
+        expect(row && row.Accessible.role === Accessible.CheckBox && row.Accessible.name === FoamyI18n.t("studio.item.keyboard")
+          && !row.Accessible.checked, "a named check box")
+        list.toggle(4)
+        expectDraft('{"preset":"foamy","layout":{"status":{"items":["network","battery","keyboard"]}}}')
+        expect(find(view, "keyboardStatus").visible, "the layout shows on the canvas")
+        // The keyboard: Up and Down walk, Alt moves, Space switches.
+        list.forceActiveFocus(Qt.TabFocusReason)
+        list.cursor = 2
+        expect(list.keyPressed(Qt.Key_Up, Qt.AltModifier) && list.cursor === 1, "Alt+Up moves it")
+        expectDraft('{"preset":"foamy","layout":{"status":{"items":["network","keyboard","battery"]}}}')
+        list.keyPressed(Qt.Key_Up, Qt.AltModifier)
+        list.keyPressed(Qt.Key_Up, Qt.AltModifier)
+        expect(list.cursor === 0, "it stops at the top")
+        expectDraft('{"preset":"foamy","layout":{"status":{"items":["keyboard","network","battery"]}}}')
+        list.keyPressed(Qt.Key_End, Qt.NoModifier)
+        expect(list.cursor === 7, "End")
+        list.keyPressed(Qt.Key_Space, Qt.NoModifier)
+        expect(Draft.same(studio.look.elements.status.items, ["keyboard", "network", "battery", "memory"]), "Space switches memory on")
+        list.keyPressed(Qt.Key_Down, Qt.AltModifier)
+        expect(Draft.same(studio.look.elements.status.items, ["keyboard", "network", "battery", "memory"]), "the last one shown can't go lower")
+        // The grip: the canvas follows the drag, one step on release.
+        var steps = studio.history.past.length
+        expect(list.dragStart(3) && find(find(list, "studioItem-memory"), "studioItemGrip").visible, "dragging memory by its grip")
+        list.dragMove(-2.4 * list.rowHeight)
+        expect(list.dragTo === 1 && view.look.elements.status.items[1] === "memory" && studio.look.elements.status.items[3] === "memory",
+          "the canvas shows it moved: " + json(view.look.elements.status.items))
+        list.dragMove(-9 * list.rowHeight)
+        expect(list.dragTo === 0, "held to the items shown: " + list.dragTo)
+        list.dragEnd()
+        expectDraft('{"preset":"foamy","layout":{"status":{"items":["memory","keyboard","network","battery"]}}}')
+        expect(studio.history.past.length === steps + 1 && studio.previewDraft === null && list.cursor === 0, "one undo step")
+        expect(!list.dragStart(6), "an item not shown has no place to drag")
+        capture("studio-items", function() {
+          // Never empty.
+          for (var i = 0; i < 4; i++) list.toggle(0)
+          expectDraft('{"preset":"foamy","layout":{"status":{"items":["battery"]}}}')
+          expect(find(list, "studioItem-battery").last && !find(find(list, "studioItem-battery"), "studioItemGrip").visible, "the last item stays")
+          var reset = find(studio.inspector, "studioItemsReset")
+          expect(reset.visible, "back to the style's own")
+          reset.clicked()
+          expectDraft('{"preset":"foamy"}')
+          expect(!reset.visible, "nothing to reset")
+          // A new style starts from its own contents.
+          list.toggle(4)
+          find(studio.inspector, "studioStyles").picked("pill")
+          expectDraft('{"preset":"foamy","layout":{"status":{"style":"pill"}}}')
+          find(studio.inspector, "studioStyles").picked("system")
+          expect(names().indexOf("uptime+,memory+,load+,battery+,network-") === 0, "the panel's own rows: " + names())
+          next()
+        })
+      } },
+    { name: "inspector: the weather's details and place", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("weather")
+        var details = find(studio.inspector, "studioDetails"), place = find(studio.inspector, "studioLocation")
+        expect(details.visible && details.value === "temperature" && place.visible && !place.checked, "temperature only, no place")
+        expect(find(studio.inspector, "studioLocationNote").text === FoamyI18n.t("studio.location.note")
+          && find(studio.inspector, "studioWeatherSample").text === FoamyI18n.t("studio.weather.sample"), "the privacy notes")
+        find(studio.inspector, "studioShown").toggled()
+        details.picked("full")
+        place.toggled()
+        expectDraft('{"preset":"foamy","layout":{"weather":{"hidden":false,"details":"full","location":true}}}')
+        expect(find(view, "weatherCondition").text.indexOf(FoamyI18n.t("studio.sample.condition")) !== -1
+          && find(view, "weatherLocation").text === FoamyI18n.t("studio.sample.place"), "the sample on the canvas")
+        studio.inspector.flickable.contentY = studio.inspector.flickable.contentHeight
+        capture("studio-weather", function() {
+          place.toggled()
+          details.picked("temperature")
+          expectDraft('{"preset":"foamy","layout":{"weather":{"hidden":false}}}')
+          next()
+        })
+      } },
     { name: "library: drag a hidden module onto the canvas", wait: 0, run: function(next) {
         reset()
         studio.libraryDragStart("calendar")

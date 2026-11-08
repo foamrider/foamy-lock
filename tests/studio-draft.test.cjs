@@ -651,3 +651,68 @@ test('preview answers from omarchy-shell become reports', () => {
   assert.equal(report(127, '', 'bash: no such file'), 'no-omarchy-shell')
   assert.equal(report(2, '', 'boom'), 'failed')
 })
+
+test('each element\'s own keys survive the sparse entry and drop out at their defaults', () => {
+  const base = { preset: 'foamy' }
+  const typing = Draft.setOption(base, 'password', 'reveal', 'typing')
+  assert.deepEqual(plain(typing), { preset: 'foamy', layout: { password: { reveal: 'typing' } } })
+  assert.deepEqual(plain(Draft.setOption(typing, 'password', 'reveal', 'always')), base, 'the default is no change')
+  assert.equal(Draft.setOption(base, 'password', 'reveal', 'later'), base, 'an unknown value is refused')
+  assert.equal(Draft.setOption(base, 'clock', 'reveal', 'typing'), base, 'a key of another module is refused')
+  assert.equal(Draft.setOption(base, 'status', 'items', ['network']), base, 'items has its own edits')
+  const full = Draft.setOption(Draft.setOption(base, 'weather', 'details', 'full'), 'weather', 'location', true)
+  assert.deepEqual(plain(full), { preset: 'foamy', layout: { weather: { details: 'full', location: true } } })
+  assert.deepEqual(plain(Draft.setOption(full, 'weather', 'location', false)), { preset: 'foamy', layout: { weather: { details: 'full' } } })
+  assert.equal(Draft.setOption(base, 'weather', 'location', 'yes'), base)
+  const look = Draft.lookOf(full)
+  assert.equal(Draft.optionOf(look, 'weather', 'details'), 'full')
+  assert.equal(Draft.optionOf(Draft.lookOf(base), 'weather', 'location'), false)
+  assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', 'reveal'), 'always')
+  // Another edit keeps them (Draft.entry reads Layout.elementKeys).
+  const moved = Draft.setScale(full, 'weather', 1.2)
+  assert.deepEqual(plain(moved), { preset: 'foamy', layout: { weather: { details: 'full', location: true, scale: 1.2 } } })
+  assert.ok(Layout.parseLook(moved).valid && Layout.parseLook(typing).valid)
+})
+
+test('status items: an ordered checklist from the style\'s own contents', () => {
+  const base = { preset: 'foamy' }
+  assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(base))), ['network', 'battery'])
+  assert.deepEqual(plain(Draft.statusRows(Draft.lookOf(base))).map(r => r.name + (r.on ? '+' : '-')),
+    ['network+', 'battery+', 'volume-', 'bluetooth-', 'keyboard-', 'uptime-', 'load-', 'memory-'])
+  const keyboard = Draft.toggleItem(base, 'keyboard', true)
+  assert.deepEqual(plain(keyboard), { preset: 'foamy', layout: { status: { items: ['network', 'battery', 'keyboard'] } } })
+  assert.deepEqual(plain(Draft.statusRows(Draft.lookOf(keyboard))).slice(0, 4).map(r => r.name + (r.on ? '+' : '-')),
+    ['network+', 'battery+', 'keyboard+', 'volume-'])
+  assert.equal(Draft.toggleItem(keyboard, 'keyboard', true), keyboard, 'already on')
+  // Back to the style's own contents: no items.
+  assert.deepEqual(plain(Draft.toggleItem(keyboard, 'keyboard', false)), base)
+  // Reordering: by position among the items shown.
+  const first = Draft.moveItem(keyboard, 'keyboard', 0)
+  assert.deepEqual(plain(first).layout.status.items, ['keyboard', 'network', 'battery'])
+  assert.deepEqual(plain(Draft.moveItem(first, 'keyboard', 99)).layout.status.items, ['network', 'battery', 'keyboard'])
+  assert.equal(Draft.moveItem(first, 'keyboard', 0), first, 'already there')
+  assert.equal(Draft.moveItem(first, 'memory', 0), first, 'an item not shown has no place')
+  // Never empty, never twice, only known names.
+  const one = Draft.toggleItem(Draft.toggleItem(base, 'battery', false), 'network', false)
+  assert.deepEqual(plain(one), { preset: 'foamy', layout: { status: { items: ['network'] } } }, 'the last item stays')
+  assert.equal(Draft.setItems(base, []), base)
+  assert.equal(Draft.setItems(base, ['network', 'network']), base)
+  assert.equal(Draft.setItems(base, ['wifi']), base)
+  assert.equal(Draft.setItems(base, 'network'), base)
+  // A new style starts from its own contents.
+  const restyled = Draft.setStyle(keyboard, 'status', 'pill')
+  assert.deepEqual(plain(restyled), { preset: 'foamy', layout: { status: { style: 'pill' } } })
+  assert.deepEqual(plain(Draft.setStyle(keyboard, 'status', 'text')), plain(keyboard), 'the same style keeps them')
+  // The panel: its own rows are no list, so naming them is kept.
+  const system = Draft.setStyle(base, 'status', 'system')
+  assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(system))), ['uptime', 'memory', 'load', 'battery'])
+  const named = Draft.toggleItem(Draft.toggleItem(system, 'volume', true), 'volume', false)
+  assert.deepEqual(plain(named), { preset: 'foamy', layout: { status: { style: 'system', items: ['uptime', 'memory', 'load', 'battery'] } } })
+  assert.deepEqual(plain(Draft.clearItems(named)), plain(system))
+  for (const entry of [keyboard, first, one, named]) assert.ok(Layout.parseLook(entry).valid, JSON.stringify(entry))
+  // All of them, and the lock takes it.
+  let all = base
+  for (const item of Layout.STATUS_ITEMS) all = Draft.toggleItem(all, item, true)
+  assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(all))), ['network', 'battery', 'volume', 'bluetooth', 'keyboard', 'uptime', 'load', 'memory'])
+  assert.ok(Layout.parseLook(all).valid)
+})

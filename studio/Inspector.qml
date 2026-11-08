@@ -26,6 +26,11 @@ FocusScope {
   readonly property int screenHeight: app ? app.monitor.height : 1080
   readonly property var offsetPx: item ? Draft.offsetPixels(Draft.elementValue(item, "offset"), screenWidth, screenHeight) : ({ x: 0, y: 0 })
   readonly property alias flickable: flick
+  // What each element takes (its own keys' values and defaults).
+  readonly property var options: LockLayout.elementLimits()
+  readonly property bool revealApplies: !!look.elements.password
+    && options.password.options.reveal.styles.indexOf(look.elements.password.style) !== -1
+  readonly property alias checklist: checklist
 
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.inspector")
@@ -111,6 +116,110 @@ FocusScope {
         value: inspector.item ? inspector.item.style : ""
         labelFor: function(style) { return FoamyI18n.t("studio.style." + style) }
         onPicked: function(style) { inspector.commit(Draft.setStyle(inspector.app.draft, inspector.name, style)) }
+      }
+
+      // The element's own keys (Layout.elementLimits()[name].options).
+      SectionLabel {
+        visible: inspector.name === "password" || inspector.name === "status" || inspector.name === "weather"
+        text: FoamyI18n.t(inspector.name === "password" ? "studio.field" : "studio.shows")
+        topPadding: FoamyStyle.gap
+      }
+
+      // password.reveal: only the styles in options.reveal.styles draw a
+      // surface to hide; pill and dots already show only the hint.
+      RowLayout {
+        width: parent.width
+        visible: inspector.name === "password"
+        Text {
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.reveal")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        Segmented {
+          objectName: "studioReveal"
+          name: FoamyI18n.t("studio.reveal")
+          enabled: inspector.revealApplies
+          opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+          options: inspector.options.password.options.reveal.values.map(function(v) { return { value: v, label: FoamyI18n.t("studio.reveal." + v) } })
+          value: Draft.optionOf(inspector.look, "password", "reveal")
+          onPicked: function(value) { inspector.commit(Draft.setOption(inspector.app.draft, "password", "reveal", value)) }
+        }
+      }
+      PaneNote {
+        objectName: "studioRevealNote"
+        visible: inspector.name === "password"
+        text: inspector.revealApplies ? FoamyI18n.t("studio.reveal.hint")
+          : FoamyI18n.t("studio.reveal.notHere", inspector.app ? inspector.app.styleLabel(inspector.look.elements.password.style) : "")
+      }
+
+      // status.items: an ordered checklist.
+      ItemChecklist {
+        id: checklist
+        objectName: "studioItems"
+        width: parent.width
+        visible: inspector.name === "status"
+        app: inspector.app
+        title: FoamyI18n.t("studio.shows")
+      }
+      RowLayout {
+        width: parent.width
+        visible: inspector.name === "status"
+        PaneNote {
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.items.hint")
+        }
+        FoamyButton {
+          objectName: "studioItemsReset"
+          focusable: true
+          visible: inspector.item !== null && inspector.item.items !== undefined
+          text: FoamyI18n.t("studio.items.reset")
+          onClicked: inspector.commit(Draft.clearItems(inspector.app.draft))
+        }
+      }
+
+      // weather.details and weather.location (off unless chosen: anyone
+      // can read a lock screen).
+      RowLayout {
+        width: parent.width
+        visible: inspector.name === "weather"
+        Text {
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.details")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        Segmented {
+          objectName: "studioDetails"
+          name: FoamyI18n.t("studio.details")
+          options: inspector.options.weather.options.details.values.map(function(v) { return { value: v, label: FoamyI18n.t("studio.details." + v) } })
+          value: Draft.optionOf(inspector.look, "weather", "details")
+          onPicked: function(value) { inspector.commit(Draft.setOption(inspector.app.draft, "weather", "details", value)) }
+        }
+      }
+      StudioToggle {
+        objectName: "studioLocation"
+        width: parent.width
+        visible: inspector.name === "weather"
+        text: FoamyI18n.t("studio.location")
+        checked: Draft.optionOf(inspector.look, "weather", "location") === true
+        onToggled: inspector.commit(Draft.setOption(inspector.app.draft, "weather", "location", !checked))
+      }
+      PaneNote {
+        objectName: "studioLocationNote"
+        visible: inspector.name === "weather"
+        text: FoamyI18n.t("studio.location.note")
+      }
+      PaneNote {
+        objectName: "studioWeatherSample"
+        visible: inspector.name === "weather"
+        text: FoamyI18n.t("studio.weather.sample")
       }
 
       SectionLabel {
@@ -253,6 +362,231 @@ FocusScope {
       }
 
       Item { width: 1; height: FoamyStyle.gap }
+    }
+  }
+
+  // The status's items as an ordered checklist (Draft.statusRows): the
+  // items shown first, in their order, then the others. A click or Space
+  // switches one; the last one shown stays. The items shown reorder by
+  // their grip (the canvas follows the drag; one undo step on release) or
+  // by Alt+Up and Alt+Down; Up, Down, Home and End move the cursor.
+  component ItemChecklist: FocusScope {
+    id: checklist
+
+    property var app: null
+    property string title: ""
+    readonly property var rows: app ? Draft.statusRows(app.look) : []
+    readonly property int shownCount: rows.filter(function(row) { return row.on }).length
+    readonly property real rowHeight: FoamyStyle.rowHeight
+    // The row with the keyboard while the list has it.
+    property int cursor: -1
+    // A drag in progress: the row's index, where it would go, and how far
+    // the pointer has moved (pixels).
+    property int dragFrom: -1
+    property int dragTo: -1
+    property real dragOffset: 0
+
+    implicitHeight: rows.length * rowHeight
+    activeFocusOnTab: true
+    onActiveFocusChanged: if (activeFocus && cursor < 0) cursor = 0
+
+    Accessible.role: Accessible.List
+    Accessible.name: title
+    Accessible.description: FoamyI18n.t("studio.items.keys")
+
+    function label(name) { return FoamyI18n.t("studio.item." + name) }
+
+    function commitIfChanged(next) {
+      if (!Draft.same(next, app.draft)) app.commit(next)
+      else app.preview(app.draft)
+    }
+
+    // Switch the item in row `index`.
+    function toggle(index) {
+      var row = rows[index]
+      if (!row) return
+      commitIfChanged(Draft.toggleItem(app.draft, row.name, !row.on))
+    }
+
+    // Move the item in row `index` by `step` among the items shown; the
+    // cursor goes with it.
+    function move(index, step) {
+      var row = rows[index]
+      var to = index + step
+      if (!row || !row.on || to < 0 || to >= shownCount) return
+      commitIfChanged(Draft.moveItem(app.draft, row.name, to))
+      cursor = to
+    }
+
+    // Keys on the list; true when handled.
+    function keyPressed(key, modifiers) {
+      var alt = (modifiers & Qt.AltModifier) !== 0
+      if (modifiers & Qt.ControlModifier) return false
+      var at = Math.max(0, cursor)
+      switch (key) {
+      case Qt.Key_Up:
+        if (alt) move(at, -1)
+        else cursor = Math.max(0, at - 1)
+        break
+      case Qt.Key_Down:
+        if (alt) move(at, 1)
+        else cursor = Math.min(rows.length - 1, at + 1)
+        break
+      case Qt.Key_Home: cursor = 0; break
+      case Qt.Key_End: cursor = rows.length - 1; break
+      case Qt.Key_Space:
+      case Qt.Key_Return:
+      case Qt.Key_Enter: toggle(at); break
+      default: return false
+      }
+      return true
+    }
+    Keys.onPressed: function(event) { if (checklist.keyPressed(event.key, event.modifiers)) event.accepted = true }
+
+    // The drag (the grip's handler, and a test hook): rows in view pixels.
+    function dragStart(index) {
+      if (!rows[index] || !rows[index].on) return false
+      dragFrom = index
+      dragTo = index
+      dragOffset = 0
+      cursor = index
+      return true
+    }
+    function dragMove(offset) {
+      if (dragFrom < 0) return
+      dragOffset = Math.max(-dragFrom * rowHeight, Math.min((shownCount - 1 - dragFrom) * rowHeight, offset))
+      var to = Math.max(0, Math.min(shownCount - 1, Math.round(dragFrom + dragOffset / rowHeight)))
+      if (to === dragTo) return
+      dragTo = to
+      app.preview(Draft.moveItem(app.draft, rows[dragFrom].name, to))
+    }
+    function dragEnd() {
+      if (dragFrom < 0) return
+      var from = dragFrom, to = dragTo
+      dragFrom = -1
+      dragTo = -1
+      dragOffset = 0
+      commitIfChanged(Draft.moveItem(app.draft, rows[from].name, to))
+      cursor = to
+    }
+
+    // Where row `index` sits while a drag moves another past it.
+    function rowY(index) {
+      if (index === dragFrom) return dragFrom * rowHeight + dragOffset
+      var at = index
+      if (dragFrom >= 0 && dragFrom < index && index <= dragTo) at--
+      else if (dragFrom >= 0 && dragTo <= index && index < dragFrom) at++
+      return at * rowHeight
+    }
+
+    Repeater {
+      model: checklist.rows
+
+      Rectangle {
+        id: row
+        required property var modelData
+        required property int index
+        readonly property bool cursorHere: checklist.activeFocus && checklist.cursor === index
+        readonly property bool last: modelData.on && checklist.shownCount === 1
+        objectName: "studioItem-" + modelData.name
+        width: checklist.width
+        height: checklist.rowHeight - 2
+        y: checklist.rowY(index) + 1
+        z: index === checklist.dragFrom ? 1 : 0
+        radius: FoamyStyle.radiusSmall
+        color: index === checklist.dragFrom ? FoamyPalette.selectedFill : rowMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+        border.width: cursorHere ? 2 : 0
+        border.color: FoamyPalette.accent
+
+        Accessible.role: Accessible.CheckBox
+        Accessible.name: checklist.label(modelData.name)
+        Accessible.checkable: true
+        Accessible.checked: modelData.on
+        Accessible.focused: cursorHere
+        Accessible.description: last ? FoamyI18n.t("studio.items.last") : ""
+        Accessible.onToggleAction: checklist.toggle(index)
+        Accessible.onPressAction: checklist.toggle(index)
+
+        MouseArea {
+          id: rowMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            checklist.cursor = row.index
+            checklist.forceActiveFocus(Qt.MouseFocusReason)
+            checklist.toggle(row.index)
+          }
+        }
+
+        // The grip, on the reading start: the items shown reorder by it.
+        Item {
+          id: grip
+          objectName: "studioItemGrip"
+          anchors.left: parent.left
+          width: FoamyStyle.gap * 2 + 4
+          height: parent.height
+          visible: row.modelData.on && checklist.shownCount > 1
+          Grid {
+            anchors.centerIn: parent
+            columns: 2
+            spacing: 2
+            Repeater {
+              model: 6
+              Rectangle { width: 2; height: 2; radius: 1; color: FoamyPalette.mutedText }
+            }
+          }
+          HoverHandler { cursorShape: Qt.SizeVerCursor }
+          DragHandler {
+            target: null
+            yAxis.enabled: true
+            xAxis.enabled: false
+            dragThreshold: 4
+            onActiveChanged: {
+              if (active) {
+                checklist.forceActiveFocus(Qt.MouseFocusReason)
+                checklist.dragStart(row.index)
+              } else checklist.dragEnd()
+            }
+            onTranslationChanged: if (active) checklist.dragMove(translation.y)
+          }
+        }
+
+        Row {
+          anchors.left: grip.right
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: FoamyStyle.gap
+
+          // The box: the accent with a check when shown.
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: FoamyStyle.iconSize + 3
+            height: width
+            radius: Math.max(2, FoamyStyle.radiusSmall / 2)
+            color: row.modelData.on ? FoamyPalette.accent : FoamyPalette.fieldFill
+            border.width: row.modelData.on ? 0 : FoamyStyle.borderWidth
+            border.color: FoamyPalette.border
+            opacity: row.last ? FoamyStyle.disabledOpacity : 1
+            FoamyIcon {
+              anchors.centerIn: parent
+              width: FoamyStyle.iconSize - 2
+              height: width
+              visible: row.modelData.on
+              name: "check"
+              color: FoamyPalette.onAccent
+            }
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: checklist.label(row.modelData.name)
+            textFormat: Text.PlainText
+            color: row.modelData.on ? FoamyPalette.text : FoamyPalette.secondaryText
+            font.family: FoamyStyle.fontFamily
+            font.pixelSize: FoamyStyle.font.body
+          }
+        }
+      }
     }
   }
 }

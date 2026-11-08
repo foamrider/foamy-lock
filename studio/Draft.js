@@ -270,9 +270,93 @@ function presetKeeping(draft, name) {
 
 // --- the inspector's edits -------------------------------------------------
 
+// A new status style starts from its own contents: its `items` go.
 function setStyle(draft, name, style) {
   if (!Layout.STYLES[name] || Layout.STYLES[name].indexOf(style) === -1) return draft
-  return editElement(draft, name, function(item) { item.style = style })
+  return editElement(draft, name, function(item) {
+    if (name === "status" && item.style !== style) delete item.items
+    item.style = style
+  })
+}
+
+// --- an element's own keys (round 2) -----------------------------------------
+//
+// password.reveal, weather.details and weather.location take one value of
+// a list (Layout.ELEMENT_OPTIONS; the default drops out of the entry), and
+// status.items an ordered list of Layout.STATUS_ITEMS.
+
+function setOption(draft, name, key, value) {
+  var spec = (Layout.ELEMENT_OPTIONS[name] || {})[key]
+  if (!spec || spec.list || spec.values.indexOf(value) === -1) return draft
+  return editElement(draft, name, function(item) { item[key] = value })
+}
+
+// The value an element's own key has (its default when absent).
+function optionOf(look, name, key) {
+  var item = look && look.elements ? look.elements[name] : null
+  var spec = (Layout.ELEMENT_OPTIONS[name] || {})[key]
+  if (!item || !spec) return undefined
+  return item[key] !== undefined ? item[key] : spec.fallback
+}
+
+// What the status shows, in order: its own `items`, else its style's
+// contents (the checklist starts from those).
+function statusItems(look) {
+  var item = look && look.elements ? look.elements.status : null
+  if (!item) return []
+  if (Array.isArray(item.items)) return item.items.slice()
+  return (Layout.STATUS_DEFAULT_ITEMS[item.style] || []).slice()
+}
+
+// The checklist's rows: the items shown, in their order, then the others
+// in the lock's order. [{ name, on }].
+function statusRows(look) {
+  var shown = statusItems(look)
+  var rows = shown.map(function(name) { return { name: name, on: true } })
+  for (var i = 0; i < Layout.STATUS_ITEMS.length; i++)
+    if (shown.indexOf(Layout.STATUS_ITEMS[i]) === -1) rows.push({ name: Layout.STATUS_ITEMS[i], on: false })
+  return rows
+}
+
+// The status shows `items` (never empty, each once, only known names). A
+// line style's own contents again (network then battery) drops `items`, so
+// the entry stays sparse; the "system" panel's own rows aren't a list (it
+// picks the battery or the network itself), so a list there stays one.
+function setItems(draft, items) {
+  if (!Array.isArray(items) || items.length === 0) return draft
+  for (var i = 0; i < items.length; i++)
+    if (Layout.STATUS_ITEMS.indexOf(items[i]) === -1 || items.indexOf(items[i]) !== i) return draft
+  return editElement(draft, "status", function(item) {
+    var own = Layout.STATUS_DEFAULT_ITEMS[item.style]
+    if (item.style !== "system" && own && same(items, own)) delete item.items
+    else item.items = items.slice()
+  })
+}
+
+// Back to the style's own contents.
+function clearItems(draft) {
+  return editElement(draft, "status", function(item) { delete item.items })
+}
+
+// `name` on (added last) or off; the last item shown can't go.
+function toggleItem(draft, name, on) {
+  var items = statusItems(lookOf(draft))
+  var at = items.indexOf(name)
+  if (on && at === -1) items.push(name)
+  else if (!on && at !== -1 && items.length > 1) items.splice(at, 1)
+  else return draft
+  return setItems(draft, items)
+}
+
+// `name` (shown) moved to position `to` among the items shown.
+function moveItem(draft, name, to) {
+  var items = statusItems(lookOf(draft))
+  var from = items.indexOf(name)
+  var target = clamp(Math.round(Number(to) || 0), 0, items.length - 1)
+  if (from === -1 || target === from) return draft
+  items.splice(from, 1)
+  items.splice(target, 0, name)
+  return setItems(draft, items)
 }
 
 // An opacity within the element's limits, in hundredths.
@@ -903,7 +987,9 @@ if (typeof module !== "undefined") module.exports = {
   nearestAnchor: nearestAnchor, snap: snap, drop: drop, offsetFrom: offsetFrom, neighbourZone: neighbourZone, nudge: nudge, gridMove: gridMove,
   resizeScale: resizeScale, probeLook: probeLook, draggedLook: draggedLook, scaledLook: scaledLook,
   problemElements: problemElements, neighbourModule: neighbourModule,
-  REFERENCE_SIZES: REFERENCE_SIZES, monitorEntries: monitorEntries, scalePercent: scalePercent
+  REFERENCE_SIZES: REFERENCE_SIZES, monitorEntries: monitorEntries, scalePercent: scalePercent,
+  setOption: setOption, optionOf: optionOf, statusItems: statusItems, statusRows: statusRows,
+  setItems: setItems, clearItems: clearItems, toggleItem: toggleItem, moveItem: moveItem
 }
 
 // --- user presets (round 2, step R2-2) -----------------------------------------
