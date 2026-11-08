@@ -9,7 +9,9 @@
 //!
 //! - **argv**: `foamy-lock-helper artwork` (below) or `foamy-lock-helper
 //!   wallpaper <link>` (see `wallpaper`). Anything else replies
-//!   `invalid-request`.
+//!   `invalid-request`. `foamy-lock-helper studio …` is Lock
+//!   Studio's, with its own contract and replies (see `studio`); it never
+//!   runs the image sandbox.
 //! - **wallpaper**: `<link>` is an absolute path, normally
 //!   `~/.local/state/omarchy/current/background`. It is resolved like
 //!   `readlink -f` and must end at a regular file. No stdin, environment or
@@ -153,8 +155,12 @@ use serde_json::{Value, json};
 mod fetch;
 mod image;
 mod store;
+mod studio;
 mod url;
 mod wallpaper;
+
+#[cfg(test)]
+pub mod forks;
 
 pub const MAX_INPUT: usize = 5 * 1024 * 1024;
 /// Account pictures are often camera photos, larger than track artwork.
@@ -323,7 +329,7 @@ fn watch(started: Instant, wake: OwnedFd) {
 
 /// Marks every descriptor above stderr close-on-exec, so nothing the shell
 /// leaked reaches bubblewrap or the decoder (Python's `close_fds=True`).
-fn cloexec_inherited() {
+pub(crate) fn cloexec_inherited() {
     const CLOSE_RANGE_CLOEXEC: libc::c_uint = 1 << 2;
     // SAFETY: close_range(2) with integer arguments only.
     let done = unsafe {
@@ -429,10 +435,14 @@ fn artwork() -> Value {
 }
 
 fn main() -> ExitCode {
+    // Lock Studio: its own replies (`json::error_reply`) and no sandbox.
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "studio") {
+        return json::run(|| studio::main(&args[1..]), json::error_reply);
+    }
     // A reply on every path, even a helper bug (then exit 101, no core dump).
     json::run(
         || -> Result<Value, foamy_helper::Failure> {
-            let args: Vec<OsString> = std::env::args_os().skip(1).collect();
             match (args.first().and_then(|a| a.to_str()), args.len()) {
                 (Some("artwork"), 1) => Ok(artwork()),
                 (Some("wallpaper"), 2) => Ok(wallpaper::probe(&args[1])),
