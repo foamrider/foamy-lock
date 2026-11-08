@@ -21,7 +21,7 @@
 //! - `studio draft-load` / `studio draft-save` / `studio draft-clear`: see
 //!   [`draft`].
 //! - `studio apply`: see [`apply`].
-//! - `studio pick-picture [title]`: see [`portal`].
+//! - `studio pick-picture [title [filter name]]`: see [`portal`].
 //!
 //! Codes: `INVALID_ARGUMENT` (unknown subcommand or arguments),
 //! `INVALID_REQUEST` (stdin isn't what the subcommand takes),
@@ -50,8 +50,10 @@ use foamy_helper::Failure;
 use serde_json::Value;
 
 pub mod apply;
+mod dbus;
 pub mod desktop;
 pub mod draft;
+pub mod portal;
 pub mod root;
 
 /// Test override of the plugin directory.
@@ -338,7 +340,7 @@ pub fn iso8601(time: SystemTime) -> String {
     )
 }
 
-const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | pick-picture [title]]";
+const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | pick-picture [title [filter name]]]";
 
 /// `foamy-lock-helper studio <args>`.
 pub fn main(args: &[OsString]) -> Result<Value, Failure> {
@@ -357,6 +359,9 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
             &read_stdin(apply::MAX_REQUEST)?,
             &apply::Options::default(),
         ),
+        ["pick-picture"] => portal::pick(&env, portal::DEFAULT_TITLE, portal::DEFAULT_FILTER),
+        ["pick-picture", title] => portal::pick(&env, title, portal::DEFAULT_FILTER),
+        ["pick-picture", title, filter] => portal::pick(&env, title, filter),
         _ => Err(Failure::coded("INVALID_ARGUMENT", USAGE)),
     }
 }
