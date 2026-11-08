@@ -9,9 +9,19 @@
 //! stand-ins, and `StudioTest.qml` (studio.qml here) is the driver that the
 //! real `shell.qml` loads when `FOAMY_LOCK_STUDIO_TEST=1`.
 //!
+//! The temporary HOME also holds what the app reads from the desktop: an
+//! Omarchy wallpaper (`~/.local/state/omarchy/current/background`, a
+//! generated PNG), the lock's entry in `~/.config/omarchy/shell.json`
+//! (12-hour clock), and a picture for the picture background
+//! (`FOAMY_LOCK_STUDIO_PICTURE`), which the real helper prepares in its
+//! sandbox. The file chooser itself is never started: its replies are fed
+//! to the app's handler.
+//!
 //! The driver checks the window, focus and drawing, drives drags, resizes
-//! and keys through the canvas's hooks and compares the look JSON, captures
-//! the window (PNG, plus PPM for the pixel check here), and measures costs.
+//! and keys through the canvas's hooks, the inspector's, library's, preset
+//! menu's and scene page's controls, and compares the look JSON; it
+//! captures the window (PNG, plus PPM for the pixel check here), and
+//! measures costs.
 //! Then the harness raises the window with `quickshell ipc -p <root> call
 //! studio raise`, as a second launch would. Plugin and studio QML warnings
 //! fail it.
@@ -26,7 +36,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::{app, host, styles};
+use crate::{app, host, png, styles};
 
 const DRIVER: &str = include_str!("studio.qml");
 /// The root's links into the plugin, and whether they're required (root.rs).
@@ -42,13 +52,56 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 ];
 const COMMONS: &str = "Commons";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 5] = [
+const CAPTURES: [&str; 11] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
     "studio-problem",
     "studio-shortcuts",
+    "studio-inspector",
+    "studio-library-drag",
+    "studio-preset-menu",
+    "studio-preset-dialog",
+    "studio-background",
+    "studio-glass",
 ];
+/// The lock's entry the app reads (read-only) for the canvas.
+const SHELL_JSON: &str =
+    r#"{"version": 1, "plugins": [{"id": "foamy.lock", "timeFormat": "12h"}]}"#;
+
+/// A `width` × `height` diagonal gradient between two colours, as a PNG.
+fn gradient(width: u32, height: u32, from: [u8; 3], to: [u8; 3]) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity((width * height * 3) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            let t = f64::from(x + y) / f64::from(width + height);
+            for c in 0..3 {
+                let value = f64::from(from[c]) + (f64::from(to[c]) - f64::from(from[c])) * t;
+                pixels.push(value.round() as u8);
+            }
+        }
+    }
+    png::encode_rgb(width, height, &pixels)
+}
+
+/// The desktop the app reads, in the temporary HOME: the wallpaper link,
+/// the lock's entry, and a picture to choose. Returns the picture's path.
+fn desktop(base: &Path) -> Result<PathBuf, String> {
+    let home = base.join("home");
+    let wallpaper = base.join("wallpaper.png");
+    fs::write(&wallpaper, gradient(320, 180, [38, 52, 84], [92, 64, 108]))
+        .map_err(app::io("wallpaper.png"))?;
+    let link = home.join(".local/state/omarchy/current/background");
+    fs::create_dir_all(link.parent().unwrap_or(&home)).map_err(app::io("current"))?;
+    symlink(&wallpaper, &link).map_err(app::io("background link"))?;
+    let config = home.join(".config/omarchy");
+    fs::create_dir_all(&config).map_err(app::io("config"))?;
+    fs::write(config.join("shell.json"), SHELL_JSON).map_err(app::io("shell.json"))?;
+    let picture = base.join("lake.png");
+    fs::write(&picture, gradient(240, 160, [20, 96, 112], [210, 160, 90]))
+        .map_err(app::io("lake.png"))?;
+    Ok(picture)
+}
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut choice = "4.5".to_string();
@@ -337,6 +390,7 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
     let root = base.join("home/.cache/foamy-lock-studio/root");
     build_root(&root, shell, &base)?;
     app::install_theme(&base)?;
+    let picture = desktop(&base)?.display().to_string();
     let out_text = out.display().to_string();
     let mut raised = None;
     let mut tick = |log: &str, env: &[(String, String)]| -> Result<(), String> {
@@ -356,6 +410,7 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
         &[
             ("FOAMY_LOCK_STUDIO_TEST", "1"),
             ("FOAMY_LOCK_STUDIO_OUT", &out_text),
+            ("FOAMY_LOCK_STUDIO_PICTURE", &picture),
         ],
         &mut tick,
     )?;

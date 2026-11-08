@@ -7,6 +7,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "kit"
 import "Layout.js" as Layout
 import "Draft.js" as Draft
 
@@ -16,6 +17,8 @@ Item {
   property var window: null
   property var studio: null
   readonly property string out: Quickshell.env("FOAMY_LOCK_STUDIO_OUT") || ""
+  // A picture to "choose" (the harness wrote it; the chooser never runs).
+  readonly property string picture: Quickshell.env("FOAMY_LOCK_STUDIO_PICTURE") || ""
   readonly property var canvas: studio ? studio.canvas : null
   readonly property var view: canvas ? canvas.view : null
   // Right to left (an RTL Omarchy language): start and end swap on screen,
@@ -44,9 +47,28 @@ Item {
   function reset() {
     canvas.cancelGesture()
     studio.history = Draft.history({ preset: "foamy" })
+    studio.previewDraft = null
     studio.previewState = "idle"
     studio.shortcutsOpen = false
+    studio.page = "module"
+    studio.pendingPreset = ""
+    studio.libraryDrag = ""
+    studio.presetMenu.close()
   }
+  // The first item under `item` with this objectName, or null.
+  function find(item, name) {
+    if (!item) return null
+    if (item.objectName === name) return item
+    var children = item.children || []
+    for (var i = 0; i < children.length; i++) {
+      var found = find(children[i], name)
+      if (found) return found
+    }
+    return null
+  }
+  // A point in `item`, or in the lock view (its pixels), in window pixels.
+  function scenePoint(item, x, y) { return item.mapToItem(null, x, y) }
+  function viewToScene(x, y) { return view.mapToItem(null, x, y) }
   function anchorOf(gesture, zone) {
     for (var i = 0; i < gesture.anchors.length; i++) if (gesture.anchors[i].zone === zone) return gesture.anchors[i]
     return null
@@ -112,6 +134,10 @@ Item {
         var inputs = focusedInputs(studio, [])
         expect(inputs.length === 0, "inputs with active focus: " + inputs)
         expect(canvas.activeFocus, "the canvas should have the keyboard")
+        // The desktop, as the lock reads it: the wallpaper and the lock's entry.
+        expect(studio.lockSettings.timeFormat === "12h" && view.timeFormat === "12h", "the lock's time format: " + view.timeFormat)
+        expect(studio.sources.wallpaperPath.indexOf("wallpaper.png") !== -1 && view.backgroundPath === studio.sources.wallpaperPath,
+          "the Omarchy wallpaper: " + studio.sources.wallpaperPath + " " + studio.sources.wallpaperError)
         expect(!view.inputEnabled && !view.enabled && !view.latchFallback, "the view takes no input and never falls back")
         // Sample data in the app's language, never the user's own.
         expect(view.userName === "sample" && view.userDisplayName !== "" && view.userDisplayName.indexOf("studio.") !== 0
@@ -330,6 +356,278 @@ Item {
         expect(studio.panes[0].activeFocus, "Shift+F6 goes back")
         var focused = studio.Window.activeFocusItem
         expect(focused && focused.cursorPosition === undefined, "never a text input: " + focused)
+        canvas.forceActiveFocus()
+        next()
+      } },
+    { name: "inspector: style, size, opacity", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("clock")
+        var styles = find(studio.inspector, "studioStyles")
+        expect(styles && styles.visible && styles.options.length === Layout.STYLES.clock.length, "clock style tiles " + (styles ? styles.options : ""))
+        // The cursor walks on screen: towards the end is Right, or Left right to left.
+        styles.forceActiveFocus()
+        styles.step(inward, 0)
+        expect(styles.cursor === 1, "the cursor moved to the next tile: " + styles.cursor)
+        styles.choose(styles.cursor)
+        expectDraft('{"preset":"foamy","layout":{"clock":{"style":"bold"}}}')
+        var size = find(studio.inspector, "studioSize")
+        size.stepBy(4)
+        expectDraft('{"preset":"foamy","layout":{"clock":{"style":"bold","scale":1.2}}}')
+        // A drag shows live and commits once.
+        var steps = studio.history.past.length
+        size.moved(1.5)
+        expect(studio.previewDraft !== null && Draft.same(studio.look.elements.clock.scale, 1.2)
+          && view.look.elements.clock.scale === 1.5, "the drag shows on the canvas only: " + json(view.look.elements.clock))
+        size.moved(1.6)
+        size.committed(1.6)
+        expect(studio.previewDraft === null && studio.history.past.length === steps + 1, "one undo step for a drag")
+        expect(studio.look.elements.clock.scale === 1.6, "scale " + studio.look.elements.clock.scale)
+        var opacity = find(studio.inspector, "studioOpacity")
+        opacity.committed(0.55)
+        expect(studio.look.elements.clock.opacity === 0.55, "opacity " + json(studio.look.elements.clock))
+        expect(!find(studio.inspector, "studioGlass").visible, "the bold clock has no glass")
+        // The field keeps to its limits.
+        studio.selectModule("password")
+        expect(!find(studio.inspector, "studioShown").visible, "the field can't be hidden")
+        find(studio.inspector, "studioOpacity").committed(0.4)
+        expect(studio.look.elements.password.opacity === 0.7, "the field's opacity floor: " + studio.look.elements.password.opacity)
+        expect(find(studio.inspector, "studioSize").from === 0.85, "the field's scale floor")
+        next()
+      } },
+    { name: "inspector: glass, zone, offset, screens, shown", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("media")
+        var glass = find(studio.inspector, "studioGlass")
+        expect(glass.visible && glass.value === 1, "the media card's glass, from the look: " + glass.value)
+        glass.committed(0.4)
+        expectDraft('{"preset":"foamy","layout":{"media":{"glass":0.4}}}')
+        var own = find(studio.inspector, "studioGlassReset")
+        expect(own.visible, "the look's glass can come back")
+        own.clicked()
+        expectDraft('{"preset":"foamy"}')
+        var zones = find(studio.inspector, "studioZones")
+        zones.picked("bottom-end")
+        expectDraft('{"preset":"foamy","layout":{"media":{"zone":"bottom-end"}}}')
+        // Offsets in grid steps (22.5 px at 1080): X towards the reading end.
+        var x = find(studio.inspector, "studioOffsetX"), y = find(studio.inspector, "studioOffsetY")
+        x.committed(-2)
+        y.committed(-1)
+        expectDraft('{"preset":"foamy","layout":{"media":{"zone":"bottom-end","offset":{"x":-0.023437,"y":-0.02037}}}}')
+        expect(x.value === -2 && x.detail === FoamyI18n.t("studio.px", FoamyI18n.number(-45, 0)), "X shows " + x.value + " (" + x.detail + ")")
+        expect(near(view.drawnRect("media").y, view.reservedRect("media").y - 22, 0.5), "moved up 22 px")
+        var resetButton = find(studio.inspector, "studioResetPosition")
+        expect(resetButton.enabled, "an offset can be reset")
+        resetButton.clicked()
+        expectDraft('{"preset":"foamy","layout":{"media":{"zone":"bottom-end"}}}')
+        expect(!resetButton.enabled, "nothing to reset")
+        find(studio.inspector, "studioScreens").picked("primary")
+        expect(studio.look.elements.media.screens === "primary", "screens " + json(studio.draft))
+        // The field: never into the top row, and the fields keep it below the top third.
+        studio.selectModule("password")
+        zones = find(studio.inspector, "studioZones")
+        expect(!zones.usable("top-center") && zones.usable("middle-center"), "the field's zones")
+        zones.forceActiveFocus()
+        zones.cursor = 4
+        zones.step(0, -1)
+        expect(zones.cursor === 4, "the cursor skips the top row: " + zones.cursor)
+        find(studio.inspector, "studioOffsetY").committed(-40)
+        expect(view.drawnRect("password").y >= 1080 / 3, "the field stays below the top third: " + json(view.drawnRect("password")))
+        expect(!find(studio.inspector, "studioScreens").visible || !find(studio.inspector, "studioScreens").parent.visible, "the field takes no screens")
+        // Shown: the calendar comes on and goes off again, one step each.
+        studio.selectModule("calendar")
+        var shown = find(studio.inspector, "studioShown")
+        expect(shown.visible && !shown.checked, "the calendar is hidden")
+        shown.toggled()
+        expect(studio.look.elements.calendar.hidden === false && view.elementRects.calendar !== undefined, "shown on the canvas")
+        studio.selectModule("media")
+        capture("studio-inspector", next)
+      } },
+    { name: "inspector: every edit is one undo step", wait: 0, run: function(next) {
+        var undos = 0
+        while (Draft.canUndo(studio.history)) { studio.undo(); undos++ }
+        expect(undos === 9, "undo steps " + undos)
+        expectDraft('{"preset":"foamy"}')
+        next()
+      } },
+    { name: "library: drag a hidden module onto the canvas", wait: 0, run: function(next) {
+        reset()
+        studio.libraryDragStart("calendar")
+        expect(studio.selected === "calendar" && studio.page === "module", "the dragged module is selected")
+        // Over the library: nothing on the canvas yet.
+        studio.libraryDragMove(scenePoint(studio.library, 40, 40), Qt.NoModifier)
+        expect(canvas.gesture === null, "not over the canvas")
+        // Over the canvas, 3 px off the top-start anchor: it snaps there.
+        studio.libraryDragMove(viewToScene(400, 300), Qt.NoModifier)
+        var g = canvas.gesture
+        expect(g && g.insert && view.elementRects.calendar !== undefined, "the calendar follows the pointer: " + json(view.elementRects.calendar))
+        var anchor = anchorOf(g, "top-start")
+        studio.libraryDragMove(viewToScene(anchor.x + anchor.width / 2 + 3, anchor.y + anchor.height / 2 - 2), Qt.NoModifier)
+        expect(canvas.gesture.result.zone === "top-start" && canvas.gesture.result.x.kind === "anchor", "snapped: " + json(canvas.gesture.result))
+        expectDraft('{"preset":"foamy"}')
+        capture("studio-library-drag", next)
+      } },
+    { name: "library: the drop shows it there", wait: 0, run: function(next) {
+        studio.libraryDragEnd()
+        expectDraft('{"preset":"foamy","layout":{"calendar":{"zone":"top-start","hidden":false}}}')
+        expect(canvas.gesture === null && studio.libraryDrag === "", "the drag is over")
+        // Dropped off the canvas: nothing changes.
+        studio.libraryDragStart("calendar")
+        studio.libraryDragMove(viewToScene(900, 500), Qt.NoModifier)
+        studio.libraryDragMove(scenePoint(studio.library, 40, 40), Qt.NoModifier)
+        expect(canvas.gesture === null, "left the canvas")
+        studio.libraryDragEnd()
+        expectDraft('{"preset":"foamy","layout":{"calendar":{"zone":"top-start","hidden":false}}}')
+        next()
+      } },
+    { name: "library: drag from the canvas onto the library hides", wait: 0, run: function(next) {
+        expect(canvas.beginMove("media"), "beginMove media")
+        canvas.moveGesture(-50 * inward * canvas.zoom, 0, Qt.NoModifier, scenePoint(studio.library, 60, 120))
+        expect(canvas.hiding && studio.library.dropTarget, "over the library: drop to hide")
+        canvas.finishGesture()
+        expect(studio.look.elements.media.hidden === true, "media hidden: " + json(studio.draft))
+        // The field never hides.
+        canvas.beginMove("password")
+        canvas.moveGesture(-50 * canvas.zoom, 0, Qt.NoModifier, scenePoint(studio.library, 60, 120))
+        expect(!canvas.hiding, "the field isn't hidden by a drop")
+        canvas.cancelGesture()
+        // The keyboard: Insert shows, Delete hides, Up and Down walk.
+        studio.selectModule("media")
+        studio.library.forceActiveFocus()
+        expect(studio.library.keyPressed(Qt.Key_Insert, Qt.NoModifier) && !studio.look.elements.media.hidden, "Insert shows")
+        expect(studio.library.keyPressed(Qt.Key_Delete, Qt.NoModifier) && studio.look.elements.media.hidden, "Delete hides")
+        studio.library.keyPressed(Qt.Key_Down, Qt.NoModifier)
+        expect(studio.selected === "status", "Down selects the next module: " + studio.selected)
+        studio.selectModule("password")
+        studio.library.keyPressed(Qt.Key_Delete, Qt.NoModifier)
+        expect(!studio.look.elements.password.hidden, "Delete never hides the field")
+        canvas.forceActiveFocus()
+        next()
+      } },
+    { name: "presets: the menu", wait: 0, run: function(next) {
+        reset()
+        studio.presetMenu.open()
+        expect(studio.presetMenu.visible && studio.presetMenu.cursor === 0, "open on the current preset")
+        expect(find(studio.presetMenu, "studioPresetItem-fluent") !== null, "every preset is listed")
+        studio.presetMenu.keyPressed(Qt.Key_Down)
+        expect(studio.presetMenu.cursor === 4, "Down moves a row: " + studio.presetMenu.cursor)
+        next()
+      } },
+    { name: "presets: the menu drawn", wait: 600, run: function(next) {
+        capture("studio-preset-menu", next)
+      } },
+    { name: "presets: without changes a pick is immediate", wait: 0, run: function(next) {
+        studio.presetMenu.keyPressed(Qt.Key_Return)
+        expect(!studio.presetMenu.visible && studio.pendingPreset === "", "picked and closed")
+        expectDraft('{"preset":"dock"}')
+        studio.undo()
+        expectDraft('{"preset":"foamy"}')
+        next()
+      } },
+    { name: "presets: with changes it asks", wait: 0, run: function(next) {
+        studio.commit({ preset: "foamy", layout: { clock: { scale: 1.2 } }, background: { dim: 0.5 } })
+        studio.requestPreset("corner")
+        expect(studio.pendingPreset === "corner" && find(studio, "studioPresetDialog").visible, "the question shows")
+        expectDraft('{"preset":"foamy","layout":{"clock":{"scale":1.2}},"background":{"dim":0.5}}')
+        capture("studio-preset-dialog", next)
+      } },
+    { name: "presets: replace, keep and cancel", wait: 0, run: function(next) {
+        studio.answerPreset(false)
+        expectDraft('{"preset":"corner"}')
+        studio.undo()
+        expectDraft('{"preset":"foamy","layout":{"clock":{"scale":1.2}},"background":{"dim":0.5}}')
+        studio.requestPreset("corner")
+        expect(find(studio, "studioPresetKeep").enabled, "the changes can be kept")
+        studio.answerPreset(true)
+        expectDraft('{"preset":"corner","layout":{"clock":{"scale":1.2}},"background":{"dim":0.5}}')
+        studio.undo()
+        studio.requestPreset("zen")
+        expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && studio.pendingPreset === "", "Esc cancels")
+        expectDraft('{"preset":"foamy","layout":{"clock":{"scale":1.2}},"background":{"dim":0.5}}')
+        // The strip asks the same way.
+        studio.requestPreset("island")
+        expect(studio.pendingPreset === "island", "the strip asks too")
+        studio.cancelPreset()
+        next()
+      } },
+    { name: "background page", wait: 0, run: function(next) {
+        reset()
+        find(studio.library, "studioSceneBackground").clicked()
+        var page = studio.scenePage
+        expect(studio.page === "background" && page.visible && !studio.inspector.visible, "the background page shows")
+        find(page, "studioSource-aurora").clicked()
+        expectDraft('{"preset":"foamy","background":{"source":"aurora"}}')
+        find(page, "studioDecor").picked("frame")
+        find(page, "studioSource-omarchy").clicked()
+        find(page, "studioBlur").committed(0.5)
+        expectDraft('{"preset":"foamy","background":{"decor":"frame","blur":0.5}}')
+        // The Omarchy wallpaper, as the lock finds it.
+        expect(studio.sources.wallpaperPath !== "" && view.backgroundPath === studio.sources.wallpaperPath && !view.backgroundPrepared,
+          "the wallpaper on the canvas: " + view.backgroundPath)
+        // The file chooser's replies (it never runs here).
+        studio.sources.applyPick(1, '{"ok":false,"code":"PORTAL_UNAVAILABLE","error":"no portal"}')
+        expect(find(page, "studioPictureProblem").text === FoamyI18n.t("studio.pick.PORTAL_UNAVAILABLE"), "portal error: " + find(page, "studioPictureProblem").text)
+        studio.sources.applyPick(127, "")
+        expect(find(page, "studioPictureProblem").text === FoamyI18n.t("studio.helperUnavailable"), "no helper")
+        studio.sources.applyPick(0, '{"ok":true,"cancelled":true}')
+        expect(studio.sources.pickError === "", "cancelled is no error")
+        studio.sources.applyPick(0, '{"ok":true,"path":"/home/you/clip.gif"}')
+        expect(studio.sources.pickError === "UNSUPPORTED", "a file the lock can't use: " + studio.sources.pickError)
+        expectDraft('{"preset":"foamy","background":{"decor":"frame","blur":0.5}}')
+        // A picture: the theme colour until the helper has prepared it.
+        studio.sources.applyPick(0, JSON.stringify({ ok: true, path: test.picture }))
+        expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.picture, decor: "frame", blur: 0.5 } }))
+        expect(view.backgroundPath === "", "not decoded here, not yet prepared: " + view.backgroundPath)
+        test.saved.waits = 0
+        next()
+      } },
+    { name: "the picture is prepared by the helper", wait: 300, run: function(next) {
+        var s = studio.sources
+        if (s.pictureSource !== test.picture && !s.pictureError) {
+          if (++test.saved.waits > 60) fail("the picture wasn't prepared: " + s.pictureError)
+          runner.interval = 250
+          runner.restart()
+          return
+        }
+        expect(s.pictureError === "" && s.picturePath.indexOf(s.pictureDirectory) === 0, "prepared: " + s.picturePath + " " + s.pictureError)
+        expect(view.backgroundPath === s.picturePath && view.backgroundPrepared, "the canvas shows the prepared picture")
+        capture("studio-background", next)
+      } },
+    { name: "a missing picture is reported", wait: 0, run: function(next) {
+        studio.sources.applyPick(0, '{"ok":true,"path":"/nonexistent/foamy-lock-studio/gone.png"}')
+        test.saved.waits = 0
+        next()
+      } },
+    { name: "the helper says it is missing", wait: 300, run: function(next) {
+        var s = studio.sources
+        if (s.pictureError !== "background-missing") {
+          if (++test.saved.waits > 60) fail("no error for a missing picture: " + s.pictureError)
+          runner.interval = 250
+          runner.restart()
+          return
+        }
+        expect(find(studio.scenePage, "studioPictureProblem").text === FoamyI18n.t("studio.picture.missing"), "missing picture")
+        expect(view.backgroundPath === "", "the theme colour shows")
+        next()
+      } },
+    { name: "glass and dim page", wait: 0, run: function(next) {
+        reset()
+        find(studio.library, "studioSceneGlass").clicked()
+        var page = studio.scenePage
+        expect(studio.page === "glass" && find(page, "studioDim").visible, "the glass and dim page shows")
+        find(page, "studioDim").stepBy(1)
+        find(page, "studioGlassOpacity").committed(0.4)
+        find(page, "studioTint").picked("accent")
+        expectDraft('{"preset":"foamy","background":{"dim":0.3},"glass":{"opacity":0.4,"tint":"accent"}}')
+        find(page, "studioDim").committed(0.95)
+        expect(studio.look.background.dim === 0.9, "dim keeps to 90 %: " + studio.look.background.dim)
+        studio.selectModule("media")
+        studio.page = "glass"
+        capture("studio-glass", next)
+      } },
+    { name: "back to the inspector", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("clock")
+        expect(studio.inspector.visible && !studio.scenePage.visible, "the inspector is back")
         canvas.forceActiveFocus()
         next()
       } },
