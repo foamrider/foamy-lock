@@ -125,9 +125,16 @@ Item {
     && visible && loadBackground
   // /proc, read every few seconds while awake; procRoot is for the tests.
   property string procRoot: "/proc"
-  readonly property bool uptimeWanted: statusLive && displayAwake && statusShows("uptime")
-  readonly property bool loadWanted: statusLive && displayAwake && statusShows("load")
-  readonly property bool memoryWanted: statusLive && displayAwake && statusShows("memory")
+  // Listed: the status shows the reading. Wanted: it is also read now. A
+  // reading is cleared only when it stops being listed, so a display that
+  // sleeps (or Lock Studio's window losing focus) keeps the last value
+  // instead of dropping the item.
+  readonly property bool uptimeListed: statusLive && statusShows("uptime")
+  readonly property bool loadListed: statusLive && statusShows("load")
+  readonly property bool memoryListed: statusLive && statusShows("memory")
+  readonly property bool uptimeWanted: uptimeListed && displayAwake
+  readonly property bool loadWanted: loadListed && displayAwake
+  readonly property bool memoryWanted: memoryListed && displayAwake
   readonly property bool systemShown: uptimeWanted || loadWanted || memoryWanted
   property real systemUptime: -1
   property string systemLoad: ""
@@ -536,10 +543,10 @@ Item {
     layoutError = ""
   }
 
-  onUptimeWantedChanged: if (!uptimeWanted) systemUptime = -1
-  onLoadWantedChanged: if (!loadWanted) systemLoad = ""
-  onMemoryWantedChanged: {
-    if (memoryWanted) return
+  onUptimeListedChanged: if (!uptimeListed) systemUptime = -1
+  onLoadListedChanged: if (!loadListed) systemLoad = ""
+  onMemoryListedChanged: {
+    if (memoryListed) return
     memoryTotal = 0
     memoryAvailable = 0
   }
