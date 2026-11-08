@@ -1,7 +1,7 @@
 # Plan: adjustable lock-screen decorations (round 5, item 3)
 
-Status: design note for review · 2026-11-08 · branch `feat/layout-engine` ·
-no code yet. Follows [lock-studio-round5.md](lock-studio-round5.md) item 3
+Status: implemented on `feat/layout-engine`, 2026-11-08 (see Progress at
+the end); the design below is as reviewed, the decisions at its end apply. Follows [lock-studio-round5.md](lock-studio-round5.md) item 3
 and the decorations of [layout-engine.md](layout-engine.md) (step 8).
 
 ## The request
@@ -15,7 +15,7 @@ From the round 5 review:
   Lock Studio offers.
 
 This note covers the diagnosis, the model, the look format, safety, Lock
-Studio and the steps. Nothing here is built yet.
+Studio and the steps.
 
 ## Diagnosis
 
@@ -711,3 +711,115 @@ Gaps found on a second read, and how the note now handles them:
 Also, for the "every preset can be recreated" test, the inspector gets
 "Move up / Move down in zone" buttons, so order within a zone can be set
 directly.
+
+## Progress
+
+On `feat/layout-engine`, 2026-11-08, after round 5's UI fixes and before
+the new animations; offscreen only (nothing locked; no real omarchy-shell,
+omarchy, hyprctl dispatch or desktop quickshell).
+
+### What was built
+
+- **Model (Layout.js, its own region at the end):** `background.shapes`
+  as specified: `box`, `panel`, `frame`; zone and module wraps (zone
+  wraps on the reserved rectangles, with narrow-screen companions; module
+  wraps on the drawn ones); padding, size, inset, radius (`"auto"`: the
+  module's corners plus the smaller padding), fill, frost, border, absorb,
+  style; strict validation with each error's path; the canonical form;
+  `template`, `legacyShapes`, `bottomBand`, `shapeRects`, `absorbedModules`
+  and `shapeAdvice`. `merge` merges the glass before the background, so an
+  older `decor` expands in the look's tint. Catalog version 4
+  (`shapeKinds`, `shapeLimits`, `templates`; `backgroundDecor` kept).
+- **Decision 1, as built:** `fill.color` is `auto` by default: it follows
+  the glass tint the way the island always did (black over clear glass, the
+  look's glass under `accent` and `solid`); a shape's own colour is
+  `glass`, `surface` or `black`. The island template is `auto` at 0.82; the
+  card, sheet, strip and split templates are `glass` (as they always were);
+  cinema is `black`. The frame's `style` is `auto` by default (glow with
+  the `accent` tint, otherwise the bezel), so neon and dotmatrix are both a
+  plain `{ "kind": "frame" }`. No light colours: the safety rule stands.
+- **Decision 2:** zone wraps keep ignoring offsets (the placement case
+  still holds); module wraps follow the drawn rectangles, exactly, without
+  rounding out, so a zero-padding box is the module's own surface to the
+  pixel (cause 6 goes for module shapes; zone shapes round as before).
+- **Decisions 3 and 4:** the dim slider steps by 1 % (Sheet keeps 0.12);
+  four shapes, two frosted, no canvas resize handles.
+- **Presets** are `template()`s through the `background()` helper (so a
+  preset added elsewhere with `background(source, blur, dim)` gets `[]`).
+- **Rendering:** `Decoration.qml` is a Repeater over LockView's
+  `shapeGeometry` binding (frosted first; frost through a `Loader` gated on
+  GPU rendering and a picture source); LockView's `placeY` uses
+  `bottomBand`; the media, status, calendar, weather and account elements
+  take `surfaceShown` and expose `surfaceRadius`. `surfaces` stays the test
+  hook, with the shape's index and kind.
+- **Lock Studio:** Library → Scene → Shapes (in `ScenePage.qml`, so no new
+  studio file and the open app hot-reloads): the list with Move up, Move
+  down and Remove, Add shape (the templates' drawings and "Around the
+  selected module"), and the shape inspector (wraps: a multi-select
+  `ZonePicker` or a module checklist; edge, padding, full width, size
+  bounds off/%/px, inset, corners with "Match the module's corners", frame
+  style as a segmented choice rather than tiles, fill, opacity in 1 %
+  steps, frost, border, inner edge, "Background of the modules inside").
+  The module inspector has "Wrap in a shape" / "Edit its shape" and the
+  decision's "Order in the zone" with Move up / Move down in zone. On the
+  canvas a click on a shape where no module is selects it; the selection
+  is outlined with its zones or modules; Delete removes it; Esc deselects.
+  The checker reports `shapeAdvice` (`shape-straddles`,
+  `shape-outside-frame`, `frost-overlap`, `shape-empty`) as warnings that
+  never block Apply nor outline a problem. The decoration tiles are gone;
+  `Draft.setBackground` refuses `decor` (and `shapes`), so Lock Studio only
+  writes shapes. Strings in en and no.
+- **Draft:** `addShape`, `removeShape`, `moveShape`, `setShape`,
+  `setWrapMode`, `toggleWrapped`, `shapeAround`, `moveInZone` (it numbers
+  the zone's stack 0, 1, 2… from the top).
+
+### Tests
+
+- **Node:** `shapes.test.cjs` (every key and message, caps, canonical
+  form, templates, legacy strings under each tint, `bottomBand`, the
+  geometry proof against a port of the old formulas over 5 sizes × 2
+  directions × 11 zone sets: exact, split and sheet within a pixel,
+  companions, right to left, colours and order, absorb, advice);
+  `studio-shapes.test.cjs`; `studio-recreate.test.cjs` (the acceptance
+  test, recipes from `tests/studio-recipe.js`).
+- **Harness:** `layout` compares every preset's shapes with
+  `Decoration.qml` at 6efe1fd at every size and in right to left (within a
+  pixel; same order), and checks shapes are under every element, frosted
+  first. `placement` adds the island/media alignment cases (an offset and
+  1.5-scaled pill in a concentric padded box, media stopping and starting,
+  a wider title, late weather, primary-only, a mirrored module panel,
+  shapes never in the geometry check or a fallback) and the absorb pixel
+  test (pill alone vs absorbed by a zero-padding `surface` box, under none,
+  accent, solid and glass 0.3: identical grabs). `studio` adds the shapes
+  page, Wrap in a shape, the advice, Move up/down, island/cinema/sheet
+  from template + a control change and back, and the acceptance run.
+- **Acceptance (all 26 selectable presets):** each recipe (7 to 14
+  steps, 269 in all) runs on the real controls, in en, no and ar, and makes
+  the preset's look (canonical, hidden modules compared by `hidden`, a
+  shown module's order by its place in its zone's stack, since the number
+  only ranks it) with the same shapes and module rectangles as a view of
+  the preset. No value was off a grid once the dim moved to 1 %.
+
+### Deviations
+
+- **The island under a changed tint.** A look that keeps the island
+  preset's shape and changes the tint gets the glass at 0.82, not 0.86 (the
+  same alpha as the dark pill). An older `decor: "island"` is exact (its
+  expansion takes 0.86 under a tint).
+- **Thumbnails are byte-identical**, split and sheet included: at 1920 ×
+  1080 their extents rounded the same way, so nothing was regenerated.
+- **Order in the acceptance test** is compared by rank (see above).
+- **Between commits:** from dfc0148 to e5bb93a the studio harness's old
+  decoration step fails (the tiles were still there but refused); fixed by
+  fb76458.
+- **Manual GPU checks** (frost on sheet and card, two frosted shapes, frost
+  over a playing video wallpaper, the neon glow, a real lock with the
+  island around the media card) are still to do, after the user's go.
+
+### Commits and checks
+
+- dfc0148 (model, presets, rendering), 284909a (layout and placement
+  tests), d124919 (Draft), e5bb93a (1 % dim, Move up/down in zone),
+  fb76458 (Shapes page, Wrap in a shape), 9a7cc8c (acceptance), and this
+  progress with the README.
+

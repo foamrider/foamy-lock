@@ -166,7 +166,7 @@ optional; without them the lock looks exactly as in 1.2.0.
 
 Presets from `dock` on are inspired by the layouts of
 [Lock Designs](https://github.com/KamradSmeshnyavy/omarchy-lock-designs) (MIT),
-rebuilt from the elements, decorations and backgrounds here; no code is shared.
+rebuilt from the elements, shapes and backgrounds here; no code is shared.
 The editor's thumbnails are in `previews/presets` (`tests/harness.sh thumbnails`).
 
 **Layout.** Each element takes `zone`, `style`, `order` and `hidden`, and the
@@ -228,7 +228,7 @@ element draws exactly as its preset says.
 | --- | --- | --- | --- |
 | `scale` | 0.5 to 2 in steps of 0.05; the field 0.85 to 1.5 | 1 | The element's size. A scaled date or clock in a centre column widens with it, up to the screen less its margins. |
 | `opacity` | 0.3 to 1; the field 0.7 to 1 | 1 | The whole element's opacity. |
-| `offset` | `{ "x": …, "y": … }`, both required, each -0.5 to 0.5 | none | A move from where the zone puts it, as a fraction of the screen's width (`x`) and height (`y`), so one look fits every screen size. `x` mirrors in right-to-left languages, like start and end. The rest of the zone's stack stays where it was, and decorations keep fitting the zones, not the moved element. |
+| `offset` | `{ "x": …, "y": … }`, both required, each -0.5 to 0.5 | none | A move from where the zone puts it, as a fraction of the screen's width (`x`) and height (`y`), so one look fits every screen size. `x` mirrors in right-to-left languages, like start and end. The rest of the zone's stack stays where it was, and a shape around its zone keeps fitting the zone, not the moved element (a shape around the module follows it). |
 | `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, the calendar `card` and `week`, and the weather `pill`, `detailed` and `card`; the element's other styles ignore it. The date has no glass and rejects the key. |
 | `screens` | `all`, `primary` | `all` | `primary` shows the element only on the monitor that receives your keystrokes (or on every monitor until one does). For the date, clock, media, status, calendar and weather; the account and the field already follow that monitor and reject the key. |
 
@@ -272,23 +272,11 @@ that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
   hold a still frame.
 - **`color`.** The solid colour (above); ignored, and left out of the look,
   with any other source.
-- **`decor`.** A shape over the background and behind the elements, fitted to
-  the zones it belongs to (it follows them to narrow screens and mirrors in
-  right-to-left languages). It is background: it never covers an element.
-  - `none` (default);
-  - `split`: a solid panel on the start side, as wide as its column needs
-    (at least 38%), with an accent edge; it fills a narrow screen;
-  - `sheet`: a frosted panel on the end side;
-  - `cinema`: black bars at the top and bottom;
-  - `strip`: a band behind the bottom row;
-  - `island`: a pill around the top-center zone;
-  - `frame`: a border inset from the edges: a glow with the `accent` glass
-    tint, otherwise a dark bezel;
-  - `card`: a glass card behind the middle-center zone.
-
-  With `cinema` and `strip` the bottom-center stack sits at the bottom edge,
-  in the band, instead of at 65% height. The frosting behind `sheet` and
-  `card` needs GPU rendering.
+- **`shapes`.** Up to four shapes over the background and behind every
+  element (see Shapes below); `[]` takes a preset's away. An older look's
+  `decor` (`none`, `split`, `sheet`, `cinema`, `strip`, `island`, `frame`
+  or `card`) is still read as its template, drawn exactly as before; a look
+  can't have both.
 - **`blur`.** From 0 to 1.
 - **`dim`.** The darkening scrim, from 0 to 0.9; the default is 0.25.
 - **Picture preparation.** A custom image is decoded, cropped to the screen and
@@ -326,8 +314,68 @@ at idle priority with up to 16 threads (one conversion at a time, cancel any
 time, 10 minutes at most). It keeps at most three clips in
 `/omarchy/foamy.lock/video/`, the oldest evicted.
 
+**Shapes.** `background.shapes` is a list of at most four shapes (at most two
+of them frosted), drawn over the background and under every element, frosted
+ones first, then in list order. They are background: they never cover an
+element, never take part in the geometry check and never cause a fallback.
+
+```json
+"background": {
+  "source": "omarchy", "blur": 0.4, "dim": 0.25,
+  "shapes": [
+    { "kind": "box", "wrap": { "modules": ["media"] }, "pad": { "x": 10, "y": 10 },
+      "radius": "auto", "fill": { "color": "black", "opacity": 0.82 }, "absorb": true },
+    { "kind": "frame", "style": "line" }
+  ]
+}
+```
+
+- **`kind`.** `box`: a rounded rectangle around what it wraps, plus `pad`;
+  `panel`: a rectangle along one screen `edge` (`start`, `end`, `top`,
+  `bottom`; start and end mirror right to left), as thick as what it wraps
+  needs plus `pad`, within `size`; `frame`: a border inset from the edges.
+- **`wrap`.** `{ "zones": [...] }`: the shown modules in those zones, where the
+  zone puts them (an offset never drags the shape along; on narrow screens a
+  zone stacked with another wraps both); or `{ "modules": [...] }`: those
+  modules where they are drawn, so the shape follows an offset, a scale and
+  content that arrives late. A box needs one; a panel without one keeps its
+  minimum size. A box around nothing shown isn't drawn (a module hidden by
+  privacy leaves no empty pill).
+- **Geometry.** Lengths are whole pixels at 1080p, scaled with the screen:
+  `pad` (a box: `{ "x", "y" }`, 0 to 120, default 24 and 16; a panel: 0 to 200,
+  default 32), `inset` (a panel, 0 to 64, default 0; a box with
+  `"stretch": "across"`, which spans the screen's width, default 16; a frame, 0
+  to 24, default 12) and `radius` (default 24 for a box, 0 for a panel, 22 for a
+  frame; a box's `"auto"` is the wrapped module's own corners plus the
+  padding). A panel's `size` takes `min`, `max` and `fillPast` (past it the
+  panel fills the screen), each `{ "screen": 0.05–1 }` or `{ "px": 0–4000 }`.
+- **`fill`.** `color`: `auto` (default: follows the glass tint, dark over clear
+  glass and the look's glass under `accent` and `solid`), `glass` (the look's
+  glass), `surface` (exactly what the wrapped modules' own glass draws) or
+  `black`; `opacity` (0 to 1, default 0.6); `frost` blurs a picture background
+  behind it (GPU rendering only).
+- **`border`.** `color` `glass` (default) or `accent`, `width` 0 to 4 (default
+  1), and on a panel `sides: "inner"`, only the edge facing the screen.
+- **`absorb`.** `true` makes the shape the only background of the modules it
+  wraps: the media card, pill and art, the status pill and system panel, the
+  calendar card and week, the weather pill, detailed and card, and the account
+  chip draw no surface of their own (their content stays where it is). The
+  password field always keeps its own. A box around one module with `pad` 0,
+  `radius: "auto"`, `fill: { "color": "surface", "opacity": 1 }` and `absorb`
+  is exactly that module's own surface, however it moves or grows.
+- **`style`** (a frame). `auto` (default: a glow in the accent with the `accent`
+  tint, otherwise a dark bezel), `bezel`, `glow` or `line`.
+- **Templates.** The presets' shapes, and Lock Studio's Add shape: `island` (a
+  dark pill around the top-center zone), `card` (frosted glass around the
+  middle-center zone), `split` (a panel on the start side, at least 38%, with an
+  accent inner edge; it fills a narrow screen), `sheet` (a frosted panel on
+  the end side), `strip` (a band across the bottom row), `cinema` (black bars
+  at the top and bottom) and `frame`. A bottom panel, or a box across the
+  screen, around the bottom-center zone holds the bottom row: the
+  bottom-center stack sits at the bottom edge, in the band.
+
 **Glass.** `opacity` (0 to 1, default 1) scales the transparency of the glass
-behind the media card, the account chip, the field and the decorations.
+behind the media card, the account chip, the field and the shapes.
 `tint` is `none` (default, white glass), `accent` (the theme accent on the
 edges, and the outline clock drawn in it) or `solid` (opaque surfaces without
 edges).
@@ -356,7 +404,7 @@ the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
 Editors use three more calls on the same target: `catalog` (version 3) lists the elements, zones,
-styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
+styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), shapes (`shapeKinds`, `shapeLimits` and `templates`; `backgroundDecor` for older clients), glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
@@ -438,7 +486,23 @@ colour** or **Animation**, and what is under it follows the choice: the picture
 theme's colours and black, and a field for any `#rrggbb` (six hex digits, checked
 as you type and again by the lock screen); for an animation, a tile per animation,
 each drawn by the lock screen's own code in its still frame. Blur (wallpaper and
-custom image) and the decoration follow.
+custom image) follows. The dim (on the glass and dim page) moves in 1 % steps.
+
+**Shapes.** Library → Scene → Shapes lists the look's shapes in drawing order
+("Box around Clock, Date"), each with Move up, Move down and Remove. **Add shape**
+offers the templates as drawings and a box around the selected module (up to
+four shapes, two frosted). Selecting a shape (in the list, or by clicking it on
+the canvas where no module is) shows only what its kind takes: what it wraps
+(zones on the zone picker, which then picks several, or modules), its edge,
+padding, full width, sizes (off, % or px), inset, corners (a box can match the
+module's), frame style, fill and opacity (1 % steps), frost, border and whether it
+is the background of the modules inside. Delete removes the selected shape, Esc
+deselects it. A module's inspector has **Wrap in a shape**: a box that is exactly
+the module's own surface and its only background, opened on the shapes page
+(**Edit its shape** once it has one); padding then grows it evenly. The checker
+warns, without blocking Apply, when a module crosses a shape's edge or leaves a
+frame, frosted shapes overlap, or a shape wraps nothing. A module's **Order in
+the zone** has Move up and Move down in zone.
 
 **A video background.** "Choose picture or video…" offers MP4, MOV, MKV and WebM
 videos too. For a video (or an Omarchy wallpaper that is one) the background page
@@ -771,9 +835,11 @@ revision.
 The layout test runs every preset in `Layout.SELECTABLE_PRESETS` (four
 quickshells at a time) through five sizes (1920 × 1080, 3440 × 1440, 1280 × 720,
 1080 × 1920 and 800 × 1000), 12- and 24-hour time, typing,
-secondary screens and right-to-left, where every element and decoration must
+secondary screens and right-to-left, where every element and shape must
 mirror. No preset may fall back or have any geometry problem; the field and every element must sit wholly
-inside or outside each decoration surface (and inside a frame); a drawn
+inside or outside each shape (and inside a frame), shapes must be under every
+element (frosted ones first) and draw what the fixed decorations of 6efe1fd drew
+(within a pixel); a drawn
 background must hold its still frame under the software renderer; the system
 panel must have its readings (from fixtures, not the real `/proc`). The foamy
 run also switches one view through every preset and back, which must restore
@@ -788,8 +854,10 @@ The placement cases (`placement`, also run by `layout` without `--preset`) put
 `scale`, `opacity`, `offset`, `glass` and `screens` on one view: an offset off
 the screen, onto another zone's element, into its own stack or onto the field,
 the field moved above the top third, a scale that overflows, an offset mirrored
-right-to-left, a primary-only element on a secondary view, and decorations that
-keep fitting the un-offset zones, weather arriving after the check, the weather's
+right-to-left, a primary-only element on a secondary view, zone shapes that keep
+fitting the un-offset zones and module shapes that follow their modules (offset,
+scale, late media and weather, mirrored), an absorbing box compared pixel for
+pixel with the module's own surface, weather arriving after the check, the weather's
 glass, details and screens, and the status sources (made only while an item needs
 them, none with `liveSources: false`, an empty status hidden). Each expects its
 geometry code, and a view with `latchFallback: false` (for an editor) must report
