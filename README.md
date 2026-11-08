@@ -195,7 +195,7 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 | `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog`, `small` (one line, for a bar or card), `poster` (huge hours over accent minutes), `ring` (the time in a ring that fills over the hour) |
 | `account` | `avatar` (default), `chip`, `name` (the name alone) |
 | `password` | `pill` (default), `underline`, `box` (an always-visible glass box with the arrow), `dots` (no surface), `terminal` (a "Password:" prompt in the mono font), `card` (a greeting above the field) |
-| `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below) |
+| `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below), `hero` (a large cover without a surface, the title and artist under it, no controls), `minimal` (one line of text, "♪ Title — Artist", no controls), `disc` (a round cover beside the title, artist and play/pause; it turns while the player plays, only with GPU rendering, never with reduced motion or while the display is blanked) |
 | `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill), `system` (a panel with uptime, memory, load and the battery, or the network without one) |
 | `calendar` | `card` (default; this month on glass, today ringed in the accent), `plain`, `week` (this week's seven days on a glass strip), `mini` (a smaller month without a card). Hidden unless a preset or `hidden: false` shows it. |
 | `weather` | `compact` (default; an icon and the temperature), `pill` (one line in a glass pill), `detailed` (a glass card), `line` (one line of text, "Light rain · 6°"), `large` (a large temperature, the condition small under it), `card` (a centred glass card with the icon, temperature, condition and today's high and low, always). Hidden unless `hidden: false` shows it, and only while Foamy Weather has a report. |
@@ -237,14 +237,14 @@ element draws exactly as its preset says.
 
 Each password style has a fixed size, so the field never moves while you type.
 Every style reads the same with CPU rendering, except the artwork: the media
-pill and art then show it as a plain square instead of a round or rounded one,
+pill, art, hero and disc then show it as a plain square instead of a round or rounded one,
 and the card's thumbnail still needs GPU rendering. Only the drawn backgrounds
 move (see below).
 
 The password field can't be hidden, and it stays in the middle or bottom row.
 `showUserInfo: false` and `showMedia: false` still hide the account and media
 whatever the layout says. Artwork is prepared only while a media style
-that shows it (`card`, `pill` or `art`) is shown.
+that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
 
 **Background.** These keys set what's behind the elements:
 

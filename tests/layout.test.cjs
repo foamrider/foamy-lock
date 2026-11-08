@@ -123,7 +123,7 @@ test('every element offers its shipped styles, defaults first', () => {
     clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog', 'small', 'poster', 'ring'],
     account: ['avatar', 'chip', 'name'],
     password: ['pill', 'underline', 'box', 'dots', 'terminal', 'card'],
-    media: ['card', 'line', 'pill', 'art'],
+    media: ['card', 'line', 'pill', 'art', 'hero', 'minimal', 'disc'],
     status: ['text', 'icons', 'pill', 'system'],
     calendar: ['card', 'plain', 'week', 'mini'],
     weather: ['compact', 'pill', 'detailed', 'line', 'large', 'card']

@@ -25,7 +25,7 @@ var STYLES = {
   clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog", "small", "poster", "ring"],
   account: ["avatar", "chip", "name"],
   password: ["pill", "underline", "box", "dots", "terminal", "card"],
-  media: ["card", "line", "pill", "art"],
+  media: ["card", "line", "pill", "art", "hero", "minimal", "disc"],
   status: ["text", "icons", "pill", "system"],
   calendar: ["card", "plain", "week", "mini"],
   weather: ["compact", "pill", "detailed", "line", "large", "card"]
@@ -102,6 +102,8 @@ var GLASS_STYLES = {
   calendar: ["card", "week"],
   weather: ["pill", "detailed", "card"]
 }
+// The media styles that draw the cover (the others never prepare artwork).
+var ARTWORK_STYLES = ["card", "pill", "art", "hero", "disc"]
 // The defaults of the optional keys, left out of a canonical look.
 var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
 // The last three are drawn by the view in the theme's colours.
@@ -746,7 +748,7 @@ if (typeof module !== "undefined") module.exports = {
   isVideoPath: isVideoPath, playsVideo: playsVideo, pausesOnBattery: pausesOnBattery, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
   ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
   STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
-  SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
+  SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, ARTWORK_STYLES: ARTWORK_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
   elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits,
   optionDefault: optionDefault, optionFollowsStyle: optionFollowsStyle, revealOf: revealOf, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,

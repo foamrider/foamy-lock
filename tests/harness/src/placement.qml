@@ -298,6 +298,66 @@ ShellRoot {
         } },
       { apply: function() { view.liveSources = true; view.look = Layout.defaults() }, check: function() {} }
     ] },
+    // The disc turns only while the player plays, with GPU rendering (the
+    // offscreen renderer is software: gpuRendering is set by hand, as the
+    // video suite does), motion not reduced, the display awake and the
+    // element shown; stopped, it goes back upright. The other new styles
+    // draw inside the screen and never turn.
+    { name: "the media disc turns only while it may", phases: [
+      { apply: function() { view.gpuRendering = false; view.look = look({ layout: { media: { style: "disc" } } }) },
+        check: function() {
+          expectProblem("")
+          var media = findNamed(view, "mediaRow")
+          if (media.discSpinning) fail("the disc turns under the software renderer")
+          if (findNamed(media, "albumArt").rotation !== 0) fail("the disc isn't upright")
+          if (!findNamed(media, "discHole").visible) fail("the disc has no centre hole")
+          view.gpuRendering = true
+        } },
+      { apply: function() {},
+        check: function() {
+          var media = findNamed(view, "mediaRow")
+          if (media.discSpinning !== !view.reduceMotion) fail("the disc doesn't turn while playing: " + media.discSpinning)
+          player.isPlaying = false
+          if (media.discSpinning) fail("the disc turns while paused")
+          player.isPlaying = true
+          view.displayAwake = false
+          if (media.discSpinning || media.discMotion) fail("the disc turns while blanked")
+          view.displayAwake = true
+          view.look = look({ layout: { media: { style: "disc", hidden: true } } })
+        } },
+      { apply: function() {},
+        check: function() {
+          var media = findNamed(view, "mediaRow")
+          if (media.discSpinning) fail("a hidden disc turns")
+          view.look = look({ layout: { media: { style: "card" } } })
+        } },
+      { apply: function() {},
+        check: function() {
+          var media = findNamed(view, "mediaRow")
+          if (media.discSpinning || findNamed(media, "albumArt").rotation !== 0) fail("the card's thumbnail is turned: " + findNamed(media, "albumArt").rotation)
+          view.look = look({ layout: { media: { style: "minimal" } } })
+        } },
+      { apply: function() {},
+        check: function() {
+          expectProblem("")
+          var media = findNamed(view, "mediaRow"), line = findNamed(media, "mediaMinimal")
+          if (line.text !== "\u266a Evening Light \u2014 Sample Artist") fail("the minimal line: " + line.text)
+          if (findNamed(media, "albumArt").visible || findNamed(media, "mediaControls").visible) fail("the minimal style shows a cover or controls")
+          if (media.color.a !== 0) fail("the minimal style has a surface")
+          view.look = look({ layout: { media: { style: "hero" } } })
+        } },
+      { apply: function() {},
+        check: function() {
+          expectProblem("")
+          var media = findNamed(view, "mediaRow"), art = findNamed(media, "albumArt")
+          if (!art.visible || art.width !== media.width || art.width < 240) fail("the hero's cover: " + art.width + " in " + media.width)
+          if (findNamed(media, "mediaTitle").y < art.height || findNamed(media, "mediaArtist").y < findNamed(media, "mediaTitle").y)
+            fail("the title and artist belong under the cover")
+          if (findNamed(media, "mediaControls").visible) fail("the hero has no controls")
+          view.gpuRendering = false
+          view.look = Layout.defaults()
+        } }
+    ] },
     { name: "latchFallback false reports, true falls back", phases: [
       { apply: function() { view.look = look({ layout: { status: { offset: { x: 0.3, y: 0 } } } }) },
         check: function() {

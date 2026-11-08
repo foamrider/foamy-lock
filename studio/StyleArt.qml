@@ -154,6 +154,9 @@ Item {
     case "media:line": return mediaLine
     case "media:pill": return mediaPill
     case "media:art": return mediaArt
+    case "media:hero": return mediaHero
+    case "media:minimal": return mediaMinimal
+    case "media:disc": return mediaDisc
     case "status:text": return statusText
     case "status:icons": return statusIcons
     case "status:pill": return statusPill
@@ -807,6 +810,66 @@ Item {
           spacing: root.u * 5
           Repeater { model: 3; Rectangle { width: root.u * 3.5; height: width; radius: width / 2; color: root.ink } }
         }
+      }
+    }
+  }
+
+  // No surface: a large cover, the title and artist under it.
+  Component {
+    id: mediaHero
+    Item {
+      Column {
+        anchors.centerIn: parent
+        spacing: root.u * 2.5
+        Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 27; height: width; radius: root.u * 3.5; color: root.edge }
+        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 22 }
+        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 14; opacity: 0.6 }
+      }
+    }
+  }
+  // One line of text: a note, the title and the artist.
+  Component {
+    id: mediaMinimal
+    Item {
+      Row {
+        anchors.centerIn: parent
+        spacing: root.u * 3
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: "♪"
+          color: root.ink
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: Math.round(root.u * 10)
+        }
+        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 26 }
+        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 4; opacity: 0.6 }
+        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 18; opacity: 0.6 }
+      }
+    }
+  }
+  // A round cover with a centre hole, the title and artist, play/pause.
+  Component {
+    id: mediaDisc
+    Item {
+      Row {
+        anchors.centerIn: parent
+        spacing: root.u * 4
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 24
+          height: width
+          radius: width / 2
+          color: root.edge
+          Rectangle { anchors.centerIn: parent; width: root.u * 5; height: width; radius: width / 2; color: root.faint; border.width: 1; border.color: root.ink }
+        }
+        Column {
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: root.u * 3
+          Bar { width: root.u * 24 }
+          Bar { width: root.u * 16; opacity: 0.6 }
+        }
+        Icon { name: "play"; width: root.u * 9; anchors.verticalCenter: parent.verticalCenter }
       }
     }
   }

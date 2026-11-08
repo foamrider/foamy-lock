@@ -492,8 +492,10 @@ Decisions, one commit or more each on `feat/layout-engine`:
     the inspector's Details is disabled for it, with a note.
 - **R4-6. Media styles** `hero`, `minimal` and `disc` (no glass; `showMedia`
   and `showBrowserMedia` hold as before):
-  - **`hero`:** no surface; a large rounded cover (300 px at scale 1), the
-    title and artist centred under it, then the transport controls.
+  - **`hero`:** no surface; a large rounded cover (280 px at scale 1), the
+    title and artist centred under it, no controls (the media keys work
+    while locked; with controls it didn't fit a 800 × 1000 screen's centre
+    column above the field).
   - **`minimal`:** one plain-text line "♪ Title — Artist", no controls, no
     cover (none is prepared).
   - **`disc`:** a round cover with a centre hole, the title and artist

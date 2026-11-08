@@ -24,7 +24,7 @@ ShellRoot {
     clockLabel: ["clockStacked", "clockOutline", "clockDots", "clockFlip", "clockAnalog", "clockPoster", "clockRing"],
     identityBlock: ["avatar", "nameLabel"],
     inputField: ["editorArea", "passwordInput", "cardGreeting", "cardPill", "terminalPrompt", "submitArrow"],
-    mediaRow: ["albumArt", "mediaTitle", "mediaArtist", "mediaControls", "mediaLine"],
+    mediaRow: ["albumArt", "mediaTitle", "mediaArtist", "mediaControls", "mediaLine", "mediaMinimal"],
     statusFooter: ["networkStatus", "batteryStatus", "volumeStatus", "bluetoothStatus", "keyboardStatus", "uptimeStatus",
       "loadStatus", "memoryStatus", "systemPanel"],
     calendarBlock: ["calendarCard", "calendarTitle"],
