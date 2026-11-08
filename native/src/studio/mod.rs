@@ -50,6 +50,7 @@ use foamy_helper::Failure;
 use serde_json::Value;
 
 pub mod desktop;
+pub mod draft;
 pub mod root;
 
 /// Test override of the plugin directory.
@@ -346,6 +347,9 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
         [] | ["open"] => root::open(&env, &current_plugin_dir()?, &root::Options::default()),
         ["install"] => desktop::install(&env, &current_plugin_dir()?),
         ["uninstall"] => desktop::uninstall(&env),
+        ["draft-load"] => draft::load(&env),
+        ["draft-save"] => draft::save(&env, &read_stdin(draft::MAX_REQUEST)?),
+        ["draft-clear"] => draft::clear(&env),
         _ => Err(Failure::coded("INVALID_ARGUMENT", USAGE)),
     }
 }
