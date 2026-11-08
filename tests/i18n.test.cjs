@@ -44,7 +44,7 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
     'not-responding.preset'].map(r => 'result.' + r),
   // User preset operations (StudioWindow.resultText) and the tips (Tips.qml).
   ...['save', 'rename', 'delete'].map(op => 'presets.done.' + op),
-  ...['mugshot', 'library', 'drag', 'keys', 'look', 'presets', 'preview', 'shortcuts'].map(t => 'tip.' + t),
+  ...['mugshot', 'library', 'drag', 'keys', 'look', 'presets', 'keyboard', 'preview', 'shortcuts'].map(t => 'tip.' + t),
   // Each element's own keys (Inspector.qml): their values, and the status items.
   ...Layout.ELEMENT_OPTIONS.password.reveal.values.map(v => 'reveal.' + v),
   ...Layout.ELEMENT_OPTIONS.weather.details.values.map(v => 'details.' + v),

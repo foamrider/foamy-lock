@@ -11,15 +11,12 @@ import "kit"
 // Mugshot writes); without Mugshot installed it says how to install it.
 // The tip seen last is kept in the app's state (LockSources.setTip), so
 // the next start shows it again.
-//
-// Tips about features still to come (the keyboard layout in the status)
-// join the list with those features.
 Rectangle {
   id: tips
 
   // LockSources: tip, setTip(), mugshotAvailable.
   property var sources: null
-  readonly property var ids: ["mugshot", "library", "drag", "keys", "look", "presets", "preview", "shortcuts"]
+  readonly property var ids: ["mugshot", "library", "drag", "keys", "look", "presets", "keyboard", "preview", "shortcuts"]
   readonly property string current: sources && ids.indexOf(sources.tip) !== -1 ? sources.tip : ids[0]
   readonly property int index: Math.max(0, ids.indexOf(current))
   readonly property string text: tipText(current)

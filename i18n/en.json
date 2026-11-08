@@ -388,6 +388,7 @@
   "studio.result.not-responding.preset": "The Omarchy shell didn't answer, so the preset may or may not be saved. Try again.",
   "studio.presetAskReplace": "Your changes aren't kept in a preset. Replace them with %1? You can undo it.",
   "studio.tip.presets": "Saving changes to a preset creates your own.",
+  "studio.tip.keyboard": "Status can show your keyboard layout, so you see it before you type your password. Select Status and tick Keyboard layout.",
   "studio.result.not-ready": "The Omarchy shell is still starting. Try again in a moment.",
   "studio.result.not-running": "The Omarchy shell isn't running.",
   "studio.result.target-not-found": "Foamy Lock isn't loaded in the Omarchy shell.",

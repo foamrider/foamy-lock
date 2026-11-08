@@ -388,6 +388,7 @@
   "studio.result.not-responding.preset": "Omarchy-skallet svarte ikke, så forhåndsvalget er kanskje lagret, kanskje ikke. Prøv igjen.",
   "studio.presetAskReplace": "Endringene dine er ikke lagret i et forhåndsvalg. Vil du erstatte dem med %1? Det kan angres.",
   "studio.tip.presets": "Når du lagrer endringer i et forhåndsvalg, får du ditt eget.",
+  "studio.tip.keyboard": "Status kan vise tastaturoppsettet, så du ser det før du skriver passordet. Velg Status og huk av for Tastaturoppsett.",
   "studio.result.not-ready": "Omarchy-skallet starter fortsatt. Prøv igjen om litt.",
   "studio.result.not-running": "Omarchy-skallet kjører ikke.",
   "studio.result.target-not-found": "Foamy Lock er ikke lastet i Omarchy-skallet.",

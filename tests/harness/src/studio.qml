@@ -1530,6 +1530,8 @@ Item {
         find(tips, "studioTipNext").clicked()
         expect(tips.current === "drag", "next wraps to the start: " + tips.current)
         for (var i = 0; i < tips.ids.length; i++) expect(tips.tipText(tips.ids[i]) !== "" && tips.tipText(tips.ids[i]).indexOf("studio.") !== 0, "words for " + tips.ids[i])
+        // The keyboard layout tip came with the status items (R2-3).
+        expect(tips.ids.indexOf("keyboard") !== -1 && tips.tipText("keyboard") === FoamyI18n.t("studio.tip.keyboard"), "the keyboard layout tip")
         waitFor(function() { return readFile(sources.statePath).indexOf('"tip":"drag"') !== -1 }, "the state file", function() {
           expect(JSON.parse(readFile(sources.statePath)).version === 1, "versioned")
           // Read back on the next start (the file's text, as loaded).
