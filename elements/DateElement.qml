@@ -6,8 +6,10 @@ import "../kit"
 // weekday and month, semibold), "serif" (a large serif weekday over a small
 // spaced line with the day, month and year), "numeric" (the locale's short
 // date), "stacked" (a large day number beside the month over the weekday)
-// and "week" (the ISO week number and the date). The host sets the width in
-// the center column; elsewhere it is `naturalWidth`.
+// "week" (the ISO week number and the date) and "iso" (the ISO date,
+// 2026-09-26, and the short weekday, in the mono face, for a console look).
+// The host sets the width in the center column; elsewhere it is
+// `naturalWidth`.
 Item {
   id: date
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
@@ -23,6 +25,7 @@ Item {
   readonly property bool numeric: styleName === "numeric"
   readonly property bool stacked: styleName === "stacked"
   readonly property bool week: styleName === "week"
+  readonly property bool iso: styleName === "iso"
   // The main line, as the tests read it.
   readonly property alias text: label.text
   readonly property alias font: label.font
@@ -62,15 +65,18 @@ Item {
       : date.stacked ? FoamyI18n.number(date.view.now.getDate())
       : date.week ? FoamyI18n.t("Week %1", [FoamyI18n.number(date.view.weekOf(date.view.now))]) + "  ·  "
         + date.view.now.toLocaleString(date.view.userLocale, "d MMMM")
+      // ISO 8601 keeps its own digits in every language.
+      : date.iso ? date.view.now.toLocaleString(Qt.locale("C"), "yyyy-MM-dd") + "  "
+        + date.view.now.toLocaleString(date.view.userLocale, "ddd")
       : date.view.now.toLocaleString(date.view.userLocale, "dddd, d MMMM")
     color: date.view.foreground
-    opacity: date.caps || date.week ? 0.86 : 1
-    font.family: date.serif ? date.serifFamily
+    opacity: date.caps || date.week || date.iso ? 0.86 : 1
+    font.family: date.serif ? date.serifFamily : date.iso ? FoamyStyle.monoFamily
       : date.caps || date.abbreviated || date.week ? date.view.textFontFamily : date.view.displayFontFamily
     font.pixelSize: Math.round((date.caps ? 17 : date.abbreviated ? 24 : date.serif ? 64 : date.numeric ? 34
-      : date.stacked ? 72 : date.week ? 18 : 30) * date.uiScale)
-    font.weight: date.caps || date.week ? Font.Medium : date.abbreviated || date.numeric ? Font.DemiBold : Font.Normal
-    font.letterSpacing: date.caps ? Math.round(3 * date.uiScale) : date.numeric ? Math.round(2 * date.uiScale) : 0
+      : date.stacked ? 72 : date.week ? 18 : date.iso ? 20 : 30) * date.uiScale)
+    font.weight: date.caps || date.week || date.iso ? Font.Medium : date.abbreviated || date.numeric ? Font.DemiBold : Font.Normal
+    font.letterSpacing: date.caps ? Math.round(3 * date.uiScale) : date.numeric || date.iso ? Math.round(2 * date.uiScale) : 0
     horizontalAlignment: date.stacked ? Text.AlignLeft : date.textAlignment
     elide: Text.ElideRight
   }

@@ -145,6 +145,7 @@ Item {
     case "date:numeric": return dateNumeric
     case "date:stacked": return dateStacked
     case "date:week": return dateWeek
+    case "date:iso": return dateIso
     case "account:avatar": return accountAvatar
     case "account:chip": return accountChip
     case "account:name": return accountName
@@ -594,6 +595,11 @@ Item {
     }
   }
 
+  // The ISO date and the short weekday, in the mono face.
+  Component {
+    id: dateIso
+    Item { Fit { text: root.sampleDate.toLocaleString(Qt.locale("C"), "yyyy-MM-dd") + " " + root.dateText("ddd"); font.pixelSize: FoamyStyle.font.subtitle; font.family: FoamyStyle.monoFamily } }
+  }
   Component {
     id: dateNumeric
     Item { Fit { text: root.dateText(Locale.ShortFormat); font.pixelSize: FoamyStyle.font.subtitle; font.weight: Font.DemiBold; font.letterSpacing: 1 } }

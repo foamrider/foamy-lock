@@ -119,7 +119,7 @@ test('the geometry check finds a missing, offscreen or covered field', () => {
 
 test('every element offers its shipped styles, defaults first', () => {
   assert.deepEqual(Layout.STYLES, {
-    date: ['long', 'caps', 'short', 'serif', 'numeric', 'stacked', 'week'],
+    date: ['long', 'caps', 'short', 'serif', 'numeric', 'stacked', 'week', 'iso'],
     clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog', 'small', 'poster', 'ring', 'serif'],
     account: ['avatar', 'chip', 'name'],
     password: ['pill', 'underline', 'box', 'dots', 'terminal', 'card'],
