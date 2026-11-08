@@ -990,27 +990,6 @@ FocusScope {
             onDeselectRequested: studio.deselect()
           }
 
-          RowLayout {
-            Layout.fillWidth: true
-            Text {
-              textFormat: Text.PlainText
-              Layout.fillWidth: true
-              text: FoamyI18n.t("studio.shownAt", [studio.monitor.width, studio.monitor.height, Math.round(lockCanvas.zoom * 100)])
-              horizontalAlignment: Text.AlignLeft
-              color: FoamyPalette.mutedText
-              font.family: FoamyStyle.fontFamily
-              font.pixelSize: FoamyStyle.font.bodySmall
-              elide: Text.ElideRight
-            }
-            Text {
-              textFormat: Text.PlainText
-              text: FoamyI18n.t("studio.hint")
-              color: FoamyPalette.mutedText
-              font.family: FoamyStyle.fontFamily
-              font.pixelSize: FoamyStyle.font.bodySmall
-            }
-          }
-
           // Problems, worst first: a connected screen blocks Apply; a
           // reference size only warns.
           Rectangle {

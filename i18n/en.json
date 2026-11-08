@@ -89,8 +89,6 @@
   "studio.zones": "Zones",
   "studio.snap": "Snapping",
   "studio.canvas": "Lock screen canvas",
-  "studio.shownAt": "%1 × %2 · shown at %3 %",
-  "studio.hint": "Drag to move · Shift: no snapping · Alt: one axis · ?: shortcuts",
   "studio.tag": "%1 · %2 · %3 %",
   "studio.percent": "%1 %",
   "studio.modules": "Modules",
