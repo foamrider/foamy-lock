@@ -7,8 +7,9 @@ import "Draft.js" as Draft
 import "Model.js" as Model
 
 // The inspector for the selected module (mockup A, right pane): whether it
-// shows, its style (drawn tiles), size, opacity and glass, its zone,
-// offset (grid steps, pixels at the screen shown) and screens. Every
+// shows, its style (drawn tiles), size, opacity and glass, its zone, its
+// place in the zone's stack (Move up / Move down in zone), offset (grid
+// steps, pixels at the screen shown) and screens. Every
 // change is one Draft edit committed through the window (`app`), so
 // undo and redo cover them; a slider drag shows live (app.preview) and
 // commits once on release.
@@ -34,6 +35,8 @@ FocusScope {
   // spotify or custom), from shell.json as the app reads it.
   readonly property string coverArt: app ? Model.coverArtMode(app.lockSettings) : "player"
   readonly property bool coverStyle: !!item && name === "media" && LockLayout.ARTWORK_STYLES.indexOf(item.style) !== -1
+  // Its place in its zone's stack: { at, count } (at -1 while hidden).
+  readonly property var zonePlace: item ? Draft.placeInZone(look, name) : ({ at: -1, count: 0 })
 
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.inspector")
@@ -360,6 +363,35 @@ FocusScope {
       PaneNote {
         text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone))
           + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(Draft.gridStep(inspector.screenHeight), 1)) : ""
+      }
+      // The order in the zone's stack, directly (a drop puts it last).
+      RowLayout {
+        width: parent.width
+        spacing: FoamyStyle.gapSmall
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.zoneOrder")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        IconButton {
+          objectName: "studioMoveUp"
+          icon: "chevron-up"
+          name: FoamyI18n.t("studio.moveUp")
+          enabled: inspector.zonePlace.at > 0
+          onClicked: inspector.commit(Draft.moveInZone(inspector.app.draft, inspector.name, -1))
+        }
+        IconButton {
+          objectName: "studioMoveDown"
+          icon: "chevron-down"
+          name: FoamyI18n.t("studio.moveDown")
+          enabled: inspector.zonePlace.at >= 0 && inspector.zonePlace.at < inspector.zonePlace.count - 1
+          onClicked: inspector.commit(Draft.moveInZone(inspector.app.draft, inspector.name, 1))
+        }
       }
 
       RowLayout {

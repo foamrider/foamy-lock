@@ -12,7 +12,7 @@ import "Draft.js" as Draft
 //   the colour (theme swatches and a #rrggbb field) or the animation (tiles
 //   drawn by the lock's own code, one per Layout.DRAWN_SOURCES); then the
 //   blur and the decoration (drawn tiles);
-// - "glass": the dim, and the glass's opacity and tint;
+// - "glass": the dim (in 1 % steps), and the glass's opacity and tint;
 // - "look": both, for the look as a whole (nothing is selected: a click
 //   beside the lock on the canvas, or Esc).
 // Values are the lock's 0–1 amounts shown as percentages, within its
@@ -621,7 +621,8 @@ FocusScope {
           label: FoamyI18n.t("studio.dim")
           from: Draft.SCENE_LIMITS.dim.min
           to: Draft.SCENE_LIMITS.dim.max
-          stepSize: 0.05
+          // 1 %: the presets use dims like 0.12.
+          stepSize: 0.01
           value: scene.background.dim
           valueText: scene.percent(shown)
           onMoved: function(v) { scene.preview(Draft.setBackground(scene.app.draft, "dim", v)) }

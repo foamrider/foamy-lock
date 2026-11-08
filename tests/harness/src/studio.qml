@@ -1626,6 +1626,20 @@ Item {
           })
         })
       } },
+    { name: "Move up and Move down in zone", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("clock")
+        var up = find(studio.inspector, "studioMoveUp"), down = find(studio.inspector, "studioMoveDown")
+        expect(up.enabled && !down.enabled, "the clock is under the date")
+        up.clicked()
+        expectDraft('{"preset":"foamy","layout":{"clock":{"order":0},"date":{"order":1}}}')
+        expect(!find(studio.inspector, "studioMoveUp").enabled && find(studio.inspector, "studioMoveDown").enabled, "now on top")
+        find(studio.inspector, "studioMoveDown").clicked()
+        expectDraft('{"preset":"foamy"}')
+        studio.selectModule("media")
+        expect(!find(studio.inspector, "studioMoveUp").enabled && !find(studio.inspector, "studioMoveDown").enabled, "alone in its zone")
+        next()
+      } },
     { name: "glass and dim page", wait: 0, run: function(next) {
         reset()
         find(studio.library, "studioSceneGlass").clicked()
@@ -1634,7 +1648,10 @@ Item {
         find(page, "studioDim").stepBy(1)
         find(page, "studioGlassOpacity").committed(0.4)
         find(page, "studioTint").picked("accent")
-        expectDraft('{"preset":"foamy","background":{"dim":0.3},"glass":{"opacity":0.4,"tint":"accent"}}')
+        // 1 % steps: the presets use dims like 0.12.
+        expectDraft('{"preset":"foamy","background":{"dim":0.26},"glass":{"opacity":0.4,"tint":"accent"}}')
+        find(page, "studioDim").committed(0.12)
+        expect(studio.look.background.dim === 0.12, "dim takes 12 %: " + studio.look.background.dim)
         find(page, "studioDim").committed(0.95)
         expect(studio.look.background.dim === 0.9, "dim keeps to 90 %: " + studio.look.background.dim)
         studio.selectModule("media")
