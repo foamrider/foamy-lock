@@ -31,4 +31,6 @@ Item {
   property var weather: null
   signal artworkFailed(string path)
   signal layoutFellBack(string error, string preset)
+  property string videoPath: ""
+  signal videoFailed(string reason)
 }

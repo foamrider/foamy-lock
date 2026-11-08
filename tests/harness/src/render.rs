@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::{app, host, png};
+use crate::{app, host, png, video};
 
 const SHELL: &str = include_str!("render.qml");
 /// The view size of each capture, in the order render.qml steps through them.
@@ -57,6 +57,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 eprintln!("{message}");
                 failed.push(name.clone());
             }
+        }
+        // And a video background's switching (see video.rs).
+        if let Err(message) = video::run_host(name, shell) {
+            eprintln!("{message}");
+            failed.push(format!("{name} video"));
         }
     }
     if failed.is_empty() {

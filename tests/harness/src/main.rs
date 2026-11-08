@@ -10,6 +10,7 @@
 //! foamy-lock-harness runtime [--host 4.5|4.0|both]
 //! foamy-lock-harness thumbnails [--host 4.5|4.0] [--preset NAME]... [--out DIR]
 //! foamy-lock-harness studio [--host 4.5|4.0|both] [--language CODE]
+//! foamy-lock-harness video [--host 4.5|4.0|both]
 //! ```
 //!
 //! `render` drives the real LockView through wide, narrow, failure, busy,
@@ -17,7 +18,9 @@
 //! focus, the password binding, media transport, the unlock hint's fit and
 //! mirroring, and captures each state (`FOAMY_RENDER_OUT` keeps a copy).
 //! The language is an Omarchy language code (default `en`), whatever the
-//! desktop uses.
+//! desktop uses. Then the `video` cases: a video background's switching on
+//! the real view (what loads, poster first, what pauses it, giving up after
+//! an error or a stall), with generated clips.
 //!
 //! `parity` renders the current `LockView.qml` next to a baseline revision's
 //! (1.2.0 by default) in one offscreen Quickshell with the same synthetic
@@ -86,6 +89,7 @@ mod runtime;
 mod studio;
 mod styles;
 mod thumbnails;
+mod video;
 
 use std::process::ExitCode;
 
@@ -100,6 +104,7 @@ fn main() -> ExitCode {
         Some("placement") => placement::run(&args[1..]),
         Some("thumbnails") => thumbnails::run(&args[1..]),
         Some("studio") => studio::run(&args[1..]),
+        Some("video") => video::run(&args[1..]),
         _ => Err(format!(
             "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness placement [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]\n       foamy-lock-harness studio [--host {hosts}] [--language CODE]",
             hosts = host::CHOICES.join("|")

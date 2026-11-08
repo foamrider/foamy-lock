@@ -4,6 +4,8 @@ import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
+// Read only: the monitors' native size for a video background.
+import Quickshell.Hyprland
 // Qualify the theme singleton to avoid QtQuick.Color taking precedence.
 import qs.Commons as Commons
 import "kit"
@@ -137,6 +139,7 @@ Item {
   // (decoded, cropped to the largest screen, blurred). Qt never decodes the
   // original; without a prepared file the theme colour shows.
   readonly property bool pictureWanted: look.background.source === "picture" && look.background.path !== ""
+    && !Layout.isVideoPath(look.background.path)
   // One prepared picture at a time, for the look on screen: the preview's,
   // else the saved one. A view uses it only when it was made for its look.
   readonly property var pictureLook: previewLook || look
@@ -147,6 +150,33 @@ Item {
   property string pictureRequestKey: ""
   property bool picturePending: false
   property bool pictureHelperUnavailable: false
+  // A video background (Layout.isVideoPath; see videoKey): the helper's
+  // video-probe, run in its sandbox while unlocked for the look on screen,
+  // gives the poster (the still of a picture source with a video path) and
+  // the clip Lock Studio converted for this file and the largest screen's
+  // native size, if there is one. The lock never converts and never
+  // decodes the original; a view plays only that clip (motion "play").
+  readonly property string videoCacheDirectory: avatarCacheDirectory + "/video/"
+  readonly property bool hyprlandSession: !!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
+  // Hyprland's monitors (read only): Qt only knows the integer scale.
+  readonly property var videoNatives: {
+    var out = []
+    var monitors = hyprlandSession ? Hyprland.monitors.values : []
+    for (var i = 0; i < monitors.length; i++) {
+      var ipc = monitors[i].lastIpcObject
+      if (ipc) out.push({ width: Number(ipc.width) || 0, height: Number(ipc.height) || 0, transform: Number(ipc.transform) || 0 })
+    }
+    return out
+  }
+  readonly property string lookVideoKey: videoKey(look)
+  readonly property string previewVideoKey: videoKey(pictureLook)
+  property string videoRequestKey: ""
+  property string videoPosterRender: ""
+  property string videoClipPath: ""
+  property string videoError: ""
+  property bool videoPending: false
+  property bool videoHelperUnavailable: false
+  property string videoFailure: ""
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -508,18 +538,27 @@ Item {
   }
 
   onPreviewVisibleChanged: if (!previewVisible) previewLook = null
-  onPreviewLookChanged: Qt.callLater(refreshPicture)
+  onPreviewLookChanged: {
+    Qt.callLater(refreshPicture)
+    refreshVideoScreens()
+  }
   // Fallback reports describe the views of the current lock and look.
   onLockRequestedChanged: {
     if (lockRequested) clearLayoutFallback()
     // A picture changed while locked is prepared once unlocked.
-    else refreshPicture()
+    else {
+      refreshPicture()
+      refreshVideo()
+    }
   }
   onLookChanged: {
     clearLayoutFallback()
     // After the bindings that read the look have caught up.
     Qt.callLater(refreshPicture)
+    refreshVideoScreens()
   }
+  // The look, the Omarchy wallpaper or a screen changed what to probe.
+  onPreviewVideoKeyChanged: Qt.callLater(refreshVideo)
 
   // The largest screen in logical pixels, inside the helper's bounds.
   function pictureSize() {
@@ -538,10 +577,90 @@ Item {
   // The helper request for a look's picture, "" when it has none.
   function pictureKey(target) {
     var background = target ? target.background : null
-    if (!background || background.source !== "picture" || !background.path) return ""
+    if (!background || background.source !== "picture" || !background.path || Layout.isVideoPath(background.path)) return ""
     var size = pictureSize()
     return JSON.stringify({ kind: "background", path: background.path, width: size[0], height: size[1],
       blur: background.blur })
+  }
+
+  // --- video backgrounds --------------------------------------------------------
+
+  // The video a look shows: a picture source's video path (its poster is
+  // the still either way), or the Omarchy wallpaper when it is a video and
+  // the look plays (its still stays Omarchy's poster). "" otherwise.
+  function videoSourcePath(target) {
+    var background = target ? target.background : null
+    if (!background) return ""
+    if (background.source === "picture" && Layout.isVideoPath(background.path)) return background.path
+    if (background.source === "omarchy" && videoBackground && Layout.playsVideo(background)) return backgroundPath
+    return ""
+  }
+
+  function isVideoPicture(target) {
+    return !!target && target.background.source === "picture" && Layout.isVideoPath(target.background.path)
+  }
+
+  // The helper's video-probe request for a look ("" without a video): the
+  // file and the largest screen's native size, the clip's key.
+  function videoKey(target) {
+    var path = videoSourcePath(target)
+    if (!path) return ""
+    var size = Model.videoScreenSize(videoNatives, Quickshell.screens || [])
+    return JSON.stringify({ path: path, width: size[0], height: size[1] })
+  }
+
+  // Asks Hyprland for its monitors again (a read-only query), so the native
+  // size follows mode and scale changes.
+  function refreshVideoScreens() {
+    if (hyprlandSession) Hyprland.refreshMonitors()
+  }
+
+  function refreshVideo() {
+    var key = previewVideoKey
+    if (!key) {
+      videoRequestKey = ""
+      videoPosterRender = ""
+      videoClipPath = ""
+      videoError = ""
+      return
+    }
+    if (key === videoRequestKey) return
+    // Probed while unlocked only, as the picture is prepared.
+    if (currentlyLocked()) return
+    if (videoProc.running) {
+      videoPending = true
+      return
+    }
+    // Never the previous video's poster or clip under this key.
+    videoRequestKey = key
+    videoPosterRender = ""
+    videoClipPath = ""
+    if (videoHelperUnavailable) {
+      applyVideoResult('{"ok":false,"error":"helper-unavailable"}', key)
+      return
+    }
+    videoProc.request = key
+    videoProc.stdinEnabled = true
+    videoProc.running = true
+  }
+
+  // The probe's reply for `request` (Model.videoProbeResult's checks).
+  function applyVideoResult(text, request) {
+    if (request !== videoRequestKey) return
+    var result = Model.videoProbeResult(text, videoCacheDirectory)
+    var violations = result.ok && Array.isArray(result.reply.violations) ? result.reply.violations : []
+    videoPosterRender = result.poster
+    videoClipPath = result.clip
+    videoError = !result.ok ? result.error
+      : violations.length > 0 && /^[a-z-]{1,48}$/.test(String(violations[0])) ? String(violations[0])
+      : !result.poster ? "video-poster-missing" : ""
+    if (videoError) console.warn("foamy.lock: video background has no poster or clip (" + videoError + ")")
+  }
+
+  // A view gave up on the clip ("error" or "stall"): its poster stays.
+  function noteVideoFailure(reason) {
+    videoFailure = reason
+    logEvent("video-gave-up: " + reason)
   }
 
   function refreshPicture() {
@@ -983,10 +1102,16 @@ Item {
         primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
         onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
-        // Only a picture made for this look; otherwise the theme colour.
-        backgroundPath: !root.pictureWanted ? root.lockWallpaperPath
+        // Only a picture (or a video's poster) made for this look; otherwise
+        // the theme colour. A video's poster is not blurred yet.
+        backgroundPath: root.isVideoPicture(root.look)
+          ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "")
+          : !root.pictureWanted ? root.lockWallpaperPath
           : root.pictureRequestKey === root.lookPictureKey ? root.pictureRenderPath : ""
         backgroundPrepared: root.pictureWanted
+        // Only the clip made for this look's video and screen.
+        videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
+        onVideoFailed: function(reason) { root.noteVideoFailure(reason) }
         backgroundVersion: root.backgroundVersion
         fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
         fingerprintUnavailable: root.fingerprintUnavailable
@@ -1026,9 +1151,13 @@ Item {
 
     LockView {
       anchors.fill: parent
-      backgroundPath: !root.previewPictureKey ? root.lockWallpaperPath
+      backgroundPath: root.isVideoPicture(root.pictureLook)
+        ? (root.videoRequestKey === root.previewVideoKey ? root.videoPosterRender : "")
+        : !root.previewPictureKey ? root.lockWallpaperPath
         : root.pictureRequestKey === root.previewPictureKey ? root.pictureRenderPath : ""
       backgroundPrepared: root.previewPictureKey !== ""
+      videoPath: root.previewVideoKey !== "" && root.videoRequestKey === root.previewVideoKey ? root.videoClipPath : ""
+      onVideoFailed: function(reason) { root.noteVideoFailure(reason) }
       backgroundVersion: root.backgroundVersion
       fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
       fingerprintUnavailable: root.fingerprintUnavailable
@@ -1337,6 +1466,35 @@ Item {
   }
 
   Process {
+    id: videoProc
+    property string request: ""
+    // The helper's own job limit is 60 s (hashing up to 2 GiB, ffprobe and
+    // the poster, each in its sandbox).
+    command: ["timeout", "--kill-after=1s", "65s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"]))
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: videoOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (FoamyNative.unavailable(exitCode)) {
+        root.videoHelperUnavailable = true
+        root.applyVideoResult('{"ok":false,"error":"helper-unavailable"}', videoProc.request)
+      } else {
+        root.applyVideoResult(videoOutput.text, videoProc.request)
+      }
+      if (root.videoPending) {
+        root.videoPending = false
+        root.refreshVideo()
+      }
+    }
+  }
+
+  Process {
     id: avatarThumbnailProc
     property string request: ""
     command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(
@@ -1473,6 +1631,7 @@ Item {
       root.knownScreenCount = screens
       root.requestSessionLock()
       root.refreshPicture()
+      root.refreshVideoScreens()
 
       // A monitor still coming up has no workspace, so cannot answer yet.
       strandedLockRetryTimer.rearm()
@@ -1574,6 +1733,10 @@ Item {
       avatarError: root.avatarError,
       pictureError: root.pictureError,
       picturePath: root.pictureRenderPath,
+      // A video background: the probe's poster and clip ("" without), why
+      // not, and the last view to give up on the clip ("error", "stall").
+      video: { poster: root.videoPosterRender, clip: root.videoClipPath, error: root.videoError,
+        failure: root.videoFailure, request: root.videoRequestKey ? JSON.parse(root.videoRequestKey) : null },
       conflict: reasons.length > 0,
       conflictReasons: reasons,
       ipcFastPath: IpcResolver.fastPath(root),
@@ -1674,6 +1837,8 @@ Item {
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
         presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
         glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
+        // Video backgrounds: background.motion and its defaults (additive).
+        backgroundMotions: Layout.MOTIONS, backgroundDefaults: Layout.BACKGROUND_DEFAULTS,
         look: root.look, lookError: root.lookError,
         // User presets (R2-2): newest first, the items skipped, the link
         // and the limits of savePreset.

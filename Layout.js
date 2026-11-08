@@ -105,7 +105,15 @@ var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
 // The last three are drawn by the view in the theme's colours.
 var BACKGROUND_SOURCES = ["omarchy", "picture", "theme", "black", "aurora", "rain", "constellation"]
 var DRAWN_SOURCES = ["aurora", "rain", "constellation"]
-var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor"]
+var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor", "motion", "pauseOnBattery"]
+// A video background (1.3.0): source "picture" with a video `path`, or an
+// Omarchy wallpaper that is a video. `motion` is "still" (the default: its
+// first frame, and the lock never decodes video) or "play" (the clip Lock
+// Studio converted for this file and screen size, if there is one, with
+// GPU rendering only). `pauseOnBattery` (default true) holds the frame
+// while on battery. Both are left out of a look when they are the default.
+var MOTIONS = ["still", "play"]
+var BACKGROUND_DEFAULTS = { motion: "still", pauseOnBattery: true }
 // Shapes drawn over the background, behind the elements, fitted to the zones
 // they belong to (see LockView and elements/Decoration.qml).
 var DECORATIONS = ["none", "split", "sheet", "cinema", "strip", "island", "frame", "card"]
@@ -117,6 +125,12 @@ var BAND_DECORATIONS = ["cinema", "strip"]
 var GLASS_TINTS = ["none", "accent", "solid"]
 var GLASS_KEYS = ["opacity", "tint"]
 var PICTURE_PATTERN = /\.(png|jpe?g|webp)$/i
+// The containers the helper converts (video-probe and video-convert).
+var VIDEO_PATTERN = /\.(mp4|m4v|mov|mkv|webm)$/i
+
+function isVideoPath(path) {
+  return VIDEO_PATTERN.test(String(path || ""))
+}
 
 function element(zone, style, order, hidden) {
   return { zone: zone, style: style, order: order, hidden: !!hidden }
@@ -496,14 +510,18 @@ function backgroundError(value) {
     return "background.source must be one of " + BACKGROUND_SOURCES.join(", ")
   if (value.path !== undefined && (typeof value.path !== "string" || value.path.length > 4096
       || (value.path !== "" && (value.path[0] !== "/" || value.path.indexOf("\u0000") !== -1
-        || value.path.split("/").indexOf("..") !== -1 || !PICTURE_PATTERN.test(value.path)))))
-    return "background.path must be an absolute .png, .jpg or .webp path without parent traversal"
+        || value.path.split("/").indexOf("..") !== -1 || !(PICTURE_PATTERN.test(value.path) || isVideoPath(value.path))))))
+    return "background.path must be an absolute picture (.png, .jpg, .webp) or video (.mp4, .m4v, .mov, .mkv, .webm) path without parent traversal"
   if (value.blur !== undefined && (typeof value.blur !== "number" || !(value.blur >= 0 && value.blur <= 1)))
     return "background.blur must be a number from 0 to 1"
   if (value.dim !== undefined && (typeof value.dim !== "number" || !(value.dim >= 0 && value.dim <= 0.9)))
     return "background.dim must be a number from 0 to 0.9"
   if (value.decor !== undefined && DECORATIONS.indexOf(value.decor) === -1)
     return "background.decor must be one of " + DECORATIONS.join(", ")
+  if (value.motion !== undefined && MOTIONS.indexOf(value.motion) === -1)
+    return "background.motion must be one of " + MOTIONS.join(", ")
+  if (value.pauseOnBattery !== undefined && typeof value.pauseOnBattery !== "boolean")
+    return "background.pauseOnBattery must be true or false"
   return ""
 }
 
@@ -530,8 +548,27 @@ function merge(presetName, layout, background, glass) {
     canonicalElement(result.elements[name])
   }
   for (var b in background || {}) result.background[b] = background[b]
+  canonicalBackground(result.background)
   for (var g in glass || {}) result.glass[g] = glass[g]
   return result
+}
+
+// The background's motion keys only where they differ from the defaults.
+function canonicalBackground(background) {
+  for (var key in BACKGROUND_DEFAULTS) {
+    if (background[key] === BACKGROUND_DEFAULTS[key]) delete background[key]
+  }
+  return background
+}
+
+// Whether the background plays: motion "play" (pauseOnBattery aside).
+function playsVideo(background) {
+  return !!background && background.motion === "play"
+}
+
+// Whether a playing background holds still on battery (the default).
+function pausesOnBattery(background) {
+  return !background || background.pauseOnBattery !== false
 }
 
 // A copy of an effective look in canonical form (see canonicalElement), so
@@ -540,6 +577,7 @@ function merge(presetName, layout, background, glass) {
 function canonical(look) {
   var result = copy(look)
   for (var name in (result && result.elements) || {}) canonicalElement(result.elements[name])
+  if (result && isPlainObject(result.background)) canonicalBackground(result.background)
   return result
 }
 
@@ -673,7 +711,8 @@ function lookGeometryError(elements, rects, width, height, margin) {
 if (typeof module !== "undefined") module.exports = {
   ELEMENTS: ELEMENTS, ZONES: ZONES, STYLES: STYLES, PASSWORD_ZONES: PASSWORD_ZONES, PRESETS: PRESETS,
   SELECTABLE_PRESETS: SELECTABLE_PRESETS, BACKGROUND_SOURCES: BACKGROUND_SOURCES, DRAWN_SOURCES: DRAWN_SOURCES,
-  BACKGROUND_KEYS: BACKGROUND_KEYS, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
+  BACKGROUND_KEYS: BACKGROUND_KEYS, MOTIONS: MOTIONS, BACKGROUND_DEFAULTS: BACKGROUND_DEFAULTS,
+  isVideoPath: isVideoPath, playsVideo: playsVideo, pausesOnBattery: pausesOnBattery, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
   ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
   STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,

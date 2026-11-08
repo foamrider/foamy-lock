@@ -338,7 +338,62 @@ function keyboardShort(description) {
   return String(description || "").split(/\s+/)[0].substring(0, 3).toLocaleUpperCase()
 }
 
+// --- video backgrounds -----------------------------------------------------
+
+// The size a video background is converted for and looked up at: the
+// largest screen's native pixels. `natives` are Hyprland's monitors
+// ({ width, height, transform }: the mode in device pixels before the
+// transform; an odd transform turns the screen), `screens` the logical
+// sizes ({ width, height }) used without them. [width, height] within the
+// helper's 16..7680 x 16..4320; 1920 x 1080 without any screen.
+function videoScreenSize(natives, screens) {
+  var best = null
+  function consider(width, height) {
+    width = Math.round(Number(width) || 0)
+    height = Math.round(Number(height) || 0)
+    if (width <= 0 || height <= 0) return
+    if (!best || width * height > best[0] * best[1]) best = [width, height]
+  }
+  for (var i = 0; i < (natives || []).length; i++) {
+    var native = natives[i]
+    if (!native) continue
+    var turned = Math.abs(Math.round(Number(native.transform) || 0)) % 2 === 1
+    consider(turned ? native.height : native.width, turned ? native.width : native.height)
+  }
+  if (!best) {
+    for (var j = 0; j < (screens || []).length; j++) {
+      if (screens[j]) consider(screens[j].width, screens[j].height)
+    }
+  }
+  if (!best) return [1920, 1080]
+  return [Math.max(16, Math.min(7680, best[0])), Math.max(16, Math.min(4320, best[1]))]
+}
+
+// The helper's video-probe reply as the lock and Lock Studio take it: a
+// poster and a clip only inside `directory` (the cache's video/, with its
+// trailing slash) and named as the helper names them, the clip for exactly
+// the output size the reply gives. { ok, error, poster, clip, reply }.
+function videoProbeResult(text, directory) {
+  var reply = null
+  try { reply = JSON.parse(String(text || "").trim().split("\n").pop()) } catch (error) { reply = null }
+  if (!reply || typeof reply !== "object" || reply.ok !== true) {
+    var code = reply && typeof reply.error === "string" && /^[a-z-]{1,48}$/.test(reply.error)
+      ? reply.error : "video-helper-failed"
+    return { ok: false, error: code, poster: "", clip: "", reply: null }
+  }
+  function inside(path, pattern) {
+    return typeof path === "string" && path.indexOf(directory) === 0 && pattern.test(path.slice(directory.length))
+  }
+  var output = reply.output && typeof reply.output === "object" ? reply.output : null
+  var poster = inside(reply.poster, /^[0-9a-f]{64}\.png$/) ? reply.poster : ""
+  var suffix = output ? "-" + output.width + "x" + output.height + ".mp4" : ""
+  var clip = output && inside(reply.clip, /^[0-9a-f]{64}-[1-9][0-9]{1,3}x[1-9][0-9]{1,3}\.mp4$/)
+    && reply.clip.slice(-suffix.length) === suffix ? reply.clip : ""
+  return { ok: true, error: "", poster: poster, clip: clip, reply: reply }
+}
+
 if (typeof module !== "undefined") module.exports = {
+  videoScreenSize: videoScreenSize, videoProbeResult: videoProbeResult,
   defaults: defaults, parseConfig: parseConfig, isVideoPath: isVideoPath, fileUrl: fileUrl,
   selectPlayer: selectPlayer, runMediaAction: runMediaAction, artworkKey: artworkKey,
   mediaPlaying: mediaPlaying, isBrowserPlayer: isBrowserPlayer, artworkPrecheck: artworkPrecheck,

@@ -241,3 +241,28 @@ test('the keyboard layout comes from the keyboard being typed on', () => {
   assert.equal(Model.keyboardShort('Norwegian'), 'NOR')
   assert.equal(Model.keyboardShort(''), '')
 })
+
+test('video backgrounds: the screen size and the probe reply', () => {
+  assert.deepEqual(Model.videoScreenSize([{width: 3440, height: 1440, transform: 0}, {width: 1920, height: 1080, transform: 1}], []), [3440, 1440])
+  // A turned screen swaps its mode; the larger by area wins.
+  assert.deepEqual(Model.videoScreenSize([{width: 3840, height: 2160, transform: 3}, {width: 1920, height: 1080}], []), [2160, 3840])
+  assert.deepEqual(Model.videoScreenSize([], [{width: 2752, height: 1152}, {width: 800, height: 600}]), [2752, 1152])
+  assert.deepEqual(Model.videoScreenSize([{width: 0, height: 0}], [{width: 1280, height: 720}]), [1280, 720])
+  assert.deepEqual(Model.videoScreenSize(null, null), [1920, 1080])
+  assert.deepEqual(Model.videoScreenSize([{width: 10240, height: 4320}], []), [7680, 4320])
+  const dir = '/c/omarchy/foamy.lock/video/'
+  const hash = 'ab'.repeat(32)
+  const reply = (extra) => JSON.stringify(Object.assign({ok: true, poster: dir + hash + '.png', clip: dir + hash + '-3440x1440.mp4',
+    output: {width: 3440, height: 1440}}, extra))
+  const good = Model.videoProbeResult('{"progress":{}}\n' + reply({}), dir)
+  assert.deepEqual([good.ok, good.poster, good.clip], [true, dir + hash + '.png', dir + hash + '-3440x1440.mp4'])
+  // Outside the cache, misnamed, or for another size: not taken.
+  for (const extra of [{poster: '/tmp/' + hash + '.png'}, {poster: dir + '../' + hash + '.png'}, {poster: dir + hash + '.jpg'}, {poster: 5}])
+    assert.equal(Model.videoProbeResult(reply(extra), dir).poster, '', JSON.stringify(extra))
+  for (const extra of [{clip: dir + hash + '-1920x1080.mp4'}, {clip: '/tmp/' + hash + '-3440x1440.mp4'}, {clip: dir + hash + '.mp4'},
+    {clip: null}, {output: null}, {clip: dir + 'x' + hash.slice(1) + '-3440x1440.mp4'}])
+    assert.equal(Model.videoProbeResult(reply(extra), dir).clip, '', JSON.stringify(extra))
+  assert.deepEqual(Model.videoProbeResult('{"ok":false,"error":"decode-failed"}', dir), {ok: false, error: 'decode-failed', poster: '', clip: '', reply: null})
+  assert.equal(Model.videoProbeResult('nonsense', dir).error, 'video-helper-failed')
+  assert.equal(Model.videoProbeResult('{"ok":false,"error":"Bad Code"}', dir).error, 'video-helper-failed')
+})

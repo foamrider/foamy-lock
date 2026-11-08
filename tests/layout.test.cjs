@@ -432,3 +432,30 @@ test('an editor is offered each element-only key with its values and defaults', 
   for (const [style, items] of Object.entries(Layout.STATUS_DEFAULT_ITEMS))
     assert.equal(errorOf('status', {style, items}), '', style)
 })
+
+test('a video background: its path, motion and pauseOnBattery', () => {
+  for (const path of ['/v/loop.mp4', '/v/a.M4V', '/v/b.mov', '/v/c.mkv', '/v/d.webm', '/p/x.JPEG'])
+    assert.ok(Layout.parseLook({background: {source: 'picture', path}}).valid, path)
+  for (const path of ['/v/a.avi', '/v/a.gif', 'v/a.mp4', '/v/../a.mp4', '/v/a.mp4.txt'])
+    assert.match(Layout.parseLook({background: {source: 'picture', path}}).error, /^background\.path must be/, path)
+  assert.ok(Layout.isVideoPath('/v/a.WebM'))
+  assert.ok(!Layout.isVideoPath('/v/a.png') && !Layout.isVideoPath('/v/a.avi') && !Layout.isVideoPath(''))
+  // The defaults are left out, so absent and default compare equal.
+  const play = Layout.parseLook({background: {source: 'picture', path: '/v/a.mp4', motion: 'play', pauseOnBattery: false}})
+  assert.deepEqual(play.look.background, {source: 'picture', path: '/v/a.mp4', blur: 0, dim: 0.25, decor: 'none',
+    motion: 'play', pauseOnBattery: false})
+  assert.ok(Layout.playsVideo(play.look.background))
+  assert.ok(!Layout.pausesOnBattery(play.look.background))
+  const still = Layout.parseLook({background: {motion: 'still', pauseOnBattery: true}})
+  assert.deepEqual(still.look, Layout.defaults())
+  assert.ok(!Layout.playsVideo(still.look.background) && Layout.pausesOnBattery(still.look.background))
+  assert.ok(Layout.pausesOnBattery(null) && !Layout.playsVideo(null))
+  const canonical = Layout.canonical({background: {source: 'omarchy', motion: 'still', pauseOnBattery: true}, elements: {}})
+  assert.deepEqual(canonical.background, {source: 'omarchy'})
+  for (const background of [{motion: 'loop'}, {motion: true}, {pauseOnBattery: 'no'}, {pauseOnBattery: 1}, {pauseOnBattery: null}])
+    assert.equal(Layout.parseLook({background}).valid, false, JSON.stringify(background))
+  assert.deepEqual(Layout.MOTIONS, ['still', 'play'])
+  assert.deepEqual(Layout.BACKGROUND_DEFAULTS, {motion: 'still', pauseOnBattery: true})
+  // No built-in preset plays.
+  for (const name of Layout.SELECTABLE_PRESETS) assert.ok(!Layout.playsVideo(Layout.preset(name).background), name)
+})

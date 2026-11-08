@@ -513,6 +513,7 @@ fn scenarios(test: &Test) -> R {
     identity_conflict_registry(test)?;
     preview(test)?;
     look(test)?;
+    video(test)?;
     user_presets(test)?;
     weather(test)?;
     wallpaper(test)?;
@@ -933,6 +934,95 @@ fn look(test: &Test) -> R {
 /// and saved, renamed and deleted one at a time through Omarchy's
 /// updateEntryInline (the fake records each write; it never writes the
 /// file, so a second write in a row shows the first was taken as the entry).
+/// A video background: the real helper's video-probe (in its sandbox)
+/// gives the poster while unlocked; the clip is found only once it was
+/// converted (as Lock Studio does, with the size the lock asked for), and a
+/// broken file leaves the theme colour. Never a picture job for a video.
+fn video(test: &Test) -> R {
+    if !Path::new("/usr/bin/ffmpeg").is_file() || !Path::new("/usr/bin/ffprobe").is_file() {
+        println!("SKIP: video backgrounds (no ffmpeg)");
+        return Ok(());
+    }
+    let clip = test.path("loop.mp4");
+    let made = Command::new("/usr/bin/ffmpeg")
+        .args(["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i"])
+        .args(["testsrc2=size=96x54:rate=10:duration=1", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+        .arg(&clip)
+        .status()
+        .map_err(app::io("ffmpeg"))?;
+    ensure!(made.success(), "ffmpeg made the test clip");
+    let entry = |motion: &str, path: &Path| {
+        json!({"background": {"source": "picture", "path": path.display().to_string(), "motion": motion}})
+    };
+    test.write_config(STOCK_OFF, entry("play", &clip))?;
+    let state = test.wait_for(|s| {
+        Ok(!text(s, "video.poster")?.is_empty() || !text(s, "video.error")?.is_empty())
+    })?;
+    let poster = text(&state, "video.poster")?.to_string();
+    ensure!(
+        text(&state, "video.error")?.is_empty()
+            && poster.contains("/omarchy/foamy.lock/video/")
+            && text(&state, "video.clip")?.is_empty()
+            && text(&state, "picturePath")?.is_empty()
+            && text(&state, "pictureError")?.is_empty(),
+        "{state}"
+    );
+    let bytes = std::fs::read(&poster).map_err(|e| format!("{poster}: {e}"))?;
+    let request = at(&state, "video.request")?.clone();
+    let size = (num(&request, "width")? as u32, num(&request, "height")? as u32);
+    ensure!(
+        crate::png::size(&bytes) == Some(size) || size.0 > 3840 || size.1 > 2160,
+        "the poster is the screen's size: {request}"
+    );
+    // Converted as Lock Studio converts it, then probed again.
+    let helper = app::plugin_root().join(format!("bin/{}/foamy-lock-helper", std::env::consts::ARCH));
+    let mut convert = Command::new(&helper)
+        .arg("video-convert")
+        .env_clear()
+        .env("HOME", &test.base)
+        .env("PATH", "/usr/bin")
+        .env("XDG_CACHE_HOME", test.path("cache"))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .map_err(app::io(helper.display()))?;
+    {
+        use std::io::Write;
+        let mut stdin = convert.stdin.take().ok_or("no stdin")?;
+        writeln!(stdin, "{request}").map_err(app::io("video-convert"))?;
+    }
+    let output = convert.wait_with_output().map_err(app::io("video-convert"))?;
+    let reply = String::from_utf8_lossy(&output.stdout).lines().last().unwrap_or("").to_string();
+    let reply = parse(&reply)?;
+    ensure!(on(&reply, "ok")?, "video-convert: {reply}");
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(text(s, "video.poster")?.is_empty()))?;
+    test.write_config(STOCK_OFF, entry("play", &clip))?;
+    let state = test.wait_for(|s| Ok(!text(s, "video.clip")?.is_empty() || !text(s, "video.error")?.is_empty()))?;
+    ensure!(
+        text(&state, "video.clip")? == text(&reply, "clip")? && text(&state, "video.poster")? == poster,
+        "{state}"
+    );
+    // Still: the same probe (the poster), no other job.
+    test.write_config(STOCK_OFF, entry("still", &clip))?;
+    test.wait_for(|s| Ok(text(s, "look.background.motion").is_err()))?;
+    // A broken file: no poster, no clip, the theme colour.
+    let broken = test.path("broken.mp4");
+    write(&broken, b"\0\0\0\x20ftypisom\0\0\x02\0garbage, not a video")?;
+    test.write_config(STOCK_OFF, entry("play", &broken))?;
+    let state = test.wait_for(|s| Ok(text(s, "video.error")? == "decode-failed"))?;
+    ensure!(
+        text(&state, "video.poster")?.is_empty() && text(&state, "video.clip")?.is_empty(),
+        "{state}"
+    );
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(text(s, "video.error")?.is_empty() && at(s, "video.request")?.is_null()))?;
+    println!(
+        "PASS: a video background's poster and clip from the sandboxed video-probe while unlocked, the clip only once converted for the lock's size, a broken video keeps the theme colour"
+    );
+    Ok(())
+}
+
 fn user_presets(test: &Test) -> R {
     let mine = |id: &str, name: &str, preset: &str| json!({"id": id, "name": name, "look": {"preset": preset, "layout": {"media": {"hidden": true}}}});
     // A bad item is skipped and counted; the good one, the look and the

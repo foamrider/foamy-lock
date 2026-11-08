@@ -47,6 +47,26 @@ Item {
   property string layoutError: ""
   // False while the service has blanked the display: nothing moves then.
   property bool displayAwake: true
+  // A video background's clip: "" without one (Service sets it only to a
+  // clip the helper converted for this file and screen size). It plays
+  // (elements/VideoBackdrop.qml, over the poster that backgroundPath shows)
+  // only with motion "play" and GPU rendering, and holds its frame while
+  // the display is blanked, the view hidden, motion reduced or, with
+  // pauseOnBattery, on battery. The first error or a 2 s stall gives up
+  // for the rest of this view's lock (a hidden preview tries again).
+  property string videoPath: ""
+  // GPU rendering; the offscreen tests set it, as they render in software.
+  property bool gpuRendering: GraphicsInfo.api !== GraphicsInfo.Software
+  property bool onBattery: UPower.onBattery
+  property bool videoGaveUp: false
+  property string videoFailure: ""
+  readonly property bool videoWanted: videoPath !== "" && loadBackground && gpuRendering && !videoGaveUp
+    && Layout.playsVideo(effectiveLook.background)
+    && ["omarchy", "picture"].indexOf(effectiveLook.background.source) !== -1
+  readonly property bool videoPlaying: videoWanted && visible && displayAwake && !reduceMotion
+    && !(onBattery && Layout.pausesOnBattery(effectiveLook.background))
+  readonly property bool videoShown: videoLoader.status === Loader.Ready && videoLoader.item !== null
+    && videoLoader.item.frameSeen
   readonly property var effectiveLook: fallbackPreset ? Layout.preset(fallbackPreset) : look
   readonly property var placed: effectiveLook.elements
 
@@ -166,6 +186,8 @@ Item {
   // The geometry check replaced the look: `error` is the reason, `preset` the
   // one now shown.
   signal layoutFellBack(string error, string preset)
+  // The clip failed ("error" or "stall"); the poster stays.
+  signal videoFailed(string reason)
 
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
@@ -624,6 +646,12 @@ Item {
     onTriggered: root.checkGeometry()
   }
 
+  // A preview overlay that is hidden may try the clip again next time.
+  onLoadBackgroundChanged: if (!loadBackground) {
+    videoGaveUp = false
+    videoFailure = ""
+  }
+
   onPasswordTextChanged: syncPasswordText()
   onInputEnabledChanged: {
     if (inputEnabled) Qt.callLater(forcePasswordFocus)
@@ -652,6 +680,8 @@ Item {
       anchors.fill: parent
       readonly property bool wanted: ["omarchy", "picture"].indexOf(root.effectiveLook.background.source) !== -1
       source: wanted && root.loadBackground && width > 0 && height > 0 ? root.fileUrl(root.backgroundPath, root.backgroundVersion) : ""
+      // Under a playing clip, once its first frame is there.
+      visible: !root.videoShown
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
       cache: true
@@ -666,6 +696,47 @@ Item {
         blur: wallpaper.blurAmount
         blurMax: 64
         autoPaddingEnabled: false
+      }
+    }
+
+    // A video background's clip over its poster: loaded (with QtMultimedia)
+    // only while it may play; see videoPath.
+    Loader {
+      id: videoLoader
+      objectName: "videoLoader"
+      anchors.fill: parent
+      active: root.videoWanted
+      source: "elements/VideoBackdrop.qml"
+    }
+
+    Binding {
+      target: videoLoader.item
+      property: "path"
+      value: root.videoPath
+      when: videoLoader.item !== null
+    }
+
+    Binding {
+      target: videoLoader.item
+      property: "playing"
+      value: root.videoPlaying
+      when: videoLoader.item !== null
+    }
+
+    Binding {
+      target: videoLoader.item
+      property: "blur"
+      value: wallpaper.blurAmount
+      when: videoLoader.item !== null
+    }
+
+    Connections {
+      target: videoLoader.item
+      ignoreUnknownSignals: true
+      function onFailed(reason) {
+        root.videoFailure = reason
+        root.videoGaveUp = true
+        root.videoFailed(reason)
       }
     }
 

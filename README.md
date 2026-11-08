@@ -250,7 +250,8 @@ that shows it (`card`, `pill` or `art`) is shown.
 
 - **`source`.** One of:
   - `omarchy` (default): the current wallpaper, as before;
-  - `picture`: the file in `path`, an absolute `.png`, `.jpg` or `.webp`;
+  - `picture`: the file in `path`, an absolute `.png`, `.jpg` or `.webp`, or a
+    video (`.mp4`, `.m4v`, `.mov`, `.mkv`, `.webm`; see Video below);
   - `theme`: the theme's background colour;
   - `black`;
   - `aurora`: soft bands of the theme accent, green and cyan drifting slowly;
@@ -287,6 +288,33 @@ that shows it (`card`, `pill` or `art`) is shown.
   the wallpaper stays sharp, and the dim still applies.
 - **Underline field.** It has no surface of its own, so it keeps at least
   0.15 dim behind it.
+- **`motion`.** For a video (a `picture` that is a video, or an Omarchy
+  wallpaper that is one): `still` (default) or `play`.
+- **`pauseOnBattery`.** `true` (default) or `false`: whether a playing video
+  holds still on battery.
+
+**Video.** A video background shows its first frame, made by the helper in
+its sandbox (an Omarchy video wallpaper keeps Omarchy's own still frame).
+With `motion: "play"` it plays a clip that Lock Studio converted for this
+file and the largest screen's native size (its Convert button, see Lock
+Studio); the lock itself never converts, and without such a clip it shows
+the still frame. It plays only with GPU rendering, muted and looping, and
+holds its frame while the display is blanked, motion is reduced, the lock
+isn't shown or (with `pauseOnBattery`) the laptop is on battery. After the
+first playback error or 2 s without a new frame it shows the still frame for
+the rest of that lock (`video.failure` in `status`). Play is experimental:
+the clip is decoded inside the shell, so a decoder crash would take the lock
+screen with it and leave the session locked behind a dead screen. Then log
+in on a text console (Ctrl+Alt+F3) and run `loginctl unlock-session`.
+
+Conversion limits: the input at most 2 GiB, MP4/MOV, MKV or WebM with H.264,
+HEVC, VP8, VP9 or AV1 video up to 7680 x 4320; the first 60 s are used, at
+the source's frame rate up to 30 fps; the output is H.264 at the screen's
+native size up to 3840 x 2160, at most 150 MiB, without sound or metadata.
+The helper decodes the file and encodes the clip in two separate sandboxes,
+at idle priority with up to 16 threads (one conversion at a time, cancel any
+time, 10 minutes at most). It keeps at most three clips in
+`/omarchy/foamy.lock/video/`, the oldest evicted.
 
 **Glass.** `opacity` (0 to 1, default 1) scales the transparency of the glass
 behind the media card, the account chip, the field and the decorations.
