@@ -4,10 +4,39 @@ const path = require('node:path');
 const I = require('./i18n.cjs');
 const manifest = require('../manifest.json');
 const tokens = s => [...s.matchAll(/%[1-9][0-9]*|\{\w+\}/g)].map(m => m[0]).sort();
+// A catalog value: a string, or plural forms ({one, other}).
+const forms = value => typeof value === 'string' ? [value] : Object.values(value);
 for (const [key, value] of Object.entries(I.en)) {
+  // The lock's strings are keyed by their English text; Lock Studio's
+  // (studio/) by `studio.*` keys, every one translated.
+  if (key.startsWith('studio.')) {
+    assert.ok(Object.hasOwn(I.no, key), `no translation: ${key}`);
+    assert.equal(typeof I.no[key], typeof value, key);
+    for (const form of forms(value)) assert.ok(form.length > 0, key);
+    for (const form of forms(I.no[key])) assert.deepEqual(tokens(form), tokens(forms(value)[0]), key);
+    continue;
+  }
   assert.equal(value, key, `English source key: ${key}`);
   if (Object.hasOwn(I.no, key)) assert.deepEqual(tokens(I.no[key]), tokens(value), key);
 }
+for (const key of Object.keys(I.no)) if (key.startsWith('studio.')) assert.ok(Object.hasOwn(I.en, key), `only in no.json: ${key}`);
+// Every literal studio key the app's QML uses is in the catalogs, and so is
+// every key it builds from the lock's names (modules, zones, styles,
+// presets, sources).
+const studioDir = path.join(__dirname, '../studio');
+for (const file of fs.readdirSync(studioDir).filter(name => name.endsWith('.qml'))) {
+  const qml = fs.readFileSync(path.join(studioDir, file), 'utf8');
+  // A key built with "+" is covered by the list below.
+  for (const match of qml.matchAll(/FoamyI18n\.tn?\("(studio\.[^"]+)"(?!\s*\+)/g)) assert.ok(Object.hasOwn(I.en, match[1]), `${file}: ${match[1]}`);
+  assert.ok(!/FoamyI18n\.tn?\("(?!studio\.)/.test(qml), `${file}: studio strings use studio.* keys`);
+}
+const Layout = require('../Layout.js');
+const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z => 'zone.' + z),
+  ...[...new Set(Object.values(Layout.STYLES).flat())].map(s => 'style.' + s), ...Layout.SELECTABLE_PRESETS.map(p => 'preset.' + p),
+  ...Layout.BACKGROUND_SOURCES.map(s => 'source.' + s), ...Layout.SCREENS.map(s => 'screens.' + s),
+  ...['move', 'nudge', 'zone', 'scale', 'hide', 'select', 'free', 'axis', 'undo', 'redo', 'panes', 'help', 'quit'].flatMap(k => ['key.' + k, 'key.' + k + '.keys']),
+  ...['password-overlap', 'password-covered', 'password-offscreen', 'password-high', 'password-missing', 'element-offscreen', 'element-overlap'].map(c => 'problem.' + c)];
+for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);
 assert.equal(I.text('Unknown %1 {name}', 'no', ['$& %2']), '$& %2 {name}'.replace(/^/, 'Unknown '));
