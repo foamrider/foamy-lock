@@ -103,7 +103,7 @@
 //!   `dns-failed`, `non-public-address`, `redirect-limit`, `http-error`,
 //!   `encoded-response`, `fetch-timeout`, `https-unsupported` (CPU without
 //!   the instructions the TLS library needs), `unsupported-format`,
-//!   `animated-image`, `decoder-unavailable`,
+//!   `animated-image`, `invalid-png`, `decoder-unavailable`,
 //!   `sandbox-architecture-unsupported`, `decode-failed`, `decode-timeout`,
 //!   `invalid-pixels`, `unsafe-cache`, `cache-busy`, `invalid-avatar-path`,
 //!   `avatar-missing`, `invalid-background-path`, `background-missing`,
@@ -148,6 +148,12 @@
 //!   frame header shows both sides above max(W, H) is decoded with
 //!   `jpeg:size=SxS`, S = max(W, H) (a DCT-scaled decode that still covers
 //!   the screen in any orientation).
+//! - **PNG text**: before the decoder, a PNG's chunks are walked (only
+//!   their headers) and it is copied without `tEXt`, `zTXt` and `iTXt`
+//!   (`image::strip_png_text`), so libpng never inflates or keeps text.
+//!   Each chunk must have a length under 2^31, lie inside the data and have
+//!   a type of four ASCII letters; at most 16384 chunks, ending with `IEND`
+//!   (bytes after it are dropped); otherwise `invalid-png`.
 //! - **Decoder**: static PNG, JPEG and WebP only. `/usr/bin/magick` in
 //!   `/usr/bin/bwrap` (see `image::command`: every namespace unshared,
 //!   capabilities dropped, new session, read-only `/usr`, the private

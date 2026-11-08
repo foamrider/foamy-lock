@@ -3,8 +3,10 @@
 //! deadline and a fixed-size output; the supervisor writes the only PNG
 //! that ever reaches the shell. Artwork and the avatar are 256x256
 //! thumbnails under artwork.py's limits; a lock-screen `Background` is the
-//! screen's size under limits scaled to it, in the same sandbox.
+//! screen's size under limits scaled to it, in the same sandbox. A PNG
+//! loses its text chunks before the decoder sees it (`strip_png_text`).
 
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::io::{self, ErrorKind};
 use std::path::Path;
@@ -19,6 +21,9 @@ use crate::store::Staging;
 pub const SIZE: usize = 256;
 pub const PIXEL_BYTES: usize = SIZE * SIZE * 3;
 pub const PNG_MAGIC: &[u8] = b"\x89PNG\r\n\x1a\n";
+/// The most chunks a PNG may have, of any type (a 32 MiB background in
+/// 8 KiB IDATs has 4096).
+pub const PNG_CHUNK_LIMIT: usize = 16384;
 
 /// artwork.py's private ImageMagick policy, byte for byte.
 pub const POLICY: &str = r#"<policymap>
@@ -274,6 +279,72 @@ pub fn format(data: &[u8]) -> Result<&'static str, Fail> {
     Err(Fail("unsupported-format"))
 }
 
+/// `data` without its PNG text chunks (`tEXt`, `zTXt`, `iTXt`), before
+/// any decoder reads it. libpng inflates every `zTXt` and keeps it, with
+/// every `tEXt`, until the read is over, outside ImageMagick's resource
+/// limits (which count pixels): a few megabytes of crafted chunks on a 1x1
+/// image hold gigabytes of text. ImageMagick only turns that text into
+/// properties, which never reach the output (only raw RGB leaves the
+/// sandbox), so the pixels are the same without it.
+///
+/// Only the 8-byte chunk headers are read; nothing is inflated, and the
+/// copy is at most the input's size. A PNG must be a chain of chunks, each
+/// with a length under 2^31, wholly inside the data, a type of four ASCII
+/// letters, at most `PNG_CHUNK_LIMIT` of them, ending with `IEND`;
+/// anything after `IEND` is dropped. Otherwise `invalid-png`. Other
+/// formats pass unchanged.
+pub fn strip_png_text(data: &[u8]) -> Result<Cow<'_, [u8]>, Fail> {
+    if !data.starts_with(PNG_MAGIC) {
+        return Ok(Cow::Borrowed(data));
+    }
+    let invalid = || Fail("invalid-png");
+    // The byte ranges kept, and where the current one started.
+    let mut kept: Vec<(usize, usize)> = Vec::new();
+    let mut start = 0;
+    let mut at = PNG_MAGIC.len();
+    let mut chunks = 0;
+    loop {
+        chunks += 1;
+        if chunks > PNG_CHUNK_LIMIT {
+            return Err(invalid());
+        }
+        let length = be32(data, at).ok_or_else(invalid)?;
+        if length > 0x7fff_ffff {
+            return Err(invalid());
+        }
+        let kind = data.get(at + 4..at + 8).ok_or_else(invalid)?;
+        if !kind.iter().all(u8::is_ascii_alphabetic) {
+            return Err(invalid());
+        }
+        let end = (at + 12)
+            .checked_add(length as usize)
+            .filter(|&end| end <= data.len())
+            .ok_or_else(invalid)?;
+        if matches!(kind, b"tEXt" | b"zTXt" | b"iTXt") {
+            if at > start {
+                kept.push((start, at));
+            }
+            start = end;
+        }
+        let last = kind == b"IEND";
+        at = end;
+        if last {
+            break;
+        }
+    }
+    if start == 0 && at == data.len() {
+        return Ok(Cow::Borrowed(data));
+    }
+    if at > start {
+        kept.push((start, at));
+    }
+    let mut out = Vec::with_capacity(kept.iter().map(|(from, to)| to - from).sum());
+    for (from, to) in kept {
+        out.extend_from_slice(&data[from..to]);
+    }
+    Ok(Cow::Owned(out))
+}
+
 /// The width and height in a JPEG's first frame header (SOF0-SOF15 but
 /// DHT, JPG and DAC), found by walking the marker segments up to the first
 /// scan; `None` when there is none or the walk leaves the data. Only used
@@ -441,6 +512,12 @@ pub fn decode(data: &[u8], staging: &Staging) -> Result<Vec<u8>, Fail> {
     })
 }
 
+/// `decode` without the text strip (the test of what it prevents).
+#[cfg(test)]
+pub fn decode_unstripped(data: &[u8], staging: &Staging) -> Result<Vec<u8>, Fail> {
+    run_stripped(data, staging, POLICY, &THUMBNAIL_LIMITS, magick)
+}
+
 /// `decode` for a lock-screen background: exactly `background.pixel_bytes()`
 /// of RGB, under its own policy and limits, in the same sandbox.
 pub fn decode_background(
@@ -458,6 +535,19 @@ pub fn decode_background(
 }
 
 fn run(
+    data: &[u8],
+    staging: &Staging,
+    policy: &str,
+    limits: &Limits,
+    magick: impl FnOnce(&str) -> Vec<OsString>,
+) -> Result<Vec<u8>, Fail> {
+    let data = strip_png_text(data)?;
+    run_stripped(&data, staging, policy, limits, magick)
+}
+
+/// `run` without the text strip: only for `run`, and for the test that
+/// shows what the strip prevents.
+fn run_stripped(
     data: &[u8],
     staging: &Staging,
     policy: &str,
@@ -592,9 +682,191 @@ fn sandbox(
     crate::signals_unblocked(|| bounded.run())
 }
 
+/// Test PNGs with text chunks: `plain` (1x1, IHDR, IDAT, IEND) and the same
+/// image with `count` `zTXt` chunks of `text` bytes each (zeros, deflated
+/// with fixed Huffman codes: a literal, then matches of 258 at distance 1,
+/// 13 bits for each 258 bytes) between IHDR and IDAT, where libpng reads
+/// them before the image.
+#[cfg(test)]
+pub mod text_bomb {
+    use super::{PNG_MAGIC, chunk, encode_rgb};
+
+    struct Bits {
+        out: Vec<u8>,
+        used: u32,
+    }
+
+    impl Bits {
+        /// `count` bits of `value`, least significant first (deflate's
+        /// order for everything but Huffman codes).
+        fn put(&mut self, value: u32, count: u32) {
+            for bit in 0..count {
+                if self.used.is_multiple_of(8) {
+                    self.out.push(0);
+                }
+                if value >> bit & 1 == 1 {
+                    *self.out.last_mut().unwrap() |= 1 << (self.used % 8);
+                }
+                self.used += 1;
+            }
+        }
+
+        /// A Huffman code, most significant bit first.
+        fn code(&mut self, code: u32, length: u32) {
+            for bit in (0..length).rev() {
+                self.put(code >> bit & 1, 1);
+            }
+        }
+    }
+
+    /// A zlib stream of `1 + 258 * matches` zero bytes.
+    pub fn zlib_zeros(matches: usize) -> Vec<u8> {
+        let mut bits = Bits {
+            out: vec![0x78, 0x01],
+            used: 16,
+        };
+        bits.put(1, 1); // BFINAL
+        bits.put(1, 2); // BTYPE 01: fixed codes
+        bits.code(0x30, 8); // literal 0
+        for _ in 0..matches {
+            bits.code(0b1100_0101, 8); // length 258 (code 285)
+            bits.code(0, 5); // distance 1 (code 0)
+        }
+        bits.code(0, 7); // end of block (256)
+        let size = (1 + 258 * matches) as u32;
+        let mut out = bits.out;
+        // Adler-32 of zeros: a stays 1, b counts them.
+        out.extend_from_slice(&((size % 65521) << 16 | 1).to_be_bytes());
+        out
+    }
+
+    /// (plain, with text): see the module.
+    pub fn png(count: usize, matches: usize) -> (Vec<u8>, Vec<u8>) {
+        let plain = encode_rgb(1, 1, &[200, 30, 60]).unwrap();
+        // IHDR ends at 8 + 25.
+        let mut bomb = plain[..33].to_vec();
+        let mut text = b"Comment\0\0".to_vec();
+        text.extend_from_slice(&zlib_zeros(matches));
+        for _ in 0..count {
+            chunk(&mut bomb, b"zTXt", &text);
+        }
+        bomb.extend_from_slice(&plain[33..]);
+        assert!(bomb.starts_with(PNG_MAGIC));
+        (plain, bomb)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn png_text_chunks_are_stripped() {
+        let plain = encode_rgb(2, 1, &[1, 2, 3, 4, 5, 6]).unwrap();
+        // Without text: the input itself, not a copy.
+        assert!(matches!(strip_png_text(&plain).unwrap(), Cow::Borrowed(_)));
+        for other in [
+            &b"\xff\xd8\xff\xe0"[..],
+            b"RIFF\0\0\0\0WEBP",
+            b"",
+            b"GIF89a",
+        ] {
+            assert!(matches!(strip_png_text(other).unwrap(), Cow::Borrowed(_)));
+        }
+        // Text before and after the image, of each kind, and trailing bytes.
+        let mut texty = plain[..33].to_vec();
+        chunk(&mut texty, b"tEXt", b"Title\0hello");
+        chunk(&mut texty, b"iTXt", b"Author\0\0\0\0\0me");
+        chunk(&mut texty, b"gAMA", &[0, 0, 0xb1, 0x8f]);
+        let idat = plain.len() - 12;
+        texty.extend_from_slice(&plain[33..idat]);
+        chunk(&mut texty, b"zTXt", b"Comment\0\0\x78\x01\x03\0\0\0\0\x01");
+        texty.extend_from_slice(&plain[idat..]);
+        texty.extend_from_slice(b"after the end");
+        let stripped = strip_png_text(&texty).unwrap();
+        let mut expected = plain[..33].to_vec();
+        chunk(&mut expected, b"gAMA", &[0, 0, 0xb1, 0x8f]);
+        expected.extend_from_slice(&plain[33..]);
+        assert_eq!(stripped.as_ref(), &expected[..]);
+        // Trailing bytes alone are dropped too.
+        let mut trailing = plain.clone();
+        trailing.extend_from_slice(b"junk");
+        assert_eq!(strip_png_text(&trailing).unwrap().as_ref(), &plain[..]);
+        // The stripped file still names its format.
+        assert_eq!(format(&stripped).unwrap(), "PNG");
+    }
+
+    #[test]
+    fn malformed_pngs_are_refused() {
+        let plain = encode_rgb(1, 1, &[0, 0, 0]).unwrap();
+        let refused = |data: &[u8]| strip_png_text(data).unwrap_err().0 == "invalid-png";
+        // Truncated anywhere: inside the signature's first chunk header, a
+        // chunk's body or its CRC, or with no IEND.
+        for cut in [9, 20, 40, plain.len() - 12, plain.len() - 1] {
+            assert!(refused(&plain[..cut]), "cut at {cut}");
+        }
+        assert!(refused(PNG_MAGIC));
+        // A length of 2^31 or more, or past the end.
+        let mut long = plain[..33].to_vec();
+        long.extend_from_slice(&[0x80, 0, 0, 0, b'I', b'D', b'A', b'T']);
+        long.extend_from_slice(&plain[33..]);
+        assert!(refused(&long));
+        let mut past = plain[..33].to_vec();
+        past.extend_from_slice(&[0x7f, 0xff, 0xff, 0xff, b'I', b'D', b'A', b'T']);
+        assert!(refused(&past));
+        // A type that isn't four ASCII letters.
+        for kind in [b"ID1T", b"tEX ", b"\0\0\0\0", b"t\xc3XT"] {
+            let mut bad = plain[..33].to_vec();
+            chunk(&mut bad, kind, b"x");
+            bad.extend_from_slice(&plain[33..]);
+            assert!(refused(&bad), "{kind:?}");
+        }
+        // At most PNG_CHUNK_LIMIT chunks, IHDR, IDAT and IEND included.
+        let with = |extra: usize| {
+            let mut many = plain[..33].to_vec();
+            for _ in 0..extra {
+                chunk(&mut many, b"tEXt", b"");
+            }
+            many.extend_from_slice(&plain[33..]);
+            many
+        };
+        let most = with(PNG_CHUNK_LIMIT - 3);
+        assert_eq!(strip_png_text(&most).unwrap().as_ref(), &plain[..]);
+        assert!(refused(&with(PNG_CHUNK_LIMIT - 2)));
+    }
+
+    #[test]
+    fn a_text_bomb_strips_to_the_image_without_inflating() {
+        // 1024 zTXt chunks of 384 KiB of text each: 384 MiB of text, past
+        // the thumbnail decoder's whole address space, in 2.5 MB.
+        let (plain, bomb) = text_bomb::png(1024, 1525);
+        let text = 1024 * (1 + 258 * 1525);
+        assert!(text > 384 << 20, "{text}");
+        assert!(bomb.len() < 3 << 20, "{}", bomb.len());
+        let started = std::time::Instant::now();
+        let stripped = strip_png_text(&bomb).unwrap();
+        // One pass over the headers: no inflating, no copy of the text.
+        assert!(started.elapsed() < std::time::Duration::from_millis(200));
+        assert_eq!(stripped.as_ref(), &plain[..]);
+        assert_eq!(stripped.len(), 72);
+    }
+
+    #[test]
+    fn zeros_deflate_as_expected() {
+        // The header, a 13-bit match per 258 bytes and the Adler-32 of
+        // 1 + 258 n zeros (that libpng inflates it is shown in the real
+        // sandbox: store.rs, a_text_bomb_decodes_in_the_real_sandbox).
+        assert_eq!(
+            text_bomb::zlib_zeros(800).len(),
+            2 + (3 + 8 + 13 * 800 + 7usize).div_ceil(8) + 4
+        );
+        let stream = text_bomb::zlib_zeros(3);
+        assert_eq!(&stream[..2], &[0x78, 0x01]);
+        assert_eq!(
+            &stream[stream.len() - 4..],
+            &(((1 + 258 * 3) << 16) | 1u32).to_be_bytes()
+        );
+    }
 
     #[test]
     fn formats_follow_artwork_py() {

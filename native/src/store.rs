@@ -809,6 +809,40 @@ mod tests {
     }
 
     #[test]
+    fn a_text_bomb_decodes_in_the_real_sandbox() {
+        let _alone = crate::forks::Alone::take();
+        if !real_sandbox() {
+            eprintln!("skipped: needs bubblewrap with namespaces and ImageMagick");
+            return;
+        }
+        let dir = scratch();
+        // One staging directory per decode, as a job has.
+        let decode = |data: &[u8], strip: bool| {
+            let staging = Staging::create(&dir, ".job-").unwrap();
+            if strip {
+                image::decode(data, &staging)
+            } else {
+                image::decode_unstripped(data, &staging)
+            }
+        };
+        // 384 MiB of zTXt on a 1x1 image (image::text_bomb), 2.5 MB on disk.
+        let (plain, bomb) = image::text_bomb::png(1024, 1525);
+        let expected = decode(&plain, true).unwrap();
+        assert_eq!(expected.len(), image::PIXEL_BYTES);
+        assert_eq!(&expected[..3], &[200, 30, 60]);
+        // The decoder sees the image alone (image.rs checks the bytes it is
+        // given), inside its 256 MiB, and the pixels are the same.
+        assert_eq!(decode(&bomb, true).unwrap(), expected);
+        // The text is valid zTXt: unstripped, this libpng and ImageMagick
+        // read it and still give the image (whether they keep the inflated
+        // text depends on their versions and limits, which the strip makes
+        // irrelevant).
+        let (_, one) = image::text_bomb::png(1, 1525);
+        assert_eq!(decode(&one, false).unwrap(), expected);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn background_decodes_in_the_real_sandbox() {
         // Its second job re-takes the cache flock: no fork elsewhere in this
         // test process may hold a copy of the first one's descriptor then.

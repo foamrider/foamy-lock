@@ -543,6 +543,12 @@ separate helper reads permitted artwork and decodes it in a Bubblewrap sandbox
 without network, home-directory, session-bus, or desktop-socket access. It accepts
 static PNG, JPEG, and WebP only. ImageMagick delegates and other image coders are
 disabled, and the decoder cannot create subprocesses or additional namespaces.
+Before the decoder reads a PNG, the helper copies it without its text chunks
+(`tEXt`, `zTXt`, `iTXt`), reading only the chunk headers, so compressed text can't
+expand in the decoder's memory; a PNG whose chunk list is malformed (a chunk past
+the end, a type that isn't four letters, no `IEND`, more than 16384 chunks) is
+refused as `invalid-png`. This applies to artwork, the avatar and background
+pictures alike, and the pixels are the same.
 The sandbox returns exactly 256 × 256 RGB pixels. The helper checks
 their length and creates a minimal PNG without copying source metadata or source
 compressed data. Only that thumbnail reaches the lock view.

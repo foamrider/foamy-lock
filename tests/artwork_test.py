@@ -1240,8 +1240,9 @@ class RealDecoder(Workspace):
                 + struct.pack('>I', zlib.crc32(b'IHDR' + header)) + png(b'\0\0\0', 1, 1)[33:])
         for name, data in [('broken.jpg', b'\xff\xd8\xffbroken'), ('huge.png', huge), ('truncated.png', self.png[:60])]:
             with self.subTest(name=name):
+                # A truncated PNG is refused before the decoder (strip_png_text).
                 self.assertIn(self.error(self.local(self.write(name, data))),
-                              {'decode-failed', 'invalid-pixels', 'decode-timeout'})
+                              {'decode-failed', 'invalid-pixels', 'decode-timeout', 'invalid-png'})
         self.assertEqual(self.leftovers(), [])
 
     def test_avatar_is_sandboxed_resized_and_private(self):
