@@ -1,0 +1,573 @@
+.pragma library
+.import "Layout.js" as Layout
+// Lock Studio's pure model: the draft look, its undo history, and the
+// snapping maths the canvas runs on every pointer move. No I/O, no QML
+// types: node tests load it (tests/studio-draft.test.cjs) with Layout.js
+// as `Layout`.
+//
+// The draft is a look entry, the four keys the lock saves: { preset, layout,
+// background, glass }, `layout` holding only what differs from the preset
+// (see entry()). Every edit takes an entry and returns a new one, so undo is
+// a list of entries, the same shape `foamy-lock-helper studio draft-save`
+// keeps on disk.
+//
+// Geometry is in the lock view's pixels (its logical screen size); the
+// canvas converts pointer moves by its zoom before calling in. Rectangles are
+// { x, y, width, height }. Anchors are the drawn rectangles an element would
+// have in each zone's current stack, measured by the canvas on a probe view:
+// { zone, x, y, width, height }.
+
+// Library order (the lock's ELEMENTS order is its tie-break, not a reading order).
+var DISPLAY_ORDER = ["clock", "date", "calendar", "account", "password", "media", "status"]
+// The grid: square cells of 1/48 of the screen height.
+var GRID_DIVISIONS = 48
+// Snapping reaches this far in canvas pixels, whatever the zoom.
+var SNAP_RADIUS = 8
+// Undo steps kept (the helper keeps at most 100 on disk).
+var HISTORY_LIMIT = 100
+// Offsets are stored to this many decimals (1e-6 of 4000 px is 0.004 px).
+var OFFSET_DECIMALS = 6
+var ORDER_LIMIT = 99
+// The zone grid's rows and logical columns (Layout.js names zones by them).
+var ROWS = ["top", "middle", "bottom"]
+var COLUMNS = ["start", "center", "end"]
+
+// An element's ranges (the password's are tighter; Layout.js keeps both).
+function limitsFor(name) {
+  return name === "password" ? Layout.PASSWORD_LIMITS : Layout.LIMITS
+}
+
+function copy(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value))
+}
+
+// JSON with every object's keys sorted: QML `var` properties hand objects
+// back as maps in key order, so comparisons ignore the order.
+function stable(value) {
+  if (Array.isArray(value)) return "[" + value.map(stable).join(",") + "]"
+  if (value !== null && typeof value === "object") {
+    return "{" + Object.keys(value).sort().filter(function(key) { return value[key] !== undefined })
+      .map(function(key) { return JSON.stringify(key) + ":" + stable(value[key]) }).join(",") + "}"
+  }
+  return JSON.stringify(value)
+}
+
+function same(a, b) {
+  return stable(a) === stable(b)
+}
+
+// An entry in the lock's key order (preset, layout, background, glass),
+// for saving.
+function ordered(draft) {
+  var out = { preset: draft.preset }
+  var keys = ["layout", "background", "glass"]
+  for (var i = 0; i < keys.length; i++) if (draft[keys[i]] !== undefined) out[keys[i]] = copy(draft[keys[i]])
+  return out
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+// --- the draft entry -------------------------------------------------------
+
+// A key's value with its default filled in, for comparing an element with
+// its preset (canonical elements omit defaults).
+function elementValue(item, key) {
+  var value = item[key]
+  if (value !== undefined) return value
+  switch (key) {
+  case "scale": return 1
+  case "opacity": return 1
+  case "screens": return "all"
+  case "hidden": return false
+  case "offset": return { x: 0, y: 0 }
+  }
+  return undefined
+}
+
+// The sparse entry for an effective look (Layout.merge's shape): only what
+// differs from its preset, so a look made of defaults is { preset }.
+function entry(look) {
+  if (!look || !look.elements) return { preset: look && Layout.PRESETS[look.preset] ? look.preset : Layout.DEFAULT_PRESET }
+  var name = look && Layout.PRESETS[look.preset] ? look.preset : Layout.DEFAULT_PRESET
+  var base = Layout.preset(name)
+  var current = Layout.canonical(look)
+  var result = { preset: name }
+  var layout = {}
+  for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+    var element = Layout.ELEMENTS[i]
+    var item = current.elements[element]
+    var preset = base.elements[element]
+    if (!item) continue
+    var changes = {}
+    for (var k = 0; k < Layout.ELEMENT_KEYS.length; k++) {
+      var key = Layout.ELEMENT_KEYS[k]
+      var value = elementValue(item, key)
+      if (value === undefined) continue
+      if (!same(value, elementValue(preset, key))) changes[key] = copy(value)
+    }
+    if (Object.keys(changes).length > 0) layout[element] = changes
+  }
+  if (Object.keys(layout).length > 0) result.layout = layout
+  var background = shallowDiff(current.background, base.background)
+  if (background) result.background = background
+  var glass = shallowDiff(current.glass, base.glass)
+  if (glass) result.glass = glass
+  return result
+}
+
+function shallowDiff(value, base) {
+  var out = {}
+  var any = false
+  for (var key in value || {}) {
+    if (!same(value[key], base[key])) {
+      out[key] = copy(value[key])
+      any = true
+    }
+  }
+  return any ? out : null
+}
+
+// The lock's reading of an entry: { valid, look, error } (Layout.parseLook).
+function parse(draft) {
+  return Layout.parseLook(draft)
+}
+
+// The effective look of an entry; the default look when it isn't valid.
+function lookOf(draft) {
+  var parsed = Layout.parseLook(draft)
+  return parsed.valid ? parsed.look : Layout.defaults()
+}
+
+// How many keys differ from the preset (elements' keys, background, glass).
+function changeCount(draft) {
+  var count = 0
+  for (var name in (draft && draft.layout) || {}) count += Object.keys(draft.layout[name]).length
+  count += Object.keys((draft && draft.background) || {}).length
+  count += Object.keys((draft && draft.glass) || {}).length
+  return count
+}
+
+// The order that puts `name` last in `zone` (after every other element there,
+// hidden ones included, so showing one later never jumps the queue).
+function lastOrder(elements, zone, name) {
+  var order = -Infinity
+  for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+    var other = Layout.ELEMENTS[i]
+    if (other === name || !elements[other] || elements[other].zone !== zone) continue
+    order = Math.max(order, elements[other].order)
+  }
+  return order === -Infinity ? 0 : Math.min(ORDER_LIMIT, order + 1)
+}
+
+// Apply `edit(item, look)` to one element of the entry's look and return the
+// new entry. The result is checked: an edit the lock would refuse returns
+// the entry unchanged.
+function editElement(draft, name, edit) {
+  var look = lookOf(draft)
+  if (!look.elements[name]) return draft
+  edit(look.elements[name], look)
+  var next = entry(look)
+  return Layout.parseLook(next).valid ? next : draft
+}
+
+function roundTo(value, decimals) {
+  var factor = Math.pow(10, decimals)
+  var rounded = Math.round(value * factor) / factor
+  return rounded === 0 ? 0 : rounded
+}
+
+function clamp(value, low, high) {
+  return Math.max(low, Math.min(high, value))
+}
+
+// An offset within the element's limits, rounded for storage.
+function cleanOffset(name, offset) {
+  var limits = limitsFor(name).offset
+  return {
+    x: roundTo(clamp(Number(offset.x) || 0, limits.min, limits.max), OFFSET_DECIMALS),
+    y: roundTo(clamp(Number(offset.y) || 0, limits.min, limits.max), OFFSET_DECIMALS)
+  }
+}
+
+// A scale within the element's limits; on its 0.05 step unless `free`.
+function cleanScale(name, scale, free) {
+  var limits = limitsFor(name).scale
+  var value = clamp(Number(scale) || 1, limits.min, limits.max)
+  return free ? value : clamp(Math.round(value / limits.step) / Math.round(1 / limits.step), limits.min, limits.max)
+}
+
+// Move to `zone` (last in its stack when the zone changes) without an offset.
+function setZone(draft, name, zone) {
+  return place(draft, name, zone, { x: 0, y: 0 })
+}
+
+// The drop: `zone`, last in its stack when it changes, and `offset`.
+function place(draft, name, zone, offset) {
+  if (name === "password" && Layout.PASSWORD_ZONES.indexOf(zone) === -1) return draft
+  if (Layout.ZONES.indexOf(zone) === -1) return draft
+  return editElement(draft, name, function(item, look) {
+    if (item.zone !== zone) {
+      item.order = lastOrder(look.elements, zone, name)
+      item.zone = zone
+    }
+    item.offset = cleanOffset(name, offset || { x: 0, y: 0 })
+  })
+}
+
+function setOffset(draft, name, offset) {
+  return editElement(draft, name, function(item) { item.offset = cleanOffset(name, offset) })
+}
+
+function setScale(draft, name, scale) {
+  return editElement(draft, name, function(item) { item.scale = cleanScale(name, scale, false) })
+}
+
+// Change the scale by `steps` of 0.05.
+function scaleBy(draft, name, steps) {
+  var current = elementValue(lookOf(draft).elements[name] || {}, "scale")
+  return setScale(draft, name, current + steps * limitsFor(name).scale.step)
+}
+
+function setOrder(draft, name, order) {
+  return editElement(draft, name, function(item) { item.order = clamp(Math.round(order), -ORDER_LIMIT, ORDER_LIMIT) })
+}
+
+// Hide or show; the password field can't be hidden.
+function setHidden(draft, name, hidden) {
+  if (name === "password" && hidden) return draft
+  return editElement(draft, name, function(item) { item.hidden = !!hidden })
+}
+
+// Start over from a preset: its look without any of the draft's changes.
+function setPreset(draft, name) {
+  return Layout.SELECTABLE_PRESETS.indexOf(name) === -1 ? draft : { preset: name }
+}
+
+// --- undo history ------------------------------------------------------------
+
+// { past: [entry…] oldest first, present: entry, future: [entry…] next first }.
+function history(draft) {
+  return { past: [], present: copy(draft), future: [] }
+}
+
+// Record a new present; an unchanged entry records nothing. The oldest steps
+// beyond `limit` (HISTORY_LIMIT) are dropped.
+function push(h, draft, limit) {
+  if (same(draft, h.present)) return h
+  var past = h.past.concat([h.present])
+  var keep = limit === undefined ? HISTORY_LIMIT : limit
+  if (past.length > keep) past = past.slice(past.length - keep)
+  return { past: past, present: copy(draft), future: [] }
+}
+
+function canUndo(h) { return h.past.length > 0 }
+function canRedo(h) { return h.future.length > 0 }
+
+function undo(h) {
+  if (!canUndo(h)) return h
+  return { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present].concat(h.future) }
+}
+
+function redo(h) {
+  if (!canRedo(h)) return h
+  return { past: h.past.concat([h.present]), present: h.future[0], future: h.future.slice(1) }
+}
+
+// --- geometry -------------------------------------------------------------------
+
+function gridStep(height) {
+  return height / GRID_DIVISIONS
+}
+
+// The snap radius in view pixels for a canvas shown at `zoom`.
+function snapRadius(zoom) {
+  return SNAP_RADIUS / (zoom > 0 ? zoom : 1)
+}
+
+// The axis a drag started along, for the Alt lock: "x", "y", or "" before
+// it has moved.
+function dragAxis(dx, dy) {
+  if (dx === 0 && dy === 0) return ""
+  return Math.abs(dx) >= Math.abs(dy) ? "x" : "y"
+}
+
+function zonesFor(name) {
+  return name === "password" ? Layout.PASSWORD_ZONES.slice() : Layout.ZONES.slice()
+}
+
+// Where an element's drawn rectangle may go: on screen; the password field
+// also `margin` from the edges and with its top at least a third down
+// (the lock's password-offscreen and password-high rules).
+function bounds(name, width, height, margin) {
+  if (name !== "password") return { left: 0, top: 0, right: width, bottom: height }
+  var m = margin || 0
+  return { left: m, top: Math.ceil(height / 3), right: width - m, bottom: height - m }
+}
+
+function clampRect(rect, box) {
+  var x = rect.width > box.right - box.left ? box.left : clamp(rect.x, box.left, box.right - rect.width)
+  var y = rect.height > box.bottom - box.top ? box.top : clamp(rect.y, box.top, box.bottom - rect.height)
+  return { x: x, y: y, width: rect.width, height: rect.height }
+}
+
+function centreX(r) { return r.x + r.width / 2 }
+function centreY(r) { return r.y + r.height / 2 }
+
+// The anchor nearest to the rectangle (centre to centre) among those whose
+// zone `name` may use; null without any.
+function nearestAnchor(rect, anchors, name) {
+  var allowed = zonesFor(name)
+  var best = null, bestDistance = Infinity
+  for (var i = 0; i < (anchors || []).length; i++) {
+    var a = anchors[i]
+    if (allowed.indexOf(a.zone) === -1) continue
+    var dx = centreX(a) - centreX(rect), dy = centreY(a) - centreY(rect)
+    var distance = dx * dx + dy * dy
+    if (distance < bestDistance) {
+      best = a
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
+// Edges and centre of a rectangle along one axis.
+function features(r, axis) {
+  return axis === "x" ? [r.x, r.x + r.width / 2, r.x + r.width] : [r.y, r.y + r.height / 2, r.y + r.height]
+}
+
+// The best snap along one axis: { kind, at, delta } or null. Anchors and
+// guides within `radius` beat the grid; the nearest wins, anchors before
+// guides on a tie.
+function snapAxis(rect, axis, input, anchor) {
+  var own = features(rect, axis)
+  var best = null
+  function consider(kind, feature, line, extra) {
+    var delta = line - own[feature]
+    var distance = Math.abs(delta)
+    if (distance > input.radius) return
+    var rank = kind === "anchor" ? 0 : 1
+    if (!best || distance < best.distance - 1e-9 || (Math.abs(distance - best.distance) <= 1e-9 && rank < best.rank)) {
+      best = { kind: kind, at: line, delta: delta, distance: distance, rank: rank }
+      if (extra) best.zone = extra
+    }
+  }
+  var anchors = input.anchors || []
+  var allowed = zonesFor(input.name)
+  for (var i = 0; i < anchors.length; i++) {
+    if (allowed.indexOf(anchors[i].zone) === -1) continue
+    var target = features(anchors[i], axis)
+    for (var f = 0; f < 3; f++) consider("anchor", f, target[f], anchors[i].zone)
+  }
+  // The screen's centre line, and the other modules' edges and centres.
+  consider("guide", 1, (axis === "x" ? input.width : input.height) / 2)
+  var others = input.others || []
+  for (var j = 0; j < others.length; j++) {
+    var lines = features(others[j], axis)
+    for (var l = 0; l < 3; l++)
+      for (var g = 0; g < 3; g++) consider("guide", g, lines[l])
+  }
+  if (best) return { kind: best.kind, at: best.at, delta: best.delta, zone: best.zone }
+  // The grid: offsets from the nearest anchor in whole cells (centres
+  // across, tops down, as the drop measures them).
+  if (!anchor) return null
+  var step = gridStep(input.height)
+  var from = axis === "x" ? centreX(anchor) : anchor.y
+  var mine = axis === "x" ? centreX(rect) : rect.y
+  var snapped = from + Math.round((mine - from) / step) * step
+  if (Math.abs(snapped - mine) > input.radius) return null
+  return { kind: "grid", at: snapped, delta: snapped - mine }
+}
+
+// One pointer move of a drag. `input`:
+//   name, width, height, margin, rightToLeft
+//   start     the element's drawn rectangle when the drag began
+//   delta     { x, y } pointer movement, view pixels
+//   axis      "", "x" or "y": Alt holds the drag to the axis it started along
+//   snapping  false while Shift is held (or snapping is switched off)
+//   radius    snap radius in view pixels (snapRadius(zoom))
+//   anchors   where the element would sit in each zone
+//   others    the other shown modules' rectangles
+// Returns { rect, x, y, zone }: the rectangle to show, the snap on each axis
+// ({ kind: "anchor" | "guide" | "grid", at } or null: `at` is the line to
+// draw) and the zone a drop here would pick.
+function snap(input) {
+  var dx = input.delta.x, dy = input.delta.y
+  if (input.axis === "x") dy = 0
+  else if (input.axis === "y") dx = 0
+  var rect = { x: input.start.x + dx, y: input.start.y + dy, width: input.start.width, height: input.start.height }
+  var box = bounds(input.name, input.width, input.height, input.margin)
+  rect = clampRect(rect, box)
+  var snapX = null, snapY = null
+  if (input.snapping) {
+    var anchor = nearestAnchor(rect, input.anchors, input.name)
+    if (input.axis !== "y") snapX = snapAxis(rect, "x", input, anchor)
+    if (input.axis !== "x") snapY = snapAxis(rect, "y", input, anchor)
+    if (snapX) rect.x += snapX.delta
+    if (snapY) rect.y += snapY.delta
+    var clamped = clampRect(rect, box)
+    // A snap the limits push back off isn't shown as a snap.
+    if (snapX && clamped.x !== rect.x) snapX = null
+    if (snapY && clamped.y !== rect.y) snapY = null
+    rect = clamped
+  }
+  var nearest = nearestAnchor(rect, input.anchors, input.name)
+  return {
+    rect: rect,
+    x: snapX ? { kind: snapX.kind, at: snapX.at } : null,
+    y: snapY ? { kind: snapY.kind, at: snapY.at } : null,
+    zone: nearest ? nearest.zone : ""
+  }
+}
+
+// The offset that puts an element's drawn `rect` where it is, measured from
+// `anchor` (its rectangle in the zone without an offset): centres across,
+// tops down, in whole pixels, x mirrored right-to-left. The password field's
+// top is kept at least a third down.
+function offsetFrom(rect, anchor, input) {
+  var dx = Math.round(centreX(rect) - centreX(anchor))
+  var dy = Math.round(rect.y - anchor.y)
+  if (input.name === "password") dy = Math.max(dy, Math.ceil(input.height / 3 - anchor.y))
+  return cleanOffset(input.name, {
+    x: dx * (input.rightToLeft ? -1 : 1) / input.width,
+    y: dy / input.height
+  })
+}
+
+// The drop of `rect` (from snap()): the nearest allowed anchor decides the
+// zone, the rest is the offset. { zone, offset } or null without anchors.
+function drop(rect, input) {
+  var anchor = nearestAnchor(rect, input.anchors, input.name)
+  if (!anchor) return null
+  return { zone: anchor.zone, offset: offsetFrom(rect, anchor, input) }
+}
+
+// The neighbouring zone on screen in `direction` ("left", "right", "up",
+// "down"), or `zone` at the edge (or into a row the element can't use).
+function neighbourZone(zone, direction, rightToLeft, name) {
+  var row = ROWS.indexOf(Layout.zoneRow(zone))
+  var logical = COLUMNS.indexOf(Layout.zoneColumn(zone))
+  if (row === -1 || logical === -1) return zone
+  // Screen columns left to right; start and end swap right-to-left.
+  var column = rightToLeft ? 2 - logical : logical
+  if (direction === "left") column--
+  else if (direction === "right") column++
+  else if (direction === "up") row--
+  else if (direction === "down") row++
+  if (row < 0 || row > 2 || column < 0 || column > 2) return zone
+  var next = ROWS[row] + "-" + COLUMNS[rightToLeft ? 2 - column : column]
+  return zonesFor(name).indexOf(next) === -1 ? zone : next
+}
+
+// Move by whole pixels on screen (an arrow key), kept within bounds():
+// `rect` is the drawn rectangle now, `anchor` the one without the offset.
+function nudge(draft, name, dx, dy, rect, anchor, input) {
+  var box = bounds(name, input.width, input.height, input.margin)
+  var moved = clampRect({ x: rect.x + dx, y: rect.y + dy, width: rect.width, height: rect.height }, box)
+  return setOffset(draft, name, offsetFrom(moved, anchor, { name: name, width: input.width, height: input.height,
+    rightToLeft: input.rightToLeft }))
+}
+
+// The move to the next grid line in `direction` (-1 or 1) from `position`,
+// on the grid that starts at `origin` (the anchor; centres across, tops
+// down), so repeated arrow presses never drift off the grid.
+function gridMove(position, origin, direction, step) {
+  var cells = (position - origin) / step
+  var target = direction > 0 ? Math.floor(cells + 1e-6) + 1 : Math.ceil(cells - 1e-6) - 1
+  return origin + target * step - position
+}
+
+// The scale while dragging a corner handle: `handle` { x, y } is -1 or 1 for
+// the corner's side on screen, `delta` the pointer movement, `rect` the drawn
+// rectangle when the resize began. The larger relative growth wins; on the
+// 0.05 step unless `free` (Shift), always within the limits.
+function resizeScale(name, startScale, rect, handle, delta, free) {
+  var grow = Math.max((rect.width + handle.x * delta.x) / Math.max(1, rect.width),
+    (rect.height + handle.y * delta.y) / Math.max(1, rect.height))
+  return cleanScale(name, startScale * Math.max(0.01, grow), free)
+}
+
+// A look for the probe view that measures an anchor: `name` in `zone`
+// without an offset, shown, last in the stack unless it's already there.
+function probeLook(look, name, zone) {
+  var result = copy(look)
+  var item = result.elements[name]
+  if (item.zone !== zone) {
+    item.order = lastOrder(result.elements, zone, name)
+    item.zone = zone
+  }
+  delete item.offset
+  item.hidden = false
+  return result
+}
+
+// The look while a drag is shown: `name` kept in its zone, moved by `offset`
+// (no limits: mid-drag it may be far from its zone; the drop picks the zone).
+function draggedLook(look, name, rect, anchor, input) {
+  var result = copy(look)
+  var dx = Math.round(centreX(rect) - centreX(anchor))
+  var dy = Math.round(rect.y - anchor.y)
+  result.elements[name].offset = { x: dx * (input.rightToLeft ? -1 : 1) / input.width, y: dy / input.height }
+  return result
+}
+
+// The look with `name` at `scale` unrounded, for a resize in progress.
+function scaledLook(look, name, scale) {
+  var result = copy(look)
+  result.elements[name].scale = scale
+  return result
+}
+
+// The modules a geometry `code` (Layout.lookGeometryError) is about, for
+// outlining them: the field and what covers it, the module off screen, or
+// the overlapping pair. Follows lookGeometryError's rules and order.
+function problemElements(code, elements, rects, width, height) {
+  if (!code) return []
+  var names = []
+  for (var i = 0; i < Layout.ELEMENTS.length; i++) if (rects[Layout.ELEMENTS[i]]) names.push(Layout.ELEMENTS[i])
+  if (code === "password-overlap") {
+    for (var j = 0; j < names.length; j++)
+      if (names[j] !== "password" && Layout.intersects(rects.password, rects[names[j]], 1)) return ["password", names[j]]
+    return ["password"]
+  }
+  if (code.indexOf("password-") === 0) return ["password"]
+  if (code === "element-offscreen") {
+    for (var k = 0; k < names.length; k++) {
+      var r = rects[names[k]]
+      if (r.x < -1 || r.y < -1 || r.x + r.width > width + 1 || r.y + r.height > height + 1) return [names[k]]
+    }
+    return []
+  }
+  if (code === "element-overlap") {
+    for (var a = 0; a < names.length; a++) {
+      for (var b = a + 1; b < names.length; b++) {
+        var first = elements[names[a]], second = elements[names[b]]
+        if (first.zone === second.zone && !Layout.isOffset(first) && !Layout.isOffset(second)) continue
+        if (Layout.intersects(rects[names[a]], rects[names[b]], 1)) return [names[a], names[b]]
+      }
+    }
+  }
+  return []
+}
+
+// The module before or after `name` in the library order (wrapping).
+function neighbourModule(name, step) {
+  var index = DISPLAY_ORDER.indexOf(name)
+  if (index === -1) return DISPLAY_ORDER[0]
+  var count = DISPLAY_ORDER.length
+  return DISPLAY_ORDER[((index + step) % count + count) % count]
+}
+
+if (typeof module !== "undefined") module.exports = {
+  DISPLAY_ORDER: DISPLAY_ORDER, GRID_DIVISIONS: GRID_DIVISIONS, SNAP_RADIUS: SNAP_RADIUS, HISTORY_LIMIT: HISTORY_LIMIT,
+  same: same, stable: stable, ordered: ordered, entry: entry, parse: parse, elementValue: elementValue, lookOf: lookOf, changeCount: changeCount, lastOrder: lastOrder,
+  place: place, setZone: setZone, setOffset: setOffset, setScale: setScale, scaleBy: scaleBy, setOrder: setOrder,
+  setHidden: setHidden, setPreset: setPreset, cleanOffset: cleanOffset, cleanScale: cleanScale,
+  history: history, push: push, undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo,
+  gridStep: gridStep, snapRadius: snapRadius, dragAxis: dragAxis, zonesFor: zonesFor, bounds: bounds, clampRect: clampRect,
+  nearestAnchor: nearestAnchor, snap: snap, drop: drop, offsetFrom: offsetFrom, neighbourZone: neighbourZone, nudge: nudge, gridMove: gridMove,
+  resizeScale: resizeScale, probeLook: probeLook, draggedLook: draggedLook, scaledLook: scaledLook,
+  problemElements: problemElements, neighbourModule: neighbourModule
+}
