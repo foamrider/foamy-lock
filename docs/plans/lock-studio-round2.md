@@ -23,6 +23,8 @@ disagrees with D1–D7, it wins. Follows [lock-studio-app.md](lock-studio-app.md
 10. **No presets strip** at the bottom (it can't be scrolled and repeats the
    menu). The preset picker moves to the **top of the left sidebar**.
 12. **Deselect** by clicking outside the lock image.
+13. **Tips** at the bottom of the left sidebar, including one about setting
+   the profile picture and name with Mugshot.
 11. **User presets:**
    - Saving changes made on top of a preset asks for a **name** and
      creates a user preset.
@@ -132,6 +134,23 @@ disagrees with D1–D7, it wins. Follows [lock-studio-app.md](lock-studio-app.md
     in a "Your presets" section first, then "Built-in").
   - **Preview states:** the group gets a caption "Preview" inside it,
     before Idle, Typing and the rest.
+  - **Tips:** a card at the bottom of the left sidebar, replacing today's
+    help text. It shows one tip at a time, with previous and next buttons
+    and an action button where there is one.
+    - **First tip:** "Your picture and name on the lock screen come from
+      your account. Set them with Mugshot." With an "Open Mugshot" button
+      (`/usr/bin/mugshot`, started detached; hidden when it isn't
+      installed, and the tip then says how to install it). The lock reads
+      AccountsService's real name and icon, and `~/.face`, which is what
+      Mugshot writes.
+    - **Other tips:**
+      - Shift drags freely and Alt locks the axis.
+      - Arrows nudge and Ctrl+arrows change zone.
+      - Any key closes the full-screen preview.
+      - Saving changes to a preset creates your own.
+      - Status can show your keyboard layout.
+    - **Remembering:** the last tip seen is kept per user in the app's
+      state.
   - **Deselect:** clicking the canvas area outside the lock image (or
     pressing Escape) clears the selection, and the inspector shows the
     look as a whole (background, glass and dim).
