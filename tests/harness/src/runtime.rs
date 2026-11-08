@@ -761,7 +761,9 @@ fn look(test: &Test) -> R {
                 .is_some_and(|s| s.iter().any(|s| s == "pill") && s.iter().any(|s| s == "terminal"))
             && at(&catalog, "styles.clock")?
                 .as_array()
-                .is_some_and(|s| s.len() == 12 && s.iter().any(|s| s == "ring") && s.iter().any(|s| s == "serif"))
+                .is_some_and(|s| s.len() == 12
+                    && s.iter().any(|s| s == "ring")
+                    && s.iter().any(|s| s == "serif"))
             && at(&catalog, "styles.calendar")?
                 .as_array()
                 .is_some_and(|s| s.iter().any(|s| s == "card"))
@@ -805,7 +807,10 @@ fn look(test: &Test) -> R {
             && at(&catalog, "styles.media")?
                 .as_array()
                 .is_some_and(|s| s.iter().any(|s| s == "disc"))
-            && text(&catalog, "elementLimits.password.options.reveal.defaults.pill")? == "typing"
+            && text(
+                &catalog,
+                "elementLimits.password.options.reveal.defaults.pill"
+            )? == "typing"
             && at(&catalog, "elementLimits.media.options.artwork.default")? == &json!(true)
             && at(&catalog, "statusItems")?
                 .as_array()
@@ -1064,14 +1069,18 @@ fn video(test: &Test) -> R {
     let clip = test.path("loop.mp4");
     let made = Command::new("/usr/bin/ffmpeg")
         .args(["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i"])
-        .args(["testsrc2=size=96x54:rate=10:duration=1", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+        .args([
+            "testsrc2=size=96x54:rate=10:duration=1",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+        ])
         .arg(&clip)
         .status()
         .map_err(app::io("ffmpeg"))?;
     ensure!(made.success(), "ffmpeg made the test clip");
-    let entry = |motion: &str, path: &Path| {
-        json!({"background": {"source": "picture", "path": path.display().to_string(), "motion": motion}})
-    };
+    let entry = |motion: &str, path: &Path| json!({"background": {"source": "picture", "path": path.display().to_string(), "motion": motion}});
     test.write_config(STOCK_OFF, entry("play", &clip))?;
     let state = test.wait_for(|s| {
         Ok(!text(s, "video.poster")?.is_empty() || !text(s, "video.error")?.is_empty())
@@ -1087,13 +1096,17 @@ fn video(test: &Test) -> R {
     );
     let bytes = std::fs::read(&poster).map_err(|e| format!("{poster}: {e}"))?;
     let request = at(&state, "video.request")?.clone();
-    let size = (num(&request, "width")? as u32, num(&request, "height")? as u32);
+    let size = (
+        num(&request, "width")? as u32,
+        num(&request, "height")? as u32,
+    );
     ensure!(
         crate::png::size(&bytes) == Some(size) || size.0 > 3840 || size.1 > 2160,
         "the poster is the screen's size: {request}"
     );
     // Converted as Lock Studio converts it, then probed again.
-    let helper = app::plugin_root().join(format!("bin/{}/foamy-lock-helper", std::env::consts::ARCH));
+    let helper =
+        app::plugin_root().join(format!("bin/{}/foamy-lock-helper", std::env::consts::ARCH));
     let mut convert = Command::new(&helper)
         .arg("video-convert")
         .env_clear()
@@ -1109,16 +1122,25 @@ fn video(test: &Test) -> R {
         let mut stdin = convert.stdin.take().ok_or("no stdin")?;
         writeln!(stdin, "{request}").map_err(app::io("video-convert"))?;
     }
-    let output = convert.wait_with_output().map_err(app::io("video-convert"))?;
-    let reply = String::from_utf8_lossy(&output.stdout).lines().last().unwrap_or("").to_string();
+    let output = convert
+        .wait_with_output()
+        .map_err(app::io("video-convert"))?;
+    let reply = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .last()
+        .unwrap_or("")
+        .to_string();
     let reply = parse(&reply)?;
     ensure!(on(&reply, "ok")?, "video-convert: {reply}");
     test.write_config(STOCK_OFF, json!({}))?;
     test.wait_for(|s| Ok(text(s, "video.poster")?.is_empty()))?;
     test.write_config(STOCK_OFF, entry("play", &clip))?;
-    let state = test.wait_for(|s| Ok(!text(s, "video.clip")?.is_empty() || !text(s, "video.error")?.is_empty()))?;
+    let state = test.wait_for(|s| {
+        Ok(!text(s, "video.clip")?.is_empty() || !text(s, "video.error")?.is_empty())
+    })?;
     ensure!(
-        text(&state, "video.clip")? == text(&reply, "clip")? && text(&state, "video.poster")? == poster,
+        text(&state, "video.clip")? == text(&reply, "clip")?
+            && text(&state, "video.poster")? == poster,
         "{state}"
     );
     // Still: the same probe (the poster), no other job.
@@ -1463,7 +1485,10 @@ fn cover_art(test: &Test) -> R {
         "{written}"
     );
     for (mode, show) in [("off", false), ("player", true)] {
-        ensure!(test.ipc("foamy.lock", "setCoverArt", &[mode])? == "ok", "{mode}");
+        ensure!(
+            test.ipc("foamy.lock", "setCoverArt", &[mode])? == "ok",
+            "{mode}"
+        );
         let written = saved(test)?;
         ensure!(
             written["showArtwork"] == json!(show)
@@ -1474,7 +1499,15 @@ fn cover_art(test: &Test) -> R {
         );
     }
     // Only the three names: never a host, a list or another case.
-    for bad in ["", "Spotify", "online", "i.scdn.co", "custom", "spotify ", "[\"i.scdn.co\"]"] {
+    for bad in [
+        "",
+        "Spotify",
+        "online",
+        "i.scdn.co",
+        "custom",
+        "spotify ",
+        "[\"i.scdn.co\"]",
+    ] {
         let answer = test.ipc("foamy.lock", "setCoverArt", &[bad])?;
         ensure!(
             answer == "invalid: mode must be one of off, player, spotify",
@@ -1486,14 +1519,26 @@ fn cover_art(test: &Test) -> R {
     // are custom.
     for (settings, mode) in [
         (json!({"artworkHosts": ["i.scdn.co"]}), "spotify"),
-        (json!({"showArtwork": false, "artworkHosts": ["i.scdn.co"]}), "off"),
-        (json!({"artworkHosts": ["images.example.com", "i.scdn.co"]}), "custom"),
+        (
+            json!({"showArtwork": false, "artworkHosts": ["i.scdn.co"]}),
+            "off",
+        ),
+        (
+            json!({"artworkHosts": ["images.example.com", "i.scdn.co"]}),
+            "custom",
+        ),
     ] {
         test.write_config(STOCK_OFF, settings.clone())?;
-        test.wait_for(|s| Ok(at(s, "settings.artworkHosts")? == &settings["artworkHosts"]
-            && on(s, "settings.showArtwork")? == settings.get("showArtwork").is_none()))?;
+        test.wait_for(|s| {
+            Ok(at(s, "settings.artworkHosts")? == &settings["artworkHosts"]
+                && on(s, "settings.showArtwork")? == settings.get("showArtwork").is_none())
+        })?;
         let catalog = parse(&test.ipc("foamy.lock", "catalog", &[])?)?;
-        ensure!(text(&catalog, "coverArt")? == mode, "{mode}: {}", catalog["coverArt"]);
+        ensure!(
+            text(&catalog, "coverArt")? == mode,
+            "{mode}: {}",
+            catalog["coverArt"]
+        );
     }
     // Refused while locked (the harness's stand-in session lock).
     let before = saved(test)?;
@@ -1504,7 +1549,9 @@ fn cover_art(test: &Test) -> R {
     test.wait_for(|s| Ok(!on(s, "locked")?))?;
     ensure!(saved(test)? == before, "written while locked");
     test.write_config(STOCK_OFF, json!({}))?;
-    test.wait_for(|s| Ok(text(s, "preset")? == "foamy" && *at(s, "settings.artworkHosts")? == json!([])))?;
+    test.wait_for(|s| {
+        Ok(text(s, "preset")? == "foamy" && *at(s, "settings.artworkHosts")? == json!([]))
+    })?;
     println!(
         "PASS: setCoverArt writes off, player and spotify (i.scdn.co only) keeping every other key, merges with a write right after, refuses any other argument and while locked; the catalog names the mode, custom for hand-set hosts"
     );
@@ -2236,6 +2283,7 @@ Item {
   function screens() { var screens = Quickshell.screens || [] }
   readonly property int weatherPollMs: 900000
   readonly property int weatherRetryMs: 10000
+  readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(\".\")), \"foamy-lock-helper\", [\"video-probe\"])
 }
 ";
 
@@ -2246,6 +2294,7 @@ Item {
         assert!(patched.contains("property alias testResume: fingerprintResumeTimer\n"));
         assert!(patched.contains("locked: testStaleLocked || lockRequested"));
         assert!(patched.contains("weatherPollMs: 2500") && patched.contains("weatherRetryMs: 200"));
+        assert!(patched.contains("root.home + \"/fake-video-probe\"]"));
         assert_eq!(
             patched
                 .matches("Mock.PamContext { config: \"/tmp/pam\" }")

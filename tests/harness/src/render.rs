@@ -120,17 +120,27 @@ fn run_host(name: &str, shell: &Path, language: &str) -> Result<PathBuf, String>
     }
     // Every animation's still frame, the same twice (deterministic).
     if !output.contains("PASS: every animation's still frame") {
-        return Err(format!("the animations' still frames are missing; log: {}", base.display()));
+        return Err(format!(
+            "the animations' still frames are missing; log: {}",
+            base.display()
+        ));
     }
     for name in app::drawn_sources()? {
         let path = dir.join(format!("capture-animation-{name}.png"));
         let bytes = fs::read(&path).map_err(app::io(path.display()))?;
         if png::size(&bytes) != Some((1920, 1080)) {
-            return Err(format!("{}: expected 1920x1080, found {:?}", path.display(), png::size(&bytes)));
+            return Err(format!(
+                "{}: expected 1920x1080, found {:?}",
+                path.display(),
+                png::size(&bytes)
+            ));
         }
         let again = dir.join(format!("capture-animation-{name}-again.png"));
         if fs::read(&again).map_err(app::io(again.display()))? != bytes {
-            return Err(format!("the {name} still frame differs when drawn again: {}", dir.display()));
+            return Err(format!(
+                "the {name} still frame differs when drawn again: {}",
+                dir.display()
+            ));
         }
     }
     println!(
@@ -155,8 +165,11 @@ fn keep_captures(app: &Path, host: Option<&str>) -> Result<(), String> {
         let name = format!("capture-{index}.png");
         fs::copy(app.join(&name), out.join(&name)).map_err(app::io(&name))?;
     }
-    fs::copy(app.join("capture-banner.png"), out.join("capture-banner.png"))
-        .map_err(app::io("capture-banner.png"))?;
+    fs::copy(
+        app.join("capture-banner.png"),
+        out.join("capture-banner.png"),
+    )
+    .map_err(app::io("capture-banner.png"))?;
     for name in app::drawn_sources()? {
         let file = format!("capture-animation-{name}.png");
         fs::copy(app.join(&file), out.join(&file)).map_err(app::io(&file))?;

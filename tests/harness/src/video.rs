@@ -51,7 +51,13 @@ pub fn run_host(name: &str, shell: &Path) -> Result<(), String> {
     let clip = base.join("clip.mp4");
     let made = Command::new("/usr/bin/ffmpeg")
         .args(["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i"])
-        .args(["testsrc2=size=320x180:rate=30:duration=4", "-c:v", "libx264", "-profile:v", "high"])
+        .args([
+            "testsrc2=size=320x180:rate=30:duration=4",
+            "-c:v",
+            "libx264",
+            "-profile:v",
+            "high",
+        ])
         .args(["-pix_fmt", "yuv420p", "-an", "-f", "mp4", "-movflags"])
         .args(["+frag_keyframe+empty_moov+default_base_moof"])
         .arg(&clip)
@@ -72,7 +78,10 @@ pub fn run_host(name: &str, shell: &Path) -> Result<(), String> {
         shell,
         "en",
         Duration::from_secs(60),
-        &[("FOAMY_VIDEO_CLIP", &clip), ("FOAMY_VIDEO_CORRUPT", &corrupt)],
+        &[
+            ("FOAMY_VIDEO_CLIP", &clip),
+            ("FOAMY_VIDEO_CORRUPT", &corrupt),
+        ],
         &mut |_, _| Ok(()),
     )?;
     for line in output

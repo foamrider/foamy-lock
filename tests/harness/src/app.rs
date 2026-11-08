@@ -270,7 +270,8 @@ pub fn selectable_presets() -> Result<Vec<String>, String> {
 /// The animations, read from Layout.js (`var DRAWN_SOURCES = [...]`).
 pub fn drawn_sources() -> Result<Vec<String>, String> {
     let layout = fs::read_to_string(plugin_root().join("Layout.js")).map_err(io("Layout.js"))?;
-    parse_list(&layout, "var DRAWN_SOURCES = [").ok_or_else(|| "no DRAWN_SOURCES in Layout.js".to_string())
+    parse_list(&layout, "var DRAWN_SOURCES = [")
+        .ok_or_else(|| "no DRAWN_SOURCES in Layout.js".to_string())
 }
 
 fn parse_presets(layout: &str) -> Option<Vec<String>> {
