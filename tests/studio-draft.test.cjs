@@ -412,6 +412,34 @@ test('[ and ] walk the modules in library order', () => {
   assert.deepEqual([...Draft.DISPLAY_ORDER].sort(), [...Layout.ELEMENTS].sort())
 })
 
+test('screens show their native size from Hyprland, then the reference sizes', () => {
+  const screens = [
+    { name: 'DP-2', width: 2752, height: 1152 },
+    { name: 'HDMI-A-1', width: 1920, height: 1080 },
+    { name: 'DP-3', width: 1080, height: 1920 },
+    { name: '', width: 1280, height: 800 },
+    { name: 'gone', width: 0, height: 0 }
+  ]
+  const natives = {
+    'DP-2': { width: 3440, height: 1440, scale: 1.25, transform: 0 },
+    'HDMI-A-1': { width: 1920, height: 1080, scale: 1, transform: 0 },
+    // Rotated: the mode is 1920 × 1080 before the transform.
+    'DP-3': { width: 1920, height: 1080, scale: 1, transform: 1 }
+  }
+  const list = plain(Draft.monitorEntries(screens, natives))
+  assert.deepEqual(list.map(m => m.key), ['screen:DP-2', 'screen:HDMI-A-1', 'screen:DP-3', 'screen:3', 'reference:1280x720', 'reference:1920x1080'])
+  assert.deepEqual(list[0], { key: 'screen:DP-2', name: 'DP-2', index: 0, width: 2752, height: 1152,
+    nativeWidth: 3440, nativeHeight: 1440, scale: 1.25, reference: false })
+  assert.deepEqual([list[2].nativeWidth, list[2].nativeHeight, list[2].width, list[2].height], [1080, 1920, 1080, 1920])
+  // Unknown to Hyprland (or no name): the logical size, unscaled.
+  assert.deepEqual([list[3].name, list[3].index, list[3].nativeWidth, list[3].nativeHeight, list[3].scale], ['', 3, 1280, 800, 1])
+  assert.equal(plain(Draft.monitorEntries([{ name: 'DP-2', width: 2752, height: 1152 }], {}))[0].nativeWidth, 2752)
+  assert.equal(plain(Draft.monitorEntries([{ name: 'DP-2', width: 2752, height: 1152 }], { 'DP-2': { width: 0, height: 0, scale: 2 } }))[0].scale, 1)
+  assert.equal(plain(Draft.monitorEntries(null, null)).length, 2)
+  assert.deepEqual(list.slice(4).map(m => [m.width, m.height, m.reference]), [[1280, 720, true], [1920, 1080, true]])
+  assert.deepEqual([1, 1.25, 1.5, 2, 1.333333, 0, NaN].map(Draft.scalePercent), [0, 125, 150, 200, 133, 0, 0])
+})
+
 test('arrow steps land on the anchor grid and never drift', () => {
   assert.equal(Draft.gridMove(100, 100, 1, G), G)
   assert.equal(Draft.gridMove(100, 100, -1, G), -G)

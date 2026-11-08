@@ -688,6 +688,52 @@ function neighbourModule(name, step) {
   return DISPLAY_ORDER[((index + step) % count + count) % count]
 }
 
+// --- screens -------------------------------------------------------------------
+
+// The sizes the canvas can show: the connected screens, then the reference
+// sizes. `screens` are Quickshell's ({ name, width, height }, logical
+// pixels: what the lock lays out at); `natives` maps a monitor name to what
+// Hyprland reports for it ({ width, height, scale, transform }: the mode in
+// device pixels, before the transform). Qt only knows the integer wl_output
+// scale (2 at 1.25), so the native size comes from Hyprland, and a screen
+// Hyprland doesn't report keeps its logical size with scale 1. A rotated
+// screen (odd transform) swaps the mode's width and height. Entries:
+// { key, name, index, width, height, nativeWidth, nativeHeight, scale,
+// reference }; `name` is "" for a screen without one (the window labels it
+// by `index`).
+var REFERENCE_SIZES = [[1280, 720], [1920, 1080]]
+
+function monitorEntries(screens, natives) {
+  var list = []
+  for (var i = 0; i < (screens ? screens.length : 0); i++) {
+    var screen = screens[i]
+    if (!screen || !(screen.width > 0 && screen.height > 0)) continue
+    var name = screen.name ? String(screen.name) : ""
+    var native = name && natives && Object.prototype.hasOwnProperty.call(natives, name) ? natives[name] : null
+    var width = screen.width, height = screen.height, scale = 1
+    if (native && native.width > 0 && native.height > 0) {
+      var turned = Math.abs(Math.round(Number(native.transform) || 0)) % 2 === 1
+      width = turned ? native.height : native.width
+      height = turned ? native.width : native.height
+      scale = Number(native.scale) > 0 ? Number(native.scale) : 1
+    }
+    list.push({ key: "screen:" + (name || i), name: name, index: i, width: screen.width, height: screen.height,
+      nativeWidth: Math.round(width), nativeHeight: Math.round(height), scale: scale, reference: false })
+  }
+  for (var j = 0; j < REFERENCE_SIZES.length; j++) {
+    var w = REFERENCE_SIZES[j][0], h = REFERENCE_SIZES[j][1]
+    list.push({ key: "reference:" + w + "x" + h, name: "", index: -1, width: w, height: h,
+      nativeWidth: w, nativeHeight: h, scale: 1, reference: true })
+  }
+  return list
+}
+
+// A scale as a whole percentage (1.25 → 125); 0 when the screen isn't scaled.
+function scalePercent(scale) {
+  var percent = Math.round(Number(scale) * 100)
+  return percent > 0 && percent !== 100 ? percent : 0
+}
+
 // --- saving: the draft on disk and the lock ----------------------------------
 //
 // The helper's replies (`foamy-lock-helper studio …`, see native/src/studio)
@@ -844,5 +890,6 @@ if (typeof module !== "undefined") module.exports = {
   gridStep: gridStep, snapRadius: snapRadius, dragAxis: dragAxis, zonesFor: zonesFor, bounds: bounds, clampRect: clampRect,
   nearestAnchor: nearestAnchor, snap: snap, drop: drop, offsetFrom: offsetFrom, neighbourZone: neighbourZone, nudge: nudge, gridMove: gridMove,
   resizeScale: resizeScale, probeLook: probeLook, draggedLook: draggedLook, scaledLook: scaledLook,
-  problemElements: problemElements, neighbourModule: neighbourModule
+  problemElements: problemElements, neighbourModule: neighbourModule,
+  REFERENCE_SIZES: REFERENCE_SIZES, monitorEntries: monitorEntries, scalePercent: scalePercent
 }
