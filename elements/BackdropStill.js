@@ -534,3 +534,57 @@ function snowPoints(ctx, s) {
 animation("snow", 12, skyField(0.7, 1, function(s, y, out) {
   lay(out, mix3(s.cyan, s.ink, 0.5), 0.05 * smoothstep(0.5, 1, y), s.glow)
 }), snowPoints)
+
+// ---- fireflies (fireflies.frag) ---------------------------------------------
+
+function meadow(x, row, at) { return at + 0.05 * (noise1(x, row) - 0.5) }
+
+var fireflies = {
+  fraction: 0.25,
+  prepare: function(s) {
+    var aspect = s.w / Math.max(s.h, 1)
+    var back = 0, front = 0
+    return {
+      column: function(ux) {
+        var x = ux * aspect
+        back = meadow(x * 1.6, 450, 0.8)
+        front = meadow(x * 2.4 + 9, 451, 0.9)
+        return heightsWith(16, [back - 0.004, back + 0.004, front - 0.004, front + 0.004])
+      },
+      shade: function(y, out) {
+        sky(s, y, 0.66, 0.92, out)
+        var k = mix(0.3, 1, s.glow)
+        var b = smoothstep(back - 0.004, back + 0.004, y) * k
+        out[0] = mix(out[0], s.base[0] * 0.72, b); out[1] = mix(out[1], s.base[1] * 0.72, b); out[2] = mix(out[2], s.base[2] * 0.72, b)
+        var f = smoothstep(front - 0.004, front + 0.004, y) * k
+        out[0] = mix(out[0], s.base[0] * 0.5, f); out[1] = mix(out[1], s.base[1] * 0.5, f); out[2] = mix(out[2], s.base[2] * 0.5, f)
+      }
+    }
+  }
+}
+
+function firefliesPoints(ctx, s) {
+  for (var l = 0; l < 2; l++) {
+    var cell = (l === 0 ? 150 : 260) * s.unit
+    var core = (l === 0 ? 1.6 : 2.6) * s.unit
+    var halo = (l === 0 ? 16 : 34) * s.unit
+    var gain = l === 0 ? 0.85 : 0.7
+    var salt = 400 + 20 * l
+    for (var r = -1; r * cell < s.h + cell; r++) {
+      for (var c = -1; c * cell < s.w + cell; c++) {
+        if (hash(c, r, salt) >= 0.6) continue
+        var a = Math.floor(1 + 2 * hash(c, r, salt + 1)), b = Math.floor(1 + 2 * hash(c, r, salt + 2))
+        var x = (c + 0.5) * cell + 0.32 * cell * Math.sin(s.turn * a + TAU * hash(c, r, salt + 3))
+        var y = (r + 0.5) * cell + 0.32 * cell * Math.sin(s.turn * b + TAU * hash(c, r, salt + 4))
+        var beat = Math.sin(s.turn * Math.floor(7 + 9 * hash(c, r, salt + 5)) + TAU * hash(c, r, salt + 6))
+        var pulse = Math.pow(0.5 + 0.5 * beat, 2.5)
+        if (pulse <= 0.001) continue
+        var tint = mix3(s.warm, s.green, 0.25 + 0.5 * hash(c, r, 470 + l))
+        glow(ctx, x, y, 4 * halo, tint, Math.min(1, 0.75 * pulse) * gain)
+        dot(ctx, x, y, 3 * core, mix3(tint, s.ink, 0.5), Math.min(1, pulse) * gain)
+      }
+    }
+  }
+}
+
+animation("fireflies", 16, fireflies, firefliesPoints)
