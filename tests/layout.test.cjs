@@ -39,7 +39,7 @@ test('overrides merge onto the preset and only change what they name', () => {
   assert.equal(look.glass.opacity, 0.4)
   // The preset data itself is never modified by a merge.
   assert.equal(Layout.PRESETS.corner.elements.media.zone, 'top-start')
-  assert.equal(Layout.PRESETS.corner.background.dim, 0.3)
+  assert.equal(Layout.PRESETS.corner.background.dim, 0.4)
 })
 
 test('stacking follows order, then the fixed element order, and skips hidden and absent elements', () => {

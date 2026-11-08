@@ -1,10 +1,11 @@
 // Layout shell: one preset (__PRESET__) through sizes, clock formats, typing
 // and primary/non-primary states, then right-to-left (everything, the
 // decorations included, must mirror); then, for foamy, every preset on one
-// view and back, and the fallback chain on a screen too small for it. Every
-// state compares the shapes drawn with what the decorations drew before
-// they were shapes (OldDecoration.qml: elements/Decoration.qml at the
-// harness's DECORATION_BASELINE, given the older `decor` its template is).
+// view and back, and the fallback chain on a screen too small for it. In
+// every state, shapes that are a template are compared with what the
+// decorations drew before they were shapes (OldDecoration.qml:
+// elements/Decoration.qml at the harness's DECORATION_BASELINE, given the
+// older `decor` its template is).
 // Written into a temporary app by the harness.
 import QtQuick
 import Quickshell
@@ -57,7 +58,7 @@ ShellRoot {
   }
 
   // The older decoration whose template the shown shapes are ("none"
-  // without shapes; "" when they are no template, which no preset has).
+  // without shapes; "" when they are a preset's own shapes, no template).
   readonly property string legacyKind: {
     var shapes = JSON.stringify(view.effectiveLook.background.shapes.map(Layout.canonicalShape))
     for (var i = 0; i < Layout.DECORATIONS.length; i++) {
@@ -263,12 +264,13 @@ ShellRoot {
   function checkBackground() {
     var decoration = findNamed(view, "decoration")
     var shapes = view.effectiveLook.background.shapes
-    var decor = shellRoot.legacyKind
-    if (decor === "") return fail("the shapes are no older decoration: " + JSON.stringify(shapes))
+    // A template draws what its older decoration drew; a preset's own
+    // shapes (no template) have no older drawing to match.
+    var decor = shellRoot.legacyKind || "own shapes"
     if (decoration.visible !== (shapes.length > 0)) return fail("decoration " + decor + " visible: " + decoration.visible)
     var surfaces = decoration.surfaces
     if (shapes.length > 0 && surfaces.length === 0) return fail("decoration " + decor + " draws nothing")
-    checkOld(surfaces, decor)
+    if (shellRoot.legacyKind !== "") checkOld(surfaces, decor)
     checkUnder(decoration, surfaces)
     for (var s = 0; s < surfaces.length; s++) {
       var surface = surfaces[s]

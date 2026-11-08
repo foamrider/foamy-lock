@@ -159,9 +159,10 @@ function element(zone, style, order, hidden) {
   return { zone: zone, style: style, order: order, hidden: !!hidden }
 }
 
-// A preset's background; `decor` names its shapes' template (see template()).
-function background(source, blur, dim, decor) {
-  return { source: source, path: "", blur: blur, dim: dim, shapes: template(decor || "none") }
+// A preset's background; `shapes` names its shapes' template (see template())
+// or lists them.
+function background(source, blur, dim, shapes) {
+  return { source: source, path: "", blur: blur, dim: dim, shapes: Array.isArray(shapes) ? shapes : template(shapes || "none") }
 }
 
 // A solid colour background (`color`: a THEME_COLORS name or "#rrggbb").
@@ -205,7 +206,8 @@ function noWeather() {
 }
 
 // A preset from the elements it shows; everything not named is hidden in a
-// zone of its own. `shown` maps element names to [zone, style, order].
+// zone of its own. `shown` maps element names to [zone, style, order, keys]
+// (keys: the element's optional keys, such as scale).
 function compose(shown, back, glass) {
   var hiddenAt = { date: ["top-center", "long"], clock: ["top-center", "thin"], account: ["bottom-center", "avatar"],
     media: ["bottom-start", "card"], status: ["top-end", "text"], calendar: ["middle-end", "card"],
@@ -215,6 +217,7 @@ function compose(shown, back, glass) {
     var name = ELEMENTS[i]
     var spec = shown[name]
     elements[name] = spec ? element(spec[0], spec[1], spec[2] || 0) : element(hiddenAt[name][0], hiddenAt[name][1], 0, true)
+    if (spec && spec[3]) for (var key in spec[3]) elements[name][key] = spec[3][key]
   }
   var preset = { elements: elements, background: back }
   if (glass) preset.glass = glass
@@ -239,32 +242,18 @@ var PRESETS = {
     },
     background: background("omarchy", 0, 0.25)
   },
-  "corner": {
-    elements: {
-      date: element("bottom-start", "caps", 0),
-      clock: element("bottom-start", "bold", 1),
-      account: element("bottom-end", "chip", 0),
-      password: element("bottom-end", "underline", 1),
-      media: element("top-start", "line", 0),
-      status: element("top-end", "icons", 0),
-      calendar: noCalendar(),
-      weather: noWeather()
-    },
-    background: background("omarchy", 0, 0.3)
-  },
-  "editorial": {
-    elements: {
-      date: element("middle-start", "caps", 0),
-      clock: element("middle-start", "bold", 1),
-      account: element("middle-start", "chip", 2),
-      password: element("middle-start", "underline", 3),
-      media: element("bottom-start", "line", 0),
-      status: element("top-end", "text", 0),
-      calendar: noCalendar(),
-      weather: noWeather()
-    },
-    background: background("omarchy", 0, 0.45)
-  },
+  // Everything gathered in the two lower corners, the wallpaper left open:
+  // your chip and the field in one, a heavy stacked time under the date in
+  // the other (on a narrow screen the time sits above the field).
+  "corner": compose({ date: ["bottom-end", "caps"], clock: ["bottom-end", "stacked", 1],
+    account: ["bottom-start", "chip"], password: ["bottom-start", "underline", 1],
+    media: ["top-start", "line"], status: ["top-end", "icons"] }, background("omarchy", 0, 0.4)),
+  // A magazine page: a kicker, a serif headline time, the byline and an
+  // underline to sign on, inside a thin page rule; the music as a caption.
+  "editorial": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "serif", 1, { scale: 1.1 }],
+    account: ["middle-start", "name", 2], password: ["middle-start", "underline", 3],
+    media: ["bottom-start", "minimal"], status: ["top-end", "text"] },
+  background("omarchy", 0, 0.45, [{ kind: "frame", radius: 0, style: "line" }])),
   "zen": {
     elements: {
       date: element("top-center", "long", 0, true),
@@ -299,9 +288,9 @@ var PRESETS = {
   // Black bars top and bottom: the time in one, the field in the other.
   "cinema": compose({ clock: ["top-center", "small"], date: ["top-center", "caps", 1], password: ["bottom-center", "underline"] },
     background("omarchy", 0, 0.1, "cinema")),
-  // Huge hours over minutes.
+  // Huge hours over minutes in the accent, printed on the wallpaper.
   "poster": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "poster", 1], password: ["bottom-start", "underline"],
-    media: ["bottom-end", "line"], status: ["top-end", "text"] }, background("omarchy", 0, 0.35)),
+    media: ["bottom-end", "minimal"], status: ["top-end", "text"] }, background("omarchy", 0, 0.4)),
   "analog": compose({ clock: ["middle-center", "analog"], date: ["middle-center", "long", 1], password: ["middle-center", "pill", 2],
     media: ["bottom-start", "card"], status: ["top-end", "text"] }, background("omarchy", 0.2, 0.3)),
   "flip": compose({ clock: ["middle-center", "flip"], date: ["middle-center", "caps", 1], password: ["middle-center", "box", 2],
@@ -314,8 +303,9 @@ var PRESETS = {
     calendar: ["middle-end", "card"], media: ["bottom-start", "line"], status: ["top-end", "text"] },
   background("omarchy", 0, 0.3)),
   // A console login on black.
-  "terminal": compose({ date: ["top-start", "caps"], clock: ["top-start", "mono", 1], account: ["middle-start", "name"],
-    password: ["middle-start", "terminal", 1], status: ["top-end", "icons"] }, solid(BLACK, 0, 0)),
+  "terminal": compose({ date: ["middle-start", "iso"], clock: ["middle-start", "mono", 1], account: ["middle-start", "name", 2],
+    password: ["middle-start", "terminal", 3], media: ["bottom-start", "minimal"], status: ["top-end", "icons"] },
+  solid(BLACK, 0, 0)),
   // Accent edges and a glowing frame over a dark wallpaper.
   "neon": compose({ date: ["middle-center", "caps"], clock: ["middle-center", "outline", 1], password: ["middle-center", "box", 2],
     status: ["top-end", "icons"] }, background("omarchy", 0, 0.7, "frame"), { opacity: 1, tint: "accent" }),

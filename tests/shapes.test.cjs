@@ -113,15 +113,20 @@ test('the canonical form: key order, defaults out, sorted wraps, list order kept
   }
 })
 
-test('the presets are templates, and the others have none', () => {
+test('the presets are templates or their own shapes, and the others have none', () => {
   const decorated = {dock: 'strip', island: 'island', split: 'split', sheet: 'sheet', card: 'card', cinema: 'cinema',
     neon: 'frame', rain: 'card', dotmatrix: 'frame'}
+  // Their own: a thin page rule (editorial).
+  const own = {
+    editorial: [{kind: 'frame', radius: 0, style: 'line'}]
+  }
   for (const name of Object.keys(Layout.PRESETS)) {
     const look = Layout.preset(name)
     assert.ok(Array.isArray(look.background.shapes), name)
     assert.equal(look.background.decor, undefined, name)
     assert.equal(Layout.backgroundShapesError(look.background), '', name)
-    assert.deepEqual(look.background.shapes, decorated[name] ? Layout.template(decorated[name]) : [], name)
+    assert.deepEqual(look.background.shapes, own[name] || (decorated[name] ? Layout.template(decorated[name]) : []), name)
+    assert.deepEqual(look.background.shapes.map(Layout.canonicalShape), look.background.shapes, name)
   }
   assert.deepEqual(Layout.preset('foamy').background.shapes, [])
   assert.deepEqual(Layout.preset('field-only').background.shapes, [])
