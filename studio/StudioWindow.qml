@@ -802,17 +802,17 @@ FocusScope {
             onClicked: studio.requestReset()
           }
 
-          // How the last Apply or Preview went, else whether the lock has
-          // the look. Two lines at most; the full text is its name.
+          // How the last Apply or Preview went (until the next edit), else
+          // a warning while the lock screen doesn't have the changes, else
+          // nothing. Two lines at most; the full text is its name.
           Text {
             id: statusText
             objectName: "studioStatus"
-            readonly property string kind: studio.notice ? studio.notice.kind : studio.unapplied ? "info" : "ok"
+            readonly property string kind: studio.notice ? studio.notice.kind : studio.unapplied ? "warning" : "ok"
             Layout.fillWidth: true
             Layout.leftMargin: FoamyStyle.gap
             text: studio.notice ? studio.notice.text
-              : studio.session !== "ready" ? ""
-              : studio.unapplied ? FoamyI18n.t("studio.unapplied") : FoamyI18n.t("studio.matchesLock")
+              : studio.session === "ready" && studio.unapplied ? FoamyI18n.t("studio.unsaved") : ""
             horizontalAlignment: Text.AlignRight
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
@@ -822,7 +822,7 @@ FocusScope {
               : kind === "ok" && studio.notice ? FoamyPalette.success : FoamyPalette.mutedText
             font.family: FoamyStyle.fontFamily
             font.pixelSize: FoamyStyle.font.bodySmall
-            font.weight: studio.notice && kind !== "busy" ? Font.DemiBold : Font.Normal
+            font.weight: kind === "busy" ? Font.Normal : Font.DemiBold
             Accessible.role: kind === "error" || kind === "warning" ? Accessible.AlertMessage : Accessible.StaticText
             Accessible.name: text
           }

@@ -4,25 +4,24 @@ import QtQuick.Layouts
 import "kit"
 
 // The tips card, pinned to the bottom edge of the library pane (the module
-// list scrolls above it): one tip at a time, previous and next (wrapping),
-// and an action where a tip has one. The first tip is about the picture
-// and name the lock shows, which come from the account (AccountsService
-// and ~/.face, what Mugshot writes): "Open Mugshot" starts it, and without
-// Mugshot installed the tip says how to install it instead. The tip seen
-// last is kept in the app's state (LockSources.setTip), so the next start
-// shows it again.
+// list scrolls above it): one tip at a time, with small previous and next
+// buttons under it (wrapping). Tips are words only; nothing here starts
+// another app. The first tip is about the picture and name the lock screen
+// shows, which come from the account (AccountsService and ~/.face, what
+// Mugshot writes); without Mugshot installed it says how to install it.
+// The tip seen last is kept in the app's state (LockSources.setTip), so
+// the next start shows it again.
 //
 // Tips about features still to come (the keyboard layout in the status)
 // join the list with those features.
 Rectangle {
   id: tips
 
-  // LockSources: tip, setTip(), mugshotAvailable, openMugshot().
+  // LockSources: tip, setTip(), mugshotAvailable.
   property var sources: null
   readonly property var ids: ["mugshot", "library", "drag", "keys", "look", "presets", "preview", "shortcuts"]
   readonly property string current: sources && ids.indexOf(sources.tip) !== -1 ? sources.tip : ids[0]
   readonly property int index: Math.max(0, ids.indexOf(current))
-  readonly property bool mugshotShown: current === "mugshot" && sources !== null && sources.mugshotAvailable
   readonly property string text: tipText(current)
 
   implicitHeight: column.implicitHeight + 2 * FoamyStyle.gapLarge
@@ -40,6 +39,43 @@ Rectangle {
   function go(step) {
     var count = ids.length
     if (sources) sources.setTip(ids[((index + step) % count + count) % count])
+  }
+
+  // A small ghost button: no surface until hovered, an accent ring with
+  // the keyboard; Enter or Space presses it.
+  component GhostButton: Rectangle {
+    id: ghost
+    property string icon: ""
+    property string name: ""
+    signal clicked()
+    implicitWidth: FoamyStyle.actionSize
+    implicitHeight: FoamyStyle.actionSize
+    radius: FoamyStyle.radiusSmall
+    color: ghostMouse.pressed ? FoamyPalette.selectedFill : ghostMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+    border.width: activeFocus ? 2 : 0
+    border.color: FoamyPalette.accent
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: name
+    Accessible.onPressAction: ghost.clicked()
+    Keys.onReturnPressed: ghost.clicked()
+    Keys.onEnterPressed: ghost.clicked()
+    Keys.onSpacePressed: ghost.clicked()
+    FoamyIcon {
+      id: ghostIcon
+      anchors.centerIn: parent
+      width: FoamyStyle.iconSize
+      height: width
+      name: ghost.icon
+      color: ghostMouse.containsMouse || ghost.activeFocus ? FoamyPalette.text : FoamyPalette.secondaryText
+    }
+    MouseArea {
+      id: ghostMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: ghost.clicked()
+    }
   }
 
   // The hairline between it and the list.
@@ -89,22 +125,6 @@ Rectangle {
         font.family: FoamyStyle.fontFamily
         font.pixelSize: FoamyStyle.font.caption
       }
-      IconButton {
-        objectName: "studioTipPrevious"
-        implicitWidth: FoamyStyle.actionSize
-        implicitHeight: FoamyStyle.actionSize
-        icon: "chevron-left"
-        name: FoamyI18n.t("studio.tip.previous")
-        onClicked: tips.go(-1)
-      }
-      IconButton {
-        objectName: "studioTipNext"
-        implicitWidth: FoamyStyle.actionSize
-        implicitHeight: FoamyStyle.actionSize
-        icon: "chevron-right"
-        name: FoamyI18n.t("studio.tip.next")
-        onClicked: tips.go(1)
-      }
     }
 
     // Every tip is laid out, the others transparent, so the card keeps the
@@ -135,19 +155,22 @@ Rectangle {
       }
     }
 
-    FoamyButton {
-      objectName: "studioTipAction"
-      visible: tips.mugshotShown
-      focusable: true
-      iconName: "external-link"
-      text: FoamyI18n.t("studio.tip.mugshotOpen")
-      onClicked: tips.sources.openMugshot()
-    }
-    PaneNote {
-      visible: tips.mugshotShown && tips.sources.mugshotFailed
-      text: FoamyI18n.t("studio.tip.mugshotFailed")
-      color: FoamyPalette.onSurface(FoamyPalette.error)
-      Accessible.role: Accessible.AlertMessage
+    // Previous and next, under the tip.
+    Row {
+      id: paging
+      spacing: FoamyStyle.gapSmall
+      GhostButton {
+        objectName: "studioTipPrevious"
+        icon: "chevron-left"
+        name: FoamyI18n.t("studio.tip.previous")
+        onClicked: tips.go(-1)
+      }
+      GhostButton {
+        objectName: "studioTipNext"
+        icon: "chevron-right"
+        name: FoamyI18n.t("studio.tip.next")
+        onClicked: tips.go(1)
+      }
     }
   }
 }

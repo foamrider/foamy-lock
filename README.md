@@ -302,10 +302,10 @@ Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
 ## Lock Studio
 
 Lock Studio is a desktop app for designing the lock screen: pick a preset, drag
-the elements around a live copy of the lock, and adjust each one (style, size,
+the elements around a live copy of the lock screen, and adjust each one (style, size,
 opacity, glass, position, which screens show it), the background and the glass.
-It runs the lock's own drawing code in its own window, so what you see is what the
-lock shows, and it saves through the lock (`saveLook`), never by writing
+It runs the lock screen's own drawing code in its own window, so what you see is what
+the lock screen shows, and it saves through Foamy Lock (`saveLook`), never by writing
 `shell.json` itself.
 
 Add it to the app launcher once:
@@ -322,10 +322,10 @@ front. `studio uninstall` removes the launcher entry.
 zone, to the screen's centre lines, to the other elements' edges and to a grid. The
 library on the left lists every element: drag a hidden one onto the canvas to show
 it, or drag one from the canvas back to the library to hide it. The preset is the
-library's first row. Click beside the lock image (or press Esc) to edit the look as
+library's first row. Click beside the lock screen image (or press Esc) to edit the look as
 a whole: background, glass and dim. Everything the pointer does, the keyboard does
 too. The screen menu lists each connected screen with its native size and scale
-(the canvas lays it out at its logical size, as the lock does) and two reference
+(the canvas lays it out at its logical size, as the lock screen does) and two reference
 sizes (1280 × 720, 1920 × 1080); a problem on a connected screen (an
 element off screen, two elements overlapping, the password field covered or too
 high) is listed under the canvas and stops Apply, one only at a reference size is
@@ -351,24 +351,25 @@ a warning.
 - **Your draft** (the look and its undo steps) is kept in
   `~/.local/state/foamy-lock/studio-draft.json` a moment after each edit, so closing
   the app or a crash loses nothing. When you open the app with a draft the lock
-  doesn't have, it asks: **Continue editing**, or **Start from saved** (which deletes
+  screen doesn't have, it asks: **Continue editing**, or **Start from saved** (which deletes
   the draft).
-- **Apply to lock** saves the look through the running lock. The header says how it
-  went: applied, refused (with the lock's reason), the screen is locked, the shell
+- **Apply to lock screen** saves the look through the running Foamy Lock. The header
+  says how it went: applied, refused (with the reason), the screen is locked, the shell
   isn't running or didn't answer (it is asked once more; if it still doesn't
   answer, the look may or may not be saved). Anything but a save keeps the draft.
+  While the lock screen doesn't have your changes, the header says **Unsaved changes**.
 - **Reset** goes back to the last saved look, or to the preset without your changes;
   either can be undone.
-- **Preview full screen** shows the look on the lock's own preview overlay without
+- **Preview full screen** shows the look on the lock screen's own preview overlay without
   saving; click or press any key to close it.
-- **Quitting** with changes the lock doesn't have asks: **Apply and quit**,
+- **Quitting** with changes the lock screen doesn't have asks: **Apply and quit**,
   **Discard** (deletes the draft) or **Cancel**.
 
 **Privacy.** The canvas uses a sample account and a sample track, never your name,
 avatar or what is playing. The clock, network and battery are real. The full-screen
-preview is the lock's own and shows your real account and media. Your picture and
-name on the lock come from your account; the first tip in the app opens Mugshot to
-set them. The app remembers the last tip you saw in
+preview is the lock screen's own and shows your real account and media. Your picture
+and name on the lock screen come from your account; the first tip in the app says to
+set them with Mugshot (and how to install it). The app remembers the last tip you saw in
 `~/.local/state/foamy-lock/studio-state.json`.
 
 Screenshots of the app will follow.

@@ -37,8 +37,9 @@ import "Draft.js" as Draft
 //   5504 × 2304 for a 3440 × 1440 screen at 125 %. Outside Hyprland there is
 //   none, and the window shows the logical size.
 // - **Mugshot** (`/usr/bin/mugshot`, which sets the account's picture and
-//   real name that the lock shows): whether it is installed (checked when
-//   the window shows), and openMugshot() starts it detached.
+//   real name that the lock screen shows): whether it is installed (checked
+//   when the window shows), so the tip can say how to install it. The app
+//   never starts it: tips launch nothing.
 // - **The app's own state** (`$XDG_STATE_HOME/foamy-lock/studio-state.json`,
 //   written atomically here; never in the plugin folder): the last tip seen.
 //
@@ -158,7 +159,6 @@ Item {
   property bool mugshotAvailable: false
   // Set when the check is asked for, cleared when it answers.
   property bool mugshotChecking: false
-  property bool mugshotFailed: false
 
   // The app's state: the last tip seen ("" until read, or without one).
   readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || home + "/.local/state"
@@ -197,19 +197,6 @@ Item {
     if (mugshotChecking) return
     mugshotChecking = true
     mugshotProbe.running = true
-  }
-
-  // Started on its own, outside this app's process group.
-  function openMugshot() {
-    if (!mugshotAvailable) return false
-    mugshotFailed = false
-    try {
-      Quickshell.execDetached([mugshotPath])
-    } catch (error) {
-      mugshotFailed = true
-      return false
-    }
-    return true
   }
 
   // The last tip seen, kept for the next start.

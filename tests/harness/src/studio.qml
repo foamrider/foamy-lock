@@ -1278,7 +1278,11 @@ Item {
         var height = tips.height
         find(tips, "studioTipNext").clicked()
         expect(tips.current === "library" && find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.library"), "next: " + tips.current)
-        expect(tips.height === height || !tips.mugshotShown, "the card keeps its height")
+        expect(tips.height === height, "the card keeps its height")
+        // Previous and next sit under the tip, small and without a surface.
+        var previous = find(tips, "studioTipPrevious"), text = find(tips, "studioTipText")
+        expect(previous.mapToItem(null, 0, 0).y >= text.mapToItem(null, 0, text.height).y && previous.height === FoamyStyle.actionSize
+          && previous.color.a === 0, "ghost buttons under the text")
         find(tips, "studioTipPrevious").clicked()
         find(tips, "studioTipPrevious").clicked()
         expect(tips.current === tips.ids[tips.ids.length - 1], "previous wraps to the last: " + tips.current)
@@ -1309,9 +1313,8 @@ Item {
           sources.mugshotPath = test.out + "/no-such-mugshot"
           sources.checkMugshot()
           waitFor(function() { return !sources.mugshotChecking }, "the check", function() {
-            expect(!sources.mugshotAvailable && !find(tips, "studioTipAction").visible, "no Mugshot: no button")
+            expect(!sources.mugshotAvailable && find(tips, "studioTipAction") === null && sources.openMugshot === undefined, "no button, nothing to start")
             expect(find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.mugshotMissing"), "the tip says how to install it")
-            expect(!sources.openMugshot(), "nothing to open")
             shellLine.line = "mkdir -p \"$1\" && printf '%s\\n' '#!/bin/bash' 'echo ran > \"$0.ran\"' > \"$2\" && chmod 755 \"$2\""
             shellLine.command = ["bash", "-c", shellLine.line, "fake-mugshot", test.out + "/bin", fakeMugshot]
             shellLine.running = true
@@ -1319,19 +1322,11 @@ Item {
               sources.mugshotPath = fakeMugshot
               sources.checkMugshot()
               waitFor(function() { return !sources.mugshotChecking }, "the check", function() {
-                var action = find(tips, "studioTipAction")
-                expect(sources.mugshotAvailable && action.visible && action.text === FoamyI18n.t("studio.tip.mugshotOpen"), "Mugshot: the button shows")
-                expect(find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.mugshot"), "the tip")
-                action.clicked()
-                waitFor(function() { return readFile(fakeMugshot + ".ran").indexOf("ran") !== -1 }, "Mugshot started", function() {
-                  expect(!sources.mugshotFailed, "started")
-                  // Another tip has no button.
-                  find(tips, "studioTipNext").clicked()
-                  expect(!find(tips, "studioTipAction").visible, "only the Mugshot tip has it")
-                  sources.mugshotPath = test.out + "/no-such-mugshot"
-                  sources.checkMugshot()
-                  waitFor(function() { return !sources.mugshotChecking }, "the check", next)
-                })
+                expect(sources.mugshotAvailable && find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.mugshot"), "installed: the tip names it")
+                expect(find(tips, "studioTipAction") === null && readFile(fakeMugshot + ".ran") === "", "words only: nothing to press, nothing started")
+                sources.mugshotPath = test.out + "/no-such-mugshot"
+                sources.checkMugshot()
+                waitFor(function() { return !sources.mugshotChecking }, "the check", next)
               })
             })
           })
@@ -1358,11 +1353,11 @@ Item {
         expect(Draft.same(studio.savedDraft, { preset: "foamy" }), "saved look " + json(studio.savedDraft))
         expect(studio.session === "ready" && !studio.unapplied && !studio.canApply, "no changes: nothing to apply")
         var status = find(studio, "studioStatus")
-        expect(status && status.text === FoamyI18n.t("studio.matchesLock"), "status: " + (status ? status.text : "none"))
+        expect(status && status.text === "", "nothing to say while the lock screen has the look: " + (status ? status.text : "none"))
         // The canvas moves only while the window can be seen and has the keyboard.
         expect(view.displayAwake === (studio.awake && studio.Window.active), "displayAwake follows the window")
         studio.commit({ preset: "zen" })
-        expect(studio.unapplied && status.text === FoamyI18n.t("studio.unapplied"), "an edit is not applied: " + status.text)
+        expect(studio.unapplied && status.text === FoamyI18n.t("studio.unsaved") && status.kind === "warning", "an edit warns: " + status.text + " " + status.kind)
         waitFor(function() { return studio.sources.draftIdle && readFile(test.draftPath).indexOf('"zen"') !== -1 },
           "the draft written after an edit", next, 5000)
       } },
