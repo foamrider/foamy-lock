@@ -7,11 +7,65 @@
 //!
 //! # Contract
 //!
-//! - **argv**: `foamy-lock-helper artwork` (below) or `foamy-lock-helper
-//!   wallpaper <link>` (see `wallpaper`). Anything else replies
-//!   `invalid-request`. `foamy-lock-helper studio …` is Lock
-//!   Studio's, with its own contract and replies (see `studio`); it never
-//!   runs the image sandbox.
+//! - **argv**: `foamy-lock-helper artwork` (below), `foamy-lock-helper
+//!   wallpaper <link>` (see `wallpaper`), `foamy-lock-helper video-probe`
+//!   or `foamy-lock-helper video-convert` (video wallpapers, below).
+//!   Anything else replies `invalid-request`. `foamy-lock-helper studio …`
+//!   is Lock Studio's, with its own contract and replies (see `studio`); it
+//!   never runs the image sandbox.
+//! - **video-probe** and **video-convert** (see `video`): stdin one line
+//!   `{"path": "/absolute/video", "width": W, "height": H}`, W x H the
+//!   largest screen's native size (16 to 7680 by 16 to 4320, else
+//!   `invalid-size`; then the path as for a background, else
+//!   `invalid-video-path`). The output size is W x H scaled down to fit
+//!   3840x2160, both sides even. The file (symlinks followed, any owner) is
+//!   opened once and only that descriptor is used: hashed (SHA-256) here
+//!   and handed to the sandbox as fd 0. Nothing outside the sandbox reads
+//!   more of it than its first bytes (MP4/MOV `ftyp` or an old QuickTime
+//!   atom, Matroska/WebM's EBML magic; else `unsupported-format`). A file
+//!   over 2 GiB is reported from its size alone.
+//!   - **video-probe** replies one line: `{"ok": true, "bytes",
+//!     "container" ("mp4", "mov", "mkv", "webm"), "codec", "width",
+//!     "height", "fps", "duration" (seconds or null), "violations" (any of
+//!     `input-too-large`, `unsupported-codec`, `input-too-wide`), "output":
+//!     {"width", "height", "fps", "seconds", "frames", "cut"}, "threads",
+//!     "estimate" (seconds), "poster" (the first frame at the output size,
+//!     `<cache>/video/<sha256 of the PNG>.png`, or null), "clip" and
+//!     "clipBytes" (the clip already made for this content and output
+//!     size, or null)}`. The facts and output are null when the size stops
+//!     it before ffprobe; with any violation there is no poster or clip.
+//!     60 s in all.
+//!   - **video-convert** writes `{"progress": {"frames": n, "total": t}}`
+//!     lines (frames stage A handed to stage B, at most every 200 ms), then
+//!     `{"ok": true, "clip": "<cache>/video/<sha256 of the input>-<W>x<H>.mp4",
+//!     "bytes", "frames", "output"}` (at once when that clip exists). One
+//!     conversion at a time (`busy`); a violation fails with its own code.
+//!     SIGTERM stops both stages and replies `cancelled`; 10 minutes in all
+//!     (`job-timeout`). A failure leaves nothing behind: `decode-failed`
+//!     (ffprobe or stage A did not exit 0), `invalid-frames` (no frame, a
+//!     partial one, or more than 60 s of them), `encode-failed`,
+//!     `output-too-large` (over 150 MiB), `source-changed` (the file
+//!     changed while it was read).
+//!   - Other codes: `video-missing`, `not-regular-file`,
+//!     `decoder-unavailable` (no bwrap, ffmpeg or ffprobe),
+//!     `sandbox-architecture-unsupported`, `decode-timeout`,
+//!     `invalid-pixels`, `unsafe-cache`, `cache-busy`, `cancelled`,
+//!     `job-timeout`, `parent-watch-failed`, `source-unavailable`,
+//!     `helper-failed`. Exit status 0; stderr nothing.
+//!   - **Cache**: `$XDG_CACHE_HOME/omarchy/foamy.lock/video/` (0700, this
+//!     user's, else `unsafe-cache`): at most 3 clips (the oldest by mtime
+//!     evicted, never the new one; a probe that finds one touches it) and 6
+//!     posters, each 0600; `.convert` (held for a whole conversion) and
+//!     `.lock` (held while publishing; waited for 2 s, else `cache-busy`).
+//!     Jobs stage in `.job-XXXXXXXX` (reclaimed by the next conversion) or
+//!     `.probe-XXXXXXXX` (after a minute).
+//!   - **Sandbox**: ffprobe and ffmpeg in the image decoder's bubblewrap
+//!     (without the input bind and ImageMagick's policy, with
+//!     `GLIBC_TUNABLES=glibc.malloc.arena_max=1`) behind the kit's threaded
+//!     decoder filter, one memfd per stage; `nice 19` and idle I/O, no core
+//!     dumps, 64 fds, no files written, CPU seconds for the deadline;
+//!     `min(cores - 2, 16)` threads. `video` has the command lines and the
+//!     address-space formulas.
 //! - **wallpaper**: `<link>` is an absolute path, normally
 //!   `~/.local/state/omarchy/current/background`. It is resolved like
 //!   `readlink -f` and must end at a regular file. No stdin, environment or
@@ -157,6 +211,7 @@ mod image;
 mod store;
 mod studio;
 mod url;
+mod video;
 mod wallpaper;
 
 #[cfg(test)]
@@ -296,13 +351,37 @@ pub fn signals_unblocked<T>(f: impl FnOnce() -> T) -> T {
     result
 }
 
+/// How the cancel thread ends a job.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    /// Replies at once and exits; the decoder dies with the helper.
+    Hard,
+    /// SIGTERM asks the job to stop its children and reply `cancelled`
+    /// itself (`video::CANCEL`); after `SOFT_GRACE` it is stopped hard.
+    Soft,
+}
+
+const SOFT_GRACE: Duration = Duration::from_secs(3);
+
 /// The cancel thread: SIGTERM is `cancelled`, SIGALRM or the job deadline
 /// `job-timeout`.
-fn watch(started: Instant, wake: OwnedFd) {
+fn watch(started: Instant, deadline: Duration, stop: Stop, wake: OwnedFd) {
     mask(libc::SIG_UNBLOCK);
+    let mut cancelling: Option<Instant> = None;
     loop {
-        let left = (started + JOB_DEADLINE).saturating_duration_since(Instant::now());
-        if left.is_zero() {
+        let mut until = started + deadline;
+        if let Some(asked) = cancelling {
+            if state().done {
+                return;
+            }
+            until = until.min(asked + SOFT_GRACE);
+            if Instant::now() >= asked + SOFT_GRACE {
+                cancel("cancelled");
+                return;
+            }
+        }
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() && cancelling.is_none() {
             cancel("job-timeout");
             return;
         }
@@ -311,7 +390,7 @@ fn watch(started: Instant, wake: OwnedFd) {
             events: libc::POLLIN,
             revents: 0,
         };
-        let milliseconds = left.as_millis().clamp(1, i32::MAX as u128) as libc::c_int;
+        let milliseconds = left.as_millis().clamp(1, 100) as libc::c_int;
         // SAFETY: poll(2) on one valid pollfd.
         if unsafe { libc::poll(&mut poll, 1, milliseconds) } <= 0 {
             continue; // timeout or EINTR: the loop checks the deadline
@@ -319,8 +398,12 @@ fn watch(started: Instant, wake: OwnedFd) {
         let mut byte = [0u8; 1];
         // SAFETY: read(2) of one byte into a local buffer from our pipe.
         if unsafe { libc::read(wake.as_raw_fd(), byte.as_mut_ptr().cast(), 1) } == 1 {
-            match byte[0] as libc::c_int {
-                libc::SIGTERM => cancel("cancelled"),
+            match (byte[0] as libc::c_int, stop) {
+                (libc::SIGTERM, Stop::Soft) => {
+                    video::CANCEL.store(true, Ordering::Relaxed);
+                    cancelling.get_or_insert_with(Instant::now);
+                }
+                (libc::SIGTERM, Stop::Hard) => cancel("cancelled"),
                 _ => cancel("job-timeout"),
             }
         }
@@ -394,11 +477,16 @@ fn read_request() -> Result<Value, Fail> {
     serde_json::from_slice(&line).map_err(|_| Fail("source-unavailable"))
 }
 
+/// The request object on stdin.
+fn request_object() -> Result<serde_json::Map<String, Value>, Fail> {
+    match read_request()? {
+        Value::Object(request) => Ok(request),
+        _ => Err(Fail("invalid-request")),
+    }
+}
+
 fn job() -> Result<Value, Fail> {
-    let request = read_request()?;
-    let Value::Object(request) = request else {
-        return Err(Fail("invalid-request"));
-    };
+    let request = request_object()?;
     match request.get("kind").and_then(Value::as_str) {
         Some("avatar") => store::prepare_avatar(&request),
         Some("background") => store::prepare_background(&request),
@@ -406,7 +494,13 @@ fn job() -> Result<Value, Fail> {
     }
 }
 
-fn artwork() -> Value {
+/// Runs `job` under the cancel thread (`deadline`, `stop`), dying with
+/// the parent; its reply, or the failure as one.
+fn supervised(
+    deadline: Duration,
+    stop: Stop,
+    job: impl FnOnce(Instant) -> Result<Value, Fail>,
+) -> Value {
     let started = Instant::now();
     cloexec_inherited();
     let Some(wake) = install_signals() else {
@@ -420,10 +514,10 @@ fn artwork() -> Value {
     {
         return failure("parent-watch-failed");
     }
-    thread::spawn(move || watch(started, wake));
+    thread::spawn(move || watch(started, deadline, stop, wake));
     let result = match parent {
         Some(pid) if rustix::process::getppid() == Some(pid) && pid.as_raw_nonzero().get() != 1 => {
-            job()
+            job(started)
         }
         _ => Err(Fail("cancelled")),
     };
@@ -434,6 +528,26 @@ fn artwork() -> Value {
     }
 }
 
+fn artwork() -> Value {
+    supervised(JOB_DEADLINE, Stop::Hard, |_| job())
+}
+
+/// `video-probe`: hashing, ffprobe and the poster within a minute.
+fn video_probe() -> Value {
+    supervised(video::PROBE_DEADLINE, Stop::Hard, |_| {
+        video::probe(&request_object()?)
+    })
+}
+
+/// `video-convert`: the stages have the 10 minutes (less what came
+/// before); the cancel thread stops the helper 10 s after that.
+fn video_convert() -> Value {
+    supervised(
+        video::CONVERT_DEADLINE + Duration::from_secs(10),
+        Stop::Soft,
+        |started| video::convert(&request_object()?, started),
+    )
+}
 fn main() -> ExitCode {
     // Lock Studio: its own replies (`json::error_reply`) and no sandbox.
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -446,6 +560,8 @@ fn main() -> ExitCode {
             match (args.first().and_then(|a| a.to_str()), args.len()) {
                 (Some("artwork"), 1) => Ok(artwork()),
                 (Some("wallpaper"), 2) => Ok(wallpaper::probe(&args[1])),
+                (Some("video-probe"), 1) => Ok(video_probe()),
+                (Some("video-convert"), 1) => Ok(video_convert()),
                 _ => Ok(failure("invalid-request")),
             }
         },

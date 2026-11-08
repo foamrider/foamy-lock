@@ -51,7 +51,7 @@ fn pathlib(text: &[u8]) -> PathBuf {
 /// `$XDG_CACHE_HOME/omarchy/foamy.lock`, or `$HOME/.cache/…` when
 /// `XDG_CACHE_HOME` is unset or empty (Python's `Path.home()`: `HOME`, else
 /// the passwd entry).
-fn lock_cache() -> PathBuf {
+pub(crate) fn lock_cache() -> PathBuf {
     let base = match std::env::var_os("XDG_CACHE_HOME").filter(|v| !v.is_empty()) {
         Some(base) => base.into_vec(),
         None => {
@@ -94,7 +94,7 @@ fn make_dirs(path: &Path, mode: u32) -> io::Result<()> {
 /// The cache directory after `make_dirs`: a real directory (not a
 /// symlink), owned by this user, and for artwork without group or other
 /// access.
-fn checked_dir(path: &Path, private: bool) -> Result<(), Fail> {
+pub(crate) fn checked_dir(path: &Path, private: bool) -> Result<(), Fail> {
     make_dirs(path, 0o700)?;
     let meta = fs::symlink_metadata(path)?;
     if !meta.file_type().is_dir()
@@ -140,7 +140,7 @@ pub struct Staging {
 }
 
 impl Staging {
-    fn create(parent: &Path, prefix: &str) -> Result<Staging, Fail> {
+    pub(crate) fn create(parent: &Path, prefix: &str) -> Result<Staging, Fail> {
         let parent = absolute(parent)?;
         let mut guard = state();
         for _ in 0..1000 {
@@ -179,7 +179,7 @@ impl Staging {
 
     /// Writes `data` as `name` in the job directory and renames it to
     /// `target` (`os.replace`).
-    fn publish(&self, name: &str, data: &[u8], target: &Path) -> Result<(), Fail> {
+    pub(crate) fn publish(&self, name: &str, data: &[u8], target: &Path) -> Result<(), Fail> {
         let staged = self.write(name, data)?;
         let _guard = state();
         fs::rename(&staged, target)?;
@@ -188,7 +188,7 @@ impl Staging {
 
     /// Removes the job directory; an error is the job's error (as Python's
     /// `TemporaryDirectory` cleanup).
-    fn finish(mut self) -> Result<(), Fail> {
+    pub(crate) fn finish(mut self) -> Result<(), Fail> {
         let path = self.path.take().expect("staging directory in use");
         let mut guard = state();
         guard.staging = None;
@@ -207,7 +207,7 @@ impl Drop for Staging {
     }
 }
 
-fn matches_staging(name: &OsStr, prefix: &str) -> bool {
+pub(crate) fn matches_staging(name: &OsStr, prefix: &str) -> bool {
     let name = name.as_bytes();
     name.len() == prefix.len() + 8
         && name.starts_with(prefix.as_bytes())
@@ -414,7 +414,7 @@ fn reclaim_jobs(cache: &Path) -> Result<(), Fail> {
     Ok(())
 }
 
-fn prune(cache: &Path, keep: usize) -> Result<(), Fail> {
+pub(crate) fn prune(cache: &Path, keep: usize) -> Result<(), Fail> {
     let mut entries = Vec::new();
     for entry in fs::read_dir(cache)? {
         let entry = entry?;
