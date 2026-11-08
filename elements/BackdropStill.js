@@ -588,3 +588,49 @@ function firefliesPoints(ctx, s) {
 }
 
 animation("fireflies", 16, fireflies, firefliesPoints)
+
+// ---- gradient (gradient.frag) -----------------------------------------------
+
+var gradient = {
+  fraction: 0.15,
+  prepare: function(s) {
+    var aspect = s.w / Math.max(s.h, 1)
+    var turn = s.turn
+    var heights = heightsWith(28, [])
+    var colors = [s.accent, s.cyan, s.green, mix3(s.base, [0, 0, 0], mix(0, 0.45, s.glow))]
+    var strength = mix(0.3, 0.4, s.glow)
+    var ax = 0.8 * Math.cos(turn), ay = 0.8 * Math.sin(turn)
+    var homes = [], k = [0, 0, 0, 0]
+    for (var i = 0; i < 4; i++) {
+      homes.push([(0.2 + 0.2 * i + 0.1 * Math.floor(i / 2)) * aspect + 0.32 * aspect * Math.sin(turn * (i === 1 ? 2 : 1) + i * 1.7),
+        (i % 2 === 0 ? 0.3 : 0.72) + 0.26 * Math.cos(turn * (i === 2 ? 2 : 1) + i * 2.3)])
+    }
+    var ux = 0
+    return {
+      column: function(x) { ux = x; return heights },
+      shade: function(uy, out) {
+        var px = ux * aspect, py = uy
+        var wx = 0.22 * (noise2(px * 1.4 + ax, py * 1.4 + ay, 501) - 0.5)
+        var wy = 0.22 * (noise2(px * 1.4 - ax + 7, py * 1.4 - ay + 7, 502) - 0.5)
+        px += wx; py += wy
+        out[0] = s.base[0]; out[1] = s.base[1]; out[2] = s.base[2]
+        for (var i = 0; i < 4; i++) {
+          var dx = px - homes[i][0], dy = py - homes[i][1]
+          var w = Math.exp(-(dx * dx + dy * dy) / (i === 3 ? 0.3 : 0.14)) * (i === 3 ? 0.8 : strength)
+          var c = colors[i]
+          out[0] = mix(out[0], c[0], w); out[1] = mix(out[1], c[1], w); out[2] = mix(out[2], c[2], w)
+        }
+        var lift = 0.2126 * (out[0] - s.base[0]) + 0.7152 * (out[1] - s.base[1]) + 0.0722 * (out[2] - s.base[2])
+        if (Math.abs(lift) > 0.001) {
+          var keep = 0.22 * (1 - Math.exp(-Math.abs(lift) / 0.22)) / Math.abs(lift)
+          out[0] = mix(s.base[0], out[0], keep); out[1] = mix(s.base[1], out[1], keep); out[2] = mix(s.base[2], out[2], keep)
+        }
+        var vx = ux - 0.5, vy = uy - 0.5
+        var v = mix(1, 1 - 0.5 * (vx * vx + vy * vy), s.glow)
+        out[0] *= v; out[1] *= v; out[2] *= v
+      }
+    }
+  }
+}
+
+animation("gradient", 30, gradient, null)
