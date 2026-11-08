@@ -5,6 +5,7 @@ import qs.Commons as Commons
 import "kit"
 import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
+import "Draft.js" as Draft
 
 // What the canvas needs from outside the app, got the way the lock gets it:
 //
@@ -24,6 +25,20 @@ import "Model.js" as Model
 //   background is never evicted). Until it is ready the theme colour shows.
 // - **Choosing a picture**: `foamy-lock-helper studio pick-picture` (the
 //   desktop's file chooser through the portal); picked(path) on a choice.
+// - **The saved look**: the same foamy.lock entry (`configEntry`), read the
+//   way the lock reads it (Draft.savedEntry).
+//
+// And what goes out, all through the helper's `studio` subcommands
+// (native/src/studio), one process per action, the replies turned into
+// reports by Draft.js:
+// - **The draft on disk**: loadDraft(), saveDraft(history), clearDraft(),
+//   run one at a time in order (a newer save or clear replaces one still
+//   waiting); draftDone(op, report or error code).
+// - **Apply**: applyLook(entry) runs `studio apply` (saveLook through
+//   omarchy-shell, one retry when it doesn't answer); applied(report, entry).
+// - **Preview full screen**: previewLook(entry) runs the lock's
+//   `foamy.lock previewLook` through omarchy-shell itself (the helper has no
+//   subcommand for it); previewed(report).
 Item {
   id: sources
 
@@ -52,6 +67,23 @@ Item {
   // The lock's settings (Model.defaults() until shell.json says otherwise).
   property var settings: Model.defaults()
   property string settingsError: ""
+  // The foamy.lock entry (null without one), and whether shell.json has
+  // been read (or found missing) at least once.
+  property var configEntry: null
+  property bool configKnown: false
+
+  // The draft on disk, Apply and Preview.
+  // Set when a process is asked to start, cleared when it exits (a
+  // Process reports `running` only once it has started).
+  property bool applying: false
+  property bool previewing: false
+  property bool draftRunning: false
+  // Nothing waiting or running on the draft file.
+  readonly property bool draftIdle: !draftRunning && draftQueue.length === 0
+  property var draftQueue: []
+  signal draftDone(string op, var result)
+  signal applied(var report, var entry)
+  signal previewed(var report)
 
   // The prepared picture, the source path it was made from, and why not.
   property string picturePath: ""
@@ -198,6 +230,121 @@ Item {
     }
   }
 
+  // --- the draft on disk ------------------------------------------------------
+
+  function loadDraft() { queueDraft({ op: "draft-load", request: "" }) }
+  function saveDraft(h) { queueDraft({ op: "draft-save", request: JSON.stringify(Draft.diskDraft(h)) }) }
+  function clearDraft() { queueDraft({ op: "draft-clear", request: "" }) }
+
+  function queueDraft(job) {
+    var queue = draftQueue.slice()
+    var last = queue.length > 0 ? queue[queue.length - 1] : null
+    // A newer save or clear makes one still waiting pointless.
+    if (last && last.op !== "draft-load" && job.op !== "draft-load") queue.pop()
+    queue.push(job)
+    draftQueue = queue
+    runDraft()
+  }
+
+  function runDraft() {
+    if (draftRunning || draftQueue.length === 0) return
+    var job = draftQueue[0]
+    draftQueue = draftQueue.slice(1)
+    draftProc.op = job.op
+    draftProc.request = job.request
+    draftProc.stdinEnabled = job.request !== ""
+    draftRunning = true
+    draftProc.running = true
+  }
+
+  // The helper's answer to `op` (also a test hook): a Draft.loadReport for
+  // draft-load, else Draft.draftError's code ("" when done).
+  function applyDraft(op, exitCode, text) {
+    draftDone(op, op === "draft-load" ? Draft.loadReport(exitCode, text) : Draft.draftError(exitCode, text))
+  }
+
+  // --- Apply and Preview ------------------------------------------------------
+
+  function applyLook(entry) {
+    if (applying) return false
+    applyProc.entry = Draft.ordered(entry)
+    applyProc.request = JSON.stringify(applyProc.entry)
+    applyProc.stdinEnabled = true
+    applying = true
+    applyProc.running = true
+    return true
+  }
+
+  // The helper's answer (also a test hook).
+  function applyApply(exitCode, text, entry) {
+    applied(Draft.applyReport(exitCode, text), entry)
+  }
+
+  function previewLook(entry) {
+    if (previewing) return false
+    previewProc.look = JSON.stringify(Draft.ordered(entry))
+    previewing = true
+    previewProc.running = true
+    return true
+  }
+
+  // omarchy-shell's answer (also a test hook).
+  function applyPreview(exitCode, stdout, stderr) {
+    previewed(Draft.previewReport(exitCode, stdout, stderr))
+  }
+
+  Process {
+    id: draftProc
+    property string op: ""
+    property string request: ""
+    command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", op]))
+    onStarted: {
+      if (request === "") return
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: draftOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.draftRunning = false
+      sources.applyDraft(draftProc.op, exitCode, draftOutput.text)
+      sources.runDraft()
+    }
+  }
+
+  // `studio apply` waits up to 6 s for each of at most two calls, a second
+  // apart.
+  Process {
+    id: applyProc
+    property var entry: null
+    property string request: ""
+    command: ["timeout", "--kill-after=1s", "20s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "apply"]))
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: applyOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.applying = false
+      sources.applyApply(exitCode, applyOutput.text, applyProc.entry)
+    }
+  }
+
+  // omarchy-shell from PATH, else Omarchy's own (where the helper looks
+  // too), with OMARCHY_PATH set when it isn't. A missing one exits 127.
+  Process {
+    id: previewProc
+    property string look: ""
+    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c",
+      'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock previewLook "$1"',
+      "foamy-lock-studio-preview", look]
+    stdout: StdioCollector { id: previewOutput; waitForEnd: true }
+    stderr: StdioCollector { id: previewErrors; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.previewing = false
+      sources.applyPreview(exitCode, previewOutput.text, previewErrors.text)
+    }
+  }
+
   Timer {
     id: pictureDebounce
     interval: 250
@@ -256,8 +403,14 @@ Item {
       var result = Model.parseConfig(text())
       sources.settingsError = result.error
       if (result.valid) sources.settings = result.settings
+      sources.configEntry = result.entry || null
+      sources.configKnown = true
     }
     onFileChanged: reload()
-    onLoadFailed: sources.settingsError = "unreadable"
+    onLoadFailed: {
+      sources.settingsError = "unreadable"
+      sources.configEntry = null
+      sources.configKnown = true
+    }
   }
 }

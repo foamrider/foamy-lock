@@ -19,12 +19,34 @@ import "Draft.js" as Draft
 // first (keep them on the new preset, or replace them); either is one
 // undo step. Keys that work everywhere are in appKey(); the canvas, the
 // library and the controls handle their own.
+//
+// Saving (LockSources runs the helper's `studio` subcommands):
+// - **On open** the draft on disk is read. One whose look differs from the
+//   lock's saved look (shell.json, read as the lock reads it) asks first:
+//   continue editing it, or start from the saved look (the draft is
+//   deleted). A draft that can't be read is set aside and reported once.
+// - **While editing** the draft (its look and undo steps) is written 800 ms
+//   after the last edit.
+// - **Apply** sends the look to the lock (`studio apply`); the header says
+//   how it went. After a save the look is the new saved one and the draft is
+//   deleted; anything else keeps both.
+// - **Preview full screen** shows the look on the lock's own preview.
+// - **Quitting** (Ctrl+Q, or closing the window) with changes the lock
+//   doesn't have asks: Apply and quit, Discard (deletes the draft), or
+//   Cancel. A pending draft write finishes first.
 FocusScope {
   id: studio
 
-  // The window can be seen (drawn backgrounds stop otherwise).
+  // The window can be seen: the canvas loads its background only then.
   property bool awake: true
-  signal quitRequested()
+  // Drawn backgrounds move and the "system" status reads /proc only while
+  // the window also has the keyboard. Quickshell has no signal for another
+  // client's session lock, but the lock always takes the keyboard, so this
+  // turns them off while the session is locked (and while the lock's
+  // preview shows).
+  readonly property bool moving: awake && Window.active
+  // Everything is saved (or discarded): the app may end now.
+  signal quitConfirmed()
 
   property var history: Draft.history({ preset: LockLayout.DEFAULT_PRESET })
   readonly property var draft: history.present
@@ -62,6 +84,29 @@ FocusScope {
   readonly property int changes: Draft.changeCount(draft)
   readonly property var panes: [library, canvasPane, inspectorPane, header]
 
+  // --- saving state ----------------------------------------------------------
+  // The lock's saved look (a sparse entry): from shell.json, and the applied
+  // look after an Apply.
+  property var savedDraft: ({ preset: LockLayout.DEFAULT_PRESET })
+  // "loading" until the draft on disk and shell.json are read, "ask" while
+  // the restore question shows, then "ready" (only then is the draft
+  // written).
+  property string session: "loading"
+  property var draftReport: null
+  // The draft found on disk while "ask" shows it.
+  property var restoreReport: null
+  readonly property bool unapplied: !Draft.sameLook(draft, savedDraft)
+  // The header's message: { kind: "busy" | "ok" | "info" | "warning" |
+  // "error", text }, or null. An edit clears it.
+  property var notice: null
+  property bool quitAsked: false
+  property bool quitAfterApply: false
+  property bool quitting: false
+  readonly property bool canApply: session === "ready" && unapplied && !applyBlocked && !lockChecker.pending
+    && !lockSources.applying && !quitting
+  readonly property bool canPreview: session === "ready" && !lockSources.previewing && !quitting
+  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked
+
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
 
@@ -70,6 +115,212 @@ FocusScope {
   function commit(next) {
     previewDraft = null
     history = Draft.push(history, next)
+  }
+
+  // Any change to the draft or its history (edits, undo, redo, presets):
+  // written to disk a moment later; the header's last message is out of date.
+  onHistoryChanged: {
+    if (session !== "ready") return
+    notice = null
+    if (!quitting) draftTimer.restart()
+  }
+
+  // --- the draft on disk ---------------------------------------------------------
+
+  // Both the draft and the saved look are known: start, or ask.
+  function startSession() {
+    if (session !== "loading" || !draftReport || !lockSources.configKnown) return
+    var report = draftReport
+    if (report.status === "loaded" && !Draft.sameLook(report.history.present, savedDraft)) {
+      // Shown behind the question, as "Continue editing" keeps it.
+      history = report.history
+      restoreReport = report
+      session = "ask"
+      restoreContinue.forceActiveFocus(Qt.PopupFocusReason)
+      return
+    }
+    // The same look as the lock's keeps its undo steps; nothing to ask.
+    history = report.status === "loaded" ? report.history : Draft.history(savedDraft)
+    session = "ready"
+    if (report.status === "corrupt") notice = { kind: "warning", text: FoamyI18n.t("studio.draft.corrupt") }
+    else if (report.status === "failed") notice = { kind: "warning", text: FoamyI18n.t("studio.draft.loadFailed", codeText(report.code)) }
+  }
+
+  // The answer: keep editing the draft, or start from the saved look.
+  function answerRestore(keep) {
+    if (session !== "ask") return
+    if (!keep) {
+      history = Draft.history(savedDraft)
+      lockSources.clearDraft()
+    }
+    restoreReport = null
+    session = "ready"
+    lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
+  }
+
+  function writeDraft() {
+    draftTimer.stop()
+    if (session !== "ready") return
+    // Nothing to keep: the lock's look, with no steps to undo.
+    if (!unapplied && !Draft.canUndo(history)) return
+    lockSources.saveDraft(history)
+  }
+
+  function codeText(code) {
+    return code === "helper-unavailable" ? FoamyI18n.t("studio.helperUnavailable") : code
+  }
+
+  function savedAtText(savedAt) {
+    var at = new Date(savedAt)
+    return isNaN(at.getTime()) ? "" : Qt.locale(FoamyI18n.formatLocale).toString(at, Locale.ShortFormat)
+  }
+
+  // --- Apply and Preview -----------------------------------------------------------
+
+  function apply() {
+    if (!canApply) return
+    writeDraft()
+    if (lockSources.applyLook(draft)) notice = { kind: "busy", text: FoamyI18n.t("studio.applying") }
+  }
+
+  function previewFull() {
+    if (!canPreview) return
+    if (lockSources.previewLook(draft)) notice = { kind: "busy", text: FoamyI18n.t("studio.previewing") }
+  }
+
+  // One result in words. `action` is "apply" or "preview".
+  function resultText(report, action) {
+    switch (report.result) {
+    case "ok": return FoamyI18n.t(action === "apply" ? "studio.applied" : "studio.previewShown")
+    case "unchanged": return FoamyI18n.t("studio.applied")
+    case "invalid": return FoamyI18n.t("studio.result.invalid", report.reason)
+    case "locked": return FoamyI18n.t("studio.result.locked." + action)
+    case "not-responding":
+      return FoamyI18n.t(action === "apply" && !report.confirmed ? "studio.result.not-responding.apply" : "studio.result.not-responding")
+    case "helper-unavailable": return FoamyI18n.t("studio.helperUnavailable")
+    case "error": return FoamyI18n.t("studio.result.error", report.code)
+    case "invalid-json": case "unsupported": case "no-entry": case "unexpected": case "not-ready": case "not-running":
+    case "target-not-found": case "function-not-found": case "no-omarchy-shell": case "failed":
+      return FoamyI18n.t("studio.result." + report.result)
+    }
+    return FoamyI18n.t("studio.result.unexpected")
+  }
+
+  function resultKind(report) {
+    if (report.saved || report.result === "ok") return "ok"
+    if (report.result === "not-responding" || report.result === "not-ready" || report.result === "locked") return "warning"
+    return "error"
+  }
+
+  // --- quitting ----------------------------------------------------------------------
+
+  // Ctrl+Q or the window closed: ask when the lock doesn't have the look.
+  function requestQuit() {
+    if (quitting) return
+    if (session === "ready" && unapplied) {
+      quitAsked = true
+      quitApply.enabled ? quitApply.forceActiveFocus(Qt.PopupFocusReason) : quitCancel.forceActiveFocus(Qt.PopupFocusReason)
+      return
+    }
+    finishQuit()
+  }
+
+  // "apply", "discard" or "cancel".
+  function answerQuit(answer) {
+    if (answer === "cancel") {
+      quitAsked = false
+      quitAfterApply = false
+      lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
+    } else if (answer === "apply") {
+      if (!canApply) return
+      quitAfterApply = true
+      apply()
+    } else if (answer === "discard") {
+      quitAsked = false
+      draftTimer.stop()
+      lockSources.clearDraft()
+      finishQuit()
+    }
+  }
+
+  // Quit once the draft file is written (or deleted); at most 3 s.
+  function finishQuit() {
+    if (quitting) return
+    if (draftTimer.running) writeDraft()
+    quitting = true
+    quitAsked = false
+    if (lockSources.draftIdle) endNow()
+    else quitDeadline.start()
+  }
+
+  // Once.
+  property bool quitDone: false
+  function endNow() {
+    if (quitDone) return
+    quitDone = true
+    quitDeadline.stop()
+    quitConfirmed()
+  }
+
+  Timer {
+    id: draftTimer
+    interval: 800
+    onTriggered: studio.writeDraft()
+  }
+
+  Timer {
+    id: quitDeadline
+    interval: 3000
+    onTriggered: studio.endNow()
+  }
+
+  // shell.json can take a moment, or never answer: don't wait forever.
+  Timer {
+    interval: 3000
+    running: studio.session === "loading"
+    onTriggered: {
+      lockSources.configKnown = true
+      if (!studio.draftReport) studio.draftReport = { status: "failed", code: "FAILED" }
+      studio.startSession()
+    }
+  }
+
+  Connections {
+    target: lockSources
+    function onConfigEntryChanged() {
+      var saved = Draft.savedEntry(lockSources.configEntry)
+      if (saved && !Draft.same(saved, studio.savedDraft)) studio.savedDraft = saved
+    }
+    function onConfigKnownChanged() { studio.startSession() }
+    function onDraftDone(op, result) {
+      if (op === "draft-load") {
+        if (studio.session === "loading" && !studio.draftReport) {
+          studio.draftReport = result
+          studio.startSession()
+        }
+      } else if (result && !studio.quitting) {
+        studio.notice = { kind: "warning", text: FoamyI18n.t(op === "draft-save" ? "studio.draft.saveFailed" : "studio.draft.clearFailed", studio.codeText(result)) }
+      }
+      if (studio.quitting && lockSources.draftIdle) studio.endNow()
+    }
+    function onApplied(report, entry) {
+      var finish = studio.quitAfterApply
+      studio.quitAfterApply = false
+      studio.quitAsked = false
+      if (report.saved && entry) {
+        studio.savedDraft = Draft.entry(Draft.lookOf(entry))
+        // Edits made while it was applying stay in the draft.
+        if (Draft.sameLook(studio.draft, entry)) {
+          draftTimer.stop()
+          lockSources.clearDraft()
+        } else studio.writeDraft()
+      }
+      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "apply") }
+      if (report.saved && finish) studio.finishQuit()
+    }
+    function onPreviewed(report) {
+      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "preview") }
+    }
   }
   function preview(next) { previewDraft = Draft.same(next, draft) ? null : next }
   function undo() {
@@ -217,13 +468,24 @@ FocusScope {
     var ctrl = (modifiers & Qt.ControlModifier) !== 0
     var shift = (modifiers & Qt.ShiftModifier) !== 0
     if (ctrl && key === Qt.Key_Q) {
-      quitRequested()
+      if (!quitAsked) requestQuit()
+      return true
+    }
+    if (key === Qt.Key_Escape && quitAsked) {
+      answerQuit("cancel")
+      return true
+    }
+    // Esc keeps the draft: nothing is lost.
+    if (key === Qt.Key_Escape && session === "ask") {
+      answerRestore(true)
       return true
     }
     if (key === Qt.Key_Escape && pendingPreset) {
       cancelPreset()
       return true
     }
+    // A question is open: only its own buttons and Esc.
+    if (questionOpen) return false
     if (ctrl && key === Qt.Key_Z) {
       if (shift) redo()
       else undo()
@@ -253,7 +515,10 @@ FocusScope {
     return false
   }
 
-  Component.onCompleted: lockCanvas.forceActiveFocus()
+  Component.onCompleted: {
+    lockCanvas.forceActiveFocus()
+    lockSources.loadDraft()
+  }
 
   // A chosen picture becomes the background in one step; a file the lock
   // can't use is reported.
@@ -269,6 +534,8 @@ FocusScope {
   ColumnLayout {
     anchors.fill: parent
     spacing: 0
+    // A question is modal: nothing behind it takes the pointer or the keys.
+    enabled: !studio.questionOpen
 
     // --- header -------------------------------------------------------------
     Rectangle {
@@ -318,37 +585,63 @@ FocusScope {
             onPicked: function(value) { studio.monitorKey = value }
           }
 
-          Item { Layout.fillWidth: true }
-
           StudioButton {
+            objectName: "studioUndo"
             text: FoamyI18n.t("studio.undo")
             enabled: Draft.canUndo(studio.history)
+            Accessible.description: FoamyI18n.t("studio.key.undo.keys")
             onClicked: studio.undo()
           }
           StudioButton {
+            objectName: "studioRedo"
             text: FoamyI18n.t("studio.redo")
             enabled: Draft.canRedo(studio.history)
+            Accessible.description: FoamyI18n.t("studio.key.redo.keys")
             onClicked: studio.redo()
           }
+
+          // How the last Apply or Preview went, else whether the lock has
+          // the look. Two lines at most; the full text is its name.
           Text {
-            text: studio.changes > 0 ? FoamyI18n.tn("studio.changes", studio.changes) : FoamyI18n.t("studio.noChanges")
-            color: FoamyPalette.mutedText
+            id: statusText
+            objectName: "studioStatus"
+            readonly property string kind: studio.notice ? studio.notice.kind : studio.unapplied ? "info" : "ok"
+            Layout.fillWidth: true
+            Layout.leftMargin: FoamyStyle.gap
+            text: studio.notice ? studio.notice.text
+              : studio.session !== "ready" ? ""
+              : studio.unapplied ? FoamyI18n.t("studio.unapplied") : FoamyI18n.t("studio.matchesLock")
+            horizontalAlignment: Text.AlignRight
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
+            color: kind === "error" ? FoamyPalette.error : kind === "warning" ? FoamyPalette.warning
+              : kind === "ok" && studio.notice ? FoamyPalette.success : FoamyPalette.mutedText
             font.family: FoamyStyle.fontFamily
             font.pixelSize: FoamyStyle.font.bodySmall
-            Layout.leftMargin: FoamyStyle.gapSmall
-            Layout.rightMargin: FoamyStyle.gapSmall
+            font.weight: studio.notice && kind !== "busy" ? Font.DemiBold : Font.Normal
+            Accessible.role: kind === "error" || kind === "warning" ? Accessible.AlertMessage : Accessible.StaticText
+            Accessible.name: text
           }
-          // Preview and Apply are wired to the lock in a later step.
+
           StudioButton {
+            id: previewButton
+            objectName: "studioPreview"
             text: FoamyI18n.t("studio.preview")
-            enabled: false
+            enabled: studio.canPreview
+            Accessible.description: FoamyI18n.t("studio.previewHint")
+            onClicked: studio.previewFull()
           }
           StudioButton {
+            id: applyButton
+            objectName: "studioApply"
             primary: true
-            text: FoamyI18n.t("studio.apply")
-            enabled: false
-            detail: ""
-            Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked") : ""
+            text: lockSources.applying ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.apply")
+            enabled: studio.canApply
+            Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked")
+              : !studio.unapplied ? FoamyI18n.t("studio.matchesLock") : ""
+            onClicked: studio.apply()
           }
         }
       }
@@ -446,6 +739,7 @@ FocusScope {
             showZones: studio.showZones
             snapping: studio.snapping
             awake: studio.awake
+            moving: studio.moving
             problemNames: studio.problemNamesFor(studio.monitor.key)
             selectionText: studio.selectionText(studio.selected)
             backgroundPath: lockSources.backgroundPath
@@ -679,46 +973,50 @@ FocusScope {
     onClosed: presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
 
-  // "Keep changes?" before a preset replaces the draft's changes.
-  Rectangle {
-    id: presetDialog
-    objectName: "studioPresetDialog"
+  // A question over the window: a title, a body and its buttons (declared
+  // inside it, after a spacer, so they sit on the reading end). Clicking
+  // outside the card dismisses it; Esc does too (appKey()).
+  component Question: Rectangle {
+    id: question
+    property string title: ""
+    property string body: ""
+    default property alias buttons: buttonRow.data
+    signal dismissed()
+
     anchors.fill: parent
-    visible: studio.pendingPreset !== ""
     color: Qt.alpha(FoamyPalette.background, 0.72)
     z: 30
 
     MouseArea {
       anchors.fill: parent
-      onClicked: studio.cancelPreset()
+      onClicked: question.dismissed()
     }
 
     Rectangle {
       anchors.centerIn: parent
-      width: Math.min(parent.width - 2 * FoamyStyle.padding, 440)
-      height: dialogColumn.implicitHeight + 2 * FoamyStyle.padding
+      width: Math.min(parent.width - 2 * FoamyStyle.padding, 460)
+      height: questionColumn.implicitHeight + 2 * FoamyStyle.padding
       radius: FoamyStyle.radius
       color: FoamyPalette.background
       border.width: FoamyStyle.borderWidth
       border.color: FoamyPalette.border
       Accessible.role: Accessible.Dialog
-      Accessible.name: dialogTitle.text
-      Accessible.description: dialogBody.text
+      Accessible.name: question.title
+      Accessible.description: question.body
 
       MouseArea { anchors.fill: parent }
 
       Column {
-        id: dialogColumn
+        id: questionColumn
         x: FoamyStyle.padding
         y: FoamyStyle.padding
         width: parent.width - 2 * FoamyStyle.padding
         spacing: FoamyStyle.gap
 
         Text {
-          id: dialogTitle
           width: parent.width
           horizontalAlignment: Text.AlignLeft
-          text: FoamyI18n.t("studio.presetAsk", studio.presetLabel(studio.pendingPreset || studio.draft.preset))
+          text: question.title
           wrapMode: Text.Wrap
           color: FoamyPalette.text
           font.family: FoamyStyle.fontFamily
@@ -728,40 +1026,107 @@ FocusScope {
           Accessible.name: text
         }
         Text {
-          id: dialogBody
           width: parent.width
           horizontalAlignment: Text.AlignLeft
-          text: FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, studio.presetLabel(studio.pendingPreset || studio.draft.preset)])
-            + (studio.pendingPreset && !studio.keptPreset ? "\n" + FoamyI18n.t("studio.presetCantKeep") : "")
+          text: question.body
           wrapMode: Text.Wrap
           color: FoamyPalette.secondaryText
           font.family: FoamyStyle.fontFamily
           font.pixelSize: FoamyStyle.font.body
         }
         RowLayout {
+          id: buttonRow
           width: parent.width
           spacing: FoamyStyle.gap
           Item { Layout.fillWidth: true }
-          StudioButton {
-            objectName: "studioPresetCancel"
-            text: FoamyI18n.t("studio.cancel")
-            onClicked: studio.cancelPreset()
-          }
-          StudioButton {
-            objectName: "studioPresetReplace"
-            text: FoamyI18n.t("studio.presetReplace")
-            onClicked: studio.answerPreset(false)
-          }
-          StudioButton {
-            id: keepButton
-            objectName: "studioPresetKeep"
-            primary: true
-            enabled: studio.keptPreset !== null
-            text: FoamyI18n.t("studio.presetKeep")
-            onClicked: studio.answerPreset(true)
-          }
         }
       }
+    }
+  }
+
+  // "Keep changes?" before a preset replaces the draft's changes.
+  Question {
+    id: presetDialog
+    objectName: "studioPresetDialog"
+    visible: studio.pendingPreset !== ""
+    title: FoamyI18n.t("studio.presetAsk", studio.presetLabel(studio.pendingPreset || studio.draft.preset))
+    body: FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, studio.presetLabel(studio.pendingPreset || studio.draft.preset)])
+      + (studio.pendingPreset && !studio.keptPreset ? "\n" + FoamyI18n.t("studio.presetCantKeep") : "")
+    onDismissed: studio.cancelPreset()
+
+    StudioButton {
+      objectName: "studioPresetCancel"
+      text: FoamyI18n.t("studio.cancel")
+      onClicked: studio.cancelPreset()
+    }
+    StudioButton {
+      objectName: "studioPresetReplace"
+      text: FoamyI18n.t("studio.presetReplace")
+      onClicked: studio.answerPreset(false)
+    }
+    StudioButton {
+      id: keepButton
+      objectName: "studioPresetKeep"
+      primary: true
+      enabled: studio.keptPreset !== null
+      text: FoamyI18n.t("studio.presetKeep")
+      onClicked: studio.answerPreset(true)
+    }
+  }
+
+  // On open: a draft the lock doesn't have.
+  Question {
+    id: restoreDialog
+    objectName: "studioRestoreDialog"
+    visible: studio.session === "ask"
+    title: FoamyI18n.t("studio.restore.title")
+    body: studio.restoreReport && studio.savedAtText(studio.restoreReport.savedAt)
+      ? FoamyI18n.t("studio.restore.bodyAt", studio.savedAtText(studio.restoreReport.savedAt)) : FoamyI18n.t("studio.restore.body")
+    onDismissed: studio.answerRestore(true)
+
+    StudioButton {
+      objectName: "studioRestoreSaved"
+      text: FoamyI18n.t("studio.restore.saved")
+      Accessible.description: FoamyI18n.t("studio.restore.savedHint")
+      onClicked: studio.answerRestore(false)
+    }
+    StudioButton {
+      id: restoreContinue
+      objectName: "studioRestoreContinue"
+      primary: true
+      text: FoamyI18n.t("studio.restore.continue")
+      onClicked: studio.answerRestore(true)
+    }
+  }
+
+  // Quitting with changes the lock doesn't have.
+  Question {
+    id: quitDialog
+    objectName: "studioQuitDialog"
+    visible: studio.quitAsked
+    title: FoamyI18n.t("studio.quit.title")
+    body: FoamyI18n.t("studio.quit.body") + (studio.applyBlocked ? "\n" + FoamyI18n.t("studio.applyBlocked") : "")
+    onDismissed: studio.answerQuit("cancel")
+
+    StudioButton {
+      id: quitCancel
+      objectName: "studioQuitCancel"
+      text: FoamyI18n.t("studio.cancel")
+      onClicked: studio.answerQuit("cancel")
+    }
+    StudioButton {
+      objectName: "studioQuitDiscard"
+      text: FoamyI18n.t("studio.quit.discard")
+      Accessible.description: FoamyI18n.t("studio.quit.discardHint")
+      onClicked: studio.answerQuit("discard")
+    }
+    StudioButton {
+      id: quitApply
+      objectName: "studioQuitApply"
+      primary: true
+      enabled: studio.canApply || studio.quitAfterApply
+      text: studio.quitAfterApply ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.quit.apply")
+      onClicked: if (!studio.quitAfterApply) studio.answerQuit("apply")
     }
   }
 

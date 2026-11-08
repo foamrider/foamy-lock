@@ -688,7 +688,151 @@ function neighbourModule(name, step) {
   return DISPLAY_ORDER[((index + step) % count + count) % count]
 }
 
+// --- saving: the draft on disk and the lock ----------------------------------
+//
+// The helper's replies (`foamy-lock-helper studio …`, see native/src/studio)
+// become small reports that the window puts into words; nothing here passes
+// the helper's own English text on.
+
+// The keys of the lock's entry that make its look.
+var LOOK_KEYS = ["preset", "layout", "background", "glass"]
+
+// The saved look as a sparse entry, from the foamy.lock entry in shell.json
+// (Model.parseConfig's `entry`): the default preset when there is no entry
+// or it has no look keys; null when the lock refuses its look (the lock then
+// keeps the look it had, and so does the app).
+function savedEntry(configEntry) {
+  var source = {}
+  for (var i = 0; i < LOOK_KEYS.length; i++)
+    if (isPlainObject(configEntry) && configEntry[LOOK_KEYS[i]] !== undefined) source[LOOK_KEYS[i]] = configEntry[LOOK_KEYS[i]]
+  var parsed = Layout.parseLook(source)
+  return parsed.valid ? entry(parsed.look) : null
+}
+
+// Two entries give the lock the same look (sparse or not, any key order).
+function sameLook(a, b) {
+  return same(entry(lookOf(a)), entry(lookOf(b)))
+}
+
+// What `studio draft-save` keeps: the look and the undo steps before it
+// (oldest first), in the lock's key order. Redo steps aren't kept.
+function diskDraft(h) {
+  return { look: ordered(h.present), history: h.past.map(ordered) }
+}
+
+// A history from a loaded draft ({ look, history }), every step read as the
+// lock reads it; steps the lock refuses are dropped. Null when it refuses
+// the look itself.
+function restore(saved) {
+  if (!saved || !isPlainObject(saved.look)) return null
+  var present = parse(saved.look)
+  if (!present.valid) return null
+  var past = []
+  var steps = Array.isArray(saved.history) ? saved.history : []
+  for (var i = 0; i < steps.length; i++) {
+    var step = isPlainObject(steps[i]) ? parse(steps[i]) : null
+    if (step && step.valid) past.push(entry(step.look))
+  }
+  if (past.length > HISTORY_LIMIT) past = past.slice(past.length - HISTORY_LIMIT)
+  return { past: past, present: entry(present.look), future: [] }
+}
+
+// The last line of a helper's stdout as a JSON object, or null.
+function replyOf(text) {
+  var lines = String(text || "").trim().split("\n")
+  try {
+    var data = JSON.parse(lines[lines.length - 1])
+    return isPlainObject(data) ? data : null
+  } catch (error) {
+    return null
+  }
+}
+
+// A failure's code: the helper's own (`IO`, `NO_HOME`, …), else "FAILED".
+function codeOf(data) {
+  return data && typeof data.code === "string" && /^[A-Z_]{1,40}$/.test(data.code) ? data.code : "FAILED"
+}
+
+// A helper that couldn't start (FoamyNative.unavailable).
+function unavailable(exitCode) {
+  return exitCode === 126 || exitCode === 127
+}
+
+// `studio draft-load`: { status } is "loaded" (with `history` and
+// `savedAt`), "none", "corrupt" (the helper moved the file aside) or
+// "failed" (with `code`, "helper-unavailable" when it couldn't start). A
+// loaded draft the lock wouldn't read counts as corrupt.
+function loadReport(exitCode, text) {
+  if (unavailable(exitCode)) return { status: "failed", code: "helper-unavailable" }
+  var data = replyOf(text)
+  if (exitCode === 0 && data && data.ok === true) {
+    if (data.status === "none") return { status: "none" }
+    if (data.status === "corrupt") return { status: "corrupt" }
+    if (data.status === "loaded") {
+      var restored = restore(data.draft)
+      var savedAt = data.draft && typeof data.draft.savedAt === "string" ? data.draft.savedAt : ""
+      return restored ? { status: "loaded", history: restored, savedAt: savedAt } : { status: "corrupt" }
+    }
+  }
+  return { status: "failed", code: codeOf(data) }
+}
+
+// `studio draft-save` and `draft-clear`: "" when done, else a code.
+function draftError(exitCode, text) {
+  if (unavailable(exitCode)) return "helper-unavailable"
+  var data = replyOf(text)
+  return exitCode === 0 && data && data.ok === true ? "" : codeOf(data)
+}
+
+// The answers `studio apply` tells apart (native/src/studio/apply.rs).
+var APPLY_RESULTS = ["ok", "unchanged", "invalid-json", "invalid", "locked", "unsupported", "no-entry", "unexpected",
+  "not-responding", "not-ready", "not-running", "target-not-found", "function-not-found", "no-omarchy-shell", "failed"]
+
+// `studio apply`: { result, saved, confirmed, reason, code }. `result` is
+// one of APPLY_RESULTS, "helper-unavailable", or "error" (the helper didn't
+// carry the request out; `code` says why). `saved`: the lock has the look.
+// `confirmed`: the outcome is certain (false: it may or may not be saved).
+// `reason` is the lock's own text for "invalid".
+function applyReport(exitCode, text) {
+  if (unavailable(exitCode)) return { result: "helper-unavailable", saved: false, confirmed: true, reason: "", code: "" }
+  var data = replyOf(text)
+  if (exitCode === 0 && data && APPLY_RESULTS.indexOf(data.result) !== -1) {
+    var saved = data.ok === true && (data.result === "ok" || data.result === "unchanged")
+    return { result: data.result, saved: saved, confirmed: data.confirmed === true,
+      reason: data.result === "invalid" && typeof data.reason === "string" ? data.reason.slice(0, 300) : "", code: "" }
+  }
+  // Exit 1 comes before anything is called; anything else may not.
+  return { result: "error", saved: false, confirmed: exitCode === 1, reason: "", code: codeOf(data) }
+}
+
+// The lock's `previewLook` through omarchy-shell, from its exit code,
+// stdout and stderr (124 and 137 are `timeout`'s, 127 a missing
+// omarchy-shell): { result, reason }, `result` as for applyReport ("ok": the
+// preview shows).
+function previewReport(exitCode, stdout, stderr) {
+  var out = String(stdout || "").trim().split("\n")[0].trim()
+  var err = String(stderr || "").trim().split("\n")[0].trim()
+  if (exitCode === 124 || exitCode === 137) return { result: "not-responding", reason: "" }
+  var failures = {
+    "omarchy-shell is not responding": "not-responding",
+    "omarchy-shell is not ready": "not-ready",
+    "omarchy-shell is not running": "not-running",
+    "Target not found.": "target-not-found",
+    "Function not found.": "function-not-found"
+  }
+  var text = exitCode === 0 ? out : err
+  if (failures.hasOwnProperty(text)) return { result: failures[text], reason: "" }
+  if (exitCode === 127) return { result: "no-omarchy-shell", reason: "" }
+  if (exitCode !== 0) return { result: "failed", reason: "" }
+  if (out === "ok" || out === "invalid-json" || out === "locked") return { result: out, reason: "" }
+  if (out.indexOf("invalid:") === 0) return { result: "invalid", reason: out.slice(8).trim().slice(0, 300) }
+  return { result: "unexpected", reason: "" }
+}
+
 if (typeof module !== "undefined") module.exports = {
+  LOOK_KEYS: LOOK_KEYS, APPLY_RESULTS: APPLY_RESULTS, savedEntry: savedEntry, sameLook: sameLook, diskDraft: diskDraft,
+  restore: restore, replyOf: replyOf, loadReport: loadReport, draftError: draftError, applyReport: applyReport,
+  previewReport: previewReport,
   DISPLAY_ORDER: DISPLAY_ORDER, GRID_DIVISIONS: GRID_DIVISIONS, SNAP_RADIUS: SNAP_RADIUS, HISTORY_LIMIT: HISTORY_LIMIT,
   same: same, stable: stable, ordered: ordered, entry: entry, parse: parse, elementValue: elementValue, lookOf: lookOf, changeCount: changeCount, lastOrder: lastOrder,
   place: place, setZone: setZone, setOffset: setOffset, setScale: setScale, scaleBy: scaleBy, setOrder: setOrder,

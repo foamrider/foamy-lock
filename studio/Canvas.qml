@@ -26,8 +26,11 @@ FocusScope {
   property string previewState: "idle"
   property bool showZones: true
   property bool snapping: true
-  // The window can be seen: drawn backgrounds move only then.
+  // The window can be seen: the background loads only then.
   property bool awake: true
+  // Drawn backgrounds move (and the "system" status reads /proc) only
+  // while this is true too (StudioWindow.moving).
+  property bool moving: true
   // Modules to outline as a problem on this screen.
   property var problemNames: []
   // Accessible description of the selection (the window words it).
@@ -331,7 +334,7 @@ FocusScope {
         scale: canvas.zoom
         look: canvas.liveLook || canvas.look
         previewState: canvas.previewState
-        displayAwake: canvas.awake
+        displayAwake: canvas.awake && canvas.moving
         loadBackground: canvas.awake
         rightToLeft: FoamyI18n.rightToLeft
         backgroundPath: canvas.backgroundPath

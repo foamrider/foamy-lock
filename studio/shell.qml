@@ -21,13 +21,33 @@ ShellRoot {
     color: FoamyPalette.background
     visible: true
 
+    // Closed by the window manager: the same guard as Ctrl+Q. When it asks,
+    // the window comes back to show the question.
+    onClosed: {
+      studio.requestQuit()
+      if (studio.quitAsked) Qt.callLater(function() { app.showWindow() })
+    }
+
     StudioWindow {
       id: studio
       anchors.fill: parent
       focus: true
       awake: window.visible && !window.minimized
-      onQuitRequested: Qt.quit()
+      onQuitConfirmed: app.quit()
     }
+  }
+
+  function showWindow() {
+    window.minimized = false
+    window.visible = true
+    studio.Window.window?.requestActivate()
+    studio.forceActiveFocus()
+  }
+
+  // The test driver keeps the app running when it checks quitting.
+  function quit() {
+    if (testDriver.item && typeof testDriver.item.catchQuit === "function") testDriver.item.catchQuit()
+    else Qt.quit()
   }
 
   // A second `foamy-lock-helper studio` raises this window instead of
@@ -38,10 +58,7 @@ ShellRoot {
     target: "studio"
 
     function raise(): string {
-      window.minimized = false
-      window.visible = true
-      studio.Window.window?.requestActivate()
-      studio.forceActiveFocus()
+      app.showWindow()
       return "raised"
     }
   }

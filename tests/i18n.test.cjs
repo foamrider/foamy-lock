@@ -37,7 +37,10 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['move', 'nudge', 'zone', 'scale', 'hide', 'show', 'select', 'free', 'axis', 'undo', 'redo', 'panes', 'help', 'quit'].flatMap(k => ['key.' + k, 'key.' + k + '.keys']),
   ...['password-overlap', 'password-covered', 'password-offscreen', 'password-high', 'password-missing', 'element-offscreen', 'element-overlap'].map(c => 'problem.' + c),
   ...Layout.DECORATIONS.map(d => 'decor.' + d), ...Layout.GLASS_TINTS.map(t => 'tint.' + t),
-  ...['NO_SESSION_BUS', 'PORTAL_UNAVAILABLE', 'PORTAL_FAILED', 'UNSUPPORTED'].map(c => 'pick.' + c)];
+  ...['NO_SESSION_BUS', 'PORTAL_UNAVAILABLE', 'PORTAL_FAILED', 'UNSUPPORTED'].map(c => 'pick.' + c),
+  // Apply and Preview results (StudioWindow.resultText).
+  ...['invalid-json', 'unsupported', 'no-entry', 'unexpected', 'not-ready', 'not-running', 'target-not-found', 'function-not-found',
+    'no-omarchy-shell', 'failed', 'locked.apply', 'locked.preview'].map(r => 'result.' + r)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);

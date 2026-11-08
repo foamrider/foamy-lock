@@ -521,3 +521,101 @@ test('a new preset can keep the draft\'s changes', () => {
   assert.equal(Draft.presetKeeping(draft, 'nope'), null)
   assert.deepEqual(plain(Draft.setPreset(draft, 'corner')), { preset: 'corner' })
 })
+
+test('the saved look comes from the lock\'s entry, as the lock reads it', () => {
+  assert.deepEqual(plain(Draft.savedEntry(null)), { preset: 'foamy' })
+  assert.deepEqual(plain(Draft.savedEntry({ id: 'foamy.lock', timeFormat: '12h' })), { preset: 'foamy' })
+  const entry = { id: 'foamy.lock', timeFormat: '12h', preset: 'zen', layout: { clock: { hidden: false, scale: 1.5 } }, glass: { tint: 'accent' } }
+  assert.deepEqual(plain(Draft.savedEntry(entry)),
+    { preset: 'zen', layout: { clock: { hidden: false, scale: 1.5 } }, glass: { tint: 'accent' } })
+  // What equals the preset isn't a change.
+  assert.deepEqual(plain(Draft.savedEntry({ preset: 'zen', layout: { clock: { zone: 'top-center' } } })), { preset: 'zen' })
+  assert.equal(Draft.savedEntry({ preset: 'nope' }), null, 'a look the lock refuses')
+  assert.equal(Draft.savedEntry({ layout: { clock: { scale: 9 } } }), null)
+})
+
+test('looks compare as the lock reads them', () => {
+  assert.ok(Draft.sameLook({ preset: 'zen' }, { preset: 'zen', layout: { clock: { zone: 'top-center', scale: 1 } } }))
+  assert.ok(Draft.sameLook({ glass: { tint: 'accent' }, preset: 'foamy' }, { preset: 'foamy', glass: { tint: 'accent' } }))
+  assert.ok(!Draft.sameLook({ preset: 'zen' }, { preset: 'foamy' }))
+  assert.ok(!Draft.sameLook({ preset: 'foamy' }, { preset: 'foamy', background: { dim: 0.5 } }))
+})
+
+test('a draft goes to disk and comes back as a history', () => {
+  let h = Draft.history({ preset: 'foamy' })
+  h = Draft.push(h, { preset: 'zen' })
+  h = Draft.push(h, { preset: 'zen', background: { dim: 0.5 } })
+  h = Draft.undo(h)
+  const disk = plain(Draft.diskDraft(h))
+  assert.deepEqual(disk, { look: { preset: 'zen' }, history: [{ preset: 'foamy' }] }, 'redo steps stay behind')
+  const ordered = Draft.diskDraft(Draft.history({ glass: { tint: 'accent' }, background: { dim: 0.5 }, preset: 'foamy' })).look
+  assert.deepEqual(Object.keys(ordered), ['preset', 'background', 'glass'], 'the lock\'s key order')
+  const back = Draft.restore({ look: disk.look, history: disk.history, savedAt: '2026-11-08T10:00:00Z' })
+  assert.deepEqual(plain(back), { past: [{ preset: 'foamy' }], present: { preset: 'zen' }, future: [] })
+  // Steps are read as the lock reads them; refused ones are dropped.
+  const odd = Draft.restore({ look: { preset: 'zen', layout: { clock: { zone: 'top-center' } } },
+    history: [{ preset: 'nope' }, 'x', { preset: 'corner' }] })
+  assert.deepEqual(plain(odd), { past: [{ preset: 'corner' }], present: { preset: 'zen' }, future: [] })
+  assert.equal(Draft.restore({ look: { preset: 'nope' }, history: [] }), null)
+  assert.equal(Draft.restore(null), null)
+  const long = Draft.restore({ look: { preset: 'zen' }, history: Array.from({ length: 130 }, () => ({ preset: 'foamy' })) })
+  assert.equal(long.past.length, Draft.HISTORY_LIMIT)
+})
+
+test('draft-load replies become reports', () => {
+  assert.deepEqual(plain(Draft.loadReport(0, '{"ok":true,"status":"none","draft":null}\n')), { status: 'none' })
+  assert.deepEqual(plain(Draft.loadReport(0, '{"ok":true,"status":"corrupt","draft":null,"reason":"not JSON","movedTo":"/x"}')), { status: 'corrupt' })
+  const loaded = Draft.loadReport(0, JSON.stringify({ ok: true, status: 'loaded',
+    draft: { look: { preset: 'zen' }, history: [{ preset: 'foamy' }], savedAt: '2026-11-08T10:00:00Z' } }))
+  assert.equal(loaded.status, 'loaded')
+  assert.equal(loaded.savedAt, '2026-11-08T10:00:00Z')
+  assert.deepEqual(plain(loaded.history.present), { preset: 'zen' })
+  assert.deepEqual(plain(Draft.loadReport(0, JSON.stringify({ ok: true, status: 'loaded', draft: { look: { preset: 'nope' } } }))),
+    { status: 'corrupt' }, 'a draft the lock would refuse')
+  assert.deepEqual(plain(Draft.loadReport(1, '{"ok":false,"code":"NO_HOME","error":"neither…"}')), { status: 'failed', code: 'NO_HOME' })
+  assert.deepEqual(plain(Draft.loadReport(101, 'panic')), { status: 'failed', code: 'FAILED' })
+  assert.deepEqual(plain(Draft.loadReport(127, '')), { status: 'failed', code: 'helper-unavailable' })
+  assert.equal(Draft.draftError(0, '{"ok":true,"path":"/x","savedAt":"…","history":0,"trimmed":0}'), '')
+  assert.equal(Draft.draftError(1, '{"ok":false,"code":"IO","error":"disk full"}'), 'IO')
+  assert.equal(Draft.draftError(1, '{"ok":false,"code":"lower case","error":""}'), 'FAILED')
+  assert.equal(Draft.draftError(126, ''), 'helper-unavailable')
+})
+
+test('apply replies become reports, without the helper\'s words', () => {
+  for (const result of Draft.APPLY_RESULTS) {
+    const ok = result === 'ok' || result === 'unchanged'
+    const report = Draft.applyReport(0, JSON.stringify({ ok, result, message: 'English', confirmed: true, attempts: 1 }))
+    assert.equal(report.result, result)
+    assert.equal(report.saved, ok)
+    assert.equal(report.confirmed, true)
+    assert.ok(!JSON.stringify(report).includes('English'))
+  }
+  const invalid = Draft.applyReport(0, '{"ok":false,"result":"invalid","reason":"layout has an unknown element: x","message":"The lock refused","confirmed":true,"attempts":1}')
+  assert.equal(invalid.reason, 'layout has an unknown element: x')
+  const unclear = Draft.applyReport(0, '{"ok":false,"result":"not-responding","message":"…","confirmed":false,"attempts":2}')
+  assert.deepEqual([unclear.saved, unclear.confirmed], [false, false])
+  assert.equal(Draft.applyReport(0, '{"ok":true,"result":"ok","confirmed":true}').saved, true)
+  assert.equal(Draft.applyReport(0, '{"ok":false,"result":"ok","confirmed":true}').saved, false, 'ok must agree')
+  assert.deepEqual(plain(Draft.applyReport(1, '{"ok":false,"code":"INVALID_REQUEST","error":"…"}')),
+    { result: 'error', saved: false, confirmed: true, reason: '', code: 'INVALID_REQUEST' })
+  assert.equal(Draft.applyReport(101, '').confirmed, false)
+  assert.equal(Draft.applyReport(0, '{"ok":true,"result":"saved"}').result, 'error', 'an unknown result')
+  assert.equal(Draft.applyReport(127, '').result, 'helper-unavailable')
+})
+
+test('preview answers from omarchy-shell become reports', () => {
+  const report = (code, out, err) => plain(Draft.previewReport(code, out, err)).result
+  assert.equal(report(0, 'ok\n', ''), 'ok')
+  assert.equal(report(0, 'locked', ''), 'locked')
+  assert.equal(report(0, 'invalid-json', ''), 'invalid-json')
+  assert.deepEqual(plain(Draft.previewReport(0, 'invalid: preset must be one of foamy', '')), { result: 'invalid', reason: 'preset must be one of foamy' })
+  assert.equal(report(0, 'what', ''), 'unexpected')
+  assert.equal(report(1, '', 'omarchy-shell is not responding\n'), 'not-responding')
+  assert.equal(report(1, '', 'omarchy-shell is not ready'), 'not-ready')
+  assert.equal(report(1, '', 'omarchy-shell is not running'), 'not-running')
+  assert.equal(report(1, '', 'Target not found.'), 'target-not-found')
+  assert.equal(report(1, '', 'Function not found.'), 'function-not-found')
+  assert.equal(report(124, '', ''), 'not-responding')
+  assert.equal(report(127, '', 'bash: no such file'), 'no-omarchy-shell')
+  assert.equal(report(2, '', 'boom'), 'failed')
+})
