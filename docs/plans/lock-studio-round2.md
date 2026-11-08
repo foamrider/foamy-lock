@@ -409,6 +409,73 @@ is memory handling and safe handling of input data:
   item is chosen keeps the default lock unchanged.
 - **`userPresets` grows `shell.json`.** Capped at 50; each look is small.
 
+## Progress
+
+**R2-1, app UI** (2026-11-08, on `feat/layout-engine`; offscreen only,
+nothing ran on the real lock or the desktop):
+- **Kit:** `FoamyIcon`, `FoamyButton`, `FoamyDropdown` and
+  `FoamyNumberField` synced with `sync.sh --add` (bringing `FoamyMotion`,
+  `SafeTextField` and `FoamyTextSettingField`, which R2-2's name prompt
+  can use). `FoamyToggle` not synced; `StudioToggle` stays.
+- **Root:** `root.rs` links `Ui` beside the `Commons` it links (so
+  `$OMARCHY_PATH/shell/Ui`, else the installed one), reserved like
+  `Commons`; a unit test covers it. Helper rebuilt and pinned. The harness
+  root links it too; qmllint gets `-I` with `qs/Commons` and `qs/Ui`.
+  **The live app needs a restart** (`foamy-lock-helper studio` rebuilds the
+  root): the new files (`IconButton.qml`, `Tips.qml`) and the `Ui` link
+  aren't in a root built before them.
+- **Header:** `IconButton` (a FoamyButton with its own FoamyIcon: tooltip
+  "Undo (Ctrl+Z)", accessible name "Undo", the keys as description) for
+  undo, redo, reset, preview and help; Apply is a FoamyButton, primary.
+  **Deviation:** the kit has neither `rotate-ccw` nor `redo-2`. Redo is
+  `undo-2` mirrored (`flipped`); Reset uses `undo-dot`. Adding the two
+  Lucide icons is a foamy-kit change (and release) of its own. DESIGN.md
+  puts icon-only toolbar actions on FoamyAction; FoamyButton was the
+  synced scope, and its bordered square matches the dropdown beside it.
+- **Reset (D3):** the dialog offers "Last saved look" (`savedDraft`) and
+  "Preset <name>" (the draft's preset, no changes), each enabled only when
+  it changes the draft, plus Cancel/Esc; either is one undo step.
+- **Screens:** a FoamyDropdown. `Draft.monitorEntries(screens, natives)`
+  (node-tested) labels each screen with Hyprland's
+  `lastIpcObject.width/height/scale` (a rotated transform swaps them),
+  "DP-2 · 3440 × 1440 · 125 %"; `width`/`height` stay logical. The
+  natives are read in `LockSources` only when `HYPRLAND_INSTANCE_SIGNATURE`
+  is set (`Hyprland.refreshMonitors()` on screen changes and when the
+  window shows, read only); without Hyprland the logical size shows.
+- **Presets:** the strip is gone. The library's first row, "Preset: <name>"
+  with a chevron, opens the preset menu (dropped from the row). The menu
+  has a `userPresets` hook and a "Built-in" heading for R2-2.
+- **Preview caption:** `Segmented.caption`, "Preview" inside the group.
+- **Deselect:** a tap on the canvas outside the lock image
+  (`Canvas.tapOutside`, the letterbox) or Esc (after the open questions,
+  menus and the shortcuts) sets `selected` to "". The inspector pane then
+  shows ScenePage's new "look" page: background, then glass and dim.
+- **Tips:** `Tips.qml`, pinned to the library pane's bottom edge (full
+  width, a hairline above). The library scrolls above it (a non-interactive
+  Flickable, so a drag on a row stays a module drag; the wheel scrolls and
+  the keyboard keeps its row in view). Seven tips: Mugshot, dragging in and
+  out, Shift/Alt, arrows, the look as a whole, closing the preview, `?`.
+  The card keeps the longest tip's height. "Open Mugshot" runs
+  `Quickshell.execDetached(["/usr/bin/mugshot"])` and shows only when
+  `test -x` finds it (checked when the window shows); otherwise the tip
+  says `omarchy-pkg-add mugshot`. **Left out until their steps:** "Saving
+  changes to a preset creates your own" (R2-2) and "Status can show your
+  keyboard layout" (R2-3); they'd be untrue today. The last tip seen is in
+  `$XDG_STATE_HOME/foamy-lock/studio-state.json` (`{version: 1, tip}`,
+  FileView, atomic).
+- **Form buttons** in the dialogs, the inspector and the picture row are
+  FoamyButtons. `StepField` stays (FoamyNumberField has no −/+ or pixel
+  detail).
+- **Harness `studio`** (en, no, ar): icon buttons' names, tooltips and
+  size; help; Reset both choices, undo, Esc and the enabled choices; the
+  dropdown's entries and picks, a scaled fake monitor's label; the
+  caption inside the group; the preset row opening the menu below it;
+  deselect by an outside tap (not on the image) and Esc, the look page;
+  the tips card's bottom edge equal to the pane's, a short list scrolling,
+  paging and wrapping, the state file, Mugshot absent (no button, install
+  hint) and present (a fake script, started, never the real one). New
+  captures: `studio-reset`, `studio-look`, `studio-tips`.
+
 ## Open questions for the user
 
 None. Settled by the user on 2026-11-08:

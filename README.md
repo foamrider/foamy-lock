@@ -321,9 +321,12 @@ front. `studio uninstall` removes the launcher entry.
 **Editing.** Drag an element on the canvas; it snaps to where it would sit in each
 zone, to the screen's centre lines, to the other elements' edges and to a grid. The
 library on the left lists every element: drag a hidden one onto the canvas to show
-it, or drag one from the canvas back to the library to hide it. Everything the
-pointer does, the keyboard does too. The canvas shows each connected screen and two
-reference sizes (1280 × 720, 1920 × 1080); a problem on a connected screen (an
+it, or drag one from the canvas back to the library to hide it. The preset is the
+library's first row. Click beside the lock image (or press Esc) to edit the look as
+a whole: background, glass and dim. Everything the pointer does, the keyboard does
+too. The screen menu lists each connected screen with its native size and scale
+(the canvas lays it out at its logical size, as the lock does) and two reference
+sizes (1280 × 720, 1920 × 1080); a problem on a connected screen (an
 element off screen, two elements overlapping, the password field covered or too
 high) is listed under the canvas and stops Apply, one only at a reference size is
 a warning.
@@ -336,6 +339,7 @@ a warning.
 | `+` / `-` | Larger or smaller |
 | Delete / Insert | Hide or show the element |
 | `[` / `]` | Previous or next element |
+| Esc | Clear the selection (the look as a whole) |
 | Shift while dragging | Drag without snapping |
 | Alt while dragging | Drag along one axis |
 | Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
@@ -353,6 +357,8 @@ a warning.
   went: applied, refused (with the lock's reason), the screen is locked, the shell
   isn't running or didn't answer (it is asked once more; if it still doesn't
   answer, the look may or may not be saved). Anything but a save keeps the draft.
+- **Reset** goes back to the last saved look, or to the preset without your changes;
+  either can be undone.
 - **Preview full screen** shows the look on the lock's own preview overlay without
   saving; click or press any key to close it.
 - **Quitting** with changes the lock doesn't have asks: **Apply and quit**,
@@ -360,7 +366,10 @@ a warning.
 
 **Privacy.** The canvas uses a sample account and a sample track, never your name,
 avatar or what is playing. The clock, network and battery are real. The full-screen
-preview is the lock's own and shows your real account and media.
+preview is the lock's own and shows your real account and media. Your picture and
+name on the lock come from your account; the first tip in the app opens Mugshot to
+set them. The app remembers the last tip you saw in
+`~/.local/state/foamy-lock/studio-state.json`.
 
 Screenshots of the app will follow.
 
