@@ -1,12 +1,19 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import "../kit"
 
-// Network and battery status. Styles: "text" (icons and labels), "icons",
-// "pill" (both icons and the battery percentage in one glass pill) and
-// "system" (a glass panel with uptime, memory, load and the battery, or the
-// network without one). The host view owns the data sources (Networking,
-// UPower, /proc while the panel shows); this only draws them.
-Row {
+// The status line. Styles: "text" (icons and labels), "icons", "pill" (the
+// parts in one glass pill) and "system" (a glass panel, one row per reading).
+// Without `items` each style shows what it always has: network and battery
+// in a line, or uptime, memory, load and the battery (the network on a
+// machine without one) in the panel. With `items` (Layout.STATUS_ITEMS, in
+// their order) it shows those, in any style; an item whose source isn't
+// available is left out, never shown as an error. The host view owns every
+// data source (Networking, UPower, PipeWire, Bluetooth, the keyboard layout,
+// /proc) and loads only the ones an item needs; this only draws them.
+// A line wider than the centre column wraps onto more lines (a Flow: one
+// line lays out exactly as a Row).
+Flow {
   id: status
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
@@ -17,111 +24,212 @@ Row {
   readonly property color glassFill: view.glassAt(glassOpacity)
   // "text" (icons and labels), "icons" (icons only), "pill" or "system".
   property string styleName: "text"
+  // The look's `items`, or null for the style's own contents.
+  property var items: null
   readonly property bool pill: styleName === "pill"
   readonly property bool system: styleName === "system"
   // Each part's padding on either side; the pill packs them edge to edge.
   readonly property real partPadding: pill ? Math.round(11 * uiScale) : Math.round(24 * uiScale) / 2
+  // The line's parts, in order (each drawn only while available).
+  readonly property var lineItems: items ? items : ["network", "battery"]
+  // The first part that shows: it holds the pill behind them all.
+  readonly property int firstShown: {
+    for (var i = 0; i < lineItems.length; i++) if (available(lineItems[i])) return i
+    return -1
+  }
+  // Something to show: always without `items` (the network is always known).
+  readonly property bool hasContent: system ? systemPanel.rows.length > 0 : firstShown !== -1
+  // The widest a reading in a line may grow (a long layout name elides).
+  readonly property real valueLimit: Math.round(220 * uiScale)
+  readonly property real lineHeight: Math.round(38 * uiScale)
+  // Everything on one line: the parts that show, side by side.
+  readonly property real naturalWidth: {
+    var total = 0
+    var shown = 0
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i]
+      if (!child.visible || !(child.width > 0)) continue
+      total += child.width
+      shown++
+    }
+    return total + Math.max(0, shown - 1) * spacing
+  }
 
   objectName: "statusFooter"
-  height: system ? systemPanel.height : Math.round(38 * uiScale)
+  width: Math.min(naturalWidth, view.contentWidthAt(uiScale))
+  height: system ? systemPanel.height : Math.max(lineHeight, implicitHeight)
   spacing: pill ? 0 : Math.round(10 * uiScale)
 
-  Item {
-    id: networkPill
-    objectName: "networkStatus"
-    visible: !status.system
-    width: networkStatusContent.implicitWidth + 2 * status.partPadding
-    height: parent.height
-
-    // The pill behind both parts. It lives in the first part so the Row
-    // doesn't place it; it spans the whole status from the Row's start.
-    Rectangle {
-      objectName: "statusPill"
-      visible: status.pill
-      x: status.view.rightToLeft ? networkPill.width - status.width : 0
-      width: status.width
-      height: status.height
-      radius: height / 2
-      color: status.glassFill
-      border.width: 1
-      border.color: status.view.glassBorder
+  // Whether `item`'s source has something to show.
+  function available(item) {
+    switch (item) {
+    case "network": return true
+    case "battery": return view.hasBattery === true
+    case "volume": return view.hasVolume === true
+    case "bluetooth": return view.hasBluetooth === true
+    case "keyboard": return String(view.keyboardLayout || "") !== ""
+    case "uptime": return view.systemUptime >= 0
+    case "load": return loadParts(view.systemLoad).length === 3
+    case "memory": return view.memoryTotal > 0
     }
+    return false
+  }
 
-    Row {
-      id: networkStatusContent
-      anchors.centerIn: parent
-      spacing: Math.round(8 * status.uiScale)
+  function icon(item) {
+    switch (item) {
+    case "network": return view.networkIcon
+    case "battery": return view.batteryIcon(view.batteryPercentage)
+    case "volume":
+      if (view.volumeMuted || view.volumePercent <= 0) return "\u{f075f}"
+      return view.volumePercent < 34 ? "\u{f057f}" : view.volumePercent < 67 ? "\u{f0580}" : "\u{f057e}"
+    case "bluetooth": return !view.bluetoothEnabled ? "\u{f00b2}" : view.bluetoothConnected > 0 ? "\u{f00b1}" : "\u{f00af}"
+    case "keyboard": return "\u{f030c}"
+    case "uptime": return "\u{f0150}"
+    case "load": return "\u{f04c5}"
+    case "memory": return "\u{f035b}"
+    }
+    return ""
+  }
 
-      Text {
-        textFormat: Text.PlainText
+  // The row label in the system panel.
+  function label(item) {
+    switch (item) {
+    case "network": return FoamyI18n.t("Network")
+    case "battery": return FoamyI18n.t("Battery")
+    case "volume": return FoamyI18n.t("Volume")
+    case "bluetooth": return FoamyI18n.t("Bluetooth")
+    case "keyboard": return FoamyI18n.t("Keyboard")
+    case "uptime": return FoamyI18n.t("Uptime")
+    case "load": return FoamyI18n.t("Load")
+    case "memory": return FoamyI18n.t("Memory")
+    }
+    return ""
+  }
+
+  // The reading in full: the "text" style and the panel.
+  function value(item) {
+    switch (item) {
+    case "network": return FoamyI18n.t(view.networkLabel)
+    case "battery": return FoamyI18n.number(view.batteryPercentage) + "%"
+    case "volume": return view.volumeMuted ? FoamyI18n.t("Muted") : FoamyI18n.number(view.volumePercent) + "%"
+    case "bluetooth":
+      if (!view.bluetoothEnabled) return FoamyI18n.t("Off")
+      return view.bluetoothConnected > 0 ? FoamyI18n.t("%1 connected", [FoamyI18n.number(view.bluetoothConnected)]) : FoamyI18n.t("On")
+    case "keyboard": return String(view.keyboardLayout || "")
+    case "uptime": return uptimeText(view.systemUptime)
+    case "load": return system ? loadText(view.systemLoad) : FoamyI18n.number(Number(loadParts(view.systemLoad)[0]), 2)
+    case "memory": return memoryText()
+    }
+    return ""
+  }
+
+  // The reading beside the icon in a line: in full for "text"; short, or
+  // none where the icon says it, for "pill" and "icons".
+  function lineValue(item) {
+    if (styleName === "text") return value(item)
+    switch (item) {
+    case "network": return ""
+    case "battery": return pill ? value(item) : ""
+    case "volume": return pill && !view.volumeMuted ? value(item) : ""
+    case "bluetooth": return pill && view.bluetoothConnected > 0 ? FoamyI18n.number(view.bluetoothConnected) : ""
+    case "keyboard": return keyboardShort(view.keyboardLayout)
+    case "memory": return FoamyI18n.number(Math.round(memoryPart() * 100)) + "%"
+    }
+    return value(item)
+  }
+
+  // The bar under a panel row (-1: none).
+  function part(item) {
+    switch (item) {
+    case "battery": return view.batteryPercentage / 100
+    case "volume": return view.volumeMuted ? 0 : Math.min(1, view.volumePercent / 100)
+    case "memory": return memoryPart()
+    }
+    return -1
+  }
+
+  function memoryUsed() {
+    return view.memoryTotal > 0 ? view.memoryTotal - view.memoryAvailable : 0
+  }
+
+  function memoryPart() {
+    return view.memoryTotal > 0 ? memoryUsed() / view.memoryTotal : -1
+  }
+
+  function memoryText() {
+    if (!(view.memoryTotal > 0)) return "—"
+    return FoamyI18n.t("%1 / %2 GB", [FoamyI18n.number(memoryUsed() / 1048576, 1), FoamyI18n.number(view.memoryTotal / 1048576, 1)])
+  }
+
+  // The layout's first word, at most three letters ("English (US)": ENG).
+  function keyboardShort(name) {
+    return String(name || "").split(/\s+/)[0].substring(0, 3).toLocaleUpperCase()
+  }
+
+  Repeater {
+    model: status.lineItems
+
+    Item {
+      id: lineItem
+      required property string modelData
+      required property int index
+      objectName: modelData + "Status"
+      visible: !status.system && status.available(modelData)
+      width: lineContent.implicitWidth + 2 * status.partPadding
+      height: status.lineHeight
+
+      // The pill behind every part. It lives in the first part that shows,
+      // so the Row doesn't place it, and spans the whole status from there.
+      Rectangle {
+        objectName: "statusPill"
+        visible: status.pill && lineItem.index === status.firstShown
+        x: status.view.rightToLeft ? lineItem.width - status.width : 0
+        width: status.width
         height: status.height
-        anchors.verticalCenter: parent.verticalCenter
-        text: status.view.networkIcon
-        color: status.view.foreground
-        opacity: 0.76
-        font.family: status.view.iconFontFamily
-        font.pixelSize: Math.round(18 * status.uiScale)
-        font.weight: Font.Light
-        verticalAlignment: Text.AlignVCenter
+        radius: Math.min(height, status.lineHeight) / 2
+        color: status.glassFill
+        border.width: 1
+        border.color: status.view.glassBorder
       }
 
-      Text {
-        textFormat: Text.PlainText
-        height: status.height
-        text: FoamyI18n.t(status.view.networkLabel)
-        visible: status.styleName === "text"
-        color: status.view.foreground
-        opacity: 0.88
-        font.family: status.view.textFontFamily
-        font.pixelSize: Math.round(15 * status.uiScale)
-        font.weight: Font.Normal
-        verticalAlignment: Text.AlignVCenter
+      Row {
+        id: lineContent
+        anchors.centerIn: parent
+        spacing: Math.round((lineItem.modelData === "network" ? 8 : 7) * status.uiScale)
+
+        Text {
+          textFormat: Text.PlainText
+          height: status.lineHeight
+          anchors.verticalCenter: parent.verticalCenter
+          text: status.icon(lineItem.modelData)
+          color: status.view.foreground
+          opacity: 0.76
+          font.family: status.view.iconFontFamily
+          font.pixelSize: Math.round(18 * status.uiScale)
+          font.weight: Font.Light
+          verticalAlignment: Text.AlignVCenter
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          height: status.lineHeight
+          width: Math.min(implicitWidth, status.valueLimit)
+          text: status.lineValue(lineItem.modelData)
+          visible: text !== ""
+          color: status.view.foreground
+          opacity: 0.88
+          font.family: status.view.textFontFamily
+          font.pixelSize: Math.round(15 * status.uiScale)
+          font.weight: Font.Normal
+          verticalAlignment: Text.AlignVCenter
+          elide: Text.ElideRight
+        }
       }
     }
   }
 
-  Item {
-    id: batteryPill
-    objectName: "batteryStatus"
-    width: batteryStatusContent.implicitWidth + 2 * status.partPadding
-    height: parent.height
-    visible: status.view.hasBattery && !status.system
-
-    Row {
-      id: batteryStatusContent
-      anchors.centerIn: parent
-      spacing: Math.round(7 * status.uiScale)
-
-      Text {
-        textFormat: Text.PlainText
-        height: status.height
-        anchors.verticalCenter: parent.verticalCenter
-        text: status.view.batteryIcon(status.view.batteryPercentage)
-        color: status.view.foreground
-        opacity: 0.76
-        font.family: status.view.iconFontFamily
-        font.pixelSize: Math.round(18 * status.uiScale)
-        font.weight: Font.Light
-        verticalAlignment: Text.AlignVCenter
-      }
-
-      Text {
-        textFormat: Text.PlainText
-        height: status.height
-        text: FoamyI18n.number(status.view.batteryPercentage) + "%"
-        visible: status.styleName !== "icons"
-        color: status.view.foreground
-        opacity: 0.88
-        font.family: status.view.textFontFamily
-        font.pixelSize: Math.round(15 * status.uiScale)
-        font.weight: Font.Normal
-        verticalAlignment: Text.AlignVCenter
-      }
-    }
-  }
-
-  // "system": one row per reading, a bar under the memory and the battery.
-  // A fixed size: four rows whatever is known.
+  // "system": one row per reading, a bar under the memory, the battery and
+  // the volume. Without `items`, a fixed size: four rows whatever is known.
   Rectangle {
     id: systemPanel
     objectName: "systemPanel"
@@ -129,23 +237,30 @@ Row {
     readonly property real padding: Math.round(22 * unit)
     readonly property real rowHeight: Math.round(46 * unit)
     readonly property real rowGap: Math.round(12 * unit)
-    readonly property real memoryUsed: status.view.memoryTotal > 0 ? status.view.memoryTotal - status.view.memoryAvailable : 0
-    readonly property var rows: [
-      { icon: "\u{f0150}", label: FoamyI18n.t("Uptime"), value: status.uptimeText(status.view.systemUptime), part: -1 },
-      { icon: "\u{f035b}", label: FoamyI18n.t("Memory"),
-        value: status.view.memoryTotal > 0 ? FoamyI18n.t("%1 / %2 GB", [FoamyI18n.number(memoryUsed / 1048576, 1),
-          FoamyI18n.number(status.view.memoryTotal / 1048576, 1)]) : "\u2014",
-        part: status.view.memoryTotal > 0 ? memoryUsed / status.view.memoryTotal : -1 },
-      { icon: "\u{f04c5}", label: FoamyI18n.t("Load"), value: status.loadText(status.view.systemLoad), part: -1 },
-      status.view.hasBattery
-        ? { icon: status.view.batteryIcon(status.view.batteryPercentage), label: FoamyI18n.t("Battery"),
-          value: FoamyI18n.number(status.view.batteryPercentage) + "%", part: status.view.batteryPercentage / 100 }
-        : { icon: status.view.networkIcon, label: FoamyI18n.t("Network"), value: FoamyI18n.t(status.view.networkLabel), part: -1 }
-    ]
+    readonly property var rows: {
+      if (status.items) {
+        var out = []
+        for (var i = 0; i < status.items.length; i++) {
+          var item = status.items[i]
+          if (status.available(item))
+            out.push({ icon: status.icon(item), label: status.label(item), value: status.value(item), part: status.part(item) })
+        }
+        return out
+      }
+      return [
+        { icon: "\u{f0150}", label: FoamyI18n.t("Uptime"), value: status.uptimeText(status.view.systemUptime), part: -1 },
+        { icon: "\u{f035b}", label: FoamyI18n.t("Memory"), value: status.memoryText(), part: status.memoryPart() },
+        { icon: "\u{f04c5}", label: FoamyI18n.t("Load"), value: status.loadText(status.view.systemLoad), part: -1 },
+        status.view.hasBattery
+          ? { icon: status.view.batteryIcon(status.view.batteryPercentage), label: FoamyI18n.t("Battery"),
+            value: FoamyI18n.number(status.view.batteryPercentage) + "%", part: status.view.batteryPercentage / 100 }
+          : { icon: status.view.networkIcon, label: FoamyI18n.t("Network"), value: FoamyI18n.t(status.view.networkLabel), part: -1 }
+      ]
+    }
 
-    visible: status.system
+    visible: status.system && rows.length > 0
     width: Math.round(320 * unit)
-    height: 2 * padding + rows.length * rowHeight + (rows.length - 1) * rowGap
+    height: rows.length > 0 ? 2 * padding + rows.length * rowHeight + (rows.length - 1) * rowGap : 0
     radius: Math.round(20 * unit)
     color: status.glassFill
     border.width: 1
@@ -159,12 +274,15 @@ Row {
         required property var modelData
         required property int index
         readonly property real iconWidth: Math.round(30 * systemPanel.unit)
+        readonly property real gap: Math.round(10 * systemPanel.unit)
         x: systemPanel.padding
         y: systemPanel.padding + index * (systemPanel.rowHeight + systemPanel.rowGap)
         width: systemPanel.width - 2 * systemPanel.padding
         height: systemPanel.rowHeight
 
-        // Plain x, mirrored by hand: the icon at the start, the value at the end.
+        // Plain x, mirrored by hand: the icon at the start, the label after
+        // it, the value at the end. The alignments are logical (they mirror
+        // with the view).
         Text {
           x: status.view.rightToLeft ? reading.width - width : 0
           width: reading.iconWidth
@@ -180,8 +298,9 @@ Row {
         }
 
         Text {
-          x: status.view.rightToLeft ? 0 : reading.iconWidth
-          width: reading.width - reading.iconWidth
+          id: rowLabel
+          x: status.view.rightToLeft ? reading.width - reading.iconWidth - width : reading.iconWidth
+          width: Math.min(implicitWidth, (reading.width - reading.iconWidth) / 2)
           height: Math.round(26 * systemPanel.unit)
           textFormat: Text.PlainText
           text: reading.modelData.label
@@ -191,14 +310,16 @@ Row {
           font.pixelSize: Math.round(14 * systemPanel.unit)
           font.weight: Font.Medium
           font.letterSpacing: Math.round(1 * systemPanel.unit)
-          horizontalAlignment: status.view.rightToLeft ? Text.AlignRight : Text.AlignLeft
+          horizontalAlignment: Text.AlignLeft
           verticalAlignment: Text.AlignVCenter
           elide: Text.ElideRight
         }
 
+        // The value takes the space after the label and elides there (a
+        // long keyboard layout name).
         Text {
-          x: status.view.rightToLeft ? 0 : reading.iconWidth
-          width: reading.width - reading.iconWidth
+          x: status.view.rightToLeft ? 0 : reading.width - width
+          width: Math.max(0, reading.width - reading.iconWidth - rowLabel.width - reading.gap)
           height: Math.round(26 * systemPanel.unit)
           textFormat: Text.PlainText
           text: reading.modelData.value
@@ -206,8 +327,9 @@ Row {
           font.family: status.view.textFontFamily
           font.pixelSize: Math.round(15 * systemPanel.unit)
           font.weight: Font.DemiBold
-          horizontalAlignment: status.view.rightToLeft ? Text.AlignLeft : Text.AlignRight
+          horizontalAlignment: Text.AlignRight
           verticalAlignment: Text.AlignVCenter
+          elide: Text.ElideRight
         }
 
         Rectangle {
@@ -233,7 +355,7 @@ Row {
 
   // "3 d 4 h", "4 h 12 min", "12 min"; a dash until known.
   function uptimeText(seconds) {
-    if (!(seconds >= 0)) return "\u2014"
+    if (!(seconds >= 0)) return "—"
     var days = Math.floor(seconds / 86400)
     var hours = Math.floor(seconds % 86400 / 3600)
     var minutes = Math.floor(seconds % 3600 / 60)
@@ -242,10 +364,16 @@ Row {
     return FoamyI18n.t("%1 min", [minutes])
   }
 
+  // The three load averages, or [] until they are known.
+  function loadParts(load) {
+    var parts = String(load || "").trim().split(/\s+/).slice(0, 3)
+    return parts.length < 3 || parts.some(function(part) { return !isFinite(Number(part)) }) ? [] : parts
+  }
+
   // The 1, 5 and 15 minute load averages in the locale's numbers.
   function loadText(load) {
-    var parts = String(load || "").trim().split(/\s+/).slice(0, 3)
-    if (parts.length < 3 || parts.some(function(part) { return !isFinite(Number(part)) })) return "\u2014"
+    var parts = loadParts(load)
+    if (parts.length < 3) return "—"
     return parts.map(function(part) { return FoamyI18n.number(Number(part), 2) }).join("  ")
   }
 }
