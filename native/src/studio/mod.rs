@@ -49,6 +49,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use foamy_helper::Failure;
 use serde_json::Value;
 
+pub mod apply;
 pub mod desktop;
 pub mod draft;
 pub mod root;
@@ -237,13 +238,14 @@ pub fn check_look(look: &Value) -> Result<(), String> {
         return Err("a look must be an object".into());
     };
     for (key, value) in look {
-        match key.as_str() {
-            "preset" if !value.is_string() => return Err("preset must be a string".into()),
-            "layout" | "background" | "glass" if !value.is_object() => {
-                return Err(format!("{key} must be an object"));
-            }
-            "preset" | "layout" | "background" | "glass" => {}
-            other => return Err(format!("unknown look key {other}")),
+        if !LOOK_KEYS.contains(&key.as_str()) {
+            return Err(format!("unknown look key {key}"));
+        }
+        if key == "preset" && !value.is_string() {
+            return Err("preset must be a string".into());
+        }
+        if key != "preset" && !value.is_object() {
+            return Err(format!("{key} must be an object"));
         }
     }
     Ok(())
@@ -350,6 +352,11 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
         ["draft-load"] => draft::load(&env),
         ["draft-save"] => draft::save(&env, &read_stdin(draft::MAX_REQUEST)?),
         ["draft-clear"] => draft::clear(&env),
+        ["apply"] => apply::apply(
+            &env,
+            &read_stdin(apply::MAX_REQUEST)?,
+            &apply::Options::default(),
+        ),
         _ => Err(Failure::coded("INVALID_ARGUMENT", USAGE)),
     }
 }
