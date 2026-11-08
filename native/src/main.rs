@@ -159,6 +159,9 @@ mod studio;
 mod url;
 mod wallpaper;
 
+#[cfg(test)]
+pub mod forks;
+
 pub const MAX_INPUT: usize = 5 * 1024 * 1024;
 /// Account pictures are often camera photos, larger than track artwork.
 pub const MAX_AVATAR_INPUT: usize = 16 * 1024 * 1024;

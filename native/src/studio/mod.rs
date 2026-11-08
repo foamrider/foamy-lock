@@ -376,7 +376,8 @@ pub mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     /// A fresh directory under the system temp dir (resolved), removed on drop.
-    pub struct Scratch(pub PathBuf);
+    /// Holds `forks::Shared`: studio tests start processes.
+    pub struct Scratch(pub PathBuf, crate::forks::Shared);
 
     impl Scratch {
         pub fn new(tag: &str) -> Scratch {
@@ -389,7 +390,8 @@ pub mod tests {
             let _ = fs::remove_dir_all(&path);
             fs::create_dir(&path).unwrap();
             fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
-            Scratch(fs::canonicalize(path).unwrap())
+            let forks = crate::forks::Shared::take();
+            Scratch(fs::canonicalize(path).unwrap(), forks)
         }
 
         pub fn path(&self, rel: &str) -> PathBuf {

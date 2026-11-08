@@ -810,6 +810,9 @@ mod tests {
 
     #[test]
     fn background_decodes_in_the_real_sandbox() {
+        // Its second job re-takes the cache flock: no fork elsewhere in this
+        // test process may hold a copy of the first one's descriptor then.
+        let _alone = crate::forks::Alone::take();
         if !real_sandbox() {
             eprintln!("skipped: needs bubblewrap with namespaces and ImageMagick");
             return;
