@@ -444,6 +444,97 @@ Not fixed: Qt Quick Controls' own placeholder inside the kit's text field
 keeps its default text format (Studio sets no placeholder; the studio
 harness skips it by name).
 
+## Round 4 (user review of the live app, 2026-11-08)
+
+Decisions, one commit or more each on `feat/layout-engine`:
+- **R4-1. No canvas footer.** The size and zoom line and the "Drag to move ·
+  Shift … · ?: shortcuts" line go (`studio.shownAt`, `studio.hint`); the
+  shortcuts overlay and the tips already say it.
+- **R4-2. `password.reveal` for every style.**
+  - **Defaults per style, so parity holds:** `pill` and `dots` default to
+    `typing` (today's drawing), the other four to `always`.
+    `Layout.revealOf(item)` gives the effective value; `canonical` drops a
+    value equal to the style's default; an explicit value stays through a
+    style change (it drops out only once it equals the new style's
+    default).
+  - **New `always` drawings:** the pill keeps its glass surface and border
+    while empty, the hint inside it (bounded by the pill, as in the box);
+    the arrow still comes with typing. The dots get a dotted track along
+    the field's bottom edge, idle and while typing (the error colour on a
+    failure); the hint stays where it is.
+  - **Safety unchanged:** the editor is focused and live on every surface;
+    the hint and the fingerprint notice follow `chromeShown` only; the
+    field's rectangle doesn't depend on `reveal`; failure and checking show
+    the field.
+  - **Catalog:** `options.reveal.styles` lists all six, `options.reveal.
+    defaults` each style's default (`default` stays `always`, the
+    general fallback, for older readers).
+  - **Inspector:** Show the field is enabled for every style and shows the
+    style's default; the "already shows only the hint" note goes.
+  - **Behaviour note:** a pill or dots look with an explicit
+    `reveal: "always"` (accepted before, with no effect) now shows the
+    field while empty. Lock Studio never wrote one (it dropped defaults).
+- **R4-3. No per-part reset buttons** in the inspector: the status's "Use
+  the style's own", the glass's "Use the look's glass" and "Reset position".
+  Undo and the header's Reset cover them. The Draft functions stay.
+- **R4-4. Background source names:** "Wallpaper" / "Bakgrunnsbilde" (was
+  "Omarchy wallpaper"), "Custom image" / "Egendefinert bilde" (was "Your
+  picture"), in every string that names them and in the README.
+- **R4-5. Weather styles** `line`, `large` and `card` (never in a preset;
+  location only with `location: true`, as before):
+  - **`line`:** one plain-text line, no icon or surface: the condition and
+    the temperature ("Light rain · 6°"); `details: full` adds the high and
+    low, then the place.
+  - **`large`:** the temperature in the display face (56 px at scale 1),
+    the condition small under it; `full` adds the high and low after it.
+  - **`card`:** a glass card (`glass` applies): the icon and temperature,
+    then the condition, then the high and low; always the full report, so
+    the inspector's Details is disabled for it, with a note.
+- **R4-6. Media styles** `hero`, `minimal` and `disc` (no glass; `showMedia`
+  and `showBrowserMedia` hold as before):
+  - **`hero`:** no surface; a large rounded cover (300 px at scale 1), the
+    title and artist centred under it, then the transport controls.
+  - **`minimal`:** one plain-text line "♪ Title — Artist", no controls, no
+    cover (none is prepared).
+  - **`disc`:** a round cover with a centre hole, the title and artist
+    beside it and play/pause. It turns (one turn in 12 s) only while the
+    player plays, with GPU rendering, motion not reduced, the display awake
+    and the view visible; otherwise it holds still. The software renderer
+    clips it to a rounded square, like the pill's thumbnail.
+  - Artwork is prepared for card, pill, art, hero and disc.
+- **R4-7. Cover art, safely** (the marketplace reviewer's finding in Foamy
+  Media, omacom/omarchy-plugin-marketplace#13969: libpng keeps every
+  inflated `zTXt`, outside ImageMagick's limits):
+  - **a. The helper strips PNG text** before ImageMagick reads a byte, for
+    every PNG it decodes (artwork, the avatar, background pictures):
+    `image::strip_png_text` walks the chunks with bounds checks (length
+    under 2³¹, the chunk inside the data, a type of four ASCII letters,
+    at most 16384 chunks, an `IEND`; anything after `IEND` is dropped) and
+    copies the file without `tEXt`, `zTXt` and `iTXt`, never inflating
+    anything. A malformed PNG fails `invalid-png`, which shows the music
+    icon. Rust tests, with a generated file of many `zTXt` chunks.
+  - **b. "Cover art: Off / From the player / Also online (Spotify)"** in
+    the media inspector, a setting (not part of the look, not undoable):
+    - **Off:** `showArtwork: false`, `artworkHosts: []`.
+    - **From the player:** `showArtwork: true`, `artworkHosts: []` (local
+      `file://` art under `artworkFileRoots`; today's default).
+    - **Also online:** `showArtwork: true`, `artworkHosts: ["i.scdn.co"]`,
+      exactly: the host of Spotify's MPRIS `mpris:artUrl`. Never by
+      default.
+    - **Other hosts** in `shell.json` show as "Your own hosts"; a choice
+      replaces them.
+    - **The write:** a new IPC `foamy.lock setCoverArt <off|player|spotify>`
+      (nothing else accepted; no host ever comes from IPC), refused while
+      locked, through `writableEntry`/`writeEntry` (updateEntryInline,
+      `lastEntry` kept fresh). Lock Studio calls it through omarchy-shell
+      as Preview does. Downloads stay in the helper as they are.
+  - **`media.artwork`** (bool, default true), a look key of the media
+    element: false shows the music icon in place of the cover in this look
+    and prepares no artwork for it; the geometry doesn't change. A "Show
+    the cover" switch in the inspector for the cover styles.
+- **Kept:** `studio.*` strings in en and no (lock screen / låseskjerm),
+  PlainText for every Text, DESIGN.md, RTL, accessible names.
+
 ## Risks
 
 - **Weather couples two plugins.** It goes over IPC only, and the lock
