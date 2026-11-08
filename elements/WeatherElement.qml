@@ -48,17 +48,19 @@ Item {
   // The width it needs (and takes: the weather never fills the centre column).
   readonly property real naturalWidth: detailed ? Math.min(maxWidth, Math.round(300 * unit))
     : pill ? Math.min(maxWidth, line.implicitWidth + 2 * padding)
-    : Math.min(maxWidth, Math.max(headWidth, detailLine.visible ? detailLine.implicitWidth : 0,
-      placeLine.visible ? placeLine.implicitWidth : 0))
+    : Math.min(maxWidth, Math.max(headWidth, detailLine.shown ? detailLine.implicitWidth : 0,
+      placeLine.shown ? placeLine.implicitWidth : 0))
   readonly property real innerWidth: width - 2 * padding
 
   objectName: "weatherBlock"
   width: naturalWidth
   height: pill ? Math.round(44 * unit) : lastLineBottom + padding
-  // Where the lines below the temperature end.
-  readonly property real lastLineBottom: placeLine.visible ? placeLine.y + placeLine.height
-    : rangeLine.visible ? rangeLine.y + rangeLine.height
-    : detailLine.visible ? detailLine.y + detailLine.height : head.y + head.height
+  // Where the lines below the temperature end. Each line's own `shown`, not
+  // `visible`, which is false in a hidden view (Lock Studio measures and
+  // checks looks in views that are never drawn).
+  readonly property real lastLineBottom: placeLine.shown ? placeLine.y + placeLine.height
+    : rangeLine.shown ? rangeLine.y + rangeLine.height
+    : detailLine.shown ? detailLine.y + detailLine.height : head.y + head.height
 
   // Where a part of `partWidth` starts inside the element, on screen.
   function startX(partWidth) {
@@ -136,7 +138,8 @@ Item {
   Text {
     id: detailLine
     objectName: "weatherCondition"
-    visible: !weather.pill && weather.detailText !== ""
+    readonly property bool shown: !weather.pill && weather.detailText !== ""
+    visible: shown
     x: weather.padding
     y: head.y + head.height + Math.round(2 * weather.unit)
     width: weather.innerWidth
@@ -155,9 +158,10 @@ Item {
   Text {
     id: rangeLine
     objectName: "weatherRange"
-    visible: weather.detailed && weather.rangeText !== ""
+    readonly property bool shown: weather.detailed && weather.rangeText !== ""
+    visible: shown
     x: weather.padding
-    y: (detailLine.visible ? detailLine.y + detailLine.height : head.y + head.height) + Math.round(2 * weather.unit)
+    y: (detailLine.shown ? detailLine.y + detailLine.height : head.y + head.height) + Math.round(2 * weather.unit)
     width: weather.innerWidth
     textFormat: Text.PlainText
     text: weather.rangeText
@@ -172,9 +176,10 @@ Item {
   Text {
     id: placeLine
     objectName: "weatherLocation"
-    visible: !weather.pill && weather.locationText !== ""
+    readonly property bool shown: !weather.pill && weather.locationText !== ""
+    visible: shown
     x: weather.padding
-    y: (rangeLine.visible ? rangeLine.y + rangeLine.height : detailLine.visible ? detailLine.y + detailLine.height
+    y: (rangeLine.shown ? rangeLine.y + rangeLine.height : detailLine.shown ? detailLine.y + detailLine.height
       : head.y + head.height) + Math.round(2 * weather.unit)
     width: weather.innerWidth
     textFormat: Text.PlainText
@@ -194,7 +199,10 @@ Item {
     objectName: "weatherLine"
     visible: weather.pill
     readonly property real fixedWidth: pillIcon.width + pillTemperature.implicitWidth + pillRange.implicitWidth
-      + (visibleChildren.length - 1) * spacing
+      + (parts - 1) * spacing
+    // The parts on the line (not visibleChildren: none are in a hidden view).
+    readonly property int parts: 2 + (weather.conditionText !== "" ? 1 : 0) + (weather.rangeText !== "" ? 1 : 0)
+      + (weather.locationText !== "" ? 1 : 0)
     readonly property real room: Math.max(0, weather.maxWidth - 2 * weather.padding - fixedWidth)
     x: weather.startX(width)
     anchors.verticalCenter: parent.verticalCenter

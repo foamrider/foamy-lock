@@ -42,13 +42,15 @@ Flow {
   // The widest a reading in a line may grow (a long layout name elides).
   readonly property real valueLimit: Math.round(220 * uiScale)
   readonly property real lineHeight: Math.round(38 * uiScale)
-  // Everything on one line: the parts that show, side by side.
+  // Everything on one line: the parts that show, side by side. Each part's
+  // own `shown`, not `visible`, which is false in a hidden view (Lock
+  // Studio measures and checks looks in views that are never drawn).
   readonly property real naturalWidth: {
     var total = 0
     var shown = 0
     for (var i = 0; i < children.length; i++) {
       var child = children[i]
-      if (!child.visible || !(child.width > 0)) continue
+      if (child["shown"] !== true || !(child.width > 0)) continue
       total += child.width
       shown++
     }
@@ -174,7 +176,8 @@ Flow {
       required property string modelData
       required property int index
       objectName: modelData + "Status"
-      visible: !status.system && status.available(modelData)
+      readonly property bool shown: !status.system && status.available(modelData)
+      visible: shown
       width: lineContent.implicitWidth + 2 * status.partPadding
       height: status.lineHeight
 
@@ -258,7 +261,8 @@ Flow {
       ]
     }
 
-    visible: status.system && rows.length > 0
+    readonly property bool shown: status.system && rows.length > 0
+    visible: shown
     width: Math.round(320 * unit)
     height: rows.length > 0 ? 2 * padding + rows.length * rowHeight + (rows.length - 1) * rowGap : 0
     radius: Math.round(20 * unit)
