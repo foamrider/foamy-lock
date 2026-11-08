@@ -1543,7 +1543,7 @@ fn cover_art(test: &Test) -> R {
     // Refused while locked (the harness's stand-in session lock).
     let before = saved(test)?;
     ensure!(test.lock("lock")? == "ok");
-    test.wait_for(|s| Ok(on(s, "locked")?))?;
+    test.wait_for(|s| on(s, "locked"))?;
     ensure!(test.ipc("foamy.lock", "setCoverArt", &["spotify"])? == "locked");
     test.submit("test-password")?;
     test.wait_for(|s| Ok(!on(s, "locked")?))?;
