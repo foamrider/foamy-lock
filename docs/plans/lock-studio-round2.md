@@ -846,6 +846,52 @@ Backdrop.qml and the background page are untouched.
 - **Live app:** no new files, so the open app hot-reloads; LockSources
   now runs `omarchy-shell foamy.lock catalog` (read only) when it loads.
 
+### Round 4
+
+On `feat/layout-engine`, 2026-11-08 (decisions above); offscreen only (fake
+omarchy-shell and session lock; nothing locked, no real omarchy-shell,
+hyprctl dispatch or desktop quickshell). Commits: 4dc98c3 (footer), 58bc2db
+(resets), 8a71e22 (source names), f198451 (PNG text strip), f7f3f6a
+(reveal), fd4133e (weather), c4954e9 (media), 44529d4 (cover art).
+- **Spotify's host, verified locally:** the installed Spotify 1.3.4.258
+  (`/opt/spotify/spotify`) carries the template
+  `https://i.scdn.co/image/{file_id}` beside `mpris:artUrl`, and the running
+  player's MPRIS `mpris:artUrl` read with `busctl --user` (scheme and host
+  only) is `https` on `i.scdn.co`, path `/image/…`. Only that host is
+  written; an `http://i.scdn.co` URL (also in the binary) stays refused as
+  `unsupported-scheme`.
+- **PNG text strip:** the crafted file (1024 `zTXt` chunks, 384 MiB of text
+  in 2.5 MB, generated in the test) strips to the bare 72-byte image and
+  decodes to the same pixels in the real sandbox. Here (ImageMagick
+  7.1.2-34, libpng 1.6.59) even the unstripped file decodes within limits
+  (19 MiB peak for 4 GiB of text), so the reviewer's growth (7.1.2-35)
+  doesn't reproduce on this machine; the strip makes it independent of
+  versions. Helper rebuilt, pinned and verified (both arches).
+- **Deviations:**
+  - `hero` has no transport controls (decided as cover, title, artist): with
+    controls it was too tall for an 800 × 1000 screen's centre column above
+    the field (the styles sweep's overlap check). The media keys work while
+    locked.
+  - Cover art is one commit for the lock's IPC, `media.artwork` and the
+    app's controls (one feature).
+  - `Off` also empties `artworkHosts`, so no remote opt-in lingers.
+  - The Draft's reset helpers (`clearItems`, `resetOffset`, `setGlass` with
+    null) stay, unused by the UI, still node-tested.
+  - Pre-existing, not from this round: `tests/artwork_test.py`'s four
+    `FakeDecoder` launch-contract cases expect the seccomp program from
+    before foamy-kit 0.6.0's denylist (they fail the same on fd99fe4's
+    helper). Its truncated-PNG case now also accepts `invalid-png`.
+- **Checks, all green:** node (118); harness parity, runtime (new cover art
+  case), layout, render, styles (reveal: both modes and the default on all
+  six styles, primary and secondary), placement (new disc/minimal/hero
+  case), video, studio en/no/ar (new: the media's cover; capture
+  `studio-media`); kit-check; `check.sh --lint-only`; qmllint (the same
+  warning kinds as at fd99fe4); `omarchy-plugin-validate`; build-native
+  `--test` and `--verify`; thumbnails byte-identical.
+- **Live app:** no new files, so the open app hot-reloads; the cover art
+  choice needs a shell running this branch (`setCoverArt`), otherwise it
+  says the running Foamy Lock is older.
+
 ## Open questions for the user
 
 None. Settled by the user on 2026-11-08:
