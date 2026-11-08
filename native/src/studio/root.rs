@@ -12,6 +12,10 @@
 //!   thumbnails, and this helper through FoamyNative from the root);
 //! - `Commons` → `$OMARCHY_PATH/shell/Commons`, else
 //!   `/usr/share/omarchy/shell/Commons` (`qs.Commons`);
+//! - `Ui` → the `Ui` beside that `Commons` (`$OMARCHY_PATH/shell/Ui`, else
+//!   `/usr/share/omarchy/shell/Ui`; `qs.Ui`, which the kit's buttons and
+//!   dropdown import; its own `qs.Commons` import resolves through the
+//!   root's `Commons`);
 //! - `qmldir`: one `Name 1.0 Name.qml` line per top-level `.qml` file whose
 //!   name starts with an uppercase letter (`singleton Name 1.0 Name.qml`
 //!   when the file has `pragma Singleton` in its first 8 KiB), sorted.
@@ -65,6 +69,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
     ("bin", false),
 ];
 const COMMONS: &str = "Commons";
+const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
 const STAGING: &str = ".root-";
 
@@ -103,11 +108,14 @@ fn is_singleton(path: &Path) -> bool {
             .any(|line| line.trim() == "pragma Singleton")
 }
 
-/// The root for `plugin` with Omarchy's `commons`.
+/// The root for `plugin` with Omarchy's `commons` (and the `Ui` beside it).
 pub fn plan(plugin: &Path, commons: &Path) -> Result<Plan, Failure> {
     let mut links = BTreeMap::new();
     let reserved = |name: &str| {
-        name == QMLDIR || name == COMMONS || PLUGIN_LINKS.iter().any(|(fixed, _)| *fixed == name)
+        name == QMLDIR
+            || name == COMMONS
+            || name == UI
+            || PLUGIN_LINKS.iter().any(|(fixed, _)| *fixed == name)
     };
     let studio = plugin.join("studio");
     match fs::read_dir(&studio) {
@@ -141,6 +149,7 @@ pub fn plan(plugin: &Path, commons: &Path) -> Result<Plan, Failure> {
         ));
     }
     links.insert(COMMONS.to_string(), commons.to_path_buf());
+    links.insert(UI.to_string(), commons.with_file_name(UI));
     let mut qmldir = String::new();
     for (name, target) in &links {
         if let Some(stem) = name.strip_suffix(".qml")
@@ -427,6 +436,7 @@ mod tests {
         scratch.file("plugin/studio/Draft.js", ".pragma library\n");
         scratch.file("plugin/studio/qmldir", "ignored\n");
         scratch.file("plugin/studio/kit", "a clash with the plugin's kit\n");
+        scratch.file("plugin/studio/Ui", "a clash with Omarchy's Ui\n");
         scratch.file("plugin/studio/.hidden.qml", "");
         fs::create_dir_all(scratch.path("plugin/studio/parts")).unwrap();
         fs::create_dir_all(scratch.path("plugin/previews")).unwrap();
@@ -463,6 +473,7 @@ mod tests {
                 "Model.js",
                 "StudioWindow.qml",
                 "Theme.qml",
+                "Ui",
                 "elements",
                 "i18n",
                 "kit",
@@ -482,6 +493,11 @@ mod tests {
         );
         assert_eq!(link("LockView.qml"), plugin.join("LockView.qml"));
         assert_eq!(link("Commons"), commons);
+        assert_eq!(
+            link("Ui"),
+            scratch.path("omarchy/shell/Ui"),
+            "Omarchy's Ui, beside its Commons, wins a clash"
+        );
         assert_eq!(
             fs::read_to_string(root.join("qmldir")).unwrap(),
             "LockView 1.0 LockView.qml\nStudioWindow 1.0 StudioWindow.qml\nsingleton Theme 1.0 Theme.qml\n"
@@ -581,11 +597,13 @@ mod tests {
                 "Layout.js",
                 "LockView.qml",
                 "Model.js",
+                "Ui",
                 "elements",
                 "i18n",
                 "kit"
             ]
         );
+        assert_eq!(plan.links["Ui"], Path::new("/Ui"));
         assert_eq!(plan.qmldir, "LockView 1.0 LockView.qml\n");
     }
 

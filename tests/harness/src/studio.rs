@@ -2,7 +2,7 @@
 //!
 //! The app root is built the way `foamy-lock-helper studio open` builds it
 //! (native/src/studio/root.rs: links to every `studio/` entry, the lock's
-//! files and Omarchy's `Commons`, and a generated `qmldir`), in a temporary
+//! files, Omarchy's `Commons` and `Ui`, and a generated `qmldir`), in a temporary
 //! HOME at `$XDG_CACHE_HOME/foamy-lock-studio/root`. For the test, three
 //! entries differ: `LockView.qml` is the fixture-patched copy every suite
 //! uses (fixed clock, network and battery), `fixtures/` holds those
@@ -60,6 +60,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
     ("bin", false),
 ];
 const COMMONS: &str = "Commons";
+const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
 const CAPTURES: [&str; 13] = [
     "studio-idle",
@@ -209,11 +210,14 @@ fn is_singleton(path: &Path) -> bool {
             .any(|line| line.trim() == "pragma Singleton")
 }
 
-/// The root for `plugin` with `commons`, by root.rs's rules: (links, qmldir).
+/// The root for `plugin` with `commons` (and the `Ui` beside it), by root.rs's rules: (links, qmldir).
 pub fn plan(plugin: &Path, commons: &Path) -> Result<(BTreeMap<String, PathBuf>, String), String> {
     let mut links = BTreeMap::new();
     let reserved = |name: &str| {
-        name == QMLDIR || name == COMMONS || PLUGIN_LINKS.iter().any(|(fixed, _)| *fixed == name)
+        name == QMLDIR
+            || name == COMMONS
+            || name == UI
+            || PLUGIN_LINKS.iter().any(|(fixed, _)| *fixed == name)
     };
     let studio = plugin.join("studio");
     for entry in fs::read_dir(&studio).map_err(app::io(studio.display()))? {
@@ -234,6 +238,7 @@ pub fn plan(plugin: &Path, commons: &Path) -> Result<(BTreeMap<String, PathBuf>,
         }
     }
     links.insert(COMMONS.to_string(), commons.to_path_buf());
+    links.insert(UI.to_string(), commons.with_file_name(UI));
     Ok((links.clone(), qmldir(&links)))
 }
 
@@ -545,6 +550,7 @@ mod tests {
             "previews",
             "bin",
             "Commons",
+            "Ui",
         ] {
             assert!(links.contains_key(name), "{name}");
         }
@@ -552,6 +558,7 @@ mod tests {
             links["Commons"],
             Path::new("/usr/share/omarchy/shell/Commons")
         );
+        assert_eq!(links["Ui"], Path::new("/usr/share/omarchy/shell/Ui"));
         assert!(qmldir.contains("Canvas 1.0 Canvas.qml\n"));
         assert!(qmldir.contains("LockView 1.0 LockView.qml\n"));
         assert!(!qmldir.contains("shell"), "{qmldir}");
