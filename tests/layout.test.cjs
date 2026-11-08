@@ -71,7 +71,7 @@ test('mistakes in the look are reported, never guessed', () => {
     {background: {path: 'relative.png'}}, {background: {path: '/tmp/../etc/x.png'}}, {background: {path: '/tmp/x.gif'}},
     {background: {source: 'picture'}}, {background: {colour: 'red'}}, {background: []},
     {glass: {opacity: -0.1}}, {glass: {opacity: 1.5}}, {glass: {blur: true}}, {glass: 0.5},
-    {background: {decor: 'bars'}}, {background: {decor: true}}, {background: {source: 'snow'}},
+    {background: {decor: 'bars'}}, {background: {decor: true}}, {background: {source: 'lava'}},
     {glass: {tint: 'red'}}, {glass: {tint: 1}}, {layout: {calendar: {style: 'month'}}}
   ]
   for (const entry of invalid) {

@@ -496,3 +496,41 @@ function matrixPoints(ctx, s) {
 }
 
 animation("matrix", 9.5, skyField(0.7, 0.7), matrixPoints)
+
+// ---- snow (snow.frag) -------------------------------------------------------
+
+function snowPoints(ctx, s) {
+  for (var l = 0; l < 4; l++) {
+    var cell = (26 + 14 * l + 12 * l * l) * s.unit
+    var radius = (1.6 + 1.2 * l + 1.1 * l * l) * s.unit
+    var soft = 0.45 + 0.17 * l
+    var salt = 300 + 20 * l
+    var rows = Math.ceil(s.h / cell) + 1
+    var fall = Math.floor(3 + 2 * l) * rows * cell * s.t / s.loop
+    var tint = mix3(mix3(s.cyan, s.ink, 0.6), s.ink, l / 3)
+    var gain = 0.5 + 0.1 * l
+    for (var gy = Math.floor(-fall / cell); gy * cell < s.h - fall; gy++) {
+      var r = posmod(gy, rows)
+      for (var gx = 0; gx * cell < s.w; gx++) {
+        if (hash(gx, r, salt) > 0.7) continue
+        var sway = 0.18 * cell * Math.sin(s.turn * Math.floor(2 + 4 * hash(gx, r, salt + 1)) + TAU * hash(gx, r, salt + 2))
+        var x = (gx + 0.3 + 0.4 * hash(gx, r, salt + 3)) * cell + sway
+        var y = (gy + 0.2 + 0.6 * hash(gx, r, salt + 4)) * cell + fall
+        var size = radius * (0.6 + 0.6 * hash(gx, r, salt + 5))
+        var inner = clamp((size * (1 - soft) - 0.5 * s.unit) / size, 0, 0.95)
+        var alpha = (0.45 + 0.55 * hash(gx, r, salt + 6)) * gain
+        var gradient = ctx.createRadialGradient(x, y, 0, x, y, size)
+        gradient.addColorStop(0, css(tint, alpha))
+        gradient.addColorStop(inner, css(tint, alpha))
+        gradient.addColorStop(mix(inner, 1, 0.5), css(tint, alpha * 0.5))
+        gradient.addColorStop(1, css(tint, 0))
+        ctx.fillStyle = gradient
+        ctx.fillRect(x - size, y - size, 2 * size, 2 * size)
+      }
+    }
+  }
+}
+
+animation("snow", 12, skyField(0.7, 1, function(s, y, out) {
+  lay(out, mix3(s.cyan, s.ink, 0.5), 0.05 * smoothstep(0.5, 1, y), s.glow)
+}), snowPoints)
