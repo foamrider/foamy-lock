@@ -81,6 +81,16 @@ ShellRoot {
     function previewState(): string { return String(service.previewVisible) }
     function previewKey(): string { var event = { accepted: false }; service.previewKeyPressed(event); return String(event.accepted) }
     // The overlay's parts: the banner, the hint, the keyboard hold.
+    // foamy.lock's JSON calls with arguments just over and at 64 KiB.
+    function bigArguments(): string {
+      var ipc = service.testFoamyIpc
+      function pad(head, bytes) { return head + " ".repeat(bytes - head.length) }
+      var look = '{"preset":"zen"}'
+      return JSON.stringify({
+        previewLook: { over: ipc.previewLook(pad(look, 65537)), at: ipc.previewLook(pad(look, 65536)) },
+        saveLook: { over: ipc.saveLook(pad(look, 65537)), at: ipc.saveLook(pad('{"preset":"zen","bogus":1}', 65536)) },
+        savePreset: { over: ipc.savePreset(pad(look, 65537)), at: ipc.savePreset(pad('{"id":"big"}', 65536)) } })
+    }
     function previewParts(): string {
       function find(item, name) {
         if (!item) return null

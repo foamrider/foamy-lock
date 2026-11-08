@@ -352,11 +352,13 @@ rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes 
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
 `saveLook` also takes `userPreset`, the id of the user preset the look came from
 (omitted, the link is removed). A `shell.json` that Omarchy can't read is never
-written: the answer is then `write-failed`.
+written: the answer is then `write-failed`. A JSON argument (`previewLook`, `saveLook`,
+`savePreset`) over 64 KiB is refused before it is parsed: `invalid: argument over 65536 bytes`.
 
 **User presets.** `userPresets` in the `foamy.lock` entry holds your own presets,
 newest first: `[{"id": "u-…", "name": "Foamy (mine)", "look": {"preset": …,
-"layout": …, "background": …, "glass": …}}]`, at most 50 and 256 KiB. Each item is
+"layout": …, "background": …, "glass": …}}]`, at most 50 and 256 KiB (items past either are
+counted as skipped, not read). Each item is
 checked on its own: an invalid one is skipped (`status` and `catalog` count it in
 `userPresetsInvalid`), and nothing in the list can change the settings or the look.
 `catalog` lists them (`userPresets`, with the built-in preset's thumbnail), and

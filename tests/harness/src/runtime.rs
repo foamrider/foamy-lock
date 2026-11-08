@@ -120,6 +120,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testProbeRetry: fingerprintRecheckTimer
   property alias testResume: fingerprintResumeTimer
   property alias testWeatherRetry: weatherRetryTimer
+  property alias testFoamyIpc: foamyLockIpc
   property bool testStaleLocked: false";
     let replacements = [
         ("import Quickshell.Wayland", "import \"mocks\" as Mock"),
@@ -919,6 +920,25 @@ fn look(test: &Test) -> R {
             .starts_with("invalid: ")
     );
     ensure!(test.ipc("foamy.lock", "previewLook", &["{not json"])? == "invalid-json");
+    // JSON arguments over 64 KiB are refused before they are parsed (valid
+    // JSON padded with spaces, so only the size can refuse it); 64 KiB is
+    // parsed (saveLook and savePreset then refuse what they read, so nothing
+    // is written). Called in the process: `quickshell ipc` itself can't carry
+    // them.
+    let big = parse(&test.test("bigArguments")?)?;
+    for function in ["previewLook", "saveLook", "savePreset"] {
+        ensure!(
+            text(&big, &format!("{function}.over"))? == "invalid: argument over 65536 bytes",
+            "{function} over 64 KiB: {big}"
+        );
+    }
+    ensure!(
+        text(&big, "previewLook.at")? == "ok"
+            && text(&big, "saveLook.at")? == "invalid: unknown key bogus"
+            && text(&big, "savePreset.at")?.starts_with("invalid: name must be"),
+        "64 KiB is parsed: {big}"
+    );
+    ensure!(test.lock("hidePreview")? == "ok");
     for name in ["field-only", "../editorial", ""] {
         ensure!(
             test.ipc("foamy.lock", "previewPreset", &[name])? == "unknown-preset",

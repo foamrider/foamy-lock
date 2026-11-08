@@ -1891,6 +1891,7 @@ Item {
   // A target only this plugin uses, so its status (and the conflict flag)
   // stays reachable even if another lock service answers "lock".
   FoamyIpc {
+    id: foamyLockIpc
     target: "foamy.lock"
 
     function status(): string {
@@ -1942,7 +1943,10 @@ Item {
     // validated by the same rules. Nothing is saved; nothing can unlock.
     function previewLook(look: string): string {
       var entry = null
-      try { entry = JSON.parse(String(look || "")) } catch (error) { return "invalid-json" }
+      var text = String(look || "")
+      var big = Layout.ipcArgumentError(text)
+      if (big) return "invalid: " + big
+      try { entry = JSON.parse(text) } catch (error) { return "invalid-json" }
       var parsed = Layout.parseLook(entry)
       if (!parsed.valid) return "invalid: " + parsed.error
       if (root.currentlyLocked()) return "locked"
@@ -1968,7 +1972,10 @@ Item {
     function saveLook(look: string): string {
       var keys = ["preset", "layout", "background", "glass", "userPreset"]
       var request = null
-      try { request = JSON.parse(String(look || "")) } catch (error) { return "invalid-json" }
+      var text = String(look || "")
+      var big = Layout.ipcArgumentError(text)
+      if (big) return "invalid: " + big
+      try { request = JSON.parse(text) } catch (error) { return "invalid-json" }
       if (!request || typeof request !== "object" || Array.isArray(request)) return "invalid: expected an object"
       for (var key in request)
         if (keys.indexOf(key) === -1) return "invalid: unknown key " + key
@@ -2014,7 +2021,10 @@ Item {
     // it is; a new one goes first.
     function savePreset(preset: string): string {
       var item = null
-      try { item = JSON.parse(String(preset || "")) } catch (error) { return "invalid-json" }
+      var text = String(preset || "")
+      var big = Layout.ipcArgumentError(text)
+      if (big) return "invalid: " + big
+      try { item = JSON.parse(text) } catch (error) { return "invalid-json" }
       var problem = Layout.userPresetError(item)
       if (problem) return "invalid: " + problem
       if (root.currentlyLocked()) return "locked"

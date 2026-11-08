@@ -81,6 +81,38 @@ test('reading stops at 50 presets and at 256 KiB', () => {
   assert.equal(Layout.utf8Length('aé✓😀'), 1 + 2 + 3 + 4)
 })
 
+test('past the caps the rest of the list is counted, never read', () => {
+  // A million items: the 951st and later are never touched (a getter there
+  // would throw), and it takes no longer than 50.
+  const huge = Array.from({length: 60}, (_, i) => preset('p' + i))
+  huge.length = 1000000
+  Object.defineProperty(huge, 60, {get() { throw new Error('item 60 was read') }})
+  const started = Date.now()
+  const read = Layout.parseUserPresets({userPresets: huge})
+  assert.equal(read.presets.length, Layout.USER_PRESET_LIMIT)
+  assert.equal(read.invalid, 1000000 - Layout.USER_PRESET_LIMIT)
+  assert.match(read.error, /userPresets\[50\]: only the first 50/)
+  assert.ok(Date.now() - started < 1000, 'the rest is not walked')
+  // Past the bytes as well: the items after the one that crossed them.
+  const filler = {junk: 'x'.repeat(Layout.USER_PRESETS_BYTES)}
+  const past = [preset('first'), filler, preset('late')]
+  Object.defineProperty(past, 2, {get() { throw new Error('item 2 was read') }})
+  const bytes = Layout.parseUserPresets({userPresets: past})
+  assert.deepEqual(bytes.presets.map(p => p.id), ['first'])
+  assert.equal(bytes.invalid, 2)
+  assert.match(bytes.error, /^userPresets\[1\]: user presets past 262144 bytes/)
+})
+
+test('IPC arguments over 64 KiB are refused before parsing', () => {
+  assert.equal(Layout.IPC_ARGUMENT_BYTES, 65536)
+  assert.equal(Layout.ipcArgumentError('x'.repeat(65536)), '')
+  assert.equal(Layout.ipcArgumentError('x'.repeat(65537)), 'argument over 65536 bytes')
+  // In UTF-8 bytes: 21846 three-byte characters are 65538 bytes.
+  assert.equal(Layout.ipcArgumentError('✓'.repeat(21845)), '')
+  assert.equal(Layout.ipcArgumentError('✓'.repeat(21846)), 'argument over 65536 bytes')
+  assert.equal(Layout.ipcArgumentError(''), '')
+})
+
 test('savePreset merges one item into the entry and keeps the rest', () => {
   const entry = {id: 'foamy.lock', timeFormat: '12h', preset: 'zen', userPresets: [preset('a'), {broken: true}]}
   const saved = Layout.savingPreset(entry, preset('b', 'New', {preset: 'corner'}))

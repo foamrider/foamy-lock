@@ -758,6 +758,19 @@ function utf8Length(text) {
   return bytes
 }
 
+// The largest IPC argument the lock parses (Omarchy's own cap): a JSON
+// argument over it is refused before JSON.parse, so a caller that reaches
+// the handler directly can't make the lock parse megabytes. In UTF-8 bytes;
+// a string with more UTF-16 units than that is over without counting.
+var IPC_ARGUMENT_BYTES = 64 * 1024
+
+// "" when `text` may be parsed, else why not.
+function ipcArgumentError(text) {
+  text = String(text)
+  return text.length > IPC_ARGUMENT_BYTES || utf8Length(text) > IPC_ARGUMENT_BYTES
+    ? "argument over " + IPC_ARGUMENT_BYTES + " bytes" : ""
+}
+
 function userPresetIdError(id) {
   return typeof id === "string" && USER_PRESET_ID.test(id) ? ""
     : "id must be 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit"
@@ -801,19 +814,30 @@ function parseUserPresets(entry) {
     result.invalid++
     if (!result.error) result.error = "userPresets[" + index + "]: " + problem
   }
+  // Past the cap (or the bytes) every later item is dropped as well: they
+  // are counted at once and never looked at, so a huge list costs no more
+  // than the first 50 items.
+  function dropRest(index, problem) {
+    drop(index, problem)
+    result.invalid += list.length - index - 1
+  }
   for (var i = 0; i < list.length; i++) {
+    if (i >= USER_PRESET_LIMIT) {
+      dropRest(i, "only the first " + USER_PRESET_LIMIT + " user presets are read")
+      break
+    }
     var item = list[i]
     bytes += utf8Length(JSON.stringify(item === undefined ? null : item)) + (i > 0 ? 1 : 0)
-    if (i >= USER_PRESET_LIMIT) drop(i, "only the first " + USER_PRESET_LIMIT + " user presets are read")
-    else if (bytes > USER_PRESETS_BYTES) drop(i, "user presets past " + USER_PRESETS_BYTES + " bytes are not read")
+    if (bytes > USER_PRESETS_BYTES) {
+      dropRest(i, "user presets past " + USER_PRESETS_BYTES + " bytes are not read")
+      break
+    }
+    var problem = userPresetError(item)
+    if (!problem && seen[item.id]) problem = "id " + item.id + " is used twice"
+    if (problem) drop(i, problem)
     else {
-      var problem = userPresetError(item)
-      if (!problem && seen[item.id]) problem = "id " + item.id + " is used twice"
-      if (problem) drop(i, problem)
-      else {
-        seen[item.id] = true
-        result.presets.push({ id: item.id, name: item.name, look: copy(item.look), effective: parseLook(item.look).look })
-      }
+      seen[item.id] = true
+      result.presets.push({ id: item.id, name: item.name, look: copy(item.look), effective: parseLook(item.look).look })
     }
   }
   return result
@@ -906,6 +930,8 @@ if (typeof module !== "undefined") {
   module.exports.USER_PRESETS_BYTES = USER_PRESETS_BYTES
   module.exports.USER_PRESET_NAME_LENGTH = USER_PRESET_NAME_LENGTH
   module.exports.utf8Length = utf8Length
+  module.exports.IPC_ARGUMENT_BYTES = IPC_ARGUMENT_BYTES
+  module.exports.ipcArgumentError = ipcArgumentError
   module.exports.userPresetIdError = userPresetIdError
   module.exports.userPresetNameError = userPresetNameError
   module.exports.userPresetError = userPresetError
