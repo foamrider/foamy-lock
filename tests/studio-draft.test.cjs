@@ -716,3 +716,16 @@ test('status items: an ordered checklist from the style\'s own contents', () => 
   assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(all))), ['network', 'battery', 'volume', 'bluetooth', 'keyboard', 'uptime', 'load', 'memory'])
   assert.ok(Layout.parseLook(all).valid)
 })
+
+test('[ and ] and the library\'s Up and Down skip a module that can\'t be used', () => {
+  const noWeather = name => name !== 'weather'
+  assert.equal(Draft.neighbourModule('status', 1, noWeather), 'clock')
+  assert.equal(Draft.neighbourModule('clock', -1, noWeather), 'status')
+  assert.equal(Draft.neighbourModule('weather', 1, noWeather), 'clock')
+  assert.equal(Draft.neighbourModule('clock', 1, () => false), 'clock', 'nothing usable: stays')
+  assert.equal(Draft.libraryStep('status', 1, noWeather), 'status', 'no wrapping: the last usable row')
+  assert.equal(Draft.libraryStep('status', 1), 'weather')
+  assert.equal(Draft.libraryStep('media', 1, noWeather), 'status')
+  assert.equal(Draft.libraryStep('clock', -1), 'clock')
+  assert.equal(Draft.libraryStep('', 1), 'clock')
+})

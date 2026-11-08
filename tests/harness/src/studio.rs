@@ -62,7 +62,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 20] = [
+const CAPTURES: [&str; 21] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -83,6 +83,7 @@ const CAPTURES: [&str; 20] = [
     "studio-preset-name",
     "studio-items",
     "studio-weather",
+    "studio-needs-weather",
 ];
 /// The lock's entry the app reads (read-only) for the canvas.
 const SHELL_JSON: &str =
@@ -94,11 +95,21 @@ const SHELL_JSON: &str =
 /// "unchanged") and records each call's arguments in `$dir/call-<n>`, the
 /// number of calls in `$dir/count`. The user preset operations (savePreset,
 /// renamePreset, deletePreset) answer what `$dir/preset-mode` says instead
-/// (ok by default). Anything but `foamy.lock saveLook`, `previewLook`,
-/// `savePreset` or `deletePreset` with one argument, or `renamePreset`
-/// with two, is refused.
+/// (ok by default). `foamy.lock catalog` (no argument) prints `$dir/catalog`
+/// (Foamy Weather reachable by default; "fail" fails like a lock that isn't
+/// running) and counts in `$dir/catalog-count` instead, so it never shifts
+/// the other calls' numbers. Anything but `foamy.lock saveLook`,
+/// `previewLook`, `savePreset` or `deletePreset` with one argument, or
+/// `renamePreset` with two, is refused.
 const FAKE_SHELL: &str = r#"#!/bin/bash
 dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+if [[ $1:$2:$# == foamy.lock:catalog:2 ]]; then
+  echo $(( $(cat "$dir/catalog-count" 2>/dev/null || echo 0) + 1 )) > "$dir/catalog-count"
+  catalog=$(cat "$dir/catalog")
+  [[ $catalog == fail ]] && { echo 'omarchy-shell is not running' >&2; exit 1; }
+  printf '%s\n' "$catalog"
+  exit 0
+fi
 n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
 echo "$n" > "$dir/count"
 printf '%s\n' "$@" > "$dir/call-$n"
@@ -127,6 +138,10 @@ case $mode in
 esac
 "#;
 
+/// The lock's catalog as the fake answers it by default: version 3, with
+/// Foamy Weather reachable (only the keys the app reads).
+const CATALOG: &str = r#"{"version":3,"weather":{"target":true,"state":"ok"}}"#;
+
 /// The fake omarchy-shell in `base/fake-shell/bin`; returns its directory.
 fn fake_shell(base: &Path) -> Result<PathBuf, String> {
     use std::os::unix::fs::PermissionsExt;
@@ -138,6 +153,7 @@ fn fake_shell(base: &Path) -> Result<PathBuf, String> {
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
         .map_err(app::io("omarchy-shell"))?;
     fs::write(dir.join("mode"), "ok\n").map_err(app::io("mode"))?;
+    fs::write(dir.join("catalog"), CATALOG).map_err(app::io("catalog"))?;
     Ok(dir)
 }
 

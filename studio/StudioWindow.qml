@@ -122,6 +122,14 @@ FocusScope {
   readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked || resetAsked
     || nameAsked !== "" || deleteAsked !== ""
 
+  // Foamy Weather: unless the lock's catalog says it can't reach it, the
+  // weather can be shown. Without it a hidden weather can't be shown (its
+  // library row is disabled: "Needs Foamy Weather"); a shown one can still
+  // be selected, moved and hidden.
+  readonly property bool weatherAvailable: lockSources.weatherTarget !== false
+  function canShow(name) { return name !== "weather" || weatherAvailable }
+  function moduleUsable(name) { return canShow(name) || !(look.elements[name] && look.elements[name].hidden) }
+
   // --- user presets ----------------------------------------------------------
   // [{ id, name, look, effective }], newest first (LockSources).
   readonly property var userPresets: lockSources.userPresets
@@ -544,6 +552,7 @@ FocusScope {
   // --- dragging from the library onto the canvas ---------------------------
 
   function libraryDragStart(name) {
+    if (!moduleUsable(name)) return
     selectModule(name)
     libraryDrag = name
   }
@@ -703,7 +712,7 @@ FocusScope {
       return true
     }
     if (key === Qt.Key_BracketLeft || key === Qt.Key_BracketRight) {
-      selectModule(Draft.neighbourModule(selected, key === Qt.Key_BracketLeft ? -1 : 1))
+      selectModule(Draft.neighbourModule(selected, key === Qt.Key_BracketLeft ? -1 : 1, moduleUsable))
       return true
     }
     return false

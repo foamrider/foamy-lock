@@ -773,12 +773,26 @@ function problemElements(code, elements, rects, width, height) {
   return []
 }
 
-// The module before or after `name` in the library order (wrapping).
-function neighbourModule(name, step) {
+// The module before or after `name` in the library order (wrapping),
+// skipping those `usable(name)` refuses (a weather that can't be shown).
+function neighbourModule(name, step, usable) {
   var index = DISPLAY_ORDER.indexOf(name)
-  if (index === -1) return DISPLAY_ORDER[0]
   var count = DISPLAY_ORDER.length
-  return DISPLAY_ORDER[((index + step) % count + count) % count]
+  if (index === -1) index = step > 0 ? -1 : 0
+  for (var i = 1; i <= count; i++) {
+    var next = DISPLAY_ORDER[((index + i * step) % count + count) % count]
+    if (!usable || usable(next)) return next
+  }
+  return name
+}
+
+// The next module from `name` in `step` (-1 or 1) in the library order,
+// without wrapping, that `usable(name)` takes; `name` at either end.
+function libraryStep(name, step, usable) {
+  var index = DISPLAY_ORDER.indexOf(name)
+  for (var at = index + step; at >= 0 && at < DISPLAY_ORDER.length; at += step)
+    if (!usable || usable(DISPLAY_ORDER[at])) return DISPLAY_ORDER[at]
+  return index === -1 ? DISPLAY_ORDER[0] : name
 }
 
 // --- screens -------------------------------------------------------------------
@@ -986,7 +1000,7 @@ if (typeof module !== "undefined") module.exports = {
   gridStep: gridStep, snapRadius: snapRadius, dragAxis: dragAxis, zonesFor: zonesFor, bounds: bounds, clampRect: clampRect,
   nearestAnchor: nearestAnchor, snap: snap, drop: drop, offsetFrom: offsetFrom, neighbourZone: neighbourZone, nudge: nudge, gridMove: gridMove,
   resizeScale: resizeScale, probeLook: probeLook, draggedLook: draggedLook, scaledLook: scaledLook,
-  problemElements: problemElements, neighbourModule: neighbourModule,
+  problemElements: problemElements, neighbourModule: neighbourModule, libraryStep: libraryStep,
   REFERENCE_SIZES: REFERENCE_SIZES, monitorEntries: monitorEntries, scalePercent: scalePercent,
   setOption: setOption, optionOf: optionOf, statusItems: statusItems, statusRows: statusRows,
   setItems: setItems, clearItems: clearItems, toggleItem: toggleItem, moveItem: moveItem

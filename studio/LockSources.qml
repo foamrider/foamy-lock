@@ -40,6 +40,11 @@ import "Draft.js" as Draft
 //   real name that the lock screen shows): whether it is installed (checked
 //   when the window shows), so the tip can say how to install it. The app
 //   never starts it: tips launch nothing.
+// - **Foamy Weather**: whether the lock can reach it, from the lock's own
+//   catalog (`foamy.lock catalog` through omarchy-shell, read only;
+//   version 3's `weather.target`), asked when the window shows. Unknown
+//   (null) until the lock says, so an older lock or one that isn't
+//   running never disables the weather.
 // - **The app's own state** (`$XDG_STATE_HOME/foamy-lock/studio-state.json`,
 //   written atomically here; never in the plugin folder): the last tip seen.
 //
@@ -160,6 +165,11 @@ Item {
   // Set when the check is asked for, cleared when it answers.
   property bool mugshotChecking: false
 
+  // Foamy Weather as the lock sees it: true or false once its catalog
+  // has said, null before (see the header).
+  property var weatherTarget: null
+  property bool catalogChecking: false
+
   // The app's state: the last tip seen ("" until read, or without one).
   readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || home + "/.local/state"
   readonly property string statePath: stateHome + "/foamy-lock/studio-state.json"
@@ -176,11 +186,13 @@ Item {
     refreshPicture()
     refreshMonitors()
     checkMugshot()
+    checkCatalog()
   }
   onPictureKeyChanged: pictureDebounce.restart()
   Component.onCompleted: {
     refreshWallpaper()
     checkMugshot()
+    checkCatalog()
   }
 
   Connections {
@@ -197,6 +209,21 @@ Item {
     if (mugshotChecking) return
     mugshotChecking = true
     mugshotProbe.running = true
+  }
+
+  function checkCatalog() {
+    if (catalogChecking) return
+    catalogChecking = true
+    catalogProc.running = true
+  }
+
+  // The lock's catalog (also a test hook): only a version 3 catalog with
+  // a yes or no changes what is known; anything else keeps it.
+  function applyCatalog(exitCode, text) {
+    catalogChecking = false
+    if (exitCode !== 0) return
+    var data = Draft.replyOf(text)
+    if (data && data.version >= 3 && data.weather && typeof data.weather.target === "boolean") weatherTarget = data.weather.target
   }
 
   // The last tip seen, kept for the next start.
@@ -517,6 +544,16 @@ Item {
       sources.previewing = false
       sources.applyPreview(exitCode, previewOutput.text, previewErrors.text)
     }
+  }
+
+  // The same omarchy-shell as Preview; the catalog is read only.
+  Process {
+    id: catalogProc
+    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c",
+      'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock catalog',
+      "foamy-lock-studio-catalog"]
+    stdout: StdioCollector { id: catalogOutput; waitForEnd: true }
+    onExited: function(exitCode) { sources.applyCatalog(exitCode, catalogOutput.text) }
   }
 
   Timer {

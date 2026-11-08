@@ -294,6 +294,8 @@
   "studio.location": "Show the place name",
   "studio.location.note": "Off by default: anyone who sees your lock screen can read it.",
   "studio.weather.sample": "The canvas shows sample weather, never yours. The lock screen shows what Foamy Weather fetches.",
+  "studio.needsWeather": "Needs Foamy Weather",
+  "studio.needsWeather.hint": "Needs Foamy Weather: the lock screen gets the weather from it. Install it and turn on its service to show the weather.",
   "studio.settingHidesAccount": "The lock screen's settings hide the account (Show user info is off).",
   "studio.settingHidesMedia": "The lock screen's settings hide the media player (Show media is off).",
   "studio.hiddenHint": "Hidden. Switch it on, or drag it from the library onto the canvas.",

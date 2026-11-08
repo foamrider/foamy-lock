@@ -90,13 +90,18 @@ FocusScope {
           focus: true
           text: FoamyI18n.t("studio.shown")
           visible: inspector.name !== "password"
+          // Shown can always go off; on only when it can show.
+          enabled: checked || !inspector.app || inspector.app.canShow(inspector.name)
+          opacity: enabled ? 1 : FoamyStyle.disabledOpacity
           checked: inspector.item ? !inspector.item.hidden : false
-          onToggled: inspector.commit(Draft.setHidden(inspector.app.draft, inspector.name, !inspector.item.hidden))
+          onToggled: if (enabled) inspector.commit(Draft.setHidden(inspector.app.draft, inspector.name, !inspector.item.hidden))
         }
       }
 
       PaneNote {
+        objectName: "studioModuleNote"
         text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways")
+          : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? FoamyI18n.t("studio.needsWeather.hint")
           : inspector.name === "account" && inspector.app && !inspector.app.lockSettings.showUserInfo ? FoamyI18n.t("studio.settingHidesAccount")
           : inspector.name === "media" && inspector.app && !inspector.app.lockSettings.showMedia ? FoamyI18n.t("studio.settingHidesMedia")
           : inspector.item && inspector.item.hidden ? FoamyI18n.t("studio.hiddenHint")

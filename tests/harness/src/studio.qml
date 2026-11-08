@@ -971,6 +971,63 @@ Item {
           next()
         })
       } },
+    { name: "weather: available from the lock's catalog", wait: 0, run: function(next) {
+        reset()
+        waitFor(function() { return !studio.sources.catalogChecking && studio.sources.weatherTarget === true }, "the catalog", function() {
+          expect(Number(readFile(fake + "/catalog-count").trim()) >= 1, "asked through the fake omarchy-shell")
+          var row = find(studio.library, "studioLibrary-weather")
+          expect(studio.weatherAvailable && row.enabled && row.detail === FoamyI18n.t("studio.hidden"), "the weather row: " + row.detail)
+          // The lock says Foamy Weather isn't there.
+          writeFile(fake + "/catalog", '{"version":3,"weather":{"target":false,"state":"unavailable"}}\n')
+          studio.sources.checkCatalog()
+          waitFor(function() { return !studio.sources.catalogChecking && studio.sources.weatherTarget === false }, "the catalog again", function() {
+            expect(!studio.weatherAvailable && !row.enabled && row.detail === FoamyI18n.t("studio.needsWeather")
+              && row.Accessible.description.indexOf(FoamyI18n.t("studio.needsWeather")) === 0, "disabled: " + row.detail)
+            // Nothing shows it: a drag, Insert, the Shown switch; the keys skip it.
+            studio.libraryDragStart("weather")
+            expect(studio.libraryDrag === "" && studio.selected === "clock", "no drag from a disabled row")
+            studio.selectModule("status")
+            studio.library.keyPressed(Qt.Key_Down, Qt.NoModifier)
+            expect(studio.selected === "status", "Down stays on the last usable row: " + studio.selected)
+            studio.appKey(Qt.Key_BracketRight, Qt.NoModifier, "]")
+            expect(studio.selected === "clock", "] skips the weather: " + studio.selected)
+            studio.appKey(Qt.Key_BracketLeft, Qt.NoModifier, "[")
+            expect(studio.selected === "status", "[ skips it too: " + studio.selected)
+            studio.selectModule("weather")
+            var shown = find(studio.inspector, "studioShown")
+            expect(!shown.enabled && find(studio.inspector, "studioModuleNote").text === FoamyI18n.t("studio.needsWeather.hint"), "the inspector says why")
+            shown.toggled()
+            studio.library.keyPressed(Qt.Key_Insert, Qt.NoModifier)
+            expectDraft('{"preset":"foamy"}')
+            capture("studio-needs-weather", function() {
+              // A weather already shown can still be selected and hidden.
+              studio.commit({ preset: "foamy", layout: { weather: { hidden: false } } })
+              expect(row.enabled && row.detail === FoamyI18n.t("studio.needsWeather") && shown.enabled, "a shown weather stays usable")
+              shown.toggled()
+              expectDraft('{"preset":"foamy"}')
+              expect(!shown.enabled && !row.enabled, "and once hidden, can't come back")
+              // Only a version 3 catalog that says yes or no counts.
+              var sources = studio.sources
+              sources.applyCatalog(0, '{"version":2,"elements":[]}')
+              sources.applyCatalog(0, 'not json')
+              sources.applyCatalog(1, '{"version":3,"weather":{"target":true}}')
+              sources.applyCatalog(0, '{"version":3,"weather":{"target":"yes"}}')
+              expect(sources.weatherTarget === false, "an older or failed answer keeps what is known")
+              writeFile(fake + "/catalog", "fail\n")
+              sources.checkCatalog()
+              waitFor(function() { return !sources.catalogChecking }, "a lock that doesn't answer", function() {
+                expect(sources.weatherTarget === false, "still known")
+                writeFile(fake + "/catalog", '{"version":3,"weather":{"target":true,"state":"pending"}}\n')
+                sources.checkCatalog()
+                waitFor(function() { return !sources.catalogChecking && sources.weatherTarget === true }, "the catalog back", function() {
+                  expect(row.enabled, "usable again")
+                  next()
+                })
+              })
+            })
+          })
+        })
+      } },
     { name: "library: drag a hidden module onto the canvas", wait: 0, run: function(next) {
         reset()
         studio.libraryDragStart("calendar")

@@ -294,6 +294,8 @@
   "studio.location": "Vis stedsnavnet",
   "studio.location.note": "Av som standard: alle som ser låseskjermen din, kan lese det.",
   "studio.weather.sample": "Lerretet viser eksempelvær, aldri ditt. Låseskjermen viser det Foamy Weather henter.",
+  "studio.needsWeather": "Trenger Foamy Weather",
+  "studio.needsWeather.hint": "Trenger Foamy Weather: låseskjermen henter været derfra. Installer det og slå på tjenesten for å vise været.",
   "studio.settingHidesAccount": "Låseskjermens innstillinger skjuler kontoen (Vis brukerinfo er av).",
   "studio.settingHidesMedia": "Låseskjermens innstillinger skjuler mediespilleren (Vis medier er av).",
   "studio.hiddenHint": "Skjult. Slå den på, eller dra den fra biblioteket til lerretet.",

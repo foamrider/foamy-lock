@@ -14,7 +14,9 @@ import "Draft.js" as Draft
 // with the canvas's snapping; drag a shown one from the canvas onto this
 // pane to hide it (StudioWindow wires both through the canvas). The
 // keyboard does the same: Up and Down walk the modules (and select them),
-// Delete hides the module, Insert shows it.
+// Delete hides the module, Insert shows it. Without Foamy Weather (the lock's
+// catalog says so) the weather's row is disabled, "Needs Foamy Weather",
+// unless the weather is shown, so it can still be hidden.
 FocusScope {
   id: library
 
@@ -30,16 +32,17 @@ FocusScope {
 
   function rowAt(index) { return modules.itemAt(index) }
 
+  // The next usable module up or down (a disabled row is skipped).
   function focusModule(step) {
-    var index = Draft.DISPLAY_ORDER.indexOf(app.selected)
-    var next = Math.max(0, Math.min(Draft.DISPLAY_ORDER.length - 1, index + step))
-    app.selectModule(Draft.DISPLAY_ORDER[next])
-    rowAt(next).forceActiveFocus(Qt.TabFocusReason)
+    var name = Draft.libraryStep(app.selected, step, app.moduleUsable)
+    app.selectModule(name)
+    rowAt(Draft.DISPLAY_ORDER.indexOf(name)).forceActiveFocus(Qt.TabFocusReason)
   }
 
   // A module shown or hidden from the keyboard: one step, only when it
-  // changes something.
+  // changes something (and never shown when it can't be).
   function setHidden(hidden) {
+    if (!hidden && !app.canShow(app.selected)) return
     var next = Draft.setHidden(app.draft, app.selected, hidden)
     if (!Draft.same(next, app.draft)) app.commit(next)
   }
@@ -148,15 +151,19 @@ FocusScope {
             readonly property var item: library.app.look.elements[modelData]
             readonly property bool hiddenNow: item.hidden && modelData !== "password"
             readonly property bool dragging: library.app.libraryDrag === modelData
+            // The weather without Foamy Weather: it can't be shown.
+            readonly property bool needsWeather: modelData === "weather" && !library.app.weatherAvailable
             objectName: "studioLibrary-" + modelData
             width: parent.width
             height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
             horizontalAlignment: Text.AlignLeft
             leading: FoamyStyle.gap + 6
             text: library.app.moduleLabel(modelData)
-            detail: hiddenNow ? FoamyI18n.t("studio.hidden") : library.app.zoneLabel(item.zone)
+            detail: needsWeather ? FoamyI18n.t("studio.needsWeather")
+              : hiddenNow ? FoamyI18n.t("studio.hidden") : library.app.zoneLabel(item.zone)
+            enabled: library.app.moduleUsable(modelData)
             checked: library.app.page === "module" && library.app.selected === modelData
-            opacity: dragging ? 0.45 : hiddenNow ? 0.7 : 1
+            opacity: !enabled ? FoamyStyle.disabledOpacity : dragging ? 0.45 : hiddenNow ? 0.7 : 1
             Accessible.role: Accessible.ListItem
             Accessible.description: detail + " · " + FoamyI18n.t("studio.dragHint")
             onClicked: library.app.selectModule(modelData)
