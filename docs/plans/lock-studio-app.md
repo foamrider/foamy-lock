@@ -1,6 +1,6 @@
 # Plan: Lock Studio, a desktop app for the Foamy lock screen
 
-Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–6 done (see Progress). Builds on
+Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–8 done (see Progress; README screenshots deferred); step 9 waits for the user. Builds on
 [layout-engine.md](layout-engine.md) (zones, presets, safety checks, IPC).
 
 ## Goal
@@ -584,7 +584,8 @@ desktop):
   - *Omarchy wallpaper:* the helper's `wallpaper` probe on
     `~/.local/state/omarchy/current/background` (as Service), re-run when the
     window shows and on a theme change; the view loads the file as the lock
-    does. **A video wallpaper shows the theme colour** (the lock's poster
+    does. **A video wallpaper shows the theme colour** (step 8: its still
+  frame; the lock's poster
     frame comes from Omarchy's `poster.sh`, not run here).
   - *Lock settings:* `~/.config/omarchy/shell.json` through a FileView that
     is never written, parsed by `Model.parseConfig`; `timeFormat`,
@@ -617,15 +618,126 @@ desktop):
   Service.qml).
 - **Costs:** unchanged in en and no. In Arabic with the 12-hour clock a
   commit costs about 21 ms (2.3 ms at 24 h): the lock's own Arabic AM/PM
-  clock text, on every relayout; worth a look on the lock itself.
+  clock text, on every relayout; worth a look on the lock itself (done in
+  step 8).
 - **Live app:** the new files aren't in a root built before them; restart
   the app (`foamy-lock-helper studio` rebuilds the root).
 
-Open for steps 7 and 8: drafts on disk (and starting from the saved look),
-Apply, Preview and the quit guard; `displayAwake` also off while the
-session is locked; screen hot-plug while a check runs; the video
-wallpaper's still frame; accessibility review with a screen reader; the
-README and its screenshots.
+Open after step 6 (all done in steps 7 and 8 below, except the README
+screenshots): drafts on disk (and starting from the saved look), Apply,
+Preview and the quit guard; `displayAwake` also off while the session is
+locked; screen hot-plug while a check runs; the video wallpaper's still
+frame; accessibility review with a screen reader; the README and its
+screenshots.
+
+**Step 7** (offscreen only; nothing was applied to or previewed on the real
+lock):
+- **Where it lives:** the processes are in `LockSources.qml` (no new QML
+  file, so a running app picks the change up on reload), the policy in
+  `StudioWindow.qml`, and the replies are read by pure, node-tested
+  functions in `Draft.js` (`savedEntry`, `sameLook`, `diskDraft`,
+  `restore`, `loadReport`, `draftError`, `applyReport`, `previewReport`).
+  The window never shows the helper's English `message`; every result has
+  a `studio.*` string.
+- **The saved look** is one baseline, `savedDraft`: the foamy.lock entry in
+  shell.json read with `Layout.parseLook` (as Service does; a look the lock
+  refuses keeps the previous baseline), replaced by the applied look after
+  a save. `unapplied` compares looks as the lock reads them. A later Reset
+  returns to it.
+- **On open:** `draft-load` and shell.json (3 s at most). A draft whose look
+  differs asks "Continue editing" (Esc too) or "Start from saved"
+  (`draft-clear`); the draft shows behind the question. A draft with the
+  lock's own look restores silently with its undo steps. Corrupt (the
+  helper sets it aside) or unreadable: one warning in the header.
+- **Draft writes:** 800 ms after the last change to the history, while
+  "ready"; nothing when the look is the lock's and there is nothing to
+  undo. One helper run at a time; a newer save or clear replaces a waiting
+  one. Redo steps aren't kept.
+- **Apply** is enabled with a change, no problem on a connected screen and
+  no check pending (`Checker.pending`), and runs `studio apply` with
+  `Draft.ordered`. `apply()` is the one entry point, so a step (naming a
+  user preset) can go before the call. Results: ok and unchanged
+  "Applied to the lock" (baseline updated, draft deleted, or written again
+  if edits came in meanwhile); not-responding with `confirmed: false` says
+  the look may or may not be saved; the rest name the problem; the draft
+  stays.
+- **Preview** has no helper subcommand: the app runs `omarchy-shell
+  foamy.lock previewLook <look>` itself (PATH, else
+  `$OMARCHY_PATH/bin`, OMARCHY_PATH set when missing; 6 s), and reads the
+  answer with `previewReport`. **Later:** a `studio preview` subcommand
+  next to `apply` would put the lookup, bounds and classification in one
+  place (Rust), and could share `apply.rs`'s classifier; no retry needed.
+- **Quit guard:** Ctrl+Q and the window's `closed` signal (the window is
+  shown again to ask) with unapplied changes ask Apply and quit / Discard
+  (`draft-clear`) / Cancel. A failed Apply closes the question and shows
+  the result. Quitting waits for draft writes (3 s at most). shell.qml
+  hands quitting to the test driver when one is loaded.
+- **Questions are modal:** one inline `Question` component (preset, restore,
+  quit); while one shows, the window behind is disabled and only Esc and
+  its buttons act.
+- **`displayAwake`:** Quickshell has no signal for another client's
+  session lock (no Hyprland IPC event for it either; logind's LockedHint
+  isn't set by the lock). The lock surface always takes the keyboard, so
+  drawn backgrounds move only while the window is shown, not minimised and
+  `Window.active`; the background still loads while the window is shown.
+  This also pauses them while the lock's preview overlay is up.
+- **Hot-plug:** each checker view checks the size it was made for (its own
+  `modelData`), not `sizes[i]`; a monitor key that's gone falls back to
+  the first screen.
+- **Harness `studio`:** a fake `omarchy-shell` first on PATH (the driver
+  stops before any Apply unless `command -v` finds it), driven by a mode
+  file; 22 calls per run. Every Apply result through the real helper,
+  not-responding twice and once (retry → unchanged), the call's key order,
+  the draft file after each; the restore question both ways and Esc;
+  same-look restore; corrupt draft; Preview (ok, locked, not running,
+  timeout, missing); the quit guard (Ctrl+Q, closed, Cancel, failed
+  Apply, Apply and quit, Discard); screens changing mid-check. Files are
+  read with a synchronous XMLHttpRequest (`QML_XHR_ALLOW_FILE_READ`): a
+  FileView keeps the last text of a file that's gone. Captures
+  `studio-restore` and `studio-quit`. Passes in en, no and ar.
+
+**Step 8:**
+- **Fixes:** a row's label never elides before its value (the value
+  elides); the switches' "on" is an accent track with an `onAccent` knob.
+  The shell's own ToggleSwitch uses the theme's `selected-color`, which in
+  the user's theme (and Omarchy's default, "foreground") is a faint grey,
+  so "like the shell" and "in the accent" differ there; the accent won.
+- **Wording:** Snap is "Snapping" / "Magnet"; Norwegian "Neste panel",
+  "Reduser"/"Øk", "mislyktes", "Hovedskjermen" in the hint; "the Omarchy
+  shell" in messages; descriptions end with a full stop.
+- **Accessibility:** a primary button's focus ring sits outside it (it was
+  accent on accent); rows report selected, radio buttons checked; scene
+  entries are page tabs. The harness tabs round the window from the canvas
+  (24 stops): every stop is shown, enabled, named and has a role. Not done:
+  a session with a real screen reader (Orca); the names, roles and order are
+  what AT-SPI would read.
+- **RTL (ar):** the header, questions, panes and switches mirror; the
+  status text aligns to the reading end.
+- **Arabic clock cost:** `Text.Fit` re-laid the clock out on every resize,
+  ~20 ms with Arabic's AM/PM. The clock now measures its line once
+  (TextMetrics) and uses Fit only within a pixel of not fitting: commit
+  22.6 → 11.5 ms in Arabic (English 6.3), drag anchors 33 → 2.4 ms.
+  Parity, runtime, layout, render (en, ar) and styles unchanged. What
+  remains in Arabic (5.9 ms per commit without the checker vs 1.2 ms) is
+  other right-to-left text; not chased.
+- **Video wallpaper:** the still frame comes from Omarchy's
+  `shell/plugins/lock/poster.sh`, run exactly as Service runs it (its cache
+  is the lock's, one frame per video, so nothing is evicted); a frame for
+  a wallpaper that changed meanwhile is dropped; without one (4.0, no
+  ffmpegthumbnailer) the theme colour, as on the lock.
+- **README:** a "Lock Studio" section (install, open, editing, keys,
+  saving, privacy) and the studio suite under Validation. **Deferred:** the
+  screenshots under `previews/studio/`, until the layout changes below
+  settle.
+
+**Next round (from the user's review of the live app; not started):** the
+presets strip goes and the preset menu moves to the top of the library;
+the screen picker becomes a dropdown with native resolutions; undo, redo
+and preview become icon buttons; the preview states get a "Preview mode"
+title; saving a built-in preset asks for a name and makes a user preset
+(listed first); a Reset button returns to the saved baseline or the chosen
+preset. Then the README screenshots. Step 9 (retiring the bar plugin)
+needs the user's go.
 
 ## Open questions for the user
 
