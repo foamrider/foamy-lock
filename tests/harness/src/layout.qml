@@ -1,7 +1,10 @@
 // Layout shell: one preset (__PRESET__) through sizes, clock formats, typing
 // and primary/non-primary states, then right-to-left (everything, the
 // decorations included, must mirror); then, for foamy, every preset on one
-// view and back, and the fallback chain on a screen too small for it.
+// view and back, and the fallback chain on a screen too small for it. Every
+// state compares the shapes drawn with what the decorations drew before
+// they were shapes (OldDecoration.qml: elements/Decoration.qml at the
+// harness's DECORATION_BASELINE, given the older `decor` its template is).
 // Written into a temporary app by the harness.
 import QtQuick
 import Quickshell
@@ -53,6 +56,17 @@ ShellRoot {
     }
   }
 
+  // The older decoration whose template the shown shapes are ("none"
+  // without shapes; "" when they are no template, which no preset has).
+  readonly property string legacyKind: {
+    var shapes = JSON.stringify(view.effectiveLook.background.shapes.map(Layout.canonicalShape))
+    for (var i = 0; i < Layout.DECORATIONS.length; i++) {
+      var kind = Layout.DECORATIONS[i]
+      if (JSON.stringify(Layout.legacyShapes(kind, view.glassTint).map(Layout.canonicalShape)) === shapes) return kind
+    }
+    return ""
+  }
+
   FloatingWindow {
     visible: true
     implicitWidth: 3440; implicitHeight: 1440
@@ -74,6 +88,15 @@ ShellRoot {
       avatarPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
       onPasswordTextEdited: function(value) { passwordText = value }
       onLayoutFellBack: function(error, preset) { shellRoot.fellBack++; shellRoot.fellBackTo.push(preset + ":" + error) }
+    }
+    // The decorations as they were, for the same view (never shown).
+    OldDecoration {
+      id: oldDecoration
+      view: view
+      visible: false
+      width: view.width
+      height: view.height
+      kind: shellRoot.legacyKind || "none"
     }
   }
   QtObject {
@@ -239,10 +262,14 @@ ShellRoot {
   // renderer) and the system panel has its readings.
   function checkBackground() {
     var decoration = findNamed(view, "decoration")
-    var decor = view.effectiveLook.background.decor
-    if (decoration.visible !== (decor !== "none")) return fail("decoration " + decor + " visible: " + decoration.visible)
+    var shapes = view.effectiveLook.background.shapes
+    var decor = shellRoot.legacyKind
+    if (decor === "") return fail("the shapes are no older decoration: " + JSON.stringify(shapes))
+    if (decoration.visible !== (shapes.length > 0)) return fail("decoration " + decor + " visible: " + decoration.visible)
     var surfaces = decoration.surfaces
-    if (decor !== "none" && surfaces.length === 0) return fail("decoration " + decor + " draws nothing")
+    if (shapes.length > 0 && surfaces.length === 0) return fail("decoration " + decor + " draws nothing")
+    checkOld(surfaces, decor)
+    checkUnder(decoration, surfaces)
     for (var s = 0; s < surfaces.length; s++) {
       var surface = surfaces[s]
       if (!(surface.width > 0 && surface.height > 0) || surface.x < -1 || surface.y < -1
@@ -268,6 +295,42 @@ ShellRoot {
     if (view.placed.status.style === "system" && findNamed(view, "statusFooter").visible
         && !(view.systemUptime > 0 && view.memoryTotal > 0 && view.systemLoad !== ""))
       return fail("the system panel has no readings: " + [view.systemUptime, view.memoryTotal, view.systemLoad])
+  }
+
+  // The shapes draw what the decoration drew: the same surfaces, in the
+  // same order, within a pixel (the panels' thickness is rounded up now,
+  // where split and sheet rounded to the nearest).
+  function checkOld(surfaces, decor) {
+    var old = oldDecoration.surfaces
+    if (old.length !== surfaces.length) return fail(decor + ": " + surfaces.length + " surfaces, the decoration drew " + old.length)
+    for (var i = 0; i < old.length; i++) {
+      var a = old[i], b = surfaces[i]
+      if (Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1 || Math.abs(a.width - b.width) > 1 || Math.abs(a.height - b.height) > 1
+          || !!a.frame !== !!b.frame)
+        return fail(decor + " surface " + i + " is " + JSON.stringify(b) + ", the decoration drew " + JSON.stringify(a))
+    }
+  }
+
+  // Shapes are under every element (drawn before them, never above), and
+  // the frosted ones first.
+  function checkUnder(decoration, surfaces) {
+    var parent = decoration.parent
+    var at = -1
+    for (var c = 0; c < parent.children.length; c++) if (parent.children[c] === decoration) at = c
+    for (var i = 0; i < elementNames.length; i++) {
+      var item = findNamed(view, elementNames[i])
+      var index = -1
+      for (var k = 0; k < parent.children.length; k++) if (parent.children[k] === item) index = k
+      if (item.parent !== parent || item.z < decoration.z || index < at)
+        return fail(elementNames[i] + " isn't above the shapes: " + [item.z, decoration.z, index, at])
+    }
+    var shapes = view.effectiveLook.background.shapes
+    var seenPlain = false
+    for (var s = 0; s < surfaces.length; s++) {
+      var frosted = Layout.isFrosted(shapes[surfaces[s].index])
+      if (frosted && seenPlain) return fail("a frosted shape is drawn after another: " + JSON.stringify(surfaces))
+      if (!frosted) seenPlain = true
+    }
   }
 
   function finish() {

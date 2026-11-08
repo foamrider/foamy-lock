@@ -33,7 +33,9 @@
 //! four screen sizes, 12- and 24-hour time, typing, and primary and
 //! secondary screens, checking that the password field stays on screen,
 //! uncovered, live and focused, that a secondary screen hides the account
-//! and idle field chrome, and that no built-in preset falls back; the foamy
+//! and idle field chrome, that no built-in preset falls back, and that its
+//! shapes draw what the fixed decorations drew (within a pixel), under every
+//! element, frosted ones first; the foamy
 //! run then forces the geometry fallback chain on a 320×240 screen. Without
 //! `--preset` it also runs `styles`.
 //!
@@ -50,9 +52,11 @@
 //! screens) on one view, case by case: the geometry codes they produce
 //! (offsets off screen, onto another element or the field, the field above
 //! the top third, a scale that overflows), offsets mirrored right-to-left,
-//! a primary-only element on a secondary view, decorations that keep
-//! fitting the un-offset zones, and `latchFallback: false` reporting without
-//! switching. `layout` without `--preset` runs it too.
+//! a primary-only element on a secondary view, zone shapes that keep
+//! fitting the un-offset zones and module shapes that follow their modules
+//! (offset, scale, late media and weather, mirrored), an absorbing box
+//! compared pixel for pixel with the module's own surface, and
+//! `latchFallback: false` reporting without switching. `layout` without `--preset` runs it too.
 //!
 //! `runtime` runs the real Service.qml with a simulated session lock, PAM and
 //! view, stand-in desktop commands, a fake Omarchy tree and shell.json, and

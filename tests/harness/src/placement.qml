@@ -3,7 +3,12 @@
 // decorations keep fitting the un-offset zones, that offsets mirror and that
 // `latchFallback: false` only reports; late weather and status readings
 // re-run the check, and the status sources exist only while an item needs
-// them. Written into a temporary app by the harness.
+// them. Shapes: zone shapes keep to the un-offset zones, module shapes
+// follow their modules (offset, scale, late media and weather, a title
+// that widens the pill, primary-only), mirror, never move the geometry
+// check, and an absorbing zero-padding box is the module's own surface:
+// the harness compares the two grabs (PLACEMENT_PIXELS) pixel for pixel.
+// Written into a temporary app by the harness.
 import QtQuick
 import Quickshell
 import "fixtures" as Fixture
@@ -74,6 +79,27 @@ ShellRoot {
     return parsed.look
   }
   function near(a, b) { return Math.abs(a - b) <= 1 }
+  function exact(a, b) { return Math.abs(a - b) < 1e-6 }
+  // The shapes drawn, in drawing order.
+  function surfaces() { return findNamed(view, "decoration").surfaces }
+  // A box around one module: Lock Studio's "Wrap in a shape", padded.
+  function around(name, pad, color) {
+    return { kind: "box", wrap: { modules: [name] }, pad: { x: pad, y: pad }, radius: "auto",
+      fill: { color: color || "surface", opacity: 1 }, absorb: true }
+  }
+  // The single shape drawn is `rect` grown by `pad` on every side, exactly.
+  function expectAround(rect, pad, what) {
+    var all = surfaces()
+    if (all.length !== 1) return fail(what + ": " + all.length + " shapes drawn: " + JSON.stringify(all))
+    var s = all[0]
+    if (!exact(s.x, rect.x - pad) || !exact(s.y, rect.y - pad) || !exact(s.width, rect.width + 2 * pad) || !exact(s.height, rect.height + 2 * pad))
+      fail(what + ": the shape " + JSON.stringify(s) + " isn't around " + JSON.stringify(rect) + " by " + pad)
+  }
+  // Grab the view into the app's directory, as PPM, for the harness.
+  function grab(name) {
+    var file = Qt.resolvedUrl(name + ".ppm").toString().replace("file://", "")
+    if (!view.grabToImage(function(result) { if (!result.saveToFile(file)) fail("saving " + file) })) fail("grab " + name)
+  }
   function sameRect(a, b) { return near(a.x, b.x) && near(a.y, b.y) && near(a.width, b.width) && near(a.height, b.height) }
   function expectProblem(code) {
     var problem = view.geometryProblem()
@@ -211,6 +237,144 @@ ShellRoot {
           if (!near(view.drawnRect("clock").x - view.reservedRect("clock").x, -192)) fail("clock not offset: " + clock.x)
         } }
     ] },
+    { name: "shapes: a zone island keeps its place, a module island follows", phases: [
+      { apply: function() { view.look = look({ preset: "island" }) },
+        check: function() { expectProblem(""); shellRoot.saved = JSON.stringify(surfaces()) } },
+      { apply: function() { view.look = look({ preset: "island", layout: { clock: { offset: { x: 0.03, y: 0.02 } } } }) },
+        check: function() {
+          if (JSON.stringify(surfaces()) !== shellRoot.saved) fail("the zone island followed an offset: " + JSON.stringify(surfaces()))
+        } },
+      // The island as the media player's background: offset, scale and
+      // the pill's own corners, wherever it goes.
+      { apply: function() {
+          view.look = look({ layout: { media: { zone: "top-center", style: "pill", offset: { x: 0.03, y: 0.02 }, scale: 1.5 },
+            date: { hidden: true }, clock: { hidden: true } },
+            background: { shapes: [around("media", 10, "black")] } })
+        },
+        check: function() {
+          expectProblem("")
+          var media = findNamed(view, "mediaRow")
+          expectAround(view.drawnRect("media"), 10, "offset and scaled")
+          if (!exact(view.shapeGeometry[0].radius, media.radius + 10)) fail("not concentric: " + view.shapeGeometry[0].radius + " for " + media.radius)
+          if (media.color.a !== 0 || media.border.width !== 0) fail("the absorbed pill still draws its surface")
+          shellRoot.saved = view.drawnRect("media")
+        } },
+      // Late media: no player, no shape; it comes back around it.
+      { apply: function() { view.activePlayer = null },
+        check: function() {
+          if (surfaces().length !== 0) fail("a shape around nothing playing: " + JSON.stringify(surfaces()))
+          expectProblem("")
+        } },
+      { apply: function() { view.activePlayer = player; player.trackTitle = "A much longer title that widens the pill" },
+        check: function() {
+          var now = view.drawnRect("media")
+          if (!(now.width > shellRoot.saved.width)) fail("the pill didn't widen: " + now.width)
+          expectAround(now, 10, "a wider title")
+        } },
+      { apply: function() { player.trackTitle = "Evening Light" },
+        check: function() { expectAround(view.drawnRect("media"), 10, "the title back") } },
+      // Primary only: not on a secondary view, and no empty pill there.
+      { apply: function() {
+          view.look = look({ layout: { media: { screens: "primary" } }, background: { shapes: [around("media", 4)] } })
+        },
+        check: function() { expectAround(view.drawnRect("media"), 4, "primary") } },
+      { apply: function() { view.primary = false },
+        check: function() { if (surfaces().length !== 0) fail("a shape around a primary-only module on a secondary view") } },
+      { apply: function() { view.primary = true; view.look = Layout.defaults() }, check: function() {} }
+    ] },
+    { name: "shapes: weather arriving late, privacy and nothing shown", phases: [
+      { apply: function() {
+          view.weather = null
+          view.look = look({ layout: { weather: { hidden: false, zone: "top-center", style: "pill" } },
+            background: { shapes: [around("weather", 6), { kind: "panel", edge: "top", wrap: { modules: ["weather"] }, size: { min: { px: 40 } } }] } })
+        },
+        check: function() {
+          var all = surfaces()
+          if (all.length !== 1 || all[0].kind !== "panel" || all[0].height !== 40) fail("without weather: only the panel's minimum: " + JSON.stringify(all))
+        } },
+      { apply: function() { view.weather = shellRoot.sampleWeather },
+        check: function() {
+          var all = surfaces()
+          var r = view.drawnRect("weather")
+          if (all.length !== 2 || !exact(all[0].x, r.x - 6) || !exact(all[0].width, r.width + 12)) fail("the weather's box: " + JSON.stringify(all))
+          if (!(all[1].height > 40)) fail("the panel didn't grow to the weather: " + JSON.stringify(all[1]))
+        } },
+      { apply: function() { view.weather = null; view.look = Layout.defaults() }, check: function() {} }
+    ] },
+    { name: "shapes: a module panel mirrors right to left", phases: [
+      { apply: function() {
+          view.look = look({ layout: { media: { offset: { x: 0.05, y: -0.03 } } },
+            background: { shapes: [{ kind: "panel", edge: "start", wrap: { modules: ["media"] }, pad: 20, border: { color: "accent", width: 2, sides: "inner" } }] } })
+        },
+        check: function() {
+          expectProblem("")
+          var r = view.drawnRect("media")
+          var s = surfaces()[0]
+          if (s.x !== 0 || s.width !== Math.ceil(r.x + r.width + 20)) fail("the start panel: " + JSON.stringify(s) + " for " + JSON.stringify(r))
+          shellRoot.saved = s
+        } },
+      { apply: function() { view.rightToLeft = true },
+        check: function() {
+          var s = surfaces()[0], ltr = shellRoot.saved
+          if (!near(s.x, view.width - ltr.x - ltr.width) || s.width !== ltr.width || s.y !== ltr.y) fail("not mirrored: " + JSON.stringify(s))
+          var line = view.shapeGeometry[0].line
+          if (!line || line.x !== s.x) fail("the inner edge isn't on the inside: " + JSON.stringify(line))
+        } },
+      { apply: function() { view.rightToLeft = false; view.look = Layout.defaults() }, check: function() {} }
+    ] },
+    { name: "shapes: never part of the geometry check, never a fallback", phases: [
+      { apply: function() { view.look = look({ layout: { status: { offset: { x: 0.3, y: 0 } } } }) },
+        check: function() { expectProblem("element-offscreen"); shellRoot.saved = view.geometryKey } },
+      { apply: function() {
+          view.look = look({ layout: { status: { offset: { x: 0.3, y: 0 } } }, background: { shapes: [
+            { kind: "panel", edge: "bottom", wrap: { modules: ["password", "account"] }, pad: 200, fill: { color: "black", opacity: 1 } },
+            { kind: "box", wrap: { modules: ["status"] }, pad: { x: 120, y: 120 }, stretch: "across", inset: 0 },
+            { kind: "frame", inset: 24, style: "glow" }, around("media", 0)] } })
+        },
+        check: function() {
+          expectProblem("element-offscreen")
+          if (view.geometryKey !== shellRoot.saved) fail("shapes changed the geometry key")
+        } },
+      { apply: function() {
+          view.look = look({ background: { shapes: [{ kind: "panel", edge: "bottom", wrap: { zones: ["bottom-center"] }, pad: 200 },
+            { kind: "box", wrap: { zones: ["middle-center", "top-center"] }, stretch: "across", pad: { x: 0, y: 120 }, fill: { frost: true } }] } })
+          view.latchFallback = true
+        },
+        check: function() {
+          if (view.fallbackPreset !== "" || shellRoot.fellBack !== 0) fail("a shape caused a fallback: " + view.layoutError)
+          // The band moves the bottom row; nothing else does.
+          if (!view.bottomBand) fail("a bottom panel around the bottom-center zone is a band")
+          view.latchFallback = false
+          view.look = Layout.defaults()
+        } }
+    ] },
+    // The island lines up exactly: a zero-padding "surface" box that absorbs
+    // the pill draws the pill's own surface. Each pair of grabs (the pill
+    // alone, then absorbed) must be the same picture; the harness compares.
+    { name: "shapes: absorb draws the module's own surface", phases: (function() {
+        var out = []
+        var tints = ["none", "accent", "solid"]
+        var glasses = [undefined, 0.3]
+        for (var t = 0; t < tints.length; t++) for (var g = 0; g < glasses.length; g++) (function(tint, glass, at) {
+          var media = { zone: "top-center", style: "pill", offset: { x: 0.0131, y: 0.0207 }, scale: 1.35 }
+          if (glass !== undefined) media.glass = glass
+          var entry = { layout: { media: media, date: { hidden: true }, clock: { hidden: true } }, glass: { tint: tint } }
+          out.push({ apply: function() { view.look = look(entry) },
+            check: function() { expectProblem(""); grab("absorb-" + at + "-alone") } })
+          out.push({ apply: function() {
+              var absorbed = JSON.parse(JSON.stringify(entry))
+              absorbed.background = { shapes: [around("media", 0)] }
+              view.look = look(absorbed)
+            },
+            check: function() {
+              expectAround(view.drawnRect("media"), 0, "zero padding")
+              grab("absorb-" + at + "-shape")
+              console.log("PLACEMENT_PIXELS absorb-" + at + "-alone.ppm absorb-" + at + "-shape.ppm " + tint + " " + glass)
+            } })
+        })(tints[t], glasses[g], t * glasses.length + g)
+        out.push({ apply: function() { view.look = Layout.defaults() }, check: function() {} })
+        return out
+      })() },
     { name: "weather arriving late re-runs the check", phases: [
       { apply: function() {
           view.weather = null

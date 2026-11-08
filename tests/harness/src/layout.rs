@@ -2,10 +2,13 @@
 //! typing, primary/non-primary and right-to-left states, plus the preset
 //! cycle and the geometry fallback chain; without `--preset` it also runs
 //! the style sweep (styles.rs). Presets run a few at a time, each in its own
-//! quickshell.
+//! quickshell. Each state also compares the shapes with the decorations they
+//! replaced: elements/Decoration.qml at DECORATION_BASELINE (from git), as
+//! OldDecoration.qml beside the view.
 
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 
 use crate::{app, host, placement, styles};
@@ -13,6 +16,28 @@ use crate::{app, host, placement, styles};
 const SHELL: &str = include_str!("layout.qml");
 /// Quickshell runs at once.
 const PARALLEL: usize = 4;
+/// The last revision with the fixed decorations (`background.decor`).
+const DECORATION_BASELINE: &str = "6efe1fd";
+
+/// The decorations as they were drawn before shapes.
+fn old_decoration() -> Result<String, String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(app::plugin_root())
+        .args([
+            "show",
+            &format!("{DECORATION_BASELINE}:elements/Decoration.qml"),
+        ])
+        .output()
+        .map_err(app::io("git"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git show {DECORATION_BASELINE}:elements/Decoration.qml: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    String::from_utf8(output.stdout).map_err(|error| format!("old decoration: {error}"))
+}
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut choice = "4.5".to_string();
@@ -100,6 +125,8 @@ fn run_preset(name: &str, shell: &Path, preset: &str) -> Result<String, String> 
     app::prepare(&dir, shell)?;
     fs::write(dir.join("shell.qml"), SHELL.replace("__PRESET__", preset))
         .map_err(app::io("shell.qml"))?;
+    fs::write(dir.join("OldDecoration.qml"), old_decoration()?)
+        .map_err(app::io("OldDecoration.qml"))?;
     app::register_types(&dir)?;
     // foamy also cycles through every preset.
     let timeout = Duration::from_secs(if preset == "foamy" { 150 } else { 60 });

@@ -236,8 +236,11 @@ fn fake_shell(base: &Path) -> Result<PathBuf, String> {
         gradient(192, 108, [120, 40, 60], [30, 90, 150]),
     )
     .map_err(app::io("cached poster"))?;
-    fs::write(dir.join("poster.png"), gradient(192, 108, [120, 40, 60], [30, 90, 150]))
-        .map_err(app::io("poster.png"))?;
+    fs::write(
+        dir.join("poster.png"),
+        gradient(192, 108, [120, 40, 60], [30, 90, 150]),
+    )
+    .map_err(app::io("poster.png"))?;
     Ok(dir)
 }
 
@@ -428,7 +431,7 @@ fn warnings(log: &str) -> Vec<String> {
 }
 
 /// A binary PPM (P6, 8-bit): (width, height, RGB bytes).
-fn read_ppm(bytes: &[u8]) -> Option<(usize, usize, &[u8])> {
+pub(crate) fn read_ppm(bytes: &[u8]) -> Option<(usize, usize, &[u8])> {
     let mut fields = Vec::new();
     let mut at = 0;
     while fields.len() < 4 {
