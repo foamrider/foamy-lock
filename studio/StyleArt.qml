@@ -8,11 +8,12 @@ import "kit"
 // tiles in the inspector show (ported from the retired foamy-lock-studio
 // popup, with its own line icons). Each drawing follows the style's
 // description in Foamy Lock's README (a dot-matrix clock, a "card" field
-// with a greeting above it…); the clock, date and calendar use sample
-// values (12:30, 7 November 2026 in the chosen language). With `element`
-// "decor" it draws a background decoration on a small screen instead (the
-// background page's tiles). A name the studio has no drawing for gets a
-// generic one (`known` is false) and the tile names it as Foamy Lock does.
+// with a greeting above it…); the clock, date, calendar and weather use
+// sample values (12:30, 7 November 2026 in the chosen language, 12°).
+// With `element` "decor" it draws a background decoration on a small
+// screen instead (the background page's tiles). A name the studio has no
+// drawing for gets a generic one (`known` is false) and the tile names it
+// as Foamy Lock does.
 // Static: no motion, no effects (Canvas draws in every renderer).
 Item {
   id: root
@@ -137,6 +138,9 @@ Item {
     case "date:caps": return dateCaps
     case "date:short": return dateShort
     case "date:serif": return dateSerif
+    case "date:numeric": return dateNumeric
+    case "date:stacked": return dateStacked
+    case "date:week": return dateWeek
     case "account:avatar": return accountAvatar
     case "account:chip": return accountChip
     case "account:name": return accountName
@@ -156,6 +160,11 @@ Item {
     case "status:system": return statusSystem
     case "calendar:card": return calendarCard
     case "calendar:plain": return calendarPlain
+    case "calendar:week": return calendarWeek
+    case "calendar:mini": return calendarMini
+    case "weather:compact": return weatherCompact
+    case "weather:pill": return weatherPill
+    case "weather:detailed": return weatherDetailed
     case "decor:none": return decorNone
     case "decor:split": return decorSplit
     case "decor:sheet": return decorSheet
@@ -228,8 +237,8 @@ Item {
     border.width: 1
     border.color: root.edge
   }
-  // The few line icons the drawings use, drawn here (this plugin's kit has
-  // no FoamyIcon): see paintIcon.
+  // The few line icons the drawings use, drawn here: see paintIcon (the
+  // weather's is the kit's FoamyIcon).
   component Icon: Canvas {
     property string name: ""
     property color color: root.ink
@@ -573,6 +582,58 @@ Item {
     }
   }
 
+  Component {
+    id: dateNumeric
+    Item { Fit { text: root.dateText(Locale.ShortFormat); font.pixelSize: FoamyStyle.font.subtitle; font.weight: Font.DemiBold; font.letterSpacing: 1 } }
+  }
+  // A large day number beside the month over the weekday.
+  Component {
+    id: dateStacked
+    Item {
+      Row {
+        anchors.centerIn: parent
+        spacing: root.u * 3
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: FoamyI18n.number(root.sampleDate.getDate())
+          textFormat: Text.PlainText
+          color: root.ink
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: Math.round(root.u * 28)
+          font.weight: Font.Light
+        }
+        Column {
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: 0
+          Repeater {
+            model: [root.dateText("MMMM"), root.dateText("dddd")]
+            Text {
+              required property string modelData
+              required property int index
+              text: modelData
+              textFormat: Text.PlainText
+              color: index === 0 ? root.ink : Qt.alpha(root.ink, 0.7)
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: Math.max(7, Math.round(root.u * (index === 0 ? 10 : 9)))
+              font.weight: index === 0 ? Font.DemiBold : Font.Normal
+            }
+          }
+        }
+      }
+    }
+  }
+  // The ISO week (7 November 2026 is in week 45) and the date.
+  Component {
+    id: dateWeek
+    Item {
+      Fit {
+        text: FoamyI18n.t("studio.art.week", FoamyI18n.number(45)) + "  ·  " + root.dateText("d MMMM")
+        font.pixelSize: FoamyStyle.font.caption
+        font.weight: Font.Medium
+      }
+    }
+  }
+
   // ---- account
   Component {
     id: accountAvatar
@@ -848,6 +909,145 @@ Item {
         spacing: root.u * 1.2
         Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 16; height: root.u * 2.2; opacity: 0.8 }
         Month { anchors.horizontalCenter: parent.horizontalCenter; cell: root.u * 4.1 }
+      }
+    }
+  }
+
+  // This week as a strip: seven days, today (Saturday the 7th) ringed.
+  Component {
+    id: calendarWeek
+    Item {
+      Glass {
+        anchors.centerIn: parent
+        width: weekRow.width + root.u * 8
+        height: weekRow.height + root.u * 8
+        radius: root.u * 4
+        Row {
+          id: weekRow
+          anchors.centerIn: parent
+          spacing: root.u * 1.4
+          Repeater {
+            model: 7
+            Column {
+              id: weekDay
+              required property int index
+              spacing: root.u * 1.6
+              Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: root.u * 3
+                height: Math.max(1, root.u * 1)
+                radius: height / 2
+                color: Qt.alpha(root.ink, 0.5)
+              }
+              Item {
+                width: root.u * 7
+                height: width
+                Rectangle {
+                  anchors.centerIn: parent
+                  visible: weekDay.index === 5
+                  width: parent.width
+                  height: width
+                  radius: width / 2
+                  color: Commons.Color.accent
+                }
+                Rectangle {
+                  anchors.centerIn: parent
+                  width: parent.width * 0.34
+                  height: width
+                  radius: width / 2
+                  color: root.ink
+                  opacity: 0.8
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  // A smaller month without a card.
+  Component {
+    id: calendarMini
+    Item {
+      Column {
+        anchors.centerIn: parent
+        spacing: root.u
+        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 12; height: root.u * 1.8; opacity: 0.8 }
+        Month { anchors.horizontalCenter: parent.horizontalCenter; cell: root.u * 3.4 }
+      }
+    }
+  }
+
+  // ---- weather (a sample: partly cloudy, 12°)
+  // The kit's Lucide icon (an image: it draws in every renderer).
+  component WeatherIcon: FoamyIcon {
+    name: "cloud-sun"
+    color: root.ink
+  }
+  component Temperature: Text {
+    text: FoamyI18n.number(12) + "°"
+    textFormat: Text.PlainText
+    color: root.ink
+    font.family: FoamyStyle.fontFamily
+  }
+  // An icon and the temperature, no surface.
+  Component {
+    id: weatherCompact
+    Item {
+      Row {
+        anchors.centerIn: parent
+        spacing: root.u * 3
+        WeatherIcon { anchors.verticalCenter: parent.verticalCenter; width: root.u * 14; height: width }
+        Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 15) }
+      }
+    }
+  }
+  // One line in a glass pill.
+  Component {
+    id: weatherPill
+    Item {
+      Glass {
+        anchors.centerIn: parent
+        width: pillLine.width + root.u * 12
+        height: root.u * 16
+        radius: height / 2
+        Row {
+          id: pillLine
+          anchors.centerIn: parent
+          spacing: root.u * 3
+          WeatherIcon { anchors.verticalCenter: parent.verticalCenter; width: root.u * 9; height: width }
+          Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 8); font.weight: Font.DemiBold }
+          Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 16; opacity: 0.6 }
+        }
+      }
+    }
+  }
+  // A glass card: the icon and a large temperature, then the condition
+  // and today's high and low.
+  Component {
+    id: weatherDetailed
+    Item {
+      Glass {
+        anchors.centerIn: parent
+        width: root.u * 50
+        height: parent.height
+        radius: root.u * 4
+        Row {
+          id: cardHead
+          x: root.u * 5
+          y: root.u * 4
+          spacing: root.u * 3
+          WeatherIcon { anchors.verticalCenter: parent.verticalCenter; width: root.u * 13; height: width }
+          Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 14); font.weight: Font.Light }
+        }
+        Column {
+          anchors.top: cardHead.bottom
+          anchors.topMargin: root.u * 2.5
+          x: root.u * 5
+          spacing: root.u * 2.5
+          Bar { width: root.u * 30; opacity: 0.8 }
+          Bar { width: root.u * 22; opacity: 0.55 }
+        }
       }
     }
   }

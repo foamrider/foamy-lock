@@ -131,6 +131,7 @@
   "studio.sample.condition": "Partly cloudy",
   "studio.sample.conditionLong": "Heavy rain and thunder with strong gusts along the coast tonight",
   "studio.sample.place": "Sample Town",
+  "studio.art.week": "Week %1",
   "studio.problem.password-overlap": "%1 overlaps the password field on %2",
   "studio.problem.password-covered": "Something covers the password field on %1",
   "studio.problem.password-offscreen": "The password field goes off screen on %1",

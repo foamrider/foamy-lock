@@ -859,6 +859,31 @@ Item {
         expectDraft('{"preset":"foamy"}')
         next()
       } },
+    { name: "inspector: every style has a drawing", wait: 0, run: function(next) {
+        reset()
+        for (var name in Layout.STYLES) {
+          studio.selectModule(name)
+          var tiles = find(studio.inspector, "studioStyles")
+          expect(tiles.options.length === Layout.STYLES[name].length, name + " tiles")
+          for (var i = 0; i < Layout.STYLES[name].length; i++) {
+            var style = Layout.STYLES[name][i]
+            var tile = find(tiles, "studioTile-" + style)
+            var art = tile ? tile.children[0] : null
+            expect(art && art.known === true && art.styleName === style, name + ":" + style + " has its own drawing")
+            expect(tile.Accessible.name === FoamyI18n.t("studio.style." + style), name + ":" + style + " named " + tile.Accessible.name)
+          }
+        }
+        studio.selectModule("date")
+        capture("studio-date-styles", function() {
+          studio.selectModule("calendar")
+          capture("studio-calendar-styles", function() {
+            studio.selectModule("weather")
+            // The tiles' icons are images: let them load.
+            var shown = Date.now()
+            waitFor(function() { return Date.now() - shown > 400 }, "the icons", function() { capture("studio-weather-styles", next) })
+          })
+        })
+      } },
     { name: "inspector: the password field's reveal", wait: 0, run: function(next) {
         reset()
         studio.selectModule("password")
