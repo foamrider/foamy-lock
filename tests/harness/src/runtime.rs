@@ -134,6 +134,13 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
         ("  PamContext {", "  Mock.PamContext {"),
         ("LockView {", "Mock.LockView {"),
         ("  PanelWindow {", "  Rectangle {"),
+        // A video wallpaper's still comes from the helper's video-probe; a
+        // stand-in answers here ($HOME/fake-video-probe: missing is a
+        // missing helper), and can hand over to the real one.
+        (
+            r#"readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"])"#,
+            r#"readonly property var posterProbeCommand: ["bash", "-c", "exec \"$0\" video-probe", root.home + "/fake-video-probe"]"#,
+        ),
         (
             "    anchors { top: true; bottom: true; left: true; right: true }",
             "    width: 800; height: 600",
@@ -312,12 +319,23 @@ impl Test {
                 .map_err(app::io(path.display()))?;
         }
         let omarchy = base.join("omarchy");
-        let poster = omarchy.join("shell/plugins/lock/poster.sh");
+        // The stand-in for the helper's video-probe behind a video
+        // wallpaper's still (posterProbeCommand, patched above).
+        let poster = base.join("fake-video-probe");
         let background = base.join(".local/state/omarchy/current/background");
         let config = base.join(".config/omarchy/shell.json");
-        for path in [&poster, &background, &config] {
+        // Omarchy's own poster.sh (ffmpegthumbnailer outside any sandbox) is
+        // there but must never run: it leaves a mark if it does.
+        let omarchy_poster = omarchy.join("shell/plugins/lock/poster.sh");
+        for path in [&omarchy_poster, &background, &config] {
             mkdir(path.parent().unwrap_or(base))?;
         }
+        write(
+            &omarchy_poster,
+            "#!/bin/sh\n: > \"$HOME/poster-sh-ran\"\nexit 1\n",
+        )?;
+        fs::set_permissions(&omarchy_poster, fs::Permissions::from_mode(0o755))
+            .map_err(app::io(omarchy_poster.display()))?;
         // A real account picture goes through the sandboxed helper into the cache.
         let face: Vec<u8> = [200, 80, 40].repeat(256 * 256);
         write(&base.join(".face"), png::encode_rgb(256, 256, &face))?;
@@ -1075,6 +1093,30 @@ fn video(test: &Test) -> R {
     // Still: the same probe (the poster), no other job.
     test.write_config(STOCK_OFF, entry("still", &clip))?;
     test.wait_for(|s| Ok(text(s, "look.background.motion").is_err()))?;
+    // A video Omarchy wallpaper: its still is the real helper's sandboxed
+    // video-probe poster (the stand-in hands over to it), in the same cache.
+    write(
+        &test.poster,
+        format!("#!/bin/sh\nexec '{}' \"$@\"\n", helper.display()),
+    )?;
+    fs::set_permissions(&test.poster, fs::Permissions::from_mode(0o755))
+        .map_err(app::io(test.poster.display()))?;
+    test.background(Some(&clip))?;
+    test.refresh_wallpaper()?;
+    test.wait_for(|_| {
+        let state = test.wallpaper()?;
+        Ok(text(&state, "path")?.contains("/omarchy/foamy.lock/video/")
+            && text(&state, "error")?.is_empty())
+    })?;
+    let still = text(&test.wallpaper()?, "path")?.to_string();
+    let bytes = std::fs::read(&still).map_err(|e| format!("{still}: {e}"))?;
+    ensure!(
+        crate::png::size(&bytes).is_some(),
+        "the wallpaper's still is a PNG: {still}"
+    );
+    test.background(None)?;
+    test.refresh_wallpaper()?;
+    test.wait_for(|_| Ok(text(&test.wallpaper()?, "path")?.is_empty()))?;
     // A broken file: no poster, no clip, the theme colour.
     let broken = test.path("broken.mp4");
     write(&broken, b"\0\0\0\x20ftypisom\0\0\x02\0garbage, not a video")?;
@@ -1087,7 +1129,7 @@ fn video(test: &Test) -> R {
     test.write_config(STOCK_OFF, json!({}))?;
     test.wait_for(|s| Ok(text(s, "video.error")?.is_empty() && at(s, "video.request")?.is_null()))?;
     println!(
-        "PASS: a video background's poster and clip from the sandboxed video-probe while unlocked, the clip only once converted for the lock's size, a broken video keeps the theme colour"
+        "PASS: a video background's poster and clip from the sandboxed video-probe while unlocked, the clip only once converted for the lock's size, a video Omarchy wallpaper's still from the same probe, a broken video keeps the theme colour"
     );
     Ok(())
 }
@@ -1586,6 +1628,29 @@ fn wallpaper(test: &Test) -> R {
         version()? == before,
         "unchanged wallpaper should reuse cache"
     );
+    // A video wallpaper's still: the helper's video-probe poster (here a
+    // stand-in that logs its request), never Omarchy's poster.sh.
+    let cache = test.path("cache/omarchy/foamy.lock/video");
+    let poster_a = cache.join(format!("{}.png", "a".repeat(64)));
+    let poster_b = cache.join(format!("{}.png", "b".repeat(64)));
+    let probe = |body: &str| -> R {
+        write(
+            &test.poster,
+            format!(
+                "#!/bin/sh\nread -r request\nprintf '%s %s\\n' \"$1\" \"$request\" >> \"$HOME/probe-requests\"\ncache=\"$XDG_CACHE_HOME/omarchy/foamy.lock/video\"\nmkdir -p \"$cache\"\n{body}\n"
+            ),
+        )?;
+        fs::set_permissions(&test.poster, fs::Permissions::from_mode(0o755))
+            .map_err(app::io(test.poster.display()))
+    };
+    let answer = |name: &str| {
+        format!(
+            "cp \"$HOME/static # wallpaper.svg\" \"$cache/{name}.png\"\nprintf '{{\"ok\":true,\"poster\":\"%s\"}}\\n' \"$cache/{name}.png\""
+        )
+    };
+    if test.poster.exists() {
+        unlink(&test.poster)?;
+    }
     let video = test.path("movie.MP4");
     write(&video, "")?;
     test.background(Some(&video))?;
@@ -1593,29 +1658,48 @@ fn wallpaper(test: &Test) -> R {
     test.wait_for(error_is("video-poster-unavailable"))?;
     ensure!(
         path()? == "",
-        "without poster.sh (as on 4.0) video must never reach Image"
+        "without the helper a video must never reach Image"
     );
-    write(&test.poster, "#!/bin/sh\nexit 1\n")?;
+    probe("exit 1")?;
     test.refresh_wallpaper()?;
     test.wait_for(error_is("video-poster-failed"))?;
     ensure!(path()? == "");
-    write(
-        &test.poster,
-        "#!/bin/sh\nsleep 0.2\nprintf \"%s\\n\" \"$HOME/static # wallpaper.svg\"\n",
-    )?;
+    // A reply that isn't ok, or a poster outside the lock's video cache, is
+    // no poster either.
+    probe("echo '{\"ok\":false,\"error\":\"decode-failed\"}'")?;
     test.refresh_wallpaper()?;
-    let shown = path_is(&image);
+    test.wait_for(error_is("video-poster-failed"))?;
+    probe("printf '{\"ok\":true,\"poster\":\"%s\"}\\n' \"$HOME/static # wallpaper.svg\"")?;
+    test.refresh_wallpaper()?;
+    test.wait_for(error_is("video-poster-failed"))?;
+    ensure!(path()? == "");
+    probe(&format!("sleep 0.2\n{}", answer(&"a".repeat(64))))?;
+    test.refresh_wallpaper()?;
+    let shown = path_is(&poster_a);
     test.wait_for(|s| Ok(shown(s)? && !on(s, "wallpaperError")?))?;
+    // The request: video-probe for the wallpaper at the screen's size.
+    let requests = read(&test.path("probe-requests"))?;
+    let last = requests.lines().last().unwrap_or("");
+    let request = parse(
+        last.strip_prefix("video-probe ")
+            .ok_or(format!("not video-probe: {last}"))?,
+    )?;
+    ensure!(
+        text(&request, "path")? == video.display().to_string()
+            && num(&request, "width")? >= 16.0
+            && num(&request, "height")? >= 16.0,
+        "the probe's request: {request}"
+    );
     // A stale video result must launch extraction for the newest video as well.
     let second_video = test.path("second.mp4");
     write(&second_video, "")?;
-    let second_poster = test.path("second.svg");
-    write(&second_poster, read(&image)?)?;
+    let second_poster = poster_b.clone();
     let marker = test.path("poster-started");
-    write(
-        &test.poster,
-        "#!/bin/sh\n: > \"$HOME/poster-started\"\nsleep 0.3\ncase \"$1\" in *second.mp4) printf \"%s\\n\" \"$HOME/second.svg\";; *) printf \"%s\\n\" \"$HOME/static # wallpaper.svg\";; esac\n",
-    )?;
+    probe(&format!(
+        ": > \"$HOME/poster-started\"\nsleep 0.3\ncase \"$request\" in *second.mp4*) {};; *) {};; esac",
+        answer(&"b".repeat(64)),
+        answer(&"a".repeat(64))
+    ))?;
     test.refresh_wallpaper()?;
     test.wait_for(|_| Ok(marker.exists()))?;
     test.background(Some(&second_video))?;
@@ -1701,8 +1785,12 @@ fn wallpaper(test: &Test) -> R {
         !on(&test.status()?, "locked")?,
         "wallpaper failures must not change lock state"
     );
+    ensure!(
+        !test.path("poster-sh-ran").exists(),
+        "Omarchy's poster.sh (unsandboxed) must never run"
+    );
     println!(
-        "PASS: static wallpaper invalidation/cache reuse, optional video poster success/failure/missing helper, stale result rejection"
+        "PASS: static wallpaper invalidation/cache reuse, a video wallpaper's still from the helper's video-probe (success, failure, a bad reply, missing helper, stale result rejection), never Omarchy's poster.sh"
     );
     println!(
         "PASS: helper wallpaper probe follows relative and retargeted links, touches; dangling link, directory and missing helper keep the themed background"

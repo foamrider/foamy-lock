@@ -489,9 +489,11 @@ Input, an arriving display, or resume detection restarts the loop. Status includ
 
 Static wallpapers are preloaded at each display size and refreshed when the
 selected file changes, including replacement at the same path. Video wallpapers
-use a cached still frame from Omarchy 4.5's optional `poster.sh` helper. Foamy Lock
-does not play video or require the new video QML module. If that helper is missing
-or extraction fails, videos use the plain themed background. Wallpaper failures do not block
+use a cached still frame: the poster of the bundled helper's sandboxed `video-probe`
+(the same probe and cache as a video background, never Omarchy's `poster.sh`, whose
+ffmpegthumbnailer runs outside any sandbox). Unless a look plays it, Foamy Lock
+does not play video. If the helper is missing or can't read the video, it uses the
+plain themed background. Wallpaper failures do not block
 authentication; `lock status` reports them in `wallpaperError`.
 
 The bundled helper (`foamy-lock-helper wallpaper <link>`, at most 2 seconds) resolves

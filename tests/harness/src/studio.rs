@@ -222,6 +222,15 @@ fn fake_shell(base: &Path) -> Result<PathBuf, String> {
     fs::write(&helper, FAKE_HELPER).map_err(app::io("foamy-lock-helper"))?;
     fs::set_permissions(&helper, fs::Permissions::from_mode(0o755))
         .map_err(app::io("foamy-lock-helper"))?;
+    // The poster the fake probe answers with, already in the lock's video
+    // cache (the wallpaper still case hands it to applyPoster directly).
+    let cache = base.join("home/.cache/omarchy/foamy.lock/video");
+    fs::create_dir_all(&cache).map_err(app::io(cache.display()))?;
+    fs::write(
+        cache.join(format!("{}.png", "ef".repeat(32))),
+        gradient(192, 108, [120, 40, 60], [30, 90, 150]),
+    )
+    .map_err(app::io("cached poster"))?;
     fs::write(dir.join("poster.png"), gradient(192, 108, [120, 40, 60], [30, 90, 150]))
         .map_err(app::io("poster.png"))?;
     Ok(dir)

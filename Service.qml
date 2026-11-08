@@ -163,6 +163,8 @@ Item {
   // native size, if there is one. The lock never converts and never
   // decodes the original; a view plays only that clip (motion "play").
   readonly property string videoCacheDirectory: avatarCacheDirectory + "/video/"
+  // video-probe for a video Omarchy wallpaper's still (posterProc).
+  readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"])
   readonly property bool hyprlandSession: !!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
   // Hyprland's monitors (read only): Qt only knows the integer scale.
   readonly property var videoNatives: {
@@ -424,7 +426,10 @@ Item {
       return
     }
     if (posterProc.running) return
+    var size = Model.videoScreenSize(videoNatives, Quickshell.screens || [])
     posterProc.sourcePath = backgroundPath
+    posterProc.request = JSON.stringify({ path: backgroundPath, width: size[0], height: size[1] })
+    posterProc.stdinEnabled = true
     posterProc.sourceSignature = backgroundSignature
     posterProc.running = true
   }
@@ -1474,11 +1479,18 @@ Item {
     id: posterProc
     property string sourcePath: ""
     property string sourceSignature: ""
-    // 4.5 owns this helper and its decoder/cache. 4.0.6 has no helper and
-    // keeps the plain background for videos without importing any new QML API.
-    command: ["timeout", "--kill-after=1s", "16s", "bash", "-c",
-      '[[ -f $1 ]] || exit 69; exec bash "$1" "$2"', "foamy-lock-poster",
-      (root.omarchyPath || Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/shell/plugins/lock/poster.sh", sourcePath]
+    property string request: ""
+    // A video Omarchy wallpaper's still: the poster of the helper's
+    // video-probe (the same sandboxed probe and cache as a picture source's
+    // video), never a decoder outside the sandbox. Its own limit is 60 s.
+    command: ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
     stdout: StdioCollector { id: posterOutput; waitForEnd: true }
     onExited: function(exitCode, exitStatus) {
       // A theme can change during extraction; never show the previous theme's frame.
@@ -1486,13 +1498,13 @@ Item {
         root.refreshPoster()
         return
       }
-      var path = String(posterOutput.text || "").trim()
-      if (exitCode === 0 && exitStatus === 0 && path[0] === "/" && !Model.isVideoPath(path)) {
-        root.videoPosterPath = path
+      var result = Model.videoProbeResult(exitCode === 0 && exitStatus === 0 ? posterOutput.text : "", root.videoCacheDirectory)
+      if (result.ok && result.poster) {
+        root.videoPosterPath = result.poster
         root.wallpaperError = ""
       } else {
         root.videoPosterPath = ""
-        root.wallpaperError = exitCode === 69 ? "video-poster-unavailable" : "video-poster-failed"
+        root.wallpaperError = FoamyNative.unavailable(exitCode) ? "video-poster-unavailable" : "video-poster-failed"
       }
     }
   }

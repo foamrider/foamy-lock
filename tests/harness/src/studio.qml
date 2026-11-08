@@ -1290,18 +1290,25 @@ Item {
         reset()
         var sources = studio.sources
         var video = test.out + "/missing-wallpaper.mp4"
-        // Omarchy's poster.sh runs for real; a video it can't read leaves the
-        // theme colour.
+        // The helper's sandboxed video-probe runs for real (never Omarchy's
+        // poster.sh); a video it can't read leaves the theme colour.
         sources.applyWallpaper(0, JSON.stringify({ ok: true, path: video, signature: "1:2:3" }))
         expect(sources.wallpaperIsVideo && sources.wallpaperPath === "" && view.backgroundPath === "", "until the frame is made, the theme colour")
-        waitFor(function() { return !sources.posterBusy }, "poster.sh", function() {
+        waitFor(function() { return !sources.posterBusy }, "video-probe", function() {
           expect(sources.wallpaperError === "video" && sources.wallpaperPath === "", "no frame: " + sources.wallpaperError)
           // A frame for another wallpaper is never shown.
-          sources.applyPoster(0, test.picture + "\n", "/elsewhere.mp4", "1:2:3")
-          waitFor(function() { return !sources.posterBusy }, "poster.sh again", function() {
+          var poster = sources.videoDirectory + "ef".repeat(32) + ".png"
+          var reply = JSON.stringify({ ok: true, poster: poster, clip: null })
+          sources.applyPoster(0, reply, "/elsewhere.mp4", "1:2:3")
+          waitFor(function() { return !sources.posterBusy }, "video-probe again", function() {
             expect(sources.wallpaperPath === "", "a stale frame: " + sources.wallpaperPath)
-            sources.applyPoster(0, test.picture + "\n", video, "1:2:3")
-            expect(sources.wallpaperError === "" && sources.wallpaperPath === test.picture && view.backgroundPath === test.picture,
+            // Only a poster in the lock's video cache, from a reply that is ok.
+            sources.applyPoster(0, JSON.stringify({ ok: true, poster: test.picture }), video, "1:2:3")
+            expect(sources.wallpaperPath === "" && sources.wallpaperError === "video", "a poster elsewhere: " + sources.wallpaperPath)
+            sources.applyPoster(1, reply, video, "1:2:3")
+            expect(sources.wallpaperPath === "", "a failed probe: " + sources.wallpaperPath)
+            sources.applyPoster(0, reply, video, "1:2:3")
+            expect(sources.wallpaperError === "" && sources.wallpaperPath === poster && view.backgroundPath === poster,
               "the still frame shows: " + sources.wallpaperPath)
             // Back to the picture wallpaper.
             sources.refreshWallpaper()
@@ -1456,6 +1463,11 @@ Item {
         expect(sources.clipSource === video && find(page, "studioVideoCard").visible, "the card for the wallpaper")
         waitFor(function() { return sources.videoProbe !== null && sources.videoProbeKey === sources.clipKey && !sources.posterBusy }, "its probe", function() {
           expect(page.cardState === "convertible" && find(page, "studioVideoConvert").enabled, "it can be converted")
+          // Its still is the same probe's poster (the stand-in helper's, never poster.sh).
+          expect(sources.wallpaperError === "" && sources.wallpaperPath === sources.videoProbe.poster && sources.wallpaperPath !== "",
+            "the wallpaper's still from video-probe: " + sources.wallpaperPath)
+          var probes = readFile(fake + "/video-requests").trim().split("\n").filter(function(line) { return line.indexOf(video) !== -1 })
+          expect(probes.length >= 2 && probes.every(function(line) { return line.indexOf("video-probe ") === 0 }), "probed: " + json(probes))
           sources.refreshWallpaper()
           waitFor(function() { return sources.wallpaperPath.indexOf("wallpaper.png") !== -1 && !sources.wallpaperIsVideo }, "the wallpaper back", function() {
             expect(!find(page, "studioVideoCard").visible, "no card for a picture wallpaper")
