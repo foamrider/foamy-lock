@@ -138,3 +138,75 @@ design note is [lock-decorations.md](lock-decorations.md).
     (the lock lists the source before the studio names it).
 - **Live app:** no new studio files, so the open app hot-reloads. The banner
   needs a shell running this branch (`elements/PreviewBanner.qml`).
+
+### Animations (item 5)
+
+On `feat/animations` (from `feat/layout-engine` 6efe1fd), 2026-11-08;
+offscreen only. Decorations untouched (they are redesigned on
+`feat/layout-engine` meanwhile); Layout.js changes are the background
+sources, the `constellation` alias and an export block at the end.
+- **Eight animations,** in the picker's order (`Layout.DRAWN_SOURCES`):
+  Northern lights (`aurora`, redone: two folded curtains of green rising
+  into the accent and cyan, with rays, over a darkened sky, faint stars and a
+  low ridge), Rain (redone: slanted streaks at three depths, mist low down),
+  Stars (`stars`, was `constellation`: three depths of twinkling stars, a few
+  warm or cool, spikes on the brightest, a faint Milky Way, three shooting
+  stars per loop; the typed-character figure is kept), Matrix (5 × 7 dot
+  glyphs, mostly mirror-symmetric, in the accent, a near and a far layer),
+  Snow (four depths, swaying), Fireflies (yellow and green glows wandering and
+  pulsing over a dark meadow), Gradient flow (four soft pools drifting through
+  a warped space, rolled off toward the background's lightness so text stays
+  legible on any theme) and Ocean waves (eight bands of swell with foam under
+  a moon, its path glinting). Colours are the theme's only: background,
+  accent, green, cyan, yellow (FoamyPalette) and the lock's foreground; on a
+  light theme light paints over instead of adding, and stars and foam take
+  the theme's text colour.
+- **How they draw** (`elements/Backdrop.qml`): with the GPU a fragment shader
+  per animation (`elements/shaders/*.frag`, a shared `common.glsl` uniform
+  block and `hash.glsl`, compiled by `elements/shaders/build.sh` with
+  `qsb --glsl '330,300 es'` plus SPIR-V, as Foamy Weather ships its sky;
+  original code). A FrameAnimation steps the time each frame while
+  `moving` (the old Timer's rule: shown, display awake, animations on, GPU),
+  so it is 60 fps (or the display's rate); every motion is periodic in a
+  120 s loop, so there is no seam. Paused (blanked, reduced motion) the
+  shader keeps its last frame and nothing re-renders; hidden, neither the
+  shader nor the still is loaded. A shader that fails to build falls back to
+  the still frame.
+- **The still frame** (`elements/BackdropStill.js`): the software renderer
+  (CPU rendering, the tests, thumbnails, Lock Studio's tiles there) paints the
+  same picture once on two Canvases: the smooth field a column at a time as
+  vertical gradients (QML's ImageData was unusably slow), scaled up, and the
+  points (stars, drops, flakes, glyphs, glows) at full size, at most 1920
+  wide. The integer hash is the shaders' bit for bit (checked against
+  lowbias32 in `tests/backdrop.test.cjs`), so stars and flakes land where the
+  shader puts them. Painted once per scene by value (a binding that recomputes
+  the same scene, or Qt asking again, paints nothing). Deterministic: the
+  render harness draws each twice and compares bytes.
+- **Older looks:** `constellation` stays a valid source; canonical form,
+  `Layout.drawnSource`, LockView and `Draft.sourceChoice` read it as `stars`
+  (the picker shows Stars chosen). The `constellation` preset keeps its id and
+  now draws `stars`.
+- **Names:** en Northern lights, Rain, Stars, Matrix, Snow, Fireflies,
+  Gradient flow, Ocean waves; no Nordlys, Regn, Stjerner, Matrix, Snø,
+  Ildfluer, Fargeflyt, Havbølger. The presets keep their names.
+- **Cost, measured** with a scratch QQuickRenderControl tool (not in the
+  repo): the Backdrop alone rendered through OpenGL into a texture with
+  Qt's offscreen platform, no window. Per frame, render plus `glFinish`, on
+  the dev machine's RX 9070 XT at 1920 × 1080 / 3840 × 2160, and on Mesa
+  llvmpipe (software GL, a stand-in for a weak GPU) at 1920 × 1080: aurora
+  0.59 / 1.77 / 12.6 ms, rain 0.24 / 0.75 / 4.0, stars 0.49 / 1.52 / 8.0,
+  matrix 0.19 / 0.59 / 3.3, snow 0.42 / 1.32 / 7.1, fireflies 0.93 (after
+  cutting its search to four cells; was 1.43) / 2.39 / 16.0, gradient
+  0.19 / 0.64 / 4.3, ocean 0.13 / 0.35 / 3.1. Limits: a fast desktop GPU and
+  a CPU rasteriser, no laptop iGPU, no compositor in the loop. The still
+  frame, painted once on the CPU at 1920 × 1080: aurora 177 ms, ocean
+  183, matrix 114, stars 112, gradient 49, snow 39, fireflies 24, rain 11.
+- **Thumbnails:** regenerated deliberately for the three presets that use an
+  animation (`aurora`, `rain`, `constellation`); the other 23 are
+  byte-identical.
+- **Tests:** `tests/backdrop.test.cjs` (shaders present and compiled, the
+  uniforms Backdrop sets are the block's, the hash, the alias); the render
+  harness saves `capture-animation-<name>.png` for each (1920 × 1080, the
+  backdrop alone, painted without a shader, the same twice); the studio case
+  checks every tile is painted without a shader and that `constellation`
+  shows Stars chosen.

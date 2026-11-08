@@ -156,9 +156,9 @@ optional; without them the lock looks exactly as in 1.2.0.
 | `neon` | An outlined clock and accent edges inside a glowing accent frame, over a dark wallpaper. |
 | `system` | The clock and field beside a panel with uptime, memory, load and battery. |
 | `music` | Now playing with large artwork in the middle, the field below it. |
-| `aurora` | Soft bands of the theme's colours drifting behind the clock and field. |
-| `rain` | Thin streaks falling behind a card with a mono clock and a terminal field. |
-| `constellation` | A star field; each typed character lights the next star of a figure. |
+| `aurora` | Northern lights swaying over a dark ridge, behind the clock and field. |
+| `rain` | Slanted rain at three depths behind a card with a mono clock and a terminal field. |
+| `constellation` | A twinkling star field; each typed character lights the next star of a figure. |
 | `dotmatrix` | A dot-matrix clock and dotted field inside a dark bezel. |
 | `flat` | The clock, date and field in the middle, on solid surfaces without edges. |
 | `frosted` | The same on glass over a strongly blurred wallpaper (blur needs GPU rendering). |
@@ -261,15 +261,28 @@ that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
   - `theme` and `black`, the older names of a solid colour, still read: the
     theme's background and `#000000` (`status` and `catalog` show them as
     `color`);
-  - `aurora`: soft bands of the theme accent, green and cyan drifting slowly;
-  - `rain`: thin accent streaks falling at different speeds;
-  - `constellation`: stars and one figure whose stars light up as you type.
+  - the animations (**Animation** in Lock Studio), drawn in the theme's
+    colours over its background:
+    - `aurora` (**Northern lights**): curtains of the theme's green, accent and
+      cyan swaying over a dark sky and a low ridge;
+    - `rain` (**Rain**): slanted streaks in the accent at three depths;
+    - `stars` (**Stars**): a twinkling star field with a faint Milky Way and a
+      rare shooting star; each typed character lights the next star of a
+      figure (`constellation`, its older name, is still read as `stars`);
+    - `matrix` (**Matrix**): columns of glyphs falling in the accent;
+    - `snow` (**Snow**): flakes at four depths, drifting as they fall;
+    - `fireflies` (**Fireflies**): glows in the theme's yellow and green
+      wandering and pulsing over a dark meadow;
+    - `gradient` (**Gradient flow**): a slow, calm flow of the theme's colours;
+    - `ocean` (**Ocean waves**): swells rolling under a moon.
 
-  The last three are the animations (**Animation** in Lock Studio), drawn in
-  the theme's colours over its background. They move only while the lock
-  screen is shown, the display is on, Omarchy's animations are on and the GPU
-  renders; otherwise (reduced motion, CPU rendering, a blanked display) they
-  hold a still frame.
+  With the GPU each is a small fragment shader (`elements/shaders`, compiled
+  with Qt's `qsb` by `elements/shaders/build.sh`; commit the `.qsb` files
+  with the sources). They move only while the lock screen is shown, the display
+  is on, Omarchy's animations are on and the GPU renders; otherwise (reduced
+  motion, a blanked display) they hold their frame, and with CPU rendering a
+  still frame is painted once instead (`elements/BackdropStill.js`, the same
+  picture). Nothing is fetched.
 - **`color`.** The solid colour (above); ignored, and left out of the look,
   with any other source.
 - **`decor`.** A shape over the background and behind the elements, fitted to
