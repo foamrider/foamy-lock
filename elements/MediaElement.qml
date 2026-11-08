@@ -12,6 +12,9 @@ Rectangle {
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
+  // The opacity of its glass surface (the look's, or its own `glass`).
+  required property real glassOpacity
+  readonly property color glassFill: view.glassAt(glassOpacity)
   property string styleName: "card"
   readonly property bool line: styleName === "line"
   readonly property bool cardStyle: styleName === "card"
@@ -43,7 +46,7 @@ Rectangle {
     : art ? artControlsY + Math.round(54 * uiScale)
     : Math.round((line ? 30 : 92) * uiScale)
   radius: pill ? height / 2 : Math.round(22 * uiScale)
-  color: line ? "transparent" : view.glass
+  color: line ? "transparent" : glassFill
   border.width: line ? 0 : 1
   border.color: view.glassBorder
 

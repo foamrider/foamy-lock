@@ -55,6 +55,10 @@ ShellRoot {
       layout.status.zone = "top-" + column
       // Above the date and clock in the center.
       if (column === "center") layout.status.order = -1
+      // The system panel is too large to share the top row on a narrow screen
+      // (elements in different zones may not overlap): the date and clock
+      // move to the middle.
+      if (style === "system" && column !== "center") layout.date = layout.clock = { zone: "middle-center" }
     }
     return layout
   }

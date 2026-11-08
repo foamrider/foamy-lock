@@ -73,12 +73,12 @@ Item {
   // in the theme accent over a darker glass, "solid" makes it opaque without
   // edges. The opacity scales the theme's (or default) glass alpha.
   readonly property string glassTint: effectiveLook.glass.tint || "none"
-  readonly property color glass: glassTint === "solid"
-    ? Qt.rgba(glassBase.r, glassBase.g, glassBase.b, Math.min(1, 0.9 * effectiveLook.glass.opacity))
-    : glassTint === "accent"
-      ? Qt.rgba(glassBase.r * 0.9 + accent.r * 0.1, glassBase.g * 0.9 + accent.g * 0.1, glassBase.b * 0.9 + accent.b * 0.1,
-        Math.max(glassBase.a, 0.55) * effectiveLook.glass.opacity)
-      : Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * effectiveLook.glass.opacity)
+  readonly property color glass: glassAt(effectiveLook.glass.opacity)
+  // Free placement: false only reports geometry problems (geometryProblemCode)
+  // instead of falling back, for an editor; the lock always latches.
+  property bool latchFallback: true
+  // The last geometry check's result: "" or a code (see Layout.lookGeometryError).
+  property string geometryProblemCode: ""
   readonly property color glassEdge: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
   readonly property color glassBorder: glassTint === "accent" ? Qt.rgba(accent.r, accent.g, accent.b, 0.9)
     : glassTint === "solid" ? Qt.rgba(glassEdge.r, glassEdge.g, glassEdge.b, 0) : glassEdge
@@ -237,6 +237,8 @@ Item {
   function elementShown(name) {
     var item = placed[name]
     if (!item || item.hidden) return name === "password"
+    // "primary": only on the screen that gets the keys (see `primary`).
+    if (item.screens === "primary" && !primary) return false
     if (name === "account") return showUserInfo && primary
     if (name === "media") return hasMedia
     return true
@@ -287,6 +289,11 @@ Item {
   }
 
   function placeX(name, itemWidth) {
+    return zoneX(name, itemWidth) + offsetX(name)
+  }
+
+  // Where the zone puts the element, before its offset.
+  function zoneX(name, itemWidth) {
     var zone = placed[name].zone
     var row = Layout.zoneRow(zone)
     var column = Layout.screenColumn(zone, rightToLeft)
@@ -322,7 +329,7 @@ Item {
       var below = stackHeight("bottom-start")
       top = height - edgeMargin(row) - (below > 0 ? below + 2 * zoneGap : 0) - total
     }
-    return top + offsetInZone(name)
+    return top + offsetInZone(name) + offsetY(name)
   }
 
   // Narrow screens with both middle side zones in use stack them, the start
@@ -341,15 +348,23 @@ Item {
     return { x: item.x + (item.width - w) / 2, y: item.y, width: w, height: item.height }
   }
 
-  // The union of the shown elements' drawn rectangles in `zones`, or null
-  // (the decorations fit themselves to it).
+  // The drawn rectangle where the zone puts it, without its offset: what the
+  // decorations fit and the zone keeps.
+  function reservedRect(name) {
+    var r = drawnRect(name)
+    return { x: r.x - offsetX(name), y: r.y - offsetY(name), width: r.width, height: r.height }
+  }
+
+  // The union of the shown elements' reserved (un-offset) rectangles in
+  // `zones`, or null (the decorations fit themselves to it, so an offset
+  // element never drags a surface along).
   function zonesRect(zones) {
     var shown = shownMap()
     var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
     for (var i = 0; i < Layout.ELEMENTS.length; i++) {
       var name = Layout.ELEMENTS[i]
       if (!shown[name] || zones.indexOf(placed[name].zone) === -1) continue
-      var r = drawnRect(name)
+      var r = reservedRect(name)
       left = Math.min(left, r.x); top = Math.min(top, r.y)
       right = Math.max(right, r.x + r.width); bottom = Math.max(bottom, r.y + r.height)
     }
@@ -366,9 +381,43 @@ Item {
     return Math.max(140 * uiScale, corners > 0 ? corners + edgeMargin("bottom") + zoneGap : 0)
   }
 
-  // An element's scale: the view's, for its screen.
+  // An element's scale: the view's, for its screen, times the look's.
   function elementScale(name) {
-    return uiScale
+    var scale = placed[name].scale
+    return uiScale * (scale === undefined ? 1 : scale)
+  }
+
+  function elementOpacity(name) {
+    var opacity = placed[name].opacity
+    return opacity === undefined ? 1 : opacity
+  }
+
+  // The opacity of an element's glass surface: its own, or the look's.
+  function elementGlass(name) {
+    var glassOpacity = placed[name].glass
+    return glassOpacity === undefined ? effectiveLook.glass.opacity : glassOpacity
+  }
+
+  // The glass colour at `opacity` (which scales the theme's or the default
+  // glass alpha), in the look's tint.
+  function glassAt(opacity) {
+    if (glassTint === "solid") return Qt.rgba(glassBase.r, glassBase.g, glassBase.b, Math.min(1, 0.9 * opacity))
+    if (glassTint === "accent")
+      return Qt.rgba(glassBase.r * 0.9 + accent.r * 0.1, glassBase.g * 0.9 + accent.g * 0.1, glassBase.b * 0.9 + accent.b * 0.1,
+        Math.max(glassBase.a, 0.55) * opacity)
+    return Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * opacity)
+  }
+
+  // An element's move from its zone position, in pixels: a fraction of the
+  // screen, x mirrored in right-to-left languages like start and end.
+  function offsetX(name) {
+    var offset = placed[name].offset
+    return offset ? Math.round(offset.x * width) * (rightToLeft ? -1 : 1) : 0
+  }
+
+  function offsetY(name) {
+    var offset = placed[name].offset
+    return offset ? Math.round(offset.y * height) : 0
   }
 
   // The centre column's width for an element at `scale`: it grows with the
@@ -383,26 +432,41 @@ Item {
     return Layout.zoneColumn(placed[name].zone) === "center" ? limit : Math.min(limit, naturalWidth)
   }
 
-  function rectOf(item) {
-    return { x: item.x, y: item.y, width: item.width, height: item.height }
-  }
-
-  // The field must be on screen and uncovered; otherwise fall back a stage.
-  function checkGeometry() {
-    // Nothing to judge before the surface has its size.
-    if (!(width > 0 && height > 0)) return
-    var others = []
+  // Each shown element's drawn rectangle, by name (for an editor's overlay
+  // and the geometry check).
+  function shownRects() {
+    var rects = {}
+    var shown = shownMap()
     for (var i = 0; i < Layout.ELEMENTS.length; i++) {
       var name = Layout.ELEMENTS[i]
-      if (name !== "password" && elementShown(name)) others.push(rectOf(elementItem(name)))
+      if (shown[name]) rects[name] = drawnRect(name)
     }
-    var error = Layout.geometryError(rectOf(inputField), others, width, height, Math.round(4 * uiScale))
-    if (!error) return
+    return rects
+  }
+  readonly property var elementRects: shownRects()
+
+  // What is wrong with the geometry shown: "" or a code. The field must be
+  // on screen, below the top third and uncovered; every element on screen;
+  // and elements in different zones (or moved by an offset) apart. Pure: it
+  // changes nothing.
+  function geometryProblem() {
+    // Nothing to judge before the surface has its size.
+    if (!(width > 0 && height > 0)) return ""
+    return Layout.lookGeometryError(placed, shownRects(), width, height, Math.round(4 * uiScale))
+  }
+
+  // Check the geometry and, unless only reporting (latchFallback false),
+  // fall back a stage on a problem.
+  function checkGeometry() {
+    if (!(width > 0 && height > 0)) return
+    var error = geometryProblem()
+    geometryProblemCode = error
+    if (!error || !latchFallback) return
     // The user's look falls back to plain foamy (unless it is plain foamy),
     // then to the field-only layout, then nothing more.
     var next
     if (!fallbackPreset) {
-      var plainFoamy = JSON.stringify(look) === JSON.stringify(Layout.defaults())
+      var plainFoamy = JSON.stringify(Layout.canonical(look)) === JSON.stringify(Layout.defaults())
       next = plainFoamy ? Layout.FALLBACK_PRESET : Layout.DEFAULT_PRESET
     } else next = Layout.fallbackAfter(fallbackPreset)
     if (!next) return
@@ -412,11 +476,9 @@ Item {
     Qt.callLater(forcePasswordFocus)
   }
 
-  // Everything the check depends on; any change re-arms the debounce.
-  readonly property string geometryKey: [width, height, inputField.x, inputField.y, inputField.width,
-    inputField.height, dateLabel.x, dateLabel.y, dateLabel.height, clockLabel.y, clockLabel.height,
-    identityBlock.y, identityBlock.height, mediaRow.x, mediaRow.y, statusFooter.x, statusFooter.width,
-    statusFooter.y, statusFooter.height, calendarBlock.x, calendarBlock.y, JSON.stringify(shownMap())].join(",")
+  // Everything the check depends on (every shown element's rectangle, so an
+  // offset or scale alone counts); any change re-arms the debounce.
+  readonly property string geometryKey: [width, height, JSON.stringify(elementRects)].join(",")
   onGeometryKeyChanged: geometryTimer.restart()
   onLookChanged: {
     fallbackPreset = ""
@@ -562,6 +624,7 @@ Item {
       id: dateLabel
       view: root
       uiScale: root.elementScale("date")
+      opacity: root.elementOpacity("date")
       styleName: root.placed.date.style
       z: 2
       alignment: root.elementAlignment("date")
@@ -575,6 +638,8 @@ Item {
       id: clockLabel
       view: root
       uiScale: root.elementScale("clock")
+      opacity: root.elementOpacity("clock")
+      glassOpacity: root.elementGlass("clock")
       styleName: root.placed.clock.style
       z: 2
       alignment: root.elementAlignment("clock")
@@ -588,6 +653,8 @@ Item {
       id: identityBlock
       view: root
       uiScale: root.elementScale("account")
+      opacity: root.elementOpacity("account")
+      glassOpacity: root.elementGlass("account")
       styleName: root.placed.account.style
       alignment: root.elementAlignment("account")
       visible: root.elementShown("account")
@@ -601,6 +668,8 @@ Item {
       id: inputField
       view: root
       uiScale: root.elementScale("password")
+      opacity: root.elementOpacity("password")
+      glassOpacity: root.elementGlass("password")
       chromeVisible: root.primary
       styleName: root.placed.password.style
       alignment: root.elementAlignment("password")
@@ -612,6 +681,8 @@ Item {
       id: mediaRow
       view: root
       uiScale: root.elementScale("media")
+      opacity: root.elementOpacity("media")
+      glassOpacity: root.elementGlass("media")
       styleName: root.placed.media.style
       visible: root.elementShown("media")
       x: root.placeX("media", width)
@@ -622,6 +693,8 @@ Item {
       id: calendarBlock
       view: root
       uiScale: root.elementScale("calendar")
+      opacity: root.elementOpacity("calendar")
+      glassOpacity: root.elementGlass("calendar")
       styleName: root.placed.calendar.style
       alignment: root.elementAlignment("calendar")
       visible: root.elementShown("calendar")
@@ -633,6 +706,8 @@ Item {
       id: statusFooter
       view: root
       uiScale: root.elementScale("status")
+      opacity: root.elementOpacity("status")
+      glassOpacity: root.elementGlass("status")
       styleName: root.placed.status.style
       visible: root.elementShown("status")
       x: root.placeX("status", width)

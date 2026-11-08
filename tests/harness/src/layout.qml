@@ -10,7 +10,7 @@ import "Layout.js" as Layout
 ShellRoot {
   id: shellRoot
   readonly property string presetName: "__PRESET__"
-  readonly property var sizes: [[1920, 1080], [3440, 1440], [1280, 720], [800, 1000]]
+  readonly property var sizes: [[1920, 1080], [3440, 1440], [1280, 720], [1080, 1920], [800, 1000]]
   property int fellBack: 0
   property var fellBackTo: []
   // foamy only: one view switched through every preset (hidden account
@@ -246,6 +246,8 @@ ShellRoot {
       for (var i = 0; i < elementNames.length; i++) {
         var item = findNamed(view, elementNames[i])
         if (!item.visible) continue
+        // Decorations fit the zones, so an offset element may cross them.
+        if (Layout.isOffset(view.placed[modelNames[elementNames[i]]])) continue
         // What draws: centred text is narrower than its full-width item.
         var r = view.drawnRect(modelNames[elementNames[i]])
         var inside = contains(surface, r)
@@ -285,6 +287,10 @@ ShellRoot {
   function check(state) {
     if (view.fallbackPreset !== "" || view.layoutError !== "")
       return fail("a built-in preset fell back: " + view.layoutError + " -> " + view.fallbackPreset)
+    // No geometry problem at all (the field, every element on screen, no
+    // overlap between zones), whether or not it would fall back.
+    var problem = view.geometryProblem()
+    if (problem !== "" || view.geometryProblemCode !== "") return fail("geometry problem: " + problem + " " + view.geometryProblemCode)
     checkField(state[4])
     var account = findNamed(view, "identityBlock")
     var avatar = findNamed(view, "avatar")

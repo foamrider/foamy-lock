@@ -6,6 +6,7 @@
 //! foamy-lock-harness parity [--host 4.5|4.0|both] [--baseline REV]
 //! foamy-lock-harness layout [--host 4.5|4.0|both] [--preset NAME]
 //! foamy-lock-harness styles [--host 4.5|4.0|both]
+//! foamy-lock-harness placement [--host 4.5|4.0|both]
 //! foamy-lock-harness runtime [--host 4.5|4.0|both]
 //! foamy-lock-harness thumbnails [--host 4.5|4.0] [--preset NAME]... [--out DIR]
 //! ```
@@ -41,6 +42,14 @@
 //! and back to the default, whose geometry must return exactly. Plugin QML
 //! warnings fail it. With `FOAMY_RENDER_OUT` it keeps two captures per case.
 //!
+//! `placement` puts the free-placement keys (scale, opacity, offset, glass,
+//! screens) on one view, case by case: the geometry codes they produce
+//! (offsets off screen, onto another element or the field, the field above
+//! the top third, a scale that overflows), offsets mirrored right-to-left,
+//! a primary-only element on a secondary view, decorations that keep
+//! fitting the un-offset zones, and `latchFallback: false` reporting without
+//! switching. `layout` without `--preset` runs it too.
+//!
 //! `runtime` runs the real Service.qml with a simulated session lock, PAM and
 //! view, stand-in desktop commands, a fake Omarchy tree and shell.json, and
 //! drives it over `quickshell ipc` (hermetic HOME, runtime dir and session
@@ -62,6 +71,7 @@ mod app;
 mod host;
 mod layout;
 mod parity;
+mod placement;
 mod png;
 mod render;
 mod runtime;
@@ -78,9 +88,10 @@ fn main() -> ExitCode {
         Some("layout") => layout::run(&args[1..]),
         Some("runtime") => runtime::run(&args[1..]),
         Some("styles") => styles::run(&args[1..]),
+        Some("placement") => placement::run(&args[1..]),
         Some("thumbnails") => thumbnails::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness placement [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]",
             hosts = host::CHOICES.join("|")
         )),
     };

@@ -21,6 +21,9 @@ Item {
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
+  // The opacity of its glass surface (the look's, or its own `glass`).
+  required property real glassOpacity
+  readonly property color glassFill: view.glassAt(glassOpacity)
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "thin"
@@ -358,7 +361,7 @@ Item {
     readonly property real diameter: Math.round(220 * clock.uiScale)
     readonly property real faceSize: Math.min(diameter, clock.width)
     readonly property string paintKey: [clock.view.now.getHours(), clock.view.now.getMinutes(), faceSize,
-      clock.view.foreground, clock.view.glass, clock.view.glassBorder].join("|")
+      clock.view.foreground, clock.glassFill, clock.view.glassBorder].join("|")
 
     visible: clock.styleName === "analog"
     x: clock.blockX(width)
@@ -377,7 +380,7 @@ Item {
       // Before the face has a size there is nothing to draw, and a
       // negative radius only makes the canvas warn.
       if (radius <= 0) return
-      context.fillStyle = clock.view.glass
+      context.fillStyle = clock.glassFill
       context.strokeStyle = clock.view.glassBorder
       context.lineWidth = 1
       context.beginPath()
@@ -494,7 +497,7 @@ Item {
     Canvas {
       id: ringFace
       readonly property string paintKey: [clock.view.now.getMinutes(), ring.size, clock.view.accent,
-        clock.view.foreground, clock.view.glass].join("|")
+        clock.view.foreground, clock.glassFill].join("|")
       anchors.fill: parent
       antialiasing: true
       onPaintKeyChanged: requestPaint()
@@ -507,7 +510,7 @@ Item {
         var line = Math.max(3, 9 * ring.unit)
         var radius = center - line / 2 - 1
         if (radius - line / 2 <= 0) return
-        context.fillStyle = clock.view.glass
+        context.fillStyle = clock.glassFill
         context.beginPath()
         context.arc(center, center, radius - line / 2, 0, Math.PI * 2)
         context.fill()

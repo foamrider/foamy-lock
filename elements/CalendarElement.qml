@@ -12,6 +12,9 @@ Item {
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
+  // The opacity of its glass surface (the look's, or its own `glass`).
+  required property real glassOpacity
+  readonly property color glassFill: view.glassAt(glassOpacity)
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "card"
@@ -47,7 +50,7 @@ Item {
     anchors.fill: parent
     visible: calendar.card
     radius: Math.round(22 * calendar.unit)
-    color: calendar.view.glass
+    color: calendar.glassFill
     border.width: 1
     border.color: calendar.view.glassBorder
   }

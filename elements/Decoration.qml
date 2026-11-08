@@ -45,7 +45,8 @@ Item {
   readonly property var sheetRect: {
     if (kind !== "sheet") return null
     var margin = Math.round(24 * unit)
-    var held = view.zonesRect(["top-end", "middle-end"].concat(view.compactLayout ? [] : ["bottom-end"]))
+    // Narrow screens centre the bottom corners: the panel widens to hold them.
+    var held = view.zonesRect(["top-end", "middle-end"].concat(view.compactLayout ? ["bottom-start", "bottom-end"] : ["bottom-end"]))
     var extent = !held ? 0 : rtl ? held.x + held.width : view.width - held.x
     var width = Math.min(view.width - 2 * margin, Math.max(Math.round(420 * unit), Math.round(extent - margin + 44 * unit)))
     return { x: rtl ? margin : view.width - margin - width, y: margin, width: width, height: view.height - 2 * margin }

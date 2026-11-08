@@ -10,6 +10,9 @@ Item {
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
+  // The opacity of its glass surface (the look's, or its own `glass`).
+  required property real glassOpacity
+  readonly property color glassFill: view.glassAt(glassOpacity)
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "avatar"
@@ -35,7 +38,7 @@ Item {
     anchors.fill: parent
     visible: account.chip
     radius: height / 2
-    color: account.view.glass
+    color: account.glassFill
     border.width: 1
     border.color: account.view.glassBorder
   }

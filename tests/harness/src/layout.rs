@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::{app, host, styles};
+use crate::{app, host, placement, styles};
 
 const SHELL: &str = include_str!("layout.qml");
 /// Quickshell runs at once.
@@ -77,6 +77,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
         {
             eprintln!("{message}");
             failed.push(format!("{name} styles"));
+        }
+        // And the free-placement cases (see placement.rs).
+        if only.is_none()
+            && let Err(message) = placement::run_host(name, shell)
+        {
+            eprintln!("{message}");
+            failed.push(format!("{name} placement"));
         }
     }
     if failed.is_empty() {

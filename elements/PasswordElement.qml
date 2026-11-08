@@ -12,6 +12,9 @@ Rectangle {
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
+  // The opacity of its glass surface (the look's, or its own `glass`).
+  required property real glassOpacity
+  readonly property color glassFill: view.glassAt(glassOpacity)
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   // Off on a surface that doesn't get the keys: the editor stays live and
@@ -69,7 +72,7 @@ Rectangle {
     : card ? Math.round(138 * uiScale) : fieldHeight
   radius: box ? Math.round(12 * uiScale) : terminal ? Math.round(6 * uiScale)
     : card ? Math.round(24 * uiScale) : underline || dotsOnly ? 0 : height / 2
-  color: !surfaceShown ? "transparent" : terminal ? Qt.rgba(0.012, 0.016, 0.03, 0.72) : view.glass
+  color: !surfaceShown ? "transparent" : terminal ? Qt.rgba(0.012, 0.016, 0.03, 0.72) : glassFill
   border.width: surfaceShown ? 1 : 0
   border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
   // Not clipped: the unlock hint below shows only while the field has no

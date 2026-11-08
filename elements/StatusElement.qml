@@ -12,6 +12,9 @@ Row {
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
+  // The opacity of its glass surface (the look's, or its own `glass`).
+  required property real glassOpacity
+  readonly property color glassFill: view.glassAt(glassOpacity)
   // "text" (icons and labels), "icons" (icons only), "pill" or "system".
   property string styleName: "text"
   readonly property bool pill: styleName === "pill"
@@ -39,7 +42,7 @@ Row {
       width: status.width
       height: status.height
       radius: height / 2
-      color: status.view.glass
+      color: status.glassFill
       border.width: 1
       border.color: status.view.glassBorder
     }
@@ -144,7 +147,7 @@ Row {
     width: Math.round(320 * unit)
     height: 2 * padding + rows.length * rowHeight + (rows.length - 1) * rowGap
     radius: Math.round(20 * unit)
-    color: status.view.glass
+    color: status.glassFill
     border.width: 1
     border.color: status.view.glassBorder
 

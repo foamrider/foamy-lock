@@ -78,7 +78,7 @@ pub fn run_host(name: &str, shell: &Path) -> Result<(), String> {
 
 /// QML warnings from the plugin's own files (binding loops, type errors),
 /// which the sweep treats as failures.
-fn qml_warnings(log: &str) -> Vec<&str> {
+pub fn qml_warnings(log: &str) -> Vec<&str> {
     log.lines()
         .filter(|line| {
             (line.contains("WARN") || line.contains("ERROR"))

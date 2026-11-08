@@ -169,7 +169,8 @@ Presets from `dock` on are inspired by the layouts of
 rebuilt from the elements, decorations and backgrounds here; no code is shared.
 The editor's thumbnails are in `previews/presets` (`tests/harness.sh thumbnails`).
 
-**Layout.** Each element takes `zone`, `style`, `order` and `hidden`:
+**Layout.** Each element takes `zone`, `style`, `order` and `hidden`, and the
+optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 
 - **`zone`.** One of `top-start`, `top-center`, `top-end`, `middle-start`,
   `middle-center`, `middle-end`, `bottom-start`, `bottom-center` and
@@ -194,6 +195,21 @@ The editor's thumbnails are in `previews/presets` (`tests/harness.sh thumbnails`
 | `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below) |
 | `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill), `system` (a panel with uptime, memory, load and the battery, or the network without one) |
 | `calendar` | `card` (default; this month on glass, today ringed in the accent), `plain`. Hidden unless a preset or `hidden: false` shows it. |
+
+**Size, finish and free placement.** Every key is optional; without them an
+element draws exactly as its preset says.
+
+| Key | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `scale` | 0.5 to 2 in steps of 0.05; the field 0.85 to 1.5 | 1 | The element's size. A scaled date or clock in a centre column widens with it, up to the screen less its margins. |
+| `opacity` | 0.3 to 1; the field 0.7 to 1 | 1 | The whole element's opacity. |
+| `offset` | `{ "x": …, "y": … }`, both required, each -0.5 to 0.5 | none | A move from where the zone puts it, as a fraction of the screen's width (`x`) and height (`y`), so one look fits every screen size. `x` mirrors in right-to-left languages, like start and end. The rest of the zone's stack stays where it was, and decorations keep fitting the zones, not the moved element. |
+| `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, and the calendar `card`; the element's other styles ignore it. The date has no glass and rejects the key. |
+| `screens` | `all`, `primary` | `all` | `primary` shows the element only on the monitor that receives your keystrokes (or on every monitor until one does). For the date, clock, media, status and calendar; the account and the field already follow that monitor and reject the key. |
+
+```json
+"layout": { "clock": { "scale": 1.25, "offset": { "x": -0.1, "y": 0.02 } }, "media": { "glass": 0.4, "screens": "primary" } }
+```
 
 Each password style has a fixed size, so the field never moves while you type.
 Every style reads the same with CPU rendering, except the artwork: the media
@@ -258,10 +274,15 @@ edges).
 value out of range, leaves the previous look in place and shows up as
 `lookError` in `omarchy-shell foamy.lock status`. It never resets the other
 settings, and a mistake in the other settings never resets the look. Each time
-the lock screen is shown, it checks that the field is on the screen and not
-covered by another element. If it is, that screen shows the `foamy` preset
+the lock screen is shown, it checks what each screen draws: the field must be
+on the screen, its top below the top third, and not covered by another
+element; every element must be on the screen; and elements in different zones,
+or moved with `offset`, must not overlap (elements stacked in one zone may, as
+the clocks pull up into the date). If not, that screen shows the `foamy` preset
 instead, and if even that doesn't fit, only the field, centred. `status`
-reports this as `layoutError` and `fallbackPreset`.
+reports this as `layoutError` and `fallbackPreset`. The codes are `password-missing`,
+`password-offscreen`, `password-high`, `password-overlap`, `element-offscreen`
+and `element-overlap`.
 
 **Several monitors.** Every monitor shows the same layout. The account and the
 field's surround show only on the monitor that receives your keystrokes, or on
@@ -272,8 +293,8 @@ every monitor, so a keystroke is never lost.
 the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
-Editors use three more calls on the same target: `catalog` lists the elements, zones,
-styles, presets (with their thumbnails), background sources, decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
+Editors use three more calls on the same target: `catalog` (version 2) lists the elements, zones,
+styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`), presets (with their thumbnails), background sources, decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
@@ -466,7 +487,7 @@ FOAMY_HELPER='["bin/aarch64/foamy-lock-helper"]' python3 -I -B -m unittest disco
 python3 -I -B tests/artwork_runtime.py
 bash tests/harness.sh render                  # --language no renders in Norwegian
 bash tests/harness.sh parity                  # geometry against 1.2.0 (needs the git history)
-bash tests/harness.sh layout                  # every preset, then the style sweep (also: styles alone)
+bash tests/harness.sh layout                  # every preset, the style sweep and the placement cases (also: styles, placement alone)
 bash tests/harness.sh runtime                 # service, PAM, fingerprint, wallpaper and IPC flows
 bash tests/harness.sh thumbnails              # re-render previews/presets/*.png (480 × 270)
 bash tests/kit-check.sh
@@ -511,7 +532,7 @@ and places the elements in `elements/` (date, clock, account, password field,
 media, status), which only draw what the view gives them. The render and parity
 tests replace those data sources in `LockView.qml` alone.
 
-The render, parity, layout, styles, runtime and thumbnails commands run through `tests/harness.sh`, which builds and
+The render, parity, layout, styles, placement, runtime and thumbnails commands run through `tests/harness.sh`, which builds and
 runs `tests/harness`: a development-only Rust crate (std only apart from `serde_json`
 for the runtime test's status replies, its own workspace, so the helper's `native.pin`
 doesn't cover it; built under `~/.cache/foamy-native`, never inside the plugin;
@@ -525,9 +546,10 @@ unavailable, no wallpaper, right-to-left). `--baseline REV` compares with anothe
 revision.
 
 The layout test runs every preset in `Layout.SELECTABLE_PRESETS` (four
-quickshells at a time) through four sizes, 12- and 24-hour time, typing,
+quickshells at a time) through five sizes (1920 × 1080, 3440 × 1440, 1280 × 720,
+1080 × 1920 and 800 × 1000), 12- and 24-hour time, typing,
 secondary screens and right-to-left, where every element and decoration must
-mirror. No preset may fall back; the field and every element must sit wholly
+mirror. No preset may fall back or have any geometry problem; the field and every element must sit wholly
 inside or outside each decoration surface (and inside a frame); a drawn
 background must hold its still frame under the software renderer; the system
 panel must have its readings (from fixtures, not the real `/proc`). The foamy
@@ -538,6 +560,14 @@ The thumbnails show each preset at 1920 × 1080 with the synthetic data and a
 fixed dark theme, scaled to 480 × 270. The offscreen platform has no GPU, so
 they show CPU rendering: no blur, and the avatar's initial instead of a
 picture.
+
+The placement cases (`placement`, also run by `layout` without `--preset`) put
+`scale`, `opacity`, `offset`, `glass` and `screens` on one view: an offset off
+the screen, onto another zone's element, into its own stack or onto the field,
+the field moved above the top third, a scale that overflows, an offset mirrored
+right-to-left, a primary-only element on a secondary view, and decorations that
+keep fitting the un-offset zones. Each expects its geometry code, and a view with
+`latchFallback: false` (for an editor) must report it without falling back.
 
 The style sweep (`styles`, also run by `layout` without `--preset`) shows every
 style of every element in each column of its row at 1920 × 1080 and 800 × 1000,

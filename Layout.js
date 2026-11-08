@@ -429,6 +429,15 @@ function merge(presetName, layout, background, glass) {
   return result
 }
 
+// A copy of an effective look in canonical form (see canonicalElement), so
+// looks compare by what they show: plain foamy with explicit defaults is
+// plain foamy.
+function canonical(look) {
+  var result = copy(look)
+  for (var name in (result && result.elements) || {}) canonicalElement(result.elements[name])
+  return result
+}
+
 // The look for a built-in preset without overrides.
 function preset(name) {
   return merge(PRESETS[name] ? name : DEFAULT_PRESET, null, null, null)
@@ -510,12 +519,48 @@ function intersects(a, b, slack) {
 // The geometry check for the password element: "" or an error code.
 // `field` is its rectangle, `others` the visible elements' rectangles, the
 // view `width` × `height`, and `margin` the space it keeps from the edges.
+// The field's top stays below the screen's top third, where a hand and an
+// eye expect it, wherever an offset moves it.
 function geometryError(field, others, width, height, margin) {
   if (!field || !(field.width > 0) || !(field.height > 0)) return "password-missing"
   if (field.x < margin || field.y < margin || field.x + field.width > width - margin
       || field.y + field.height > height - margin) return "password-offscreen"
+  if (field.y < height / 3) return "password-high"
   for (var i = 0; i < others.length; i++) {
     if (intersects(field, others[i], 1)) return "password-overlap"
+  }
+  return ""
+}
+
+// Whether an element is moved from its zone position.
+function isOffset(item) {
+  return !!item && !!item.offset && (item.offset.x !== 0 || item.offset.y !== 0)
+}
+
+// The whole look's geometry check: "" or an error code. `elements` is the
+// effective layout, `rects` maps each shown element to its drawn rectangle.
+// - The field: as geometryError, against every other shown element.
+// - Every element stays on screen (within a pixel): element-offscreen.
+// - Elements don't overlap (element-overlap) when they sit in different
+//   zones, or when either is offset. Neighbours in one zone's stack may: the
+//   clocks pull up into the date on purpose.
+function lookGeometryError(elements, rects, width, height, margin) {
+  var names = []
+  for (var i = 0; i < ELEMENTS.length; i++) if (rects[ELEMENTS[i]]) names.push(ELEMENTS[i])
+  var others = []
+  for (var j = 0; j < names.length; j++) if (names[j] !== "password") others.push(rects[names[j]])
+  var error = geometryError(rects.password, others, width, height, margin)
+  if (error) return error
+  for (var k = 0; k < names.length; k++) {
+    var r = rects[names[k]]
+    if (r.x < -1 || r.y < -1 || r.x + r.width > width + 1 || r.y + r.height > height + 1) return "element-offscreen"
+  }
+  for (var a = 0; a < names.length; a++) {
+    for (var b = a + 1; b < names.length; b++) {
+      var first = elements[names[a]], second = elements[names[b]]
+      if (first.zone === second.zone && !isOffset(first) && !isOffset(second)) continue
+      if (intersects(rects[names[a]], rects[names[b]], 1)) return "element-overlap"
+    }
   }
   return ""
 }
@@ -528,5 +573,6 @@ if (typeof module !== "undefined") module.exports = {
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
   elementError: elementError, elementLimits: elementLimits, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
-  isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError
+  isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError,
+  canonical: canonical, isOffset: isOffset, lookGeometryError: lookGeometryError
 }

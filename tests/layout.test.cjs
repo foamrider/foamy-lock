@@ -308,3 +308,52 @@ test('the limits an editor offers match what the parser accepts', () => {
   assert.equal(Layout.LIMITS.scale.min, 0.5)
   assert.equal(Layout.PASSWORD_LIMITS.scale.min, 0.85)
 })
+
+test('the field keeps below the top third of the screen', () => {
+  const field = {x: 800, y: 360, width: 320, height: 51}
+  assert.equal(Layout.geometryError(field, [], 1920, 1080, 8), '', 'exactly a third down')
+  assert.equal(Layout.geometryError({...field, y: 359}, [], 1920, 1080, 8), 'password-high')
+  // Off screen comes first, then too high, then covered.
+  assert.equal(Layout.geometryError({...field, y: 2}, [], 1920, 1080, 8), 'password-offscreen')
+  assert.equal(Layout.geometryError({...field, y: 300}, [{...field, y: 300}], 1920, 1080, 8), 'password-high')
+})
+
+test('the look geometry check: elements on screen, apart between zones and when moved', () => {
+  const look = Layout.defaults().elements
+  const field = {x: 800, y: 840, width: 320, height: 51}
+  const date = {x: 810, y: 97, width: 300, height: 40}
+  // The clock pulls up into the date: neighbours in one stack may overlap.
+  const clock = {x: 760, y: 117, width: 400, height: 220}
+  const status = {x: 1650, y: 24, width: 246, height: 38}
+  const rects = {date, clock, password: field, status}
+  const check = (elements, r) => Layout.lookGeometryError(elements, r, 1920, 1080, 4)
+  assert.equal(check(look, rects), '')
+  assert.equal(check(look, {...rects, password: undefined}), 'password-missing')
+  assert.equal(check(look, {...rects, password: {...field, y: 200}}), 'password-high')
+  assert.equal(check(look, {...rects, status: {...status, x: 1700}}), 'element-offscreen')
+  assert.equal(check(look, {...rects, status: {...status, x: -2}}), 'element-offscreen')
+  assert.equal(check(look, {...rects, status: {...status, x: 1674}}), '', 'touching the edge, within a pixel')
+  // Different zones may not overlap.
+  assert.equal(check(look, {...rects, status: {...status, x: 1000, y: 100}}), 'element-overlap')
+  // The field against anything, its own stack included.
+  assert.equal(check(look, {...rects, account: {x: 900, y: 800, width: 120, height: 60}}), 'password-overlap')
+  // An offset element against everything, its own stack included.
+  const moved = Layout.parseLook({layout: {clock: {offset: {x: 0, y: 0.01}}}}).look.elements
+  assert.equal(Layout.isOffset(moved.clock), true)
+  assert.equal(Layout.isOffset(look.clock), false)
+  assert.equal(check(moved, rects), 'element-overlap')
+  assert.equal(check(moved, {...rects, clock: {...clock, y: 140}}), '')
+  // Hidden elements have no rectangle and aren't checked.
+  assert.equal(check(look, {password: field}), '')
+})
+
+test('a look in canonical form compares by what it shows', () => {
+  const look = Layout.defaults()
+  look.elements.clock.scale = 1
+  look.elements.date.offset = {x: 0, y: 0}
+  look.elements.status.screens = 'all'
+  assert.equal(JSON.stringify(Layout.canonical(look)), JSON.stringify(Layout.defaults()))
+  assert.equal(look.elements.clock.scale, 1, 'the argument is not changed')
+  look.elements.clock.scale = 1.2
+  assert.notEqual(JSON.stringify(Layout.canonical(look)), JSON.stringify(Layout.defaults()))
+})
