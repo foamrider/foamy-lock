@@ -120,6 +120,16 @@ function entry(look) {
   }
   if (Object.keys(layout).length > 0) result.layout = layout
   var background = shallowDiff(current.background, base.background)
+  // A key canonical form leaves out at its default (the colour, motion)
+  // that the preset sets otherwise: written out at its default (the
+  // terminal's black back to the theme's background).
+  for (var key in Layout.BACKGROUND_DEFAULTS) {
+    if (current.background[key] === undefined && base.background[key] !== undefined
+        && !(key === "color" && current.background.source !== "color")) {
+      background = background || {}
+      background[key] = Layout.BACKGROUND_DEFAULTS[key]
+    }
+  }
   if (background) result.background = background
   var glass = shallowDiff(current.glass, base.glass)
   if (glass) result.glass = glass
@@ -457,6 +467,44 @@ function setPicture(draft, path) {
   return editLook(draft, function(look) {
     look.background.source = "picture"
     look.background.path = String(path || "")
+  })
+}
+
+// The background page's source choices, and the choice a source belongs to:
+// the wallpaper, a custom image, a solid colour (the older "theme" and
+// "black" too) or an animation (any of Layout.DRAWN_SOURCES).
+var SOURCE_CHOICES = ["omarchy", "picture", "color", "animation"]
+
+function sourceChoice(source) {
+  if (Layout.DRAWN_SOURCES.indexOf(source) !== -1) return "animation"
+  if (source === "color" || source === "theme" || source === "black") return "color"
+  return source === "picture" ? "picture" : "omarchy"
+}
+
+// Choose a source: a solid colour keeps the look's colour (the theme's
+// background by default); an animation keeps the one shown, else the
+// first. The custom image needs a path: see setPicture.
+function chooseSource(draft, choice) {
+  var current = lookOf(draft).background.source
+  if (SOURCE_CHOICES.indexOf(choice) === -1 || choice === "picture" || sourceChoice(current) === choice) return draft
+  return setBackground(draft, "source", choice === "animation" ? Layout.DRAWN_SOURCES[0] : choice)
+}
+
+// Typed text as a colour, "#rrggbb" in lower case ("" when it isn't one):
+// six hex digits, the "#" optional, nothing else.
+function hexColor(text) {
+  var value = String(text === undefined || text === null ? "" : text).trim()
+  if (value.charAt(0) !== "#") value = "#" + value
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : ""
+}
+
+// A solid colour (a theme colour's name or "#rrggbb"), as the source.
+function setColor(draft, color) {
+  var value = Layout.THEME_COLORS.indexOf(color) !== -1 ? color : hexColor(color)
+  if (!value) return draft
+  return editLook(draft, function(look) {
+    look.background.source = "color"
+    look.background.color = value
   })
 }
 
@@ -1007,6 +1055,7 @@ if (typeof module !== "undefined") module.exports = {
   setStyle: setStyle, setOpacity: setOpacity, cleanOpacity: cleanOpacity, setGlass: setGlass, glassOf: glassOf, hasGlass: hasGlass,
   setScreens: setScreens, resetOffset: resetOffset, offsetPixels: offsetPixels, pixelsToSteps: pixelsToSteps, stepsToPixels: stepsToPixels,
   SCENE_LIMITS: SCENE_LIMITS, setBackground: setBackground, setPicture: setPicture, setGlassLook: setGlassLook,
+  SOURCE_CHOICES: SOURCE_CHOICES, sourceChoice: sourceChoice, chooseSource: chooseSource, hexColor: hexColor, setColor: setColor,
   history: history, push: push, undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo,
   gridStep: gridStep, snapRadius: snapRadius, dragAxis: dragAxis, zonesFor: zonesFor, bounds: bounds, clampRect: clampRect,
   nearestAnchor: nearestAnchor, snap: snap, drop: drop, offsetFrom: offsetFrom, neighbourZone: neighbourZone, nudge: nudge, gridMove: gridMove,

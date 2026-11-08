@@ -62,7 +62,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 28] = [
+const CAPTURES: [&str; 30] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -72,6 +72,8 @@ const CAPTURES: [&str; 28] = [
     "studio-library-drag",
     "studio-preset-menu",
     "studio-preset-dialog",
+    "studio-animation",
+    "studio-color",
     "studio-background",
     "studio-glass",
     "studio-restore",

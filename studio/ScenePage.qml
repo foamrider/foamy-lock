@@ -1,14 +1,17 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
+import qs.Commons as Commons
 import "kit"
 import "Layout.js" as LockLayout
 import "Draft.js" as Draft
 
 // The scene pages in the inspector pane (Library → Scene):
-// - "background": the source (Wallpaper, Custom image, the
-//   theme colour, black or a drawn scene), the picture, the blur and the
-//   decoration (drawn tiles);
+// - "background": the source (Wallpaper, Custom image, Solid colour or
+//   Animation), then what that source needs: the image (picture or video),
+//   the colour (theme swatches and a #rrggbb field) or the animation (tiles
+//   drawn by the lock's own code, one per Layout.DRAWN_SOURCES); then the
+//   blur and the decoration (drawn tiles);
 // - "glass": the dim, and the glass's opacity and tint;
 // - "look": both, for the look as a whole (nothing is selected: a click
 //   beside the lock on the canvas, or Esc).
@@ -30,6 +33,12 @@ FocusScope {
   readonly property var background: look.background
   readonly property var sources: app ? app.sources : null
   readonly property bool pictureChosen: background.path !== undefined && background.path !== ""
+  // Wallpaper, Custom image, Solid colour or Animation (Draft.SOURCE_CHOICES).
+  readonly property string choice: Draft.sourceChoice(background.source)
+  // The solid colour shown: a theme colour's name or "#rrggbb".
+  readonly property string colorValue: LockLayout.solidColor(background) || LockLayout.BACKGROUND_DEFAULTS.color
+  // The swatches: the theme's colours by name, then black.
+  readonly property var swatches: LockLayout.THEME_COLORS.concat([LockLayout.BLACK])
 
   Accessible.role: Accessible.Pane
   Accessible.name: title
@@ -39,10 +48,22 @@ FocusScope {
   function percent(value) { return FoamyI18n.t("studio.percent", Math.round(value * 100)) }
 
   // A source chosen: the picture without a path asks for one first.
-  function chooseSource(source) {
-    if (source === "picture" && !pictureChosen) sources.pick()
-    else if (source === "picture") commit(Draft.setPicture(app.draft, background.path))
-    else commit(Draft.setBackground(app.draft, "source", source))
+  function chooseSource(choice) {
+    if (choice === "picture" && !pictureChosen) sources.pick()
+    else if (choice === "picture") commit(Draft.setPicture(app.draft, background.path))
+    else commit(Draft.chooseSource(app.draft, choice))
+  }
+
+  // A swatch's colour on screen, and its name.
+  function swatchColor(value) {
+    if (value === "background") return Commons.Color.background
+    if (value === "accent") return Commons.Color.accent
+    if (value === "muted") return Commons.Color.muted
+    if (value === "urgent") return Commons.Color.urgent
+    return value
+  }
+  function swatchName(value) {
+    return value === LockLayout.BLACK ? FoamyI18n.t("studio.color.black") : FoamyI18n.t("studio.color." + value)
   }
 
   // What went wrong with the picture, in words ("" when nothing did).
@@ -142,7 +163,7 @@ FocusScope {
     if (sources.picking) return FoamyI18n.t("studio.picture.choosing")
     // A video's state is on its card.
     if (sources.pictureIsVideo) return ""
-    if (background.source !== "picture") return pictureChosen ? FoamyI18n.t("studio.picture.notShown") : ""
+    if (background.source !== "picture") return ""
     if (sources.preparing || (sources.pictureSource !== background.path && !sources.pictureError)) return FoamyI18n.t("studio.picture.preparing")
     return ""
   }
@@ -204,7 +225,7 @@ FocusScope {
           Accessible.name: FoamyI18n.t("studio.source")
 
           Repeater {
-            model: LockLayout.BACKGROUND_SOURCES
+            model: Draft.SOURCE_CHOICES
             StudioButton {
               required property string modelData
               required property int index
@@ -214,7 +235,7 @@ FocusScope {
               horizontalAlignment: Text.AlignLeft
               text: FoamyI18n.t("studio.source." + modelData)
               detail: modelData === "picture" && !scene.pictureChosen ? FoamyI18n.t("studio.picture.choose") : ""
-              checked: scene.background.source === modelData
+              checked: scene.choice === modelData
               Accessible.role: Accessible.RadioButton
               Accessible.checkable: true
               onClicked: scene.chooseSource(modelData)
@@ -222,44 +243,184 @@ FocusScope {
           }
         }
 
+        // Only what would surprise: a wallpaper the canvas can't show.
         PaneNote {
-          text: LockLayout.DRAWN_SOURCES.indexOf(scene.background.source) !== -1 ? FoamyI18n.t("studio.drawnHint")
-            : scene.background.source === "omarchy" && scene.sources && scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo")
-            : scene.background.source === "omarchy" && scene.sources && scene.sources.wallpaperIsVideo ? FoamyI18n.t("studio.wallpaperStill")
-            : scene.background.source === "omarchy" && scene.sources && scene.sources.wallpaperError !== "" ? FoamyI18n.t("studio.wallpaperMissing")
+          objectName: "studioWallpaperNote"
+          text: scene.choice !== "omarchy" || !scene.sources ? ""
+            : scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo")
+            : scene.sources.wallpaperError !== "" ? FoamyI18n.t("studio.wallpaperMissing")
             : ""
         }
 
-        SectionLabel {
-          text: FoamyI18n.t("studio.picture")
-          topPadding: FoamyStyle.gap
-        }
-        PaneNote {
-          objectName: "studioPicturePath"
-          color: FoamyPalette.secondaryText
-          elide: Text.ElideMiddle
-          wrapMode: Text.NoWrap
-          text: scene.pictureChosen ? scene.background.path : FoamyI18n.t("studio.picture.none")
-        }
-        RowLayout {
+        // --- the image (Custom image) -------------------------------------
+        Column {
+          objectName: "studioImageSection"
           width: parent.width
-          FoamyButton {
-            objectName: "studioChoosePicture"
-            focusable: true
-            text: FoamyI18n.t("studio.picture.chooseButton")
-            enabled: scene.sources !== null && !scene.sources.picking
-            onClicked: scene.sources.pick()
+          spacing: FoamyStyle.gap
+          visible: scene.choice === "picture"
+
+          SectionLabel {
+            text: FoamyI18n.t("studio.picture")
+            topPadding: FoamyStyle.gap
           }
           PaneNote {
-            Layout.fillWidth: true
-            text: scene.pictureStatus()
+            objectName: "studioPicturePath"
+            color: FoamyPalette.secondaryText
+            elide: Text.ElideMiddle
+            wrapMode: Text.NoWrap
+            text: scene.pictureChosen ? scene.background.path : FoamyI18n.t("studio.picture.none")
+          }
+          RowLayout {
+            width: parent.width
+            FoamyButton {
+              objectName: "studioChoosePicture"
+              focusable: true
+              text: FoamyI18n.t("studio.picture.chooseButton")
+              enabled: scene.sources !== null && !scene.sources.picking
+              onClicked: scene.sources.pick()
+            }
+            PaneNote {
+              Layout.fillWidth: true
+              text: scene.pictureStatus()
+            }
           }
         }
+        // Outside the section: a chooser that failed says so whatever the
+        // source (the chooser can open from the source list too).
         PaneNote {
           objectName: "studioPictureProblem"
           color: FoamyPalette.onSurface(FoamyPalette.error)
           text: scene.pictureProblem()
           Accessible.role: Accessible.AlertMessage
+        }
+
+        // --- the colour (Solid colour) -------------------------------------
+        Column {
+          objectName: "studioColorSection"
+          width: parent.width
+          spacing: FoamyStyle.gap
+          visible: scene.choice === "color"
+
+          SectionLabel {
+            text: FoamyI18n.t("studio.color")
+            topPadding: FoamyStyle.gap
+          }
+          // The theme's colours (they follow the theme) and black. Arrows
+          // move between them; Enter or Space chooses.
+          Flow {
+            id: swatchRow
+            objectName: "studioSwatches"
+            width: parent.width
+            spacing: FoamyStyle.gapSmall
+            Accessible.role: Accessible.List
+            Accessible.name: FoamyI18n.t("studio.color.swatches")
+
+            Repeater {
+              model: scene.swatches
+              Rectangle {
+                id: swatch
+                required property string modelData
+                required property int index
+                readonly property bool chosen: scene.choice === "color" && scene.colorValue === modelData
+                objectName: "studioSwatch-" + modelData
+                width: FoamyStyle.actionSize + FoamyStyle.gapSmall
+                height: width
+                radius: FoamyStyle.radiusSmall
+                color: "transparent"
+                border.width: activeFocus ? 2 : chosen ? 2 : FoamyStyle.borderWidth
+                border.color: activeFocus ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+                activeFocusOnTab: true
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: scene.swatchName(modelData)
+                Accessible.checkable: true
+                Accessible.checked: chosen
+                function choose() { scene.commit(Draft.setColor(scene.app.draft, modelData)) }
+                Accessible.onPressAction: choose()
+                Keys.onReturnPressed: choose()
+                Keys.onEnterPressed: choose()
+                Keys.onSpacePressed: choose()
+                Keys.onLeftPressed: swatchRow.focusSwatch(index + (LayoutMirroring.enabled ? 1 : -1))
+                Keys.onRightPressed: swatchRow.focusSwatch(index + (LayoutMirroring.enabled ? -1 : 1))
+                Rectangle {
+                  anchors.fill: parent
+                  anchors.margins: 4
+                  radius: Math.max(0, parent.radius - 2)
+                  color: scene.swatchColor(swatch.modelData)
+                  border.width: 1
+                  border.color: Qt.alpha(FoamyPalette.text, 0.18)
+                }
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    swatch.forceActiveFocus(Qt.MouseFocusReason)
+                    swatch.choose()
+                  }
+                }
+              }
+            }
+            function focusSwatch(index) {
+              if (index < 0 || index >= scene.swatches.length) return
+              for (var i = 0; i < children.length; i++)
+                if (children[i].objectName === "studioSwatch-" + scene.swatches[index]) children[i].forceActiveFocus(Qt.TabFocusReason)
+            }
+          }
+          // Any colour: six hex digits, checked as typed and by the lock.
+          RowLayout {
+            width: parent.width
+            spacing: FoamyStyle.gap
+            FoamyTextSettingField {
+              id: hexField
+              objectName: "studioColorHex"
+              Layout.fillWidth: true
+              label: FoamyI18n.t("studio.color.custom")
+              placeholderText: "#rrggbb"
+              value: scene.colorValue.charAt(0) === "#" ? scene.colorValue : ""
+              field.maximumLength: 7
+              validate: function(text) { return text === "" || Draft.hexColor(text) !== "" || FoamyI18n.t("studio.color.invalid") }
+              // Then shown as the lock keeps it ("C0FFEE" → "#c0ffee").
+              onCommitted: function(text) {
+                if (text === "") return
+                scene.commit(Draft.setColor(scene.app.draft, text))
+                Qt.callLater(function() { if (!hexField.dirty) hexField.show() })
+              }
+            }
+            Rectangle {
+              objectName: "studioColorPreview"
+              Layout.preferredWidth: FoamyStyle.actionSize
+              Layout.preferredHeight: FoamyStyle.actionSize
+              Layout.alignment: Qt.AlignBottom
+              radius: FoamyStyle.radiusSmall
+              color: scene.swatchColor(scene.colorValue)
+              border.width: FoamyStyle.borderWidth
+              border.color: FoamyPalette.border
+              Accessible.ignored: true
+            }
+          }
+        }
+
+        // --- the animation (Animation) -------------------------------------
+        Column {
+          objectName: "studioAnimationSection"
+          width: parent.width
+          spacing: FoamyStyle.gap
+          visible: scene.choice === "animation"
+
+          SectionLabel {
+            text: FoamyI18n.t("studio.animation")
+            topPadding: FoamyStyle.gap
+          }
+          // Each animation Layout.js lists, in its still frame.
+          StyleTiles {
+            objectName: "studioAnimation"
+            width: parent.width
+            element: "animation"
+            title: FoamyI18n.t("studio.animation")
+            options: LockLayout.DRAWN_SOURCES
+            value: scene.choice === "animation" ? scene.background.source : ""
+            labelFor: function(name) { return FoamyI18n.t("studio.source." + name) }
+            onPicked: function(name) { scene.commit(Draft.setBackground(scene.app.draft, "source", name)) }
+          }
         }
 
         // --- the video card -------------------------------------------------
@@ -423,16 +584,11 @@ FocusScope {
           onMoved: function(v) { scene.preview(Draft.setBackground(scene.app.draft, "blur", v)) }
           onCommitted: function(v) { scene.commit(Draft.setBackground(scene.app.draft, "blur", v)) }
         }
-        PaneNote {
-          visible: scene.background.source === "omarchy" || (scene.sources !== null && scene.sources.pictureIsVideo)
-          text: FoamyI18n.t("studio.blurHint")
-        }
 
         SectionLabel {
           text: FoamyI18n.t("studio.decoration")
           topPadding: FoamyStyle.gap
         }
-        PaneNote { text: FoamyI18n.t("studio.decorationHint") }
         StyleTiles {
           objectName: "studioDecor"
           width: parent.width
@@ -471,13 +627,11 @@ FocusScope {
           onMoved: function(v) { scene.preview(Draft.setBackground(scene.app.draft, "dim", v)) }
           onCommitted: function(v) { scene.commit(Draft.setBackground(scene.app.draft, "dim", v)) }
         }
-        PaneNote { text: FoamyI18n.t("studio.dimHint") }
 
         SectionLabel {
           text: FoamyI18n.t("studio.glass")
           topPadding: FoamyStyle.gap
         }
-        PaneNote { text: FoamyI18n.t("studio.glassHint") }
         StudioSlider {
           objectName: "studioGlassOpacity"
           width: parent.width

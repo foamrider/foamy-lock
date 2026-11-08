@@ -3,6 +3,7 @@ import QtQuick
 import qs.Commons
 import qs.Commons as Commons
 import "kit"
+import "elements" as Elements
 
 // A small drawing of one element style, made from its name: what the style
 // tiles in the inspector show (ported from the retired foamy-lock-studio
@@ -11,7 +12,8 @@ import "kit"
 // with a greeting above it…); the clock, date, calendar and weather use
 // sample values (12:30, 7 November 2026 in the chosen language, 12°).
 // With `element` "decor" it draws a background decoration on a small
-// screen instead (the background page's tiles). A name the studio has no
+// screen instead (the background page's tiles), and with "animation" one of
+// the drawn backgrounds (Layout.DRAWN_SOURCES), by the lock's own code. A name the studio has no
 // drawing for gets a generic one (`known` is false) and the tile names it
 // as Foamy Lock does.
 // Static: no motion, no effects (Canvas draws in every renderer).
@@ -122,6 +124,7 @@ Item {
   }
 
   function pick(name) {
+    if (element === "animation") return animationArt
     switch (name) {
     case "clock:thin": return clockThin
     case "clock:bold": return clockBold
@@ -1290,6 +1293,37 @@ Item {
           border.color: root.edge
         }
         Field { anchors.centerIn: parent; width: parent.width * 0.3 }
+      }
+    }
+  }
+
+  // ---- an animation (the background page's picker): the lock's own drawing
+  // (elements/Backdrop.qml) in its still frame, on the theme's background,
+  // drawn at a small screen's size and scaled down, so every animation
+  // Layout.js lists has its picture. Never moves (no motion allowed).
+  Component {
+    id: animationArt
+    Item {
+      Screen {
+        id: animationScreen
+        color: Commons.Color.background
+        Elements.Backdrop {
+          width: 480
+          height: 300
+          view: stillView
+          source: root.styleName
+          transform: Scale { xScale: animationScreen.width / 480; yScale: animationScreen.height / 300 }
+        }
+      }
+      // What Backdrop reads from its LockView.
+      QtObject {
+        id: stillView
+        readonly property real uiScale: 0.5
+        readonly property bool motionAllowed: false
+        readonly property bool reduceMotion: true
+        readonly property color accent: Commons.Color.accent
+        readonly property color foreground: Commons.Color.foreground
+        readonly property string passwordText: ""
       }
     }
   }

@@ -34,6 +34,8 @@ const Layout = require('../Layout.js');
 const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z => 'zone.' + z),
   ...[...new Set(Object.values(Layout.STYLES).flat())].map(s => 'style.' + s), ...Layout.SELECTABLE_PRESETS.map(p => 'preset.' + p),
   ...Layout.BACKGROUND_SOURCES.map(s => 'source.' + s), ...Layout.SCREENS.map(s => 'screens.' + s),
+  // The background page's choices (Draft.SOURCE_CHOICES) and colour swatches (ScenePage.qml).
+  ...['omarchy', 'picture', 'color', 'animation'].map(s => 'source.' + s), ...Layout.THEME_COLORS.map(c => 'color.' + c),
   ...['move', 'nudge', 'zone', 'scale', 'hide', 'show', 'select', 'free', 'axis', 'undo', 'redo', 'panes', 'help', 'quit'].flatMap(k => ['key.' + k, 'key.' + k + '.keys']),
   ...['password-overlap', 'password-covered', 'password-offscreen', 'password-high', 'password-missing', 'element-offscreen', 'element-overlap'].map(c => 'problem.' + c),
   ...Layout.DECORATIONS.map(d => 'decor.' + d), ...Layout.GLASS_TINTS.map(t => 'tint.' + t),

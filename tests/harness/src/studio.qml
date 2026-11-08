@@ -7,6 +7,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Commons as Commons
 import "kit"
 import "Layout.js" as Layout
 import "Draft.js" as Draft
@@ -40,6 +41,11 @@ Item {
   function ok(message) { console.info("studio ok: " + message) }
   function expect(condition, message) { if (!condition) fail(message) }
   function json(value) { return JSON.stringify(value) }
+  // The background page's sections that show (the image, colour, animation).
+  function backgroundSections() {
+    return ["studioImageSection", "studioColorSection", "studioAnimationSection"].filter(function(name) {
+      return find(studio.scenePage, name).visible }).join(",")
+  }
   function expectDraft(expected) {
     // Key order aside (QML hands objects back sorted).
     if (!Draft.same(studio.draft, JSON.parse(expected))) fail("draft " + json(studio.draft) + ", expected " + expected)
@@ -1248,12 +1254,87 @@ Item {
         expect(studio.library.presetButton.activeFocus, "the preset row has the keyboard after the question")
         next()
       } },
+    { name: "background: four sources, an animation", wait: 0, run: function(next) {
+        reset()
+        find(studio.library, "studioSceneBackground").clicked()
+        var page = studio.scenePage
+        expect(Draft.SOURCE_CHOICES.every(function(choice) { return find(page, "studioSource-" + choice) !== null })
+          && find(page, "studioSource-aurora") === null && find(page, "studioSource-black") === null, "the four sources")
+        expect(find(page, "studioSource-omarchy").checked && backgroundSections() === "", "the wallpaper: no section of its own: " + backgroundSections())
+        // The first animation, then any from the picker, each drawn by the
+        // lock's own Backdrop in its still frame.
+        find(page, "studioSource-animation").clicked()
+        expectDraft('{"preset":"foamy","background":{"source":"aurora"}}')
+        expect(find(page, "studioSource-animation").checked && backgroundSections() === "studioAnimationSection", "the animation section: " + backgroundSections())
+        var animations = find(page, "studioAnimation")
+        expect(JSON.stringify(animations.options) === JSON.stringify(Layout.DRAWN_SOURCES) && animations.value === "aurora", "every animation: " + json(animations.options))
+        for (var a = 0; a < Layout.DRAWN_SOURCES.length; a++) {
+          var tile = find(animations, "studioTile-" + Layout.DRAWN_SOURCES[a])
+          var still = tile ? find(tile, "backdrop") : null
+          expect(still && still.source === Layout.DRAWN_SOURCES[a] && !still.moving && still.phase === still.stillPhaseOf(still.source)
+            && tile.Accessible.name === FoamyI18n.t("studio.source." + Layout.DRAWN_SOURCES[a]), "a still drawing of " + Layout.DRAWN_SOURCES[a])
+        }
+        animations.picked("rain")
+        expectDraft('{"preset":"foamy","background":{"source":"rain"}}')
+        find(page, "studioSource-animation").clicked()
+        expectDraft('{"preset":"foamy","background":{"source":"rain"}}')
+        expect(find(page, "studioBlur").visible === false, "no blur for an animation")
+        capture("studio-animation", next)
+      } },
+    { name: "background: a solid colour", wait: 0, run: function(next) {
+        var page = studio.scenePage
+        // The theme's background first, then a swatch or #rrggbb.
+        find(page, "studioSource-color").clicked()
+        expectDraft('{"preset":"foamy","background":{"source":"color"}}')
+        expect(backgroundSections() === "studioColorSection", "the colour section: " + backgroundSections())
+        expect(find(page, "studioSwatch-background").chosen && find(page, "studioSwatch-#000000") !== null
+          && Layout.THEME_COLORS.every(function(name) { return find(page, "studioSwatch-" + name).Accessible.name === FoamyI18n.t("studio.color." + name) }),
+          "the theme's swatches and black, named")
+        find(page, "studioSwatch-#000000").choose()
+        expectDraft('{"preset":"foamy","background":{"source":"color","color":"#000000"}}')
+        var solid = find(view, "solidBackground")
+        expect(solid && solid.visible && Qt.colorEqual(solid.color, "#000000"), "the canvas shows it")
+        var hex = find(page, "studioColorHex")
+        expect(hex.field.text === "#000000", "the field shows a hex colour: " + hex.field.text)
+        hex.field.text = "C0FFEE"
+        hex.dirty = true
+        hex.commitEdit(false)
+        expectDraft('{"preset":"foamy","background":{"source":"color","color":"#c0ffee"}}')
+        expect(Qt.colorEqual(solid.color, "#c0ffee"), "typed: " + solid.color)
+        waitFor(function() { return hex.field.text === "#c0ffee" }, "the field showing the colour as kept", function() {
+        // Strict: anything but six hex digits is refused, and says how.
+        hex.field.text = "#12g"
+        hex.dirty = true
+        expect(!hex.commitEdit(false) && hex.error === FoamyI18n.t("studio.color.invalid"), "refused: " + hex.error)
+        expectDraft('{"preset":"foamy","background":{"source":"color","color":"#c0ffee"}}')
+        expect(hex.field.maximumLength === 7, "at most 7 characters")
+        hex.cancelEdit()
+        find(page, "studioSwatch-accent").choose()
+        expect(Qt.colorEqual(solid.color, Commons.Color.accent) && find(page, "studioSwatch-accent").chosen && hex.field.text === "",
+          "a theme colour by name: " + solid.color)
+        // Less help: none of the old explanations under the controls.
+        var notes = []
+        function walk(item) {
+          if (!item) return
+          if (item.visible && item.textFormat !== undefined && item.wrapMode === Text.Wrap && item.text !== "") notes.push(item.text)
+          for (var i = 0; i < item.children.length; i++) walk(item.children[i])
+        }
+        walk(page)
+        expect(notes.length === 0, "no notes on a colour background: " + json(notes))
+        capture("studio-color", function() {
+          find(page, "studioSource-omarchy").clicked()
+          expect(backgroundSections() === "" && !solid.visible, "back to the wallpaper")
+          expectDraft('{"preset":"foamy"}')
+          next()
+        })
+        })
+      } },
     { name: "background page", wait: 0, run: function(next) {
         reset()
         find(studio.library, "studioSceneBackground").clicked()
         var page = studio.scenePage
         expect(studio.page === "background" && page.visible && !studio.inspector.visible, "the background page shows")
-        find(page, "studioSource-aurora").clicked()
+        find(page, "studioSource-animation").clicked()
         expectDraft('{"preset":"foamy","background":{"source":"aurora"}}')
         find(page, "studioDecor").picked("frame")
         find(page, "studioSource-omarchy").clicked()

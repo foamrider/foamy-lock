@@ -432,6 +432,14 @@ volume, Bluetooth, keyboard layout and weather, never yours, and the problem che
 uses the widest samples. When the lock screen can't reach Foamy Weather, the
 Weather row says **Needs Foamy Weather**.
 
+**The background page.** **Source** is **Wallpaper**, **Custom image**, **Solid
+colour** or **Animation**, and what is under it follows the choice: the picture
+(or video) and its chooser for a custom image; for a solid colour, swatches of the
+theme's colours and black, and a field for any `#rrggbb` (six hex digits, checked
+as you type and again by the lock screen); for an animation, a tile per animation,
+each drawn by the lock screen's own code in its still frame. Blur (wallpaper and
+custom image) and the decoration follow.
+
 **A video background.** "Choose picture or video…" offers MP4, MOV, MKV and WebM
 videos too. For a video (or an Omarchy wallpaper that is one) the background page
 shows a card: its first frame, the facts ("4 min 12 s · 3840 × 2160 · HEVC ·

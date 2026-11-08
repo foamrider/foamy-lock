@@ -741,3 +741,45 @@ test('[ and ] and the library\'s Up and Down skip a module that can\'t be used',
   assert.equal(Draft.libraryStep('clock', -1), 'clock')
   assert.equal(Draft.libraryStep('', 1), 'clock')
 })
+
+test('the background page: four source choices, a solid colour and an animation', () => {
+  assert.deepEqual(plain(Draft.SOURCE_CHOICES), ['omarchy', 'picture', 'color', 'animation'])
+  for (const [source, choice] of [['omarchy', 'omarchy'], ['picture', 'picture'], ['color', 'color'], ['theme', 'color'],
+    ['black', 'color'], ...Layout.DRAWN_SOURCES.map(s => [s, 'animation'])]) assert.equal(Draft.sourceChoice(source), choice, source)
+  // A solid colour starts from the theme's background; an animation from the first.
+  assert.deepEqual(plain(Draft.chooseSource({preset: 'foamy'}, 'color')), {preset: 'foamy', background: {source: 'color'}})
+  assert.deepEqual(plain(Draft.chooseSource({preset: 'foamy'}, 'animation')), {preset: 'foamy', background: {source: Layout.DRAWN_SOURCES[0]}})
+  // Choosing the choice shown keeps what it has (the colour, the animation).
+  const rain = {preset: 'foamy', background: {source: 'rain'}}
+  assert.deepEqual(plain(Draft.chooseSource(rain, 'animation')), rain)
+  const red = Draft.setColor({preset: 'foamy'}, '#C0FFEE')
+  assert.deepEqual(plain(red), {preset: 'foamy', background: {source: 'color', color: '#c0ffee'}})
+  assert.deepEqual(plain(Draft.chooseSource(red, 'color')), plain(red))
+  // Back to the wallpaper; the picture needs a path, so it isn't chosen here.
+  assert.equal(Draft.lookOf(Draft.chooseSource(red, 'omarchy')).background.source, 'omarchy')
+  assert.deepEqual(plain(Draft.chooseSource(red, 'picture')), plain(red))
+  assert.deepEqual(plain(Draft.chooseSource(red, 'video')), plain(red))
+  // The terminal preset is black: a solid colour without a change.
+  assert.deepEqual(plain(Draft.chooseSource({preset: 'terminal'}, 'color')), {preset: 'terminal'})
+  assert.deepEqual(plain(Draft.setColor({preset: 'terminal'}, '#000000')), {preset: 'terminal'})
+  // An older look saved as black is the same look as #000000.
+  assert.ok(Draft.sameLook({preset: 'foamy', background: {source: 'black'}}, {preset: 'foamy', background: {source: 'color', color: '#000000'}}))
+  // Theme colours by name; typed text strictly as six hex digits.
+  for (const name of Layout.THEME_COLORS) assert.equal(Draft.lookOf(Draft.setColor({preset: 'foamy'}, name)).background.source, 'color')
+  for (const [text, hex] of [['#1A1B26', '#1a1b26'], ['1a1b26', '#1a1b26'], [' #00ff00 ', '#00ff00']]) assert.equal(Draft.hexColor(text), hex, text)
+  for (const text of ['', '#', '#12345', '#1234567', 'zzzzzz', '#12 456', 'red', 'background', null, undefined])
+    assert.equal(Draft.hexColor(text), '', String(text))
+  for (const bad of ['red', '#12345', 'foreground', '', null]) assert.deepEqual(plain(Draft.setColor({preset: 'foamy'}, bad)), {preset: 'foamy'}, String(bad))
+})
+
+test('a preset\'s own colour can go back to the theme\'s background', () => {
+  // The terminal is black; the theme's background must be written out, or
+  // the entry would mean black again.
+  const themed = Draft.setColor({preset: 'terminal'}, 'background')
+  assert.deepEqual(plain(themed), {preset: 'terminal', background: {color: 'background'}})
+  assert.equal(Layout.solidColor(Draft.lookOf(themed).background), 'background')
+  // Another source carries no colour, so nothing is written for it.
+  assert.deepEqual(plain(Draft.chooseSource({preset: 'terminal'}, 'animation')), {preset: 'terminal', background: {source: 'aurora'}})
+  assert.deepEqual(plain(Draft.chooseSource(Draft.chooseSource({preset: 'terminal'}, 'animation'), 'color')),
+    {preset: 'terminal', background: {color: 'background'}})
+})
