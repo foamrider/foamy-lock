@@ -4,6 +4,7 @@ import "kit"
 // A section's title in a pane: caption, capitals, muted, on the reading
 // start.
 Text {
+  textFormat: Text.PlainText
   width: parent ? parent.width : implicitWidth
   horizontalAlignment: Text.AlignLeft
   color: FoamyPalette.mutedText

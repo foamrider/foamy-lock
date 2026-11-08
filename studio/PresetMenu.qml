@@ -272,6 +272,7 @@ FocusScope {
   }
 
   component Heading: Text {
+    textFormat: Text.PlainText
     horizontalAlignment: Text.AlignLeft
     color: FoamyPalette.mutedText
     font.family: FoamyStyle.fontFamily
@@ -335,6 +336,7 @@ FocusScope {
         }
         Text {
           objectName: "studioPresetsEmpty"
+          textFormat: Text.PlainText
           visible: menu.userCount === 0
           width: parent.width
           horizontalAlignment: Text.AlignLeft

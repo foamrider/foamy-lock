@@ -102,6 +102,7 @@ Rectangle {
         Layout.alignment: Qt.AlignVCenter
       }
       Text {
+        textFormat: Text.PlainText
         Layout.fillWidth: true
         text: FoamyI18n.t("studio.tip")
         horizontalAlignment: Text.AlignLeft
@@ -117,6 +118,7 @@ Rectangle {
       }
       Text {
         objectName: "studioTipCount"
+        textFormat: Text.PlainText
         text: FoamyI18n.t("studio.tip.count", [FoamyI18n.number(tips.index + 1, 0), FoamyI18n.number(tips.ids.length, 0)])
         color: FoamyPalette.mutedText
         font.family: FoamyStyle.fontFamily
@@ -135,6 +137,7 @@ Rectangle {
         model: tips.ids
         Text {
           required property string modelData
+          textFormat: Text.PlainText
           readonly property bool shown: modelData === tips.current
           objectName: shown ? "studioTipText" : ""
           width: tipBox.width

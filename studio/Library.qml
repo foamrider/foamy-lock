@@ -236,6 +236,7 @@ FocusScope {
     border.color: FoamyPalette.accent
 
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       width: parent.width - 2 * FoamyStyle.gapLarge
       horizontalAlignment: Text.AlignHCenter

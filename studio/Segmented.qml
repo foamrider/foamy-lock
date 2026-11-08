@@ -48,6 +48,7 @@ Rectangle {
 
     Text {
       objectName: "segmentedCaption"
+      textFormat: Text.PlainText
       visible: control.caption !== ""
       height: control.height - 4
       leftPadding: FoamyStyle.controlPaddingX
@@ -81,6 +82,7 @@ Rectangle {
 
         Text {
           id: segmentLabel
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           text: segment.modelData.label
           color: segment.selected ? FoamyPalette.text : FoamyPalette.secondaryText

@@ -663,7 +663,10 @@ bash tests/kit-check.sh
 ```
 
 The tests are Rust (`tests/harness`), Python 3 and Node (development only; the plugin does not need
-them at runtime). `artwork_test.py` runs the helper as a process: it checks the
+them at runtime). `tests/plaintext.test.cjs` is a lint: every `Text` in the plugin's QML sets
+`textFormat: Text.PlainText` (Text's default renders markup, so a file name like
+`<img src='data:…'>` would make Qt decode an image outside the sandbox); an exception needs an
+entry with its reason in the test's `ALLOWED`. `artwork_test.py` runs the helper as a process: it checks the
 request/reply contract, the exact Bubblewrap command line, environment, rlimits,
 inherited descriptors, policy and seccomp program (through stand-in `bwrap` and
 `magick` scripts in an outer Bubblewrap namespace), HTTPS against a local TLS

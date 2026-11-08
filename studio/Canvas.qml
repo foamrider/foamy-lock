@@ -562,6 +562,7 @@ FocusScope {
     color: FoamyPalette.accent
     Text {
       id: tagLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: parent.text
       color: FoamyPalette.onAccent

@@ -61,6 +61,7 @@ FocusScope {
     spacing: FoamyStyle.gapTiny
 
     Text {
+      textFormat: Text.PlainText
       width: FoamyStyle.unitWidthCompact
       height: parent.height
       verticalAlignment: Text.AlignVCenter
@@ -132,6 +133,7 @@ FocusScope {
     StepButton { text: "+"; steps: 1; name: FoamyI18n.t("studio.more", field.name) }
 
     Text {
+      textFormat: Text.PlainText
       height: parent.height
       leftPadding: FoamyStyle.gapSmall
       verticalAlignment: Text.AlignVCenter
@@ -159,6 +161,7 @@ FocusScope {
     Accessible.onPressAction: field.stepBy(steps)
 
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: button.text
       color: FoamyPalette.text

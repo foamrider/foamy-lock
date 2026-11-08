@@ -1230,6 +1230,45 @@ Item {
         expect(view.backgroundPath === s.picturePath && view.backgroundPrepared, "the canvas shows the prepared picture")
         capture("studio-background", next)
       } },
+    { name: "a file name that looks like markup is shown as text", wait: 0, run: function(next) {
+        // As rich text, this name would make Qt decode the PNG in the
+        // studio's process and lay it out 900 pixels tall.
+        var png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+        var name = "/nonexistent/foamy-lock-studio/<img src='data:image/png;base64," + png + "' width='900' height='900'><b>x</b>.png"
+        studio.sources.applyPick(0, JSON.stringify({ ok: true, path: name }))
+        var shown = find(studio.scenePage, "studioPicturePath")
+        expect(shown && shown.text === name, "the name as it is: " + (shown ? shown.text : "missing"))
+        expect(shown.textFormat === Text.PlainText && shown.implicitHeight < 60 && shown.lineCount === 1,
+          "plain text, one line: " + shown.textFormat + " " + shown.implicitHeight)
+        studio.notice = { kind: "warning", text: name }
+        var status = find(studio, "studioStatus")
+        expect(status.textFormat === Text.PlainText && status.text === name && status.implicitHeight < 120,
+          "the status line too: " + status.implicitHeight)
+        studio.notice = null
+        // Every Text in the window and the lock view on its canvas.
+        var rich = []
+        var count = 0
+        function walk(item) {
+          if (!item) return
+          // Qt Quick Controls' own placeholder inside the kit's text field
+          // shows the field's placeholderText, which Studio never sets from
+          // data (it has none today); the lint covers the plugin's own Text.
+          if (item.textFormat !== undefined && item.elide !== undefined && String(item).indexOf("QQuickPlaceholderText") !== 0) {
+            count++
+            if (item.textFormat !== Text.PlainText) {
+              var chain = []
+              for (var up = item; up && chain.length < 6; up = up.parent) chain.push(String(up).replace(/\(0x[0-9a-f]+\)/, "") + (up.objectName ? "#" + up.objectName : ""))
+              rich.push(chain.join(" < ") + ": " + String(item.text).slice(0, 40))
+            }
+          }
+          var children = item.children || []
+          for (var i = 0; i < children.length; i++) walk(children[i])
+        }
+        walk(studio.contentItem || studio)
+        walk(view)
+        expect(count > 50 && rich.length === 0, count + " Text items, not plain: " + JSON.stringify(rich))
+        next()
+      } },
     { name: "a missing picture is reported", wait: 0, run: function(next) {
         studio.sources.applyPick(0, '{"ok":true,"path":"/nonexistent/foamy-lock-studio/gone.png"}')
         test.saved.waits = 0

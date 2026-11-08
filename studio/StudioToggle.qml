@@ -50,6 +50,7 @@ Item {
 
   Text {
     id: label
+    textFormat: Text.PlainText
     visible: toggle.showLabel
     anchors.left: parent.left
     anchors.right: ring.left

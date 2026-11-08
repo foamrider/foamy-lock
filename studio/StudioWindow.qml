@@ -759,6 +759,7 @@ FocusScope {
           spacing: FoamyStyle.gap
 
           Text {
+            textFormat: Text.PlainText
             text: FoamyI18n.t("studio.title")
             color: FoamyPalette.text
             font.family: FoamyStyle.fontFamily
@@ -817,6 +818,7 @@ FocusScope {
           Text {
             id: statusText
             objectName: "studioStatus"
+            textFormat: Text.PlainText
             readonly property string kind: studio.notice ? studio.notice.kind : studio.unapplied ? "warning" : "ok"
             Layout.fillWidth: true
             Layout.leftMargin: FoamyStyle.gap
@@ -991,6 +993,7 @@ FocusScope {
           RowLayout {
             Layout.fillWidth: true
             Text {
+              textFormat: Text.PlainText
               Layout.fillWidth: true
               text: FoamyI18n.t("studio.shownAt", [studio.monitor.width, studio.monitor.height, Math.round(lockCanvas.zoom * 100)])
               horizontalAlignment: Text.AlignLeft
@@ -1000,6 +1003,7 @@ FocusScope {
               elide: Text.ElideRight
             }
             Text {
+              textFormat: Text.PlainText
               text: FoamyI18n.t("studio.hint")
               color: FoamyPalette.mutedText
               font.family: FoamyStyle.fontFamily
@@ -1034,6 +1038,7 @@ FocusScope {
                 model: problemColumn.sorted.slice(0, 3)
                 Text {
                   required property var modelData
+                  textFormat: Text.PlainText
                   width: problemColumn.width
                   text: studio.problemText(modelData)
                   horizontalAlignment: Text.AlignLeft
@@ -1044,6 +1049,7 @@ FocusScope {
                 }
               }
               Text {
+                textFormat: Text.PlainText
                 visible: problemColumn.sorted.length > 3
                 width: problemColumn.width
                 horizontalAlignment: Text.AlignLeft
@@ -1126,6 +1132,7 @@ FocusScope {
     color: FoamyPalette.accent
     Text {
       id: ghostLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: studio.libraryDrag ? studio.moduleLabel(studio.libraryDrag) : ""
       color: FoamyPalette.onAccent
@@ -1481,6 +1488,7 @@ FocusScope {
         spacing: FoamyStyle.gapSmall
 
         Text {
+          textFormat: Text.PlainText
           width: parent.width
           horizontalAlignment: Text.AlignLeft
           text: FoamyI18n.t("studio.shortcuts")
@@ -1496,6 +1504,7 @@ FocusScope {
             required property var modelData
             width: shortcutColumn.width
             Text {
+              textFormat: Text.PlainText
               Layout.fillWidth: true
               horizontalAlignment: Text.AlignLeft
               text: FoamyI18n.t("studio.key." + parent.modelData)
@@ -1504,6 +1513,7 @@ FocusScope {
               font.pixelSize: FoamyStyle.font.body
             }
             Text {
+              textFormat: Text.PlainText
               text: FoamyI18n.t("studio.key." + parent.modelData + ".keys")
               color: FoamyPalette.text
               font.family: FoamyStyle.monoFamily

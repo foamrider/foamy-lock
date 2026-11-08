@@ -162,6 +162,7 @@ FocusScope {
 
       Text {
         objectName: "studioScenePageTitle"
+        textFormat: Text.PlainText
         width: parent.width
         text: scene.title
         horizontalAlignment: Text.AlignLeft
@@ -492,6 +493,7 @@ FocusScope {
         RowLayout {
           width: parent.width
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             text: FoamyI18n.t("studio.tint")
             horizontalAlignment: Text.AlignLeft

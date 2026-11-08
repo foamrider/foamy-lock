@@ -76,6 +76,7 @@ FocusScope {
 
   Text {
     id: name
+    textFormat: Text.PlainText
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     width: slider.labelWidth
@@ -89,6 +90,7 @@ FocusScope {
 
   Text {
     id: readout
+    textFormat: Text.PlainText
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
     width: Style.space(44)

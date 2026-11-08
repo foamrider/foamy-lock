@@ -73,6 +73,7 @@ FocusScope {
       RowLayout {
         width: parent.width
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: inspector.app ? inspector.app.moduleLabel(inspector.name) : ""
           horizontalAlignment: Text.AlignLeft
@@ -136,6 +137,7 @@ FocusScope {
         width: parent.width
         visible: inspector.name === "password"
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: FoamyI18n.t("studio.reveal")
           horizontalAlignment: Text.AlignLeft
@@ -192,6 +194,7 @@ FocusScope {
         width: parent.width
         visible: inspector.name === "weather"
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: FoamyI18n.t("studio.details")
           horizontalAlignment: Text.AlignLeft
@@ -346,6 +349,7 @@ FocusScope {
         width: parent.width
         visible: LockLayout.SCREENS_ELEMENTS.indexOf(inspector.name) !== -1
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: FoamyI18n.t("studio.screens")
           horizontalAlignment: Text.AlignLeft
