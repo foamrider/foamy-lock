@@ -697,3 +697,17 @@ Gaps found on a second read, and how the note now handles them:
    slider 1 % steps?
 4. **Limits and handles.** Are 4 shapes (2 frosted), and no resize
    handles on the canvas in this round, enough?
+
+## Decisions (user, 2026-11-08)
+
+1. **Colours:** shapes follow the glass tint by default (`fill: "auto"`),
+   with an option for a shape's own colour.
+2. **Offsets:** only module-wrapped shapes follow the drawn rectangles.
+   Zone-wrapped shapes keep ignoring offsets.
+3. **Dim slider:** the dim slider gets 1 % steps; Sheet keeps its 0.12.
+4. **Scope:** up to 4 shapes (2 frosted), with no canvas resize handles
+   this round.
+
+Also, for the "every preset can be recreated" test, the inspector gets
+"Move up / Move down in zone" buttons, so order within a zone can be set
+directly.
