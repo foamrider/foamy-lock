@@ -83,13 +83,10 @@ function elementValue(item, key) {
   case "hidden": return false
   case "offset": return { x: 0, y: 0 }
   }
-  // An element's own key (each belongs to one element): its default, but
-  // none for status.items (absent is the style's own contents).
-  for (var name in Layout.ELEMENT_OPTIONS) {
-    var spec = Layout.ELEMENT_OPTIONS[name][key]
-    if (spec && !spec.list) return spec.fallback
-  }
-  return undefined
+  // An element's own key (each belongs to one element): its default for
+  // the item's style, but none for status.items (absent is the style's own
+  // contents).
+  return Layout.optionDefault(key, item.style)
 }
 
 // The sparse entry for an effective look (Layout.merge's shape): only what
@@ -108,13 +105,16 @@ function entry(look) {
     if (!item) continue
     var changes = {}
     // Its own keys too (password.reveal, status.items, weather.details and
-    // location), or an edit to them would be lost.
+    // location), or an edit to them would be lost. A key whose default
+    // follows the style (password.reveal) compares as given: canonical
+    // already dropped it where it is the style's default.
     var keys = Layout.elementKeys(element)
     for (var k = 0; k < keys.length; k++) {
       var key = keys[k]
-      var value = elementValue(item, key)
+      var styled = Layout.optionFollowsStyle(key)
+      var value = styled ? item[key] : elementValue(item, key)
       if (value === undefined) continue
-      if (!same(value, elementValue(preset, key))) changes[key] = copy(value)
+      if (!same(value, styled ? preset[key] : elementValue(preset, key))) changes[key] = copy(value)
     }
     if (Object.keys(changes).length > 0) layout[element] = changes
   }
@@ -291,12 +291,13 @@ function setOption(draft, name, key, value) {
   return editElement(draft, name, function(item) { item[key] = value })
 }
 
-// The value an element's own key has (its default when absent).
+// The value an element's own key has (its default for the element's style
+// when absent).
 function optionOf(look, name, key) {
   var item = look && look.elements ? look.elements[name] : null
   var spec = (Layout.ELEMENT_OPTIONS[name] || {})[key]
   if (!item || !spec) return undefined
-  return item[key] !== undefined ? item[key] : spec.fallback
+  return item[key] !== undefined ? item[key] : Layout.optionDefault(key, item.style)
 }
 
 // What the status shows, in order: its own `items`, else its style's

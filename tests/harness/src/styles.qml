@@ -2,8 +2,8 @@
 // one view through two sizes, 12- and 24-hour time, typing and idle, primary
 // and secondary; then every style switched on the same view and back to the
 // default, which must restore the geometry exactly; then password.reveal
-// "typing" on every field style, typed into on primary and secondary
-// screens. The status runs with every item and the weather with its widest
+// "always" and "typing" on every field style, typed into on primary and
+// secondary screens. The status runs with every item and the weather with its widest
 // sample (the full details, a long condition and place). Written into a
 // temporary app by the harness, which replaces __CAPTURE__.
 import QtQuick
@@ -147,11 +147,13 @@ ShellRoot {
   // The field's rectangle with reveal "always", per style and screen.
   property var revealRects: ({})
 
-  // password.reveal "typing": per style, on a primary and a secondary
-  // screen, the field idle (surface hidden on the underline, box, terminal
-  // and card; the hint and fingerprint notice still there on the primary;
-  // the editor focused), typed into through the editor itself (all shows),
-  // failed and checking (all shows). Its rectangle never moves.
+  // password.reveal on every style (round 4), on a primary and a secondary
+  // screen: "always" shows the field while empty on the primary (the pill's
+  // glass with the hint inside it, the dots' track; nothing on the
+  // secondary); "typing" shows only the hint idle (the hint and fingerprint
+  // notice still there on the primary; the editor focused), then all of it
+  // typed into through the editor itself, failed and checking. Its
+  // rectangle never moves.
   readonly property var revealSteps: {
     var out = []
     var styles = Layout.STYLES.password
@@ -159,6 +161,7 @@ ShellRoot {
       for (var p = 1; p >= 0; p--) (function(style, primary) {
         var key = style + (primary ? "" : " secondary")
         var hides = Layout.REVEAL_STYLES.indexOf(style) !== -1
+        if (!hides) shellRoot.fail("password.reveal must apply to " + style)
         function reset(reveal) {
           view.width = 1920; view.height = 1080
           view.rightToLeft = false
@@ -172,6 +175,17 @@ ShellRoot {
         out.push({ name: key + " always", apply: function() { reset("always") }, check: function() {
           shellRoot.revealRects[key] = JSON.stringify(rect(findNamed(view, "inputField")))
           shellRoot.revealRects[key + " parts"] = JSON.stringify(shellRoot.chrome())
+          shellRoot.checkAlways(style, primary)
+        } })
+        // The style's own default draws as before round 4 (pill and dots:
+        // only the hint; the others: the field).
+        out.push({ name: key + " default", apply: function() { reset(undefined) }, check: function() {
+          var own = Layout.optionDefault("reveal", style)
+          if (Layout.revealOf(view.placed.password) !== own) shellRoot.fail("the default reveal of " + style + " isn't " + own)
+          if (own === "always") {
+            if (JSON.stringify(shellRoot.chrome()) !== shellRoot.revealRects[key + " parts"])
+              shellRoot.fail(style + "'s default isn't its \"always\" drawing")
+          } else shellRoot.checkReveal(key, primary, false)
         } })
         out.push({ name: key + " idle", apply: function() { reset("typing") }, check: function() {
           shellRoot.checkReveal(key, primary, hides ? false : null)
@@ -207,7 +221,7 @@ ShellRoot {
   function chrome() {
     var field = findNamed(view, "inputField")
     var out = { surface: field.border.width > 0 && field.color.a > 0 }
-    var names = ["fieldUnderline", "terminalPrompt", "cardGreeting", "cardPill", "boxDivider", "submitArrow", "unlockHint"]
+    var names = ["fieldUnderline", "terminalPrompt", "cardGreeting", "cardPill", "boxDivider", "submitArrow", "dotsTrack", "unlockHint"]
     for (var i = 0; i < names.length; i++) {
       var part = findNamed(field, names[i])
       var shown = !!part && part.visible
@@ -215,6 +229,31 @@ ShellRoot {
       out[names[i]] = shown
     }
     return out
+  }
+
+  // reveal "always", idle: on the primary screen the field shows (a surface,
+  // the underline or the dots' track) with the hint, inside the pill's
+  // glass; on a secondary screen nothing does.
+  function checkAlways(style, primary) {
+    var field = findNamed(view, "inputField")
+    var now = chrome()
+    var drawn = now.surface || now.fieldUnderline || now.dotsTrack
+    if (!primary) {
+      for (var name in now) if (now[name]) return fail(name + " shows on a secondary screen while idle")
+      checked++
+      return
+    }
+    if (!drawn) return fail(style + " shows no field while empty with reveal always: " + JSON.stringify(now))
+    if (!now.unlockHint) return fail(style + " lost its hint")
+    if (style === "pill") {
+      if (!now.surface) return fail("the pill's glass must show while empty")
+      var hint = findNamed(field, "unlockHint")
+      if (hint.x < 0 || hint.x + hint.width > field.width + 0.5 || hint.y < 0 || hint.y + hint.height > field.height + 0.5)
+        return fail("the hint leaves the pill: " + JSON.stringify(rect(hint)))
+      if (now.submitArrow) return fail("the pill's arrow comes with typing")
+    }
+    if (style === "dots" && !now.dotsTrack) return fail("the dots' track must show while empty")
+    checked++
   }
 
   // `shown`: true (the chrome shows as with reveal "always"), false (only
@@ -237,7 +276,8 @@ ShellRoot {
       if (!view.authenticatingPassword && !view.failureMessage && !view.passwordText && !view.fingerprintUnavailable
           && JSON.stringify(now) !== revealRects[key + " parts"])
         return fail("reveal typing changed a style it doesn't apply to: " + JSON.stringify(now) + ", was " + revealRects[key + " parts"])
-    } else if (!now.surface && !now.fieldUnderline && Layout.REVEAL_STYLES.indexOf(view.placed.password.style) !== -1) {
+    } else if (!now.surface && !now.fieldUnderline && view.placed.password.style !== "dots") {
+      // (The dots have no surface: typed, the dots themselves show.)
       return fail("the field stays hidden: " + JSON.stringify(now))
     }
     checked++

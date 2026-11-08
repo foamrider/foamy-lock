@@ -654,9 +654,11 @@ test('preview answers from omarchy-shell become reports', () => {
 
 test('each element\'s own keys survive the sparse entry and drop out at their defaults', () => {
   const base = { preset: 'foamy' }
-  const typing = Draft.setOption(base, 'password', 'reveal', 'typing')
-  assert.deepEqual(plain(typing), { preset: 'foamy', layout: { password: { reveal: 'typing' } } })
-  assert.deepEqual(plain(Draft.setOption(typing, 'password', 'reveal', 'always')), base, 'the default is no change')
+  // The pill's own default is "typing" (its drawing before round 4).
+  assert.deepEqual(plain(Draft.setOption(base, 'password', 'reveal', 'typing')), base, 'the style\'s default is no change')
+  const typing = Draft.setOption(base, 'password', 'reveal', 'always')
+  assert.deepEqual(plain(typing), { preset: 'foamy', layout: { password: { reveal: 'always' } } })
+  assert.deepEqual(plain(Draft.setOption(typing, 'password', 'reveal', 'typing')), base, 'back to the default')
   assert.equal(Draft.setOption(base, 'password', 'reveal', 'later'), base, 'an unknown value is refused')
   assert.equal(Draft.setOption(base, 'clock', 'reveal', 'typing'), base, 'a key of another module is refused')
   assert.equal(Draft.setOption(base, 'status', 'items', ['network']), base, 'items has its own edits')
@@ -667,7 +669,17 @@ test('each element\'s own keys survive the sparse entry and drop out at their de
   const look = Draft.lookOf(full)
   assert.equal(Draft.optionOf(look, 'weather', 'details'), 'full')
   assert.equal(Draft.optionOf(Draft.lookOf(base), 'weather', 'location'), false)
-  assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', 'reveal'), 'always')
+  assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', 'reveal'), 'typing')
+  assert.equal(Draft.optionOf(Draft.lookOf(Draft.setStyle(base, 'password', 'box')), 'password', 'reveal'), 'always')
+  // A style change keeps an explicit value, and a style alone adds none.
+  const box = Draft.setStyle(base, 'password', 'box')
+  assert.deepEqual(plain(box), { preset: 'foamy', layout: { password: { style: 'box' } } })
+  const boxTyping = Draft.setOption(box, 'password', 'reveal', 'typing')
+  assert.deepEqual(plain(Draft.setStyle(boxTyping, 'password', 'card')), { preset: 'foamy', layout: { password: { style: 'card', reveal: 'typing' } } })
+  // Until it is the new style's own default.
+  assert.deepEqual(plain(Draft.setStyle(boxTyping, 'password', 'dots')), { preset: 'foamy', layout: { password: { style: 'dots' } } })
+  assert.deepEqual(plain(Draft.setStyle(typing, 'password', 'underline')), { preset: 'foamy', layout: { password: { style: 'underline' } } })
+  assert.deepEqual(plain(Draft.setStyle(typing, 'password', 'dots')), { preset: 'foamy', layout: { password: { style: 'dots', reveal: 'always' } } })
   // Another edit keeps them (Draft.entry reads Layout.elementKeys).
   const moved = Draft.setScale(full, 'weather', 1.2)
   assert.deepEqual(plain(moved), { preset: 'foamy', layout: { weather: { details: 'full', location: true, scale: 1.2 } } })

@@ -45,9 +45,10 @@ var STATUS_DEFAULT_ITEMS = {
   system: ["uptime", "memory", "load", "battery"]
 }
 // Keys only one element takes (1.3.0, round 2), each optional, validated only there:
-// - password.reveal: "always" (the default) or "typing": the field's surface
-//   shows only once something is typed or a state needs it (REVEAL_STYLES;
-//   the other styles already show only the hint when idle).
+// - password.reveal: "always" or "typing": the field shows only once
+//   something is typed or a state needs it. Every style takes it; its
+//   default follows the style (styleDefaults: the pill and dots have always
+//   shown only the hint while idle, the others the whole field).
 // - status.items: an ordered list of STATUS_ITEMS, each at most once; absent
 //   means the style's built-in contents (STATUS_DEFAULT_ITEMS).
 // - weather.details: "temperature" (the default) or "full" (adds the
@@ -55,12 +56,13 @@ var STATUS_DEFAULT_ITEMS = {
 // - weather.location: true shows the place name (default false: a lock
 //   screen is seen by anyone).
 var ELEMENT_OPTIONS = {
-  password: { reveal: { values: ["always", "typing"], fallback: "always" } },
+  password: { reveal: { values: ["always", "typing"], fallback: "always", styleDefaults: { pill: "typing", dots: "typing" } } },
   status: { items: { list: STATUS_ITEMS } },
   weather: { details: { values: ["temperature", "full"], fallback: "temperature" },
     location: { values: [false, true], fallback: false } }
 }
-var REVEAL_STYLES = ["underline", "box", "terminal", "card"]
+// The field styles password.reveal applies to (round 4: all of them).
+var REVEAL_STYLES = STYLES.password.slice()
 // Free placement and finish (1.3.0), every key optional; absent means the
 // default, which draws exactly as before:
 // - scale: the element's size, a multiple of 0.05 (default 1).
@@ -451,20 +453,48 @@ function elementOptions(name) {
     out[key] = spec.list ? { items: spec.list.slice(), defaults: copy(STATUS_DEFAULT_ITEMS) }
       : { values: spec.values.slice(), default: spec.fallback }
   }
-  if (name === "password") out.reveal.styles = REVEAL_STYLES.slice()
+  if (name === "password") {
+    out.reveal.styles = REVEAL_STYLES.slice()
+    out.reveal.defaults = {}
+    for (var i = 0; i < STYLES.password.length; i++) out.reveal.defaults[STYLES.password[i]] = optionDefault("reveal", STYLES.password[i])
+  }
   return out
 }
 
-// The element-only keys' defaults (each key belongs to one element).
-var OPTION_DEFAULTS = (function() {
-  var out = {}
+// An element-only key's default for an element of `style` (each key belongs
+// to one element): its own default, or its style's (password.reveal).
+function optionDefault(key, style) {
+  for (var name in ELEMENT_OPTIONS) {
+    var spec = ELEMENT_OPTIONS[name][key]
+    if (!spec || spec.list) continue
+    return spec.styleDefaults && spec.styleDefaults[style] !== undefined ? spec.styleDefaults[style] : spec.fallback
+  }
+  return undefined
+}
+
+// Whether the key's default depends on the element's style.
+function optionFollowsStyle(key) {
+  for (var name in ELEMENT_OPTIONS) if (ELEMENT_OPTIONS[name][key] && ELEMENT_OPTIONS[name][key].styleDefaults) return true
+  return false
+}
+
+// The field's effective reveal: its own, else its style's default.
+function revealOf(item) {
+  return item && item.reveal !== undefined ? item.reveal : optionDefault("reveal", item ? item.style : "")
+}
+
+// The element-only keys with a default (each key belongs to one element;
+// optionDefault gives it for a style).
+var OPTION_KEYS = (function() {
+  var out = []
   for (var name in ELEMENT_OPTIONS)
-    for (var key in ELEMENT_OPTIONS[name]) if (!ELEMENT_OPTIONS[name][key].list) out[key] = ELEMENT_OPTIONS[name][key].fallback
+    for (var key in ELEMENT_OPTIONS[name]) if (!ELEMENT_OPTIONS[name][key].list) out.push(key)
   return out
 })()
 
 // One element in canonical form: the optional keys only where they differ
-// from their defaults (a zero offset is no offset; glass stays once set),
+// from their defaults (an element-only key's for its style; a zero offset
+// is no offset; glass stays once set),
 // and the scale exactly on its step. Absent and default then compare equal.
 // `items` stays as given: absent (the style's own contents) is not the same
 // as naming them.
@@ -473,8 +503,9 @@ function canonicalElement(item) {
   for (var key in ELEMENT_DEFAULTS) {
     if (item[key] === ELEMENT_DEFAULTS[key]) delete item[key]
   }
-  for (var option in OPTION_DEFAULTS) {
-    if (item[option] === OPTION_DEFAULTS[option]) delete item[option]
+  for (var o = 0; o < OPTION_KEYS.length; o++) {
+    var option = OPTION_KEYS[o]
+    if (item[option] !== undefined && item[option] === optionDefault(option, item.style)) delete item[option]
   }
   if (Array.isArray(item.items)) item.items = item.items.slice()
   if (item.offset !== undefined) {
@@ -717,7 +748,8 @@ if (typeof module !== "undefined") module.exports = {
   STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
-  elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
+  elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits,
+  optionDefault: optionDefault, optionFollowsStyle: optionFollowsStyle, revealOf: revealOf, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError,
   canonical: canonical, isOffset: isOffset, lookGeometryError: lookGeometryError
 }

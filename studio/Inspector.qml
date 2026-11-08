@@ -28,8 +28,6 @@ FocusScope {
   readonly property alias flickable: flick
   // What each element takes (its own keys' values and defaults).
   readonly property var options: LockLayout.elementLimits()
-  readonly property bool revealApplies: !!look.elements.password
-    && options.password.options.reveal.styles.indexOf(look.elements.password.style) !== -1
   readonly property alias checklist: itemChecklist
 
   Accessible.role: Accessible.Pane
@@ -131,8 +129,8 @@ FocusScope {
         topPadding: FoamyStyle.gap
       }
 
-      // password.reveal: only the styles in options.reveal.styles draw a
-      // surface to hide; pill and dots already show only the hint.
+      // password.reveal, for every field style; absent, the style's own
+      // default (the pill and dots: while typing).
       RowLayout {
         width: parent.width
         visible: inspector.name === "password"
@@ -149,8 +147,6 @@ FocusScope {
         Segmented {
           objectName: "studioReveal"
           name: FoamyI18n.t("studio.reveal")
-          enabled: inspector.revealApplies
-          opacity: enabled ? 1 : FoamyStyle.disabledOpacity
           options: inspector.options.password.options.reveal.values.map(function(v) { return { value: v, label: FoamyI18n.t("studio.reveal." + v) } })
           value: Draft.optionOf(inspector.look, "password", "reveal")
           onPicked: function(value) { inspector.commit(Draft.setOption(inspector.app.draft, "password", "reveal", value)) }
@@ -159,8 +155,7 @@ FocusScope {
       PaneNote {
         objectName: "studioRevealNote"
         visible: inspector.name === "password"
-        text: inspector.revealApplies ? FoamyI18n.t("studio.reveal.hint")
-          : FoamyI18n.t("studio.reveal.notHere", inspector.app ? inspector.app.styleLabel(inspector.look.elements.password.style) : "")
+        text: FoamyI18n.t("studio.reveal.hint")
       }
 
       // status.items: an ordered checklist.

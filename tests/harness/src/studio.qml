@@ -887,15 +887,22 @@ Item {
         reset()
         studio.selectModule("password")
         var reveal = find(studio.inspector, "studioReveal"), note = find(studio.inspector, "studioRevealNote")
-        expect(reveal.visible && reveal.options.length === 2 && reveal.value === "always", "the reveal choice: " + json(reveal.options))
+        // Foamy's pill: its own default is "while typing" (its drawing
+        // before round 4), and every style takes the choice.
+        expect(reveal.visible && reveal.enabled && reveal.options.length === 2 && reveal.value === "typing", "the reveal choice: " + json(reveal.options) + " " + reveal.value)
         expect(reveal.options[1].label === FoamyI18n.t("studio.reveal.typing"), "labelled: " + reveal.options[1].label)
-        // Foamy's pill already shows only the hint: disabled, with the reason.
-        expect(!reveal.enabled && note.text === FoamyI18n.t("studio.reveal.notHere", FoamyI18n.t("studio.style.pill")), "disabled for the pill: " + note.text)
+        expect(note.text === FoamyI18n.t("studio.reveal.hint"), "the note: " + note.text)
+        var field = view.elementItem("password")
+        expect(!field.surfaceShown, "the pill idle: only the hint")
+        reveal.picked("always")
+        expectDraft('{"preset":"foamy","layout":{"password":{"reveal":"always"}}}')
+        expect(field.surfaceShown, "the pill shown while empty")
+        reveal.picked("typing")
+        expectDraft('{"preset":"foamy"}')
         find(studio.inspector, "studioStyles").picked("box")
-        expect(reveal.enabled && note.text === FoamyI18n.t("studio.reveal.hint"), "enabled for the box")
+        expect(reveal.enabled && reveal.value === "always", "the box: always, its own")
         reveal.picked("typing")
         expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","reveal":"typing"}}}')
-        var field = view.elementItem("password")
         expect(field.surfaceIdleHidden === true, "idle on the canvas: the surface hides")
         studio.previewState = "typing"
         expect(field.surfaceIdleHidden === false, "typing: it shows")
@@ -903,14 +910,18 @@ Item {
         reveal.picked("always")
         expectDraft('{"preset":"foamy","layout":{"password":{"style":"box"}}}')
         reveal.picked("typing")
-        // Another style that ignores it keeps the key, and says why.
+        // A new style keeps an explicit value, until it is that style's own.
+        find(studio.inspector, "studioStyles").picked("card")
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"card","reveal":"typing"}}}')
         find(studio.inspector, "studioStyles").picked("dots")
-        expect(!reveal.enabled && reveal.value === "typing" && note.text === FoamyI18n.t("studio.reveal.notHere", FoamyI18n.t("studio.style.dots")),
-          "the dots: kept, disabled")
+        expect(reveal.enabled && reveal.value === "typing", "the dots: while typing")
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"dots"}}}')
+        reveal.picked("always")
+        expect(find(field, "dotsTrack").visible, "the dots' track while empty")
         expect(!find(studio.inspector, "studioItems").visible && !find(studio.inspector, "studioDetails").visible, "only the field's own keys")
         var undos = 0
         while (Draft.canUndo(studio.history)) { studio.undo(); undos++ }
-        expect(undos === 5, "undo steps " + undos)
+        expect(undos === 9, "undo steps " + undos)
         next()
       } },
     { name: "inspector: the status items", wait: 0, run: function(next) {

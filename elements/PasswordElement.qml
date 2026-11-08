@@ -22,11 +22,12 @@ Rectangle {
   property bool chromeVisible: true
   // Only the surround changes between styles; the editor is the same. Each
   // style has a fixed size, whatever is typed or shown.
-  // - "pill": a glass pill once typing starts.
+  // - "pill": a glass pill (by default once typing starts; see reveal).
   // - "underline": a line under the text, no surface.
   // - "box": a squarer glass box, always shown, with the hint inside and the
   //   submit arrow in its own segment.
-  // - "dots": no surface: centred dots, the hint and states as small text.
+  // - "dots": no surface: centred dots, the hint and states as small text
+  //   (with reveal "always", over a dotted track).
   // - "terminal": a dark box in the mono font with a "Password:" prompt
   //   before the editor and a block caret.
   // - "card": a glass card with a greeting above a pill.
@@ -38,13 +39,19 @@ Rectangle {
   readonly property bool card: styleName === "card"
   // A password being typed is never invisible, whichever surface has it.
   readonly property bool chromeShown: chromeVisible || view.passwordText.length > 0
-  // "always" (the default) or "typing": the underline, box, terminal and
-  // card hide their surface, border, line, prompt, greeting and arrow while
-  // nothing is typed and no failure or check shows. The unlock hint and the
+  // "always" or "typing" (Layout.revealOf: the pill and dots default to
+  // "typing", their drawing before round 4, the others to "always").
+  // "typing": nothing of the field but the hint shows while nothing is
+  // typed and no failure or check shows: the underline, box, terminal and
+  // card hide their surface, border, line, prompt, greeting and arrow, the
+  // pill its glass, the dots their track. "always": the field shows while
+  // empty too: the pill keeps its glass and border (the hint inside it), the
+  // dots a dotted track under the editor. Either way the unlock hint and the
   // fingerprint notice stay, the editor stays focused (at opacity 0, as on
   // every idle surface) and the field keeps its size, so nothing moves when
-  // it appears. The pill and dots already show only the hint when idle.
+  // it appears.
   property string reveal: "always"
+  readonly property bool idleShown: reveal === "always"
   readonly property bool surfaceIdleHidden: reveal === "typing" && (underline || box || terminal || card) && !view.showPassword
   // The centre column at this element's scale (it bounds the hint and the
   // notice), and the field's own sizes.
@@ -61,10 +68,11 @@ Rectangle {
     : 1
   readonly property bool mirrored: view.rightToLeft
   readonly property string editorFontFamily: terminal ? FoamyStyle.monoFamily : view.textFontFamily
-  // The surface behind everything: glass for the pill while typing, always
-  // for the box and card, a dark panel for the terminal, none otherwise.
+  // The surface behind everything: glass for the pill (while typing, or
+  // always with reveal "always"), the box and card, a dark panel for the
+  // terminal, none otherwise.
   readonly property bool surfaceShown: chromeShown && !surfaceIdleHidden
-    && (box || card || terminal || (styleName === "pill" && view.showPassword))
+    && (box || card || terminal || (styleName === "pill" && (view.showPassword || idleShown)))
   readonly property real submitWidth: Math.round(70 * uiScale)
   // The submit arrow: the pill and card while typing, the box always; the
   // dots and terminal submit with Enter alone.
@@ -168,6 +176,28 @@ Rectangle {
     color: field.view.glassBorder
   }
 
+  // The dots' track (reveal "always"): a dotted line along the bottom
+  // edge, idle and under the typed dots; the error colour on a failure.
+  Row {
+    id: dotsTrack
+    objectName: "dotsTrack"
+    readonly property real dot: Math.max(2, Math.round(3 * field.uiScale))
+    visible: field.dotsOnly && field.idleShown && field.chromeShown
+    anchors.horizontalCenter: parent.horizontalCenter
+    anchors.bottom: parent.bottom
+    spacing: Math.round(6 * field.uiScale)
+    Repeater {
+      model: Math.max(1, Math.floor((field.width - 2 * field.inset + dotsTrack.spacing) / (dotsTrack.dot + dotsTrack.spacing)))
+      Rectangle {
+        width: dotsTrack.dot
+        height: width
+        radius: width / 2
+        color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+        opacity: field.view.errorState ? 1 : field.view.showPassword ? 0.6 : 0.38
+      }
+    }
+  }
+
   Rectangle {
     objectName: "fieldUnderline"
     visible: field.underline && field.chromeShown && !field.surfaceIdleHidden
@@ -189,12 +219,14 @@ Rectangle {
 
   // The hint is bounded by the view's content width, not the pill: it wraps
   // to a second line (two lines fit the field's height) and elides only beyond.
-  // Inside a box, card or terminal it stays within the surface; the terminal
-  // starts it after the prompt.
+  // Inside a box, card, terminal or a pill shown while empty (reveal
+  // "always") it stays within the surface; the terminal starts it after the
+  // prompt.
   Row {
     id: unlockHint
     objectName: "unlockHint"
     readonly property bool contained: field.box || field.card || field.terminal
+      || (field.styleName === "pill" && field.idleShown)
     readonly property real limit: contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.uiScale)) : field.contentWidth
     x: !field.terminal ? hintArea.x + (hintArea.width - width) / 2
       : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x

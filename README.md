@@ -204,7 +204,7 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 
 | Key | Values | Default | Meaning |
 | --- | --- | --- | --- |
-| `password.reveal` | `always`, `typing` | `always` | `typing` hides the `underline`, `box`, `terminal` and `card` field's surface, line, prompt, greeting and arrow until you type or a failure or check shows; the unlock hint and the fingerprint notice stay, and the field is live and keeps its place. `pill` and `dots` already show only the hint, so they ignore it. |
+| `password.reveal` | `always`, `typing` | `typing` for `pill` and `dots`, `always` for the others (each style's drawing before 1.3.0) | `typing` shows only the unlock hint until you type or a failure or check shows: the field's surface, line, prompt, greeting and arrow (the pill's glass, the dots' track) come with the first key. `always` shows the field while it is empty too: the pill keeps its glass with the hint inside it, and the dots get a dotted track under the editor. Either way the unlock hint and the fingerprint notice stay, and the field is live and keeps its place. A value equal to the style's own is left out of the look. |
 | `status.items` | An ordered list of `network`, `battery`, `volume`, `bluetooth`, `keyboard`, `uptime`, `load`, `memory`, each at most once | the style's own (network and battery; the `system` panel's four rows) | What the status shows, in that order, in any style. An item whose source has nothing (no battery, no PipeWire sink, no Bluetooth adapter) is left out. The volume (the default sink, PipeWire), Bluetooth (on or off and connected devices) and keyboard layout (Hyprland's active layout, read with `hyprctl -j devices`; nothing is switched) are read only while their item shows. A line wider than the centre column wraps. |
 | `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low. |
 | `weather.location` | `true`, `false` | `false` | Shows the forecast's place name. Off by default: anyone can see a lock screen. |
@@ -402,8 +402,8 @@ high) is listed under the canvas and stops Apply, one only at a reference size i
 a warning.
 
 **Element options.** The inspector also sets each element's own keys: the
-password field's **Show the field** (Always, or While typing for the styles that
-draw a surface), the status's items (a checklist: tick what it shows, reorder by
+password field's **Show the field** (Always, or While typing; each style starts
+from its own), the status's items (a checklist: tick what it shows, reorder by
 the grip or with Alt+Up and Alt+Down; a new style starts from its own contents),
 and the weather's details and place name (off by default). The canvas shows sample
 volume, Bluetooth, keyboard layout and weather, never yours, and the problem check

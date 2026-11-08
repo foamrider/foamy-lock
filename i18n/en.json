@@ -275,7 +275,6 @@
   "studio.reveal.always": "Always",
   "studio.reveal.typing": "While typing",
   "studio.reveal.hint": "While typing: the field shows with the first key, or when a check or a wrong password needs it. The unlock hint always shows.",
-  "studio.reveal.notHere": "%1 already shows only the hint until you type.",
   "studio.item.network": "Network",
   "studio.item.battery": "Battery",
   "studio.item.volume": "Volume",

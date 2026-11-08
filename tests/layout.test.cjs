@@ -404,11 +404,44 @@ test('element-only keys are accepted on their own element and only there', () =>
   // The reveal option keeps the field: it can't hide it, and every style accepts it.
   for (const style of Layout.STYLES.password)
     assert.ok(Layout.parseLook({layout: {password: {style, reveal: 'typing'}}}).valid, style)
-  assert.deepEqual(Layout.REVEAL_STYLES, ['underline', 'box', 'terminal', 'card'])
+  assert.deepEqual(Layout.REVEAL_STYLES, Layout.STYLES.password)
+})
+
+test('password.reveal defaults to each style\'s own drawing and drops out there', () => {
+  // The pill and dots have always shown only the hint while idle; the others the field.
+  const own = {pill: 'typing', underline: 'always', box: 'always', dots: 'typing', terminal: 'always', card: 'always'}
+  for (const [style, value] of Object.entries(own)) {
+    assert.equal(Layout.optionDefault('reveal', style), value, style)
+    const plain = Layout.parseLook({layout: {password: {style}}}).look
+    assert.equal(Layout.revealOf(plain.elements.password), value, style)
+    // The style's default is no change; the other value stays.
+    const same = Layout.parseLook({layout: {password: {style, reveal: value}}}).look
+    assert.equal(JSON.stringify(same), JSON.stringify(plain), style)
+    const other = value === 'always' ? 'typing' : 'always'
+    const changed = Layout.parseLook({layout: {password: {style, reveal: other}}}).look
+    assert.equal(changed.elements.password.reveal, other, style)
+    assert.equal(Layout.revealOf(changed.elements.password), other, style)
+    assert.equal(JSON.stringify(Layout.canonical(changed)), JSON.stringify(changed), style)
+  }
+  // Canonical drops it by the element's style, wherever it comes from.
+  const look = Layout.defaults()
+  look.elements.password.reveal = 'typing'
+  assert.equal(JSON.stringify(Layout.canonical(look)), JSON.stringify(Layout.defaults()))
+  look.elements.password.style = 'box'
+  assert.equal(Layout.canonical(look).elements.password.reveal, 'typing')
+  assert.equal(Layout.revealOf(null), 'always')
+  assert.ok(Layout.optionFollowsStyle('reveal') && !Layout.optionFollowsStyle('details') && !Layout.optionFollowsStyle('items'))
+  // Every built-in preset keeps its field's drawing.
+  for (const name of Layout.SELECTABLE_PRESETS) {
+    const item = Layout.preset(name).elements.password
+    assert.equal(item.reveal, undefined, name)
+    assert.equal(Layout.revealOf(item), own[item.style], name)
+  }
 })
 
 test('element-only defaults leave the look canonical; items stay as named', () => {
-  const plain = Layout.parseLook({layout: {password: {reveal: 'always'}, weather: {details: 'temperature', location: false}}})
+  // The pill's own reveal is "typing" (see the test of its defaults).
+  const plain = Layout.parseLook({layout: {password: {reveal: 'typing'}, weather: {details: 'temperature', location: false}}})
   assert.equal(JSON.stringify(plain.look), JSON.stringify(Layout.defaults()))
   const named = Layout.parseLook({layout: {status: {items: ['battery', 'network']}}})
   assert.deepEqual(named.look.elements.status.items, ['battery', 'network'], 'the order is kept')
@@ -422,7 +455,8 @@ test('element-only defaults leave the look canonical; items stay as named', () =
 test('an editor is offered each element-only key with its values and defaults', () => {
   const limits = Layout.elementLimits()
   assert.deepEqual(limits.password.options, {reveal: {values: ['always', 'typing'], default: 'always',
-    styles: ['underline', 'box', 'terminal', 'card']}})
+    styles: Layout.STYLES.password,
+    defaults: {pill: 'typing', underline: 'always', box: 'always', dots: 'typing', terminal: 'always', card: 'always'}}})
   assert.deepEqual(limits.status.options.items.items, Layout.STATUS_ITEMS)
   assert.deepEqual(limits.status.options.items.defaults, Layout.STATUS_DEFAULT_ITEMS)
   assert.deepEqual(Object.keys(limits.status.options.items.defaults), Layout.STYLES.status)
