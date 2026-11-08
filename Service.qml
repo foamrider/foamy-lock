@@ -93,6 +93,18 @@ Item {
   property string lookError: ""
   // The preview overlay's own look (previewPreset); null shows `look`.
   property var previewLook: null
+  // User presets (Layout.parseUserPresets): a third group, read item by
+  // item from the same entry, never touching `settings` or `look`.
+  property var userPresets: []
+  property int userPresetsInvalid: 0
+  property string userPresetsError: ""
+  // The saved look's link to one of them ("" without one, or for an id
+  // that isn't in the list).
+  property string userPresetLink: ""
+  // Whether Omarchy would write shell.json as last read: "ok", "no-entry"
+  // (no single foamy.lock entry), or "unreadable" (not a version 1 object,
+  // or not read at all), where Omarchy skips the write (persistShellConfig).
+  property string entryState: "unreadable"
   // Lock surfaces that have keyboard focus: the field shows there, or on
   // every surface while none does (Layout.isPrimary).
   property int activeSurfaces: 0
@@ -146,8 +158,10 @@ Item {
       settings = result.settings
       stockLockEnabled = result.stockLockEnabled
     } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
+    noteEntryState(text, result.entry)
     // The look keys are read whenever the file has one foamy.lock entry.
     if (result.entry) {
+      applyUserPresets(result.entry)
       lastEntry = result.entry
       var parsed = Layout.parseLook(result.entry)
       lookError = parsed.error
@@ -157,6 +171,62 @@ Item {
     }
     // Services may have been added or removed with this edit.
     Qt.callLater(checkLockRoute)
+  }
+
+  // --- user presets and writes (Lock Studio round 2, step R2-2) --------------
+
+  // Omarchy writes shell.json only over a version 1 object it could read
+  // (persistShellConfig skips the write otherwise, and still reports a
+  // change): a save must then say write-failed, never ok. An empty file is
+  // written, but it has no entry to merge into.
+  function noteEntryState(text, entry) {
+    var source = String(text || "")
+    var config = null
+    try { config = JSON.parse(source) } catch (error) { config = null }
+    var readable = config !== null && typeof config === "object" && !Array.isArray(config) && config.version === 1
+    entryState = readable ? (entry ? "ok" : "no-entry") : source.trim() === "" ? "no-entry" : "unreadable"
+  }
+
+  function applyUserPresets(entry) {
+    var parsed = Layout.parseUserPresets(entry)
+    if (JSON.stringify(parsed.presets) !== JSON.stringify(userPresets)) userPresets = parsed.presets
+    userPresetsInvalid = parsed.invalid
+    if (parsed.error !== userPresetsError) {
+      userPresetsError = parsed.error
+      if (parsed.error) console.warn("foamy.lock: " + parsed.invalid + " user preset(s) skipped: " + parsed.error)
+    }
+    userPresetLink = Layout.userPresetLink(entry, parsed.presets)
+  }
+
+  // The entry an IPC write merges into, or the reply when there is none
+  // to write.
+  function writableEntry() {
+    if (!shell || typeof shell.updateEntryInline !== "function") return "unsupported"
+    if (!lastEntry || entryState === "no-entry") return "no-entry"
+    if (entryState !== "ok") return "write-failed"
+    return lastEntry
+  }
+
+  // Writes `next` (the entry without its id) through Omarchy's own
+  // updateEntryInline and takes it as the entry last read at once, so a
+  // second write before the file watch reports this one merges over it,
+  // never over the entry before (two quick saves don't revert each other).
+  function writeEntry(next) {
+    if (!shell.updateEntryInline("foamy.lock", next)) return "unchanged"
+    var written = { id: "foamy.lock" }
+    for (var key in next) written[key] = next[key]
+    lastEntry = written
+    applyUserPresets(written)
+    return "ok"
+  }
+
+  // The catalog's user presets: each with its look and its built-in
+  // preset's thumbnail (user presets have none of their own).
+  function catalogUserPresets(dir) {
+    return userPresets.map(function(preset) {
+      return { id: preset.id, name: preset.name, entry: preset.look, look: preset.effective,
+        thumbnail: dir + "/previews/presets/" + preset.effective.preset + ".png" }
+    })
   }
 
   // The socket answers from the first enabled handler for a target. When a
@@ -1314,6 +1384,7 @@ Item {
     onLoaded: root.applyConfiguration(text())
     onFileChanged: reload()
     onLoadFailed: {
+      root.entryState = "unreadable"
       root.configError = "Cannot read " + root.configPath
       console.warn("foamy.lock: " + root.configError + "; keeping previous settings")
     }
@@ -1361,6 +1432,11 @@ Item {
       fallbackPreset: root.fallbackPreset,
       activeSurfaces: root.activeSurfaces,
       previewPreset: root.previewLook ? root.previewLook.preset : "",
+      // User presets: their ids and names, the items skipped, the link.
+      userPresets: root.userPresets.map(function(preset) { return { id: preset.id, name: preset.name } }),
+      userPresetsInvalid: root.userPresetsInvalid,
+      userPresetsError: root.userPresetsError,
+      userPreset: root.userPresetLink,
       locked: root.currentlyLocked(),
       requested: root.lockRequested,
       pending: root.pendingSessionLock,
@@ -1473,7 +1549,13 @@ Item {
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
         presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
         glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
-        look: root.look, lookError: root.lookError })
+        look: root.look, lookError: root.lookError,
+        // User presets (R2-2): newest first, the items skipped, the link
+        // and the limits of savePreset.
+        userPresets: root.catalogUserPresets(dir), userPresetsInvalid: root.userPresetsInvalid,
+        userPresetsError: root.userPresetsError, userPreset: root.userPresetLink,
+        userPresetLimits: { count: Layout.USER_PRESET_LIMIT, bytes: Layout.USER_PRESETS_BYTES,
+          name: Layout.USER_PRESET_NAME_LENGTH } })
     }
 
     // The preview overlay with an unsaved look: a JSON object with the same
@@ -1494,14 +1576,17 @@ Item {
     }
 
     // Save a look from an editor: the foamy.lock entry's look keys (preset,
-    // layout, background, glass), validated like shell.json. They replace the
-    // entry's look keys (omitted ones are removed, so a reset drops its
-    // overrides); every other setting in the entry is kept. Written through
-    // Omarchy's own updateEntryInline (FileView atomicWrites: a symlinked
-    // shell.json stays a symlink), so the change comes back through the
-    // normal config watch. Nothing here can unlock.
+    // layout, background, glass) and `userPreset` (the user preset it came
+    // from), validated like shell.json. They replace the entry's look keys
+    // (omitted ones are removed, so a reset drops its overrides, and a look
+    // saved without `userPreset` drops the link); every other setting in the
+    // entry is kept. Written through Omarchy's own updateEntryInline
+    // (FileView atomicWrites: a symlinked shell.json stays a symlink), so
+    // the change comes back through the normal config watch. "write-failed"
+    // when Omarchy would skip the write (shell.json unreadable). Nothing here
+    // can unlock.
     function saveLook(look: string): string {
-      var keys = ["preset", "layout", "background", "glass"]
+      var keys = ["preset", "layout", "background", "glass", "userPreset"]
       var request = null
       try { request = JSON.parse(String(look || "")) } catch (error) { return "invalid-json" }
       if (!request || typeof request !== "object" || Array.isArray(request)) return "invalid: expected an object"
@@ -1509,26 +1594,75 @@ Item {
         if (keys.indexOf(key) === -1) return "invalid: unknown key " + key
       var parsed = Layout.parseLook(request)
       if (!parsed.valid) return "invalid: " + parsed.error
+      if (request.userPreset !== undefined && Layout.userPresetIdError(request.userPreset))
+        return "invalid: userPreset must be a user preset's id"
       if (root.currentlyLocked()) return "locked"
-      if (!root.shell || typeof root.shell.updateEntryInline !== "function") return "unsupported"
-      if (!root.lastEntry) return "no-entry"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
       var next = {}
-      for (var existing in root.lastEntry)
-        if (existing !== "id" && keys.indexOf(existing) === -1) next[existing] = root.lastEntry[existing]
+      for (var existing in base)
+        if (existing !== "id" && keys.indexOf(existing) === -1) next[existing] = base[existing]
       for (var i = 0; i < keys.length; i++)
         if (request[keys[i]] !== undefined) next[keys[i]] = request[keys[i]]
-      return root.shell.updateEntryInline("foamy.lock", next) ? "ok" : "unchanged"
+      return root.writeEntry(next)
     }
 
+    // A built-in preset by name, or a user preset as `user:<id>`.
     function previewPreset(name: string): string {
-      if (Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return "unknown-preset"
+      var user = String(name).indexOf("user:") === 0 ? Layout.findUserPreset(root.userPresets, String(name).slice(5)) : null
+      if (!user && Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return "unknown-preset"
       if (root.currentlyLocked()) return "locked"
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
-      root.previewLook = Layout.preset(name)
+      root.previewLook = user ? user.effective : Layout.preset(name)
       root.previewVisible = true
       return "ok"
+    }
+
+    // User presets (Layout.js, "user presets"), one item per call, merged
+    // into the entry as last read: the list itself never crosses IPC (an
+    // argument is at most 64 KiB). The replies are saveLook's (ok,
+    // unchanged, invalid-json, invalid: …, locked, unsupported, no-entry,
+    // write-failed) plus full (50 presets), too-large (256 KiB of presets)
+    // and unknown-preset (renamePreset). Nothing here can unlock.
+
+    // `preset`: { id, name, look }, `look` with the look keys saveLook takes
+    // but `userPreset`. The id is the caller's own, so a retry is the same
+    // save ("unchanged" once the first landed). A known id is updated where
+    // it is; a new one goes first.
+    function savePreset(preset: string): string {
+      var item = null
+      try { item = JSON.parse(String(preset || "")) } catch (error) { return "invalid-json" }
+      var problem = Layout.userPresetError(item)
+      if (problem) return "invalid: " + problem
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var change = Layout.savingPreset(base, item)
+      return change.error || root.writeEntry(change.entry)
+    }
+
+    function renamePreset(presetId: string, name: string): string {
+      var problem = Layout.userPresetIdError(presetId) || Layout.userPresetNameError(name)
+      if (problem) return "invalid: " + problem
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var change = Layout.renamingPreset(base, presetId, name)
+      return change.error || root.writeEntry(change.entry)
+    }
+
+    // An id that isn't there answers "unchanged"; the saved look keeps
+    // working, without its link.
+    function deletePreset(presetId: string): string {
+      var problem = Layout.userPresetIdError(presetId)
+      if (problem) return "invalid: " + problem
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var change = Layout.deletingPreset(base, presetId)
+      return change.error || root.writeEntry(change.entry)
     }
   }
 }

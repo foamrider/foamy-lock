@@ -497,6 +497,7 @@ fn scenarios(test: &Test) -> R {
     identity_conflict_registry(test)?;
     preview(test)?;
     look(test)?;
+    user_presets(test)?;
     wallpaper(test)?;
     settings_and_password(test)?;
     fingerprint(test)?;
@@ -866,6 +867,266 @@ fn look(test: &Test) -> R {
     })?;
     println!(
         "PASS: look presets and overrides reload live, look and settings mistakes stay apart, previewPreset shows without saving, sandboxed picture background and missing picture"
+    );
+    Ok(())
+}
+
+/// User presets (`userPresets`): read item by item apart from the settings
+/// and the look, listed in status and catalog, previewed as `user:<id>`,
+/// and saved, renamed and deleted one at a time through Omarchy's
+/// updateEntryInline (the fake records each write; it never writes the
+/// file, so a second write in a row shows the first was taken as the entry).
+fn user_presets(test: &Test) -> R {
+    let mine = |id: &str, name: &str, preset: &str| json!({"id": id, "name": name, "look": {"preset": preset, "layout": {"media": {"hidden": true}}}});
+    // A bad item is skipped and counted; the good one, the look and the
+    // settings stay.
+    test.write_config(
+        STOCK_OFF,
+        json!({"preset": "corner", "timeFormat": "12h", "userPreset": "a",
+            "userPresets": [mine("a", "Mine", "zen"), {"id": "Bad Id", "name": "x", "look": {}}]}),
+    )?;
+    let state = test
+        .wait_for(|s| Ok(text(s, "preset")? == "corner" && num(s, "userPresetsInvalid")? == 1.0))?;
+    ensure!(
+        *at(&state, "userPresets")? == json!([{"id": "a", "name": "Mine"}])
+            && text(&state, "userPresetsError")?.starts_with("userPresets[1]: id must be")
+            && text(&state, "userPreset")? == "a"
+            && *at(&state, "settings.timeFormat")? == "12h"
+            && text(&state, "lookError")?.is_empty(),
+        "{state}"
+    );
+    // Bad presets list, look still applies; an unknown link is ignored.
+    test.write_config(
+        STOCK_OFF,
+        json!({"preset": "zen", "timeFormat": "12h", "userPreset": "gone", "userPresets": "nope"}),
+    )?;
+    let state = test.wait_for(|s| Ok(text(s, "preset")? == "zen"))?;
+    ensure!(
+        *at(&state, "userPresets")? == json!([])
+            && num(&state, "userPresetsInvalid")? == 1.0
+            && text(&state, "userPreset")?.is_empty()
+            && text(&state, "lookError")?.is_empty()
+            && text(&state, "configError")?.is_empty(),
+        "{state}"
+    );
+    test.write_config(
+        STOCK_OFF,
+        json!({"timeFormat": "12h", "userPresets": [mine("a", "Mine", "editorial")]}),
+    )?;
+    test.wait_for(|s| {
+        Ok(at(s, "userPresets")?
+            .as_array()
+            .is_some_and(|p| p.len() == 1))
+    })?;
+    // The catalog lists them with their look and their preset's thumbnail.
+    let catalog = parse(&test.ipc("foamy.lock", "catalog", &[])?)?;
+    ensure!(
+        at(&catalog, "userPresets")?[0]["id"] == "a"
+            && at(&catalog, "userPresets")?[0]["look"]["preset"] == "editorial"
+            && at(&catalog, "userPresets")?[0]["entry"]["layout"]["media"]["hidden"] == true
+            && at(&catalog, "userPresets")?[0]["thumbnail"]
+                .as_str()
+                .is_some_and(|t| t.ends_with("/previews/presets/editorial.png"))
+            && num(&catalog, "userPresetLimits.count")? == 50.0
+            && num(&catalog, "userPresetLimits.bytes")? == 262144.0
+            && num(&catalog, "userPresetsInvalid")? == 0.0,
+        "{catalog}"
+    );
+    // previewPreset user:<id> shows it; nothing is saved.
+    ensure!(test.ipc("foamy.lock", "previewPreset", &["user:a"])? == "ok");
+    ensure!(text(&test.status()?, "previewPreset")? == "editorial");
+    ensure!(test.lock("hidePreview")? == "ok");
+    for name in ["user:nope", "user:", "user:A"] {
+        ensure!(
+            test.ipc("foamy.lock", "previewPreset", &[name])? == "unknown-preset",
+            "{name}"
+        );
+    }
+    // savePreset: a new id goes first, the rest of the entry is kept; a
+    // retry is the same save.
+    let save = mine("b", "Ålesund ✓", "corner").to_string();
+    ensure!(test.ipc("foamy.lock", "savePreset", &[&save])? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        text(&saved, "module")? == "foamy.lock"
+            && *at(&saved, "entry.timeFormat")? == "12h"
+            && at(&saved, "entry.userPresets")?
+                .as_array()
+                .is_some_and(|p| p.len() == 2
+                    && p[0]["id"] == "b"
+                    && p[0]["name"] == "Ålesund ✓"
+                    && p[1]["id"] == "a")
+            && at(&saved, "entry.id").is_err(),
+        "{saved}"
+    );
+    ensure!(test.ipc("foamy.lock", "savePreset", &[&save])? == "unchanged");
+    // At once, before any file watch: the next operation merges over it.
+    ensure!(
+        at(&test.status()?, "userPresets")?
+            .as_array()
+            .is_some_and(|p| p.len() == 2)
+    );
+    ensure!(test.ipc("foamy.lock", "renamePreset", &["b", "Bee"])? == "ok");
+    ensure!(test.ipc("foamy.lock", "previewPreset", &["user:b"])? == "ok");
+    ensure!(test.lock("hidePreview")? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        at(&saved, "entry.userPresets")?
+            .as_array()
+            .is_some_and(|p| p.len() == 2
+                && p[0]["name"] == "Bee"
+                && p[0]["look"]["preset"] == "corner"
+                && p[1]["id"] == "a")
+            && *at(&saved, "entry.timeFormat")? == "12h",
+        "two quick operations both stay: {saved}"
+    );
+    ensure!(test.ipc("foamy.lock", "renamePreset", &["b", "Bee"])? == "unchanged");
+    ensure!(test.ipc("foamy.lock", "renamePreset", &["zz", "Bee"])? == "unknown-preset");
+    // saveLook links the look to it (a fifth key), and a look saved
+    // without the key drops the link; the presets stay either way.
+    let linked =
+        json!({"preset": "corner", "layout": {"media": {"hidden": true}}, "userPreset": "b"})
+            .to_string();
+    ensure!(test.ipc("foamy.lock", "saveLook", &[&linked])? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        text(&saved, "entry.userPreset")? == "b"
+            && text(&saved, "entry.preset")? == "corner"
+            && at(&saved, "entry.userPresets")?
+                .as_array()
+                .is_some_and(|p| p.len() == 2),
+        "{saved}"
+    );
+    ensure!(text(&test.status()?, "userPreset")? == "b");
+    let unlinked = json!({"preset": "corner", "layout": {"media": {"hidden": true}}}).to_string();
+    ensure!(test.ipc("foamy.lock", "saveLook", &[&unlinked])? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        at(&saved, "entry.userPreset").is_err()
+            && at(&saved, "entry.userPresets")?
+                .as_array()
+                .is_some_and(|p| p.len() == 2),
+        "{saved}"
+    );
+    ensure!(test.ipc("foamy.lock", "saveLook", &[&linked])? == "ok");
+    // deletePreset: gone with its link, the look kept; a retry is unchanged.
+    ensure!(test.ipc("foamy.lock", "deletePreset", &["b"])? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        at(&saved, "entry.userPreset").is_err()
+            && text(&saved, "entry.preset")? == "corner"
+            && at(&saved, "entry.userPresets")?
+                .as_array()
+                .is_some_and(|p| p.len() == 1 && p[0]["id"] == "a"),
+        "{saved}"
+    );
+    ensure!(test.ipc("foamy.lock", "deletePreset", &["b"])? == "unchanged");
+    // Strict parsing.
+    for (function, args, reply) in [
+        ("savePreset", vec!["{nope"], "invalid-json"),
+        (
+            "savePreset",
+            vec![r#"{"id":"Bad","name":"x","look":{}}"#],
+            "invalid: id must be",
+        ),
+        (
+            "savePreset",
+            vec![r#"{"id":"c","name":" x","look":{}}"#],
+            "invalid: name must be",
+        ),
+        (
+            "savePreset",
+            vec![r#"{"id":"c","name":"x","look":{"userPreset":"a"}}"#],
+            "invalid: look has an unknown key",
+        ),
+        (
+            "savePreset",
+            vec![r#"{"id":"c","name":"x","look":{"layout":{"password":{"hidden":true}}}}"#],
+            "invalid: ",
+        ),
+        ("renamePreset", vec!["a", ""], "invalid: name must be"),
+        ("deletePreset", vec!["../a"], "invalid: id must be"),
+        (
+            "saveLook",
+            vec![r#"{"userPreset":"Not An Id"}"#],
+            "invalid: userPreset must be",
+        ),
+    ] {
+        let answer = test.ipc("foamy.lock", function, &args)?;
+        ensure!(answer.starts_with(reply), "{function} {args:?}: {answer}");
+    }
+    // Caps: 50 presets, and 256 KiB of them (items the lock skips count).
+    let fifty: Vec<Value> = (0..50)
+        .map(|i| mine(&format!("p{i}"), "Many", "zen"))
+        .collect();
+    test.write_config(STOCK_OFF, json!({"userPresets": fifty}))?;
+    test.wait_for(|s| {
+        Ok(at(s, "userPresets")?
+            .as_array()
+            .is_some_and(|p| p.len() == 50))
+    })?;
+    ensure!(
+        test.ipc(
+            "foamy.lock",
+            "savePreset",
+            &[&mine("new", "New", "zen").to_string()]
+        )? == "full"
+    );
+    ensure!(
+        test.ipc(
+            "foamy.lock",
+            "savePreset",
+            &[&mine("p7", "Changed", "zen").to_string()]
+        )? == "ok"
+    );
+    let filler = json!({"junk": "x".repeat(262_100)});
+    test.write_config(STOCK_OFF, json!({"userPresets": [filler]}))?;
+    test.wait_for(|s| {
+        Ok(at(s, "userPresets")?
+            .as_array()
+            .is_some_and(|p| p.is_empty())
+            && num(s, "userPresetsInvalid")? == 1.0)
+    })?;
+    ensure!(
+        test.ipc(
+            "foamy.lock",
+            "savePreset",
+            &[&mine("new", "New", "zen").to_string()]
+        )? == "too-large"
+    );
+    // A shell.json Omarchy can't read is never written (persistShellConfig
+    // skips it): write-failed, not ok.
+    write(&test.config, "{ \"version\": 1, \"plugins\": [")?;
+    test.wait_for(|s| Ok(!text(s, "configError")?.is_empty()))?;
+    for (function, arg) in [
+        ("savePreset", mine("w", "W", "zen").to_string()),
+        ("saveLook", json!({"preset": "zen"}).to_string()),
+        ("deletePreset", "a".to_string()),
+    ] {
+        let answer = test.ipc("foamy.lock", function, &[&arg])?;
+        ensure!(answer == "write-failed", "{function}: {answer}");
+    }
+    // No entry to merge into.
+    write(
+        &test.config,
+        json!({"version": 1, "plugins": [], "disabledPlugins": STOCK_OFF}).to_string(),
+    )?;
+    test.wait_for(|s| Ok(text(s, "configError")?.contains("exactly one")))?;
+    ensure!(
+        test.ipc(
+            "foamy.lock",
+            "savePreset",
+            &[&mine("w", "W", "zen").to_string()]
+        )? == "no-entry"
+    );
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| {
+        Ok(text(s, "preset")? == "foamy"
+            && text(s, "configError")?.is_empty()
+            && num(s, "userPresetsInvalid")? == 0.0)
+    })?;
+    println!(
+        "PASS: user presets read item by item (a bad list never touches the look or settings), listed, previewed as user:<id>, saved, renamed and deleted one at a time with the caps, the link as saveLook's fifth key, two quick writes kept, write-failed and no-entry"
     );
     Ok(())
 }

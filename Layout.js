@@ -576,3 +576,198 @@ if (typeof module !== "undefined") module.exports = {
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError,
   canonical: canonical, isOffset: isOffset, lookGeometryError: lookGeometryError
 }
+
+// --- user presets (Lock Studio round 2, step R2-2) ----------------------------
+//
+// `userPresets` in the foamy.lock entry: [{ id, name, look }], newest first,
+// `look` holding the four look keys (preset, layout, background, glass) as
+// the entry does. A third group, read apart from the settings and the look,
+// and item by item: an invalid item is dropped (and counted), the others are
+// kept, and nothing here changes the settings or the look. `userPreset` is
+// the saved look's link to the preset it came from; an id that isn't in the
+// list is ignored (the look itself is always self-contained).
+//
+// The writes (the lock's savePreset, renamePreset, deletePreset) change one
+// item of the entry's own list and keep every other item as it is, invalid
+// ones too: an item a newer lock understands is never lost by an older one.
+var USER_PRESET_LIMIT = 50
+// The whole list as compact JSON, in UTF-8 bytes.
+var USER_PRESETS_BYTES = 256 * 1024
+var USER_PRESET_NAME_LENGTH = 64
+// A short slug made by the client, so a retried save is the same save.
+var USER_PRESET_ID = /^[a-z0-9][a-z0-9-]{0,39}$/
+var USER_PRESET_KEYS = ["id", "name", "look"]
+var LOOK_ENTRY_KEYS = ["preset", "layout", "background", "glass"]
+
+function utf8Length(text) {
+  var bytes = 0
+  for (var i = 0; i < text.length; i++) {
+    var code = text.charCodeAt(i)
+    if (code < 0x80) bytes += 1
+    else if (code < 0x800) bytes += 2
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      bytes += 4
+      i++
+    } else bytes += 3
+  }
+  return bytes
+}
+
+function userPresetIdError(id) {
+  return typeof id === "string" && USER_PRESET_ID.test(id) ? ""
+    : "id must be 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit"
+}
+
+// A name as shown: trimmed, 1 to 64 characters, no control characters.
+function userPresetNameError(name) {
+  if (typeof name !== "string" || name.trim() === "" || name !== name.trim())
+    return "name must be a non-empty string without leading or trailing spaces"
+  if (name.length > USER_PRESET_NAME_LENGTH) return "name must be at most " + USER_PRESET_NAME_LENGTH + " characters"
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(name)) return "name must not contain control characters"
+  return ""
+}
+
+// One item: "" when the lock can use it, else why not.
+function userPresetError(item) {
+  if (!isPlainObject(item)) return "a user preset must be an object"
+  for (var key in item) if (USER_PRESET_KEYS.indexOf(key) === -1) return "a user preset has an unknown key: " + key
+  var problem = userPresetIdError(item.id) || userPresetNameError(item.name)
+  if (problem) return problem
+  if (!isPlainObject(item.look)) return "look must be an object"
+  for (var lookKey in item.look)
+    if (LOOK_ENTRY_KEYS.indexOf(lookKey) === -1) return "look has an unknown key: " + lookKey
+  var parsed = parseLook(item.look)
+  return parsed.valid ? "" : parsed.error
+}
+
+// The entry's user presets as the lock reads them: { presets: [{ id, name,
+// look (the item's own look keys), effective (Layout.merge's shape) }],
+// invalid: <items dropped>, error: <the first problem, with its index> }.
+// Past USER_PRESET_LIMIT items, or past USER_PRESETS_BYTES, the rest are
+// dropped; so is a second item with an id already read.
+function parseUserPresets(entry) {
+  var list = isPlainObject(entry) ? entry.userPresets : undefined
+  var result = { presets: [], invalid: 0, error: "" }
+  if (list === undefined) return result
+  if (!Array.isArray(list)) return { presets: [], invalid: 1, error: "userPresets must be a list" }
+  var seen = {}
+  var bytes = 2
+  function drop(index, problem) {
+    result.invalid++
+    if (!result.error) result.error = "userPresets[" + index + "]: " + problem
+  }
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i]
+    bytes += utf8Length(JSON.stringify(item === undefined ? null : item)) + (i > 0 ? 1 : 0)
+    if (i >= USER_PRESET_LIMIT) drop(i, "only the first " + USER_PRESET_LIMIT + " user presets are read")
+    else if (bytes > USER_PRESETS_BYTES) drop(i, "user presets past " + USER_PRESETS_BYTES + " bytes are not read")
+    else {
+      var problem = userPresetError(item)
+      if (!problem && seen[item.id]) problem = "id " + item.id + " is used twice"
+      if (problem) drop(i, problem)
+      else {
+        seen[item.id] = true
+        result.presets.push({ id: item.id, name: item.name, look: copy(item.look), effective: parseLook(item.look).look })
+      }
+    }
+  }
+  return result
+}
+
+// The preset `id` in a parsed list (parseUserPresets().presets), or null.
+function findUserPreset(presets, id) {
+  for (var i = 0; i < (presets || []).length; i++) if (presets[i].id === id) return presets[i]
+  return null
+}
+
+// The entry's link (`userPreset`) when it names a preset in `presets`, else "".
+function userPresetLink(entry, presets) {
+  var id = isPlainObject(entry) ? entry.userPreset : undefined
+  return typeof id === "string" && findUserPreset(presets, id) ? id : ""
+}
+
+// A copy of `entry` without its id (what updateEntryInline takes), with the
+// raw list, or the reply when the list can't be changed.
+function presetBase(entry) {
+  var next = {}
+  for (var key in entry) if (key !== "id") next[key] = copy(entry[key])
+  if (next.userPresets !== undefined && !Array.isArray(next.userPresets))
+    return { error: "invalid: shell.json's userPresets isn't a list; fix or remove it first", entry: null }
+  return { error: "", entry: next, list: next.userPresets || [] }
+}
+
+function presetResult(base, list) {
+  if (utf8Length(JSON.stringify(list)) > USER_PRESETS_BYTES) return { error: "too-large", entry: null }
+  if (list.length > 0) base.userPresets = list
+  else delete base.userPresets
+  return { error: "", entry: base }
+}
+
+// savePreset: `item` (checked with userPresetError) replaces the item with
+// its id where it is, or goes first. { error: "" | "full" | "too-large" |
+// "invalid: …", entry: the next entry (without id) }.
+function savingPreset(entry, item) {
+  var base = presetBase(entry)
+  if (base.error) return base
+  var list = base.list.slice()
+  var saved = { id: item.id, name: item.name, look: copy(item.look) }
+  var found = -1
+  for (var i = 0; i < list.length; i++) {
+    if (isPlainObject(list[i]) && list[i].id === item.id) {
+      if (found === -1) {
+        found = i
+        list[i] = saved
+      } else list.splice(i--, 1)
+    }
+  }
+  if (found === -1) {
+    if (list.length >= USER_PRESET_LIMIT) return { error: "full", entry: null }
+    list.unshift(saved)
+  }
+  return presetResult(base.entry, list)
+}
+
+// renamePreset: { error: "" | "unknown-preset" | "too-large" | "invalid: …", entry }.
+function renamingPreset(entry, id, name) {
+  var base = presetBase(entry)
+  if (base.error) return base
+  var list = base.list.slice()
+  var found = false
+  for (var i = 0; i < list.length; i++) {
+    if (isPlainObject(list[i]) && list[i].id === id) {
+      var renamed = copy(list[i])
+      renamed.name = name
+      list[i] = renamed
+      found = true
+    }
+  }
+  if (!found) return { error: "unknown-preset", entry: null }
+  return presetResult(base.entry, list)
+}
+
+// deletePreset: every item with `id` goes, and the saved look's link to it
+// (the look stays). An id that isn't there changes nothing, so a retried
+// delete answers "unchanged". { error: "" | "invalid: …", entry }.
+function deletingPreset(entry, id) {
+  var base = presetBase(entry)
+  if (base.error) return base
+  var list = base.list.filter(function(item) { return !(isPlainObject(item) && item.id === id) })
+  if (base.entry.userPreset === id) delete base.entry.userPreset
+  return presetResult(base.entry, list)
+}
+
+if (typeof module !== "undefined") {
+  module.exports.USER_PRESET_LIMIT = USER_PRESET_LIMIT
+  module.exports.USER_PRESETS_BYTES = USER_PRESETS_BYTES
+  module.exports.USER_PRESET_NAME_LENGTH = USER_PRESET_NAME_LENGTH
+  module.exports.utf8Length = utf8Length
+  module.exports.userPresetIdError = userPresetIdError
+  module.exports.userPresetNameError = userPresetNameError
+  module.exports.userPresetError = userPresetError
+  module.exports.parseUserPresets = parseUserPresets
+  module.exports.findUserPreset = findUserPreset
+  module.exports.userPresetLink = userPresetLink
+  module.exports.savingPreset = savingPreset
+  module.exports.renamingPreset = renamingPreset
+  module.exports.deletingPreset = deletingPreset
+}
