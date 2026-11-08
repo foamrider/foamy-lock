@@ -29,15 +29,22 @@ Item {
   onActiveChanged: debounce.restart()
   onSettingsChanged: debounce.restart()
 
+  // A check is due (the look or the sizes changed less than 300 ms ago):
+  // the problems may be out of date.
+  readonly property bool pending: debounce.running
+
+  // Each view checks the size it was made for (its own modelData), so a
+  // screen plugged in or out while a check is due never pairs a view with
+  // another screen's size.
   function check() {
     var started = Date.now()
     var found = []
     for (var i = 0; i < views.count; i++) {
-      var view = views.itemAt(i) as SampleView
-      if (!view || !(view.width > 0)) continue
+      var view = views.itemAt(i)
+      if (!view || !(view.width > 0) || !view.size) continue
       var code = view.geometryProblem()
       if (!code) continue
-      var size = checker.sizes[i]
+      var size = view.size
       found.push({ key: size.key, label: size.label, reference: !!size.reference, width: size.width, height: size.height,
         code: code, names: Draft.problemElements(code, view.placed, view.elementRects, view.width, view.height) })
     }
@@ -57,6 +64,7 @@ Item {
 
     SampleView {
       required property var modelData
+      readonly property var size: modelData
       width: modelData.width
       height: modelData.height
       look: checker.look || Draft.lookOf(null)
