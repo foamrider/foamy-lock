@@ -9,6 +9,7 @@
 //! foamy-lock-harness placement [--host 4.5|4.0|both]
 //! foamy-lock-harness runtime [--host 4.5|4.0|both]
 //! foamy-lock-harness thumbnails [--host 4.5|4.0] [--preset NAME]... [--out DIR]
+//! foamy-lock-harness studio [--host 4.5|4.0|both] [--language CODE]
 //! ```
 //!
 //! `render` drives the real LockView through wide, narrow, failure, busy,
@@ -63,6 +64,13 @@
 //! backgrounds show their still frame. `FOAMY_RENDER_OUT` keeps full-size
 //! captures too.
 //!
+//! `studio` runs Lock Studio (studio/) as the app, offscreen, from a root
+//! built like `foamy-lock-helper studio open` builds it, in a temporary HOME:
+//! the window, focus, drawing, scripted drags (snapping, Shift, Alt, the
+//! password field's limits), resizes and keys compared as look JSON, the
+//! problem checker, captures (paths printed), costs, and `studio raise` over
+//! IPC.
+//!
 //! Hosts: 4.5 is `FOAMY_HOST_45`,
 //! else `$OMARCHY_TEST_ROOT/shell`, else `/usr/share/omarchy/shell`; 4.0 runs
 //! only when `FOAMY_HOST_40` names a 4.0 shell directory.
@@ -75,6 +83,7 @@ mod placement;
 mod png;
 mod render;
 mod runtime;
+mod studio;
 mod styles;
 mod thumbnails;
 
@@ -90,8 +99,9 @@ fn main() -> ExitCode {
         Some("styles") => styles::run(&args[1..]),
         Some("placement") => placement::run(&args[1..]),
         Some("thumbnails") => thumbnails::run(&args[1..]),
+        Some("studio") => studio::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness placement [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness placement [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]\n       foamy-lock-harness studio [--host {hosts}] [--language CODE]",
             hosts = host::CHOICES.join("|")
         )),
     };

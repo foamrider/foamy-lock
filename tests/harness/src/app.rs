@@ -127,6 +127,62 @@ pub fn run_quickshell(
     language: &str,
     timeout: Duration,
 ) -> Result<(bool, String), String> {
+    run_quickshell_with(
+        base,
+        app,
+        host_shell,
+        language,
+        timeout,
+        &[],
+        &mut |_, _| Ok(()),
+    )
+}
+
+/// The environment of a hermetic offscreen quickshell under `base` (HOME,
+/// runtime dir and language file as run_quickshell sets them up), for
+/// `quickshell ipc` calls into a running instance.
+pub fn quickshell_env(base: &Path, host_shell: &Path) -> Vec<(String, String)> {
+    let home = base.join("home");
+    let omarchy = host_shell
+        .parent()
+        .unwrap_or(host_shell)
+        .display()
+        .to_string();
+    let mut env = host::hermetic(
+        &home,
+        &base.join("runtime"),
+        &home.join(".config/omarchy/language"),
+    );
+    env.extend(
+        [
+            ("OMARCHY_PATH", omarchy.as_str()),
+            ("QT_QPA_PLATFORM", "offscreen"),
+            ("QT_QUICK_BACKEND", "software"),
+            ("QT_QPA_PLATFORMTHEME", "basic"),
+            ("QT_STYLE_OVERRIDE", "Fusion"),
+            ("LANG", "en_US.UTF-8"),
+            ("LC_ALL", "en_US.UTF-8"),
+            ("LC_TIME", "en_US.UTF-8"),
+        ]
+        .map(|(key, value)| (key.to_string(), value.to_string())),
+    );
+    env
+}
+
+/// Called with the log so far and the environment while quickshell runs.
+pub type Tick<'a> = dyn FnMut(&str, &[(String, String)]) -> Result<(), String> + 'a;
+
+/// run_quickshell with `extra` environment variables, calling `tick` with
+/// the log so far (and the environment) about every 100 ms while it runs.
+pub fn run_quickshell_with(
+    base: &Path,
+    app: &Path,
+    host_shell: &Path,
+    language: &str,
+    timeout: Duration,
+    extra: &[(&str, &str)],
+    tick: &mut Tick,
+) -> Result<(bool, String), String> {
     let home = base.join("home");
     let runtime = base.join("runtime");
     let language_file = home.join(".config/omarchy/language");
@@ -138,11 +194,7 @@ pub fn run_quickshell(
     )
     .map_err(io("runtime"))?;
     fs::write(&language_file, format!("{language}\n")).map_err(io("language"))?;
-    let omarchy = host_shell
-        .parent()
-        .unwrap_or(host_shell)
-        .display()
-        .to_string();
+    let env = quickshell_env(base, host_shell);
     let log_path = base.join("quickshell.log");
     let log = fs::File::create(&log_path).map_err(io(log_path.display()))?;
     let mut child = Command::new("dbus-run-session")
@@ -150,17 +202,8 @@ pub fn run_quickshell(
         .arg(app)
         .arg("--no-color")
         .env_clear()
-        .envs(host::hermetic(&home, &runtime, &language_file))
-        .envs([
-            ("OMARCHY_PATH", omarchy.as_str()),
-            ("QT_QPA_PLATFORM", "offscreen"),
-            ("QT_QUICK_BACKEND", "software"),
-            ("QT_QPA_PLATFORMTHEME", "basic"),
-            ("QT_STYLE_OVERRIDE", "Fusion"),
-            ("LANG", "en_US.UTF-8"),
-            ("LC_ALL", "en_US.UTF-8"),
-            ("LC_TIME", "en_US.UTF-8"),
-        ])
+        .envs(env.iter().map(|(key, value)| (key, value)))
+        .envs(extra.iter().copied())
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(io("log"))?)
         .stderr(log)
@@ -172,13 +215,17 @@ pub fn run_quickshell(
         if let Some(status) = child.try_wait().map_err(io("quickshell"))? {
             break Some(status);
         }
-        if Instant::now() >= deadline {
+        let ticked = fs::read_to_string(&log_path)
+            .map_err(io(log_path.display()))
+            .and_then(|log| tick(&log, &env));
+        if ticked.is_err() || Instant::now() >= deadline {
             // The whole group: dbus-run-session, its bus and quickshell.
             let _ = Command::new("kill")
                 .arg("-TERM")
                 .arg(format!("-{}", child.id()))
                 .status();
             let _ = child.wait();
+            ticked?;
             break None;
         }
         std::thread::sleep(Duration::from_millis(100));
