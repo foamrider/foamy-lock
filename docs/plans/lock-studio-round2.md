@@ -439,3 +439,92 @@ code):
   - A duplicate date style.
   - Late content and geometry.
 - All folded into "Changes after review".
+
+## Progress
+
+### R2-3/R2-4 (lock side)
+
+Branch `feat/round2-elements` (off `feat/layout-engine`), 2026-11-08; offscreen
+only (nothing locked, no real omarchy-shell, hyprctl dispatch or desktop
+quickshell). studio/, native/, bin/ and the studio harness are untouched.
+
+- **Model (Layout.js, Model.js):**
+  - `ELEMENT_OPTIONS`: `password.reveal`, `status.items`, `weather.details`,
+    `weather.location`, accepted only on their element (`elementKeys(name)`;
+    not in `ELEMENT_KEYS`). Defaults drop out of `canonical`; absent
+    `items` stays absent (the style's own contents, `STATUS_DEFAULT_ITEMS`).
+    `items` must be a non-empty list of distinct `STATUS_ITEMS`.
+  - Styles: date `numeric`, `stacked`, `week`; calendar `week`, `mini`;
+    weather `compact`, `pill`, `detailed`. `weather` is last in ELEMENTS,
+    hidden at `top-start`/`compact` in every preset (literal and
+    `compose`); SCREENS_ELEMENTS and GLASS_STYLES (calendar `week`,
+    weather `pill`/`detailed`) updated.
+  - `elementLimits()[name].options`: each own key's values and default
+    (`reveal.styles` = REVEAL_STYLES; `items.items` and per-style
+    `items.defaults`).
+  - Model: `isoWeek`, `parseWeather` (states ok/pending/unavailable/stale/
+    invalid; 4 KiB reply cap; integers ±150; unit C/F; code
+    `[a-z0-9_]{1,48}`; condition ≤ 64, location ≤ 80, one line, no control
+    or bidi-override characters; ISO `updatedAt`, 3 h cutoff, 10 min skew),
+    `weatherFresh`, `weatherGroup` (8 groups), `keyboardLayout` (Omarchy's
+    KeyboardLayoutModel rules, read-only).
+- **View:**
+  - `password.reveal: "typing"`: `surfaceIdleHidden` hides surface, border,
+    underline, prompt, greeting, card pill, divider and arrow for
+    underline/box/terminal/card while `!view.showPassword`; hint and
+    fingerprint notice stay on `chromeShown`; the scrim keeps its 0.15
+    floor.
+  - Status: one Repeater over the items (objectNames `<item>Status`, so
+    parity's `networkStatus`/`batteryStatus` hold); the root is now a
+    `Flow` (one line lays out as the Row did; parity passes) that wraps at
+    the centre column, so "all items" fits; the system panel builds rows
+    from items (its RTL label/value alignment was mirrored twice; fixed).
+    An item without data is left out; a status with nothing to show is
+    hidden (`hasContent`).
+  - Sources: `elements/sources/{Volume,Bluetooth,Keyboard}Source.qml`
+    (the only PipeWire/Bluetooth/Hyprland imports), loaded by path through
+    Loaders only while an item needs them and `liveSources` is true; /proc
+    reads gated per item (`uptimeWanted`, `loadWanted`, `memoryWanted`).
+  - `WeatherElement` (plain text, elides inside `contentWidthAt`, own line
+    icons), shown only while `view.weather` is set; late arrival changes
+    `elementRects`, so the geometry check re-runs.
+- **Service:** FoamyPeerIpc (synced, foamy-kit 0.5.2) polls `foamy.weather
+  current` only when `IpcResolver.handlersFor` finds the target and a shown
+  look has the weather: on lock/preview open, then every 15 min while
+  awake (not while blanked); pending → up to 3 retries 10 s apart; a 60 s
+  clock enforces the 3 h cutoff. `lock status` gets `weather {state,
+  shown, polls, updatedAt}` (never the place). Catalog version 3:
+  `elementKeysFor`, `statusItems`, `weather {target, state}`, and the
+  options in `elementLimits`.
+- **Harness:** fixtures `Sources.qml` + `fixtures/sources/*` (patch_view
+  swaps the source paths); styles: every new style, all status items in
+  each status style and column, the widest weather (64-char condition,
+  80-char place), and the reveal sweep (each field style, primary and
+  secondary: idle hidden with hint, typed through the editor, failed,
+  checking, rectangle unchanged); placement: late weather, weather
+  glass/details/screens, lazy sources and `liveSources: false`; runtime: a
+  fake `foamy.weather` ShellIpc peer (absent target, polls, blanking,
+  pending, stale, not ok, invalid, an older peer through a recording
+  `omarchy-shell` stand-in); layout: presets with the widest weather sample
+  never show it. Thumbnails byte-identical; parity unchanged.
+- **Deviations:**
+  - The reveal typing test lives in `styles` (the runtime test's view is a
+    mock); runtime covers the weather.
+  - `tests/studio-draft.test.cjs`: two expectations adjusted for the new
+    element (library order leaves `weather` out until the app adds it; a
+    module placed in `top-start` now orders after the hidden weather).
+  - i18n: lock strings (Volume, Muted, Bluetooth, On, Off, "%1 connected",
+    Keyboard, "Week %1", "High %1", "Low %1") and the studio keys the i18n
+    test derives from Layout (`module.weather`, `style.numeric|week|mini|
+    compact|detailed`), en and no.
+- **For the app (inspector, later step):** `reveal` (values from
+  `options.reveal`; disabled outside `reveal.styles`); `items` as an
+  ordered checklist (start from `options.items.defaults[style]`; clear on
+  style change); weather `details`/`location` and the availability row
+  from catalog `weather.target`/`state`; `Draft.entry` must use
+  `Layout.elementKeys(name)` (today it drops the new keys);
+  `Draft.DISPLAY_ORDER` needs `weather`. SampleView: `liveSources: false`
+  and samples on `hasVolume`, `volumePercent`, `volumeMuted`,
+  `hasBluetooth`, `bluetoothEnabled`, `bluetoothConnected`,
+  `keyboardLayout`, `weather` (`{temperature, unit, code, condition, high,
+  low, location, updatedAtMs}`; never the real place).
