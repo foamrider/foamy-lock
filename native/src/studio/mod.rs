@@ -49,6 +49,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use foamy_helper::Failure;
 use serde_json::Value;
 
+pub mod desktop;
 pub mod root;
 
 /// Test override of the plugin directory.
@@ -343,6 +344,8 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
     let env = Env::current();
     match words.as_slice() {
         [] | ["open"] => root::open(&env, &current_plugin_dir()?, &root::Options::default()),
+        ["install"] => desktop::install(&env, &current_plugin_dir()?),
+        ["uninstall"] => desktop::uninstall(&env),
         _ => Err(Failure::coded("INVALID_ARGUMENT", USAGE)),
     }
 }
