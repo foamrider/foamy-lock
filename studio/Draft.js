@@ -1292,3 +1292,243 @@ if (typeof module !== "undefined") {
   module.exports.videoProgress = videoProgress
   module.exports.convertReport = convertReport
 }
+
+// --- shapes (round 5: the decorations, docs/plans/lock-decorations.md) ---------
+//
+// The look's background.shapes, edited one at a time: add (a template, or
+// a box around one module), remove, move in the drawing order, and set one
+// key by its path ("pad.x", "fill.opacity", "wrap", …). Each edit is one
+// entry (one undo step) and refuses what the lock would refuse (more than
+// four shapes, more than two frosted, a value out of range). The entry
+// compares the shapes as a whole with the preset's, so a look that keeps
+// them stores nothing.
+
+// What "Add shape" offers: the templates, then a box around a module.
+var SHAPE_CHOICES = Layout.SHAPE_TEMPLATES.concat(["around"])
+
+// editLook for the shape edits: an edit that changes nothing returns the
+// draft itself.
+function shapeEdit(draft, edit) {
+  var next = editLook(draft, edit)
+  return same(next, draft) ? draft : next
+}
+
+function shapesOf(look) {
+  return (look && look.background && look.background.shapes) || []
+}
+
+// The box "Wrap in a shape" adds: no padding, the module's own corners and
+// glass, its only background, so it is exactly the module's own surface
+// however the module moves or grows; padding then grows it concentrically.
+function aroundShape(name) {
+  return { kind: "box", wrap: { modules: [name] }, pad: { x: 0, y: 0 }, radius: "auto",
+    fill: { color: "surface", opacity: 1 }, absorb: true }
+}
+
+// The shapes a choice adds ([] when it can't: "around" needs a module).
+function choiceShapes(choice, module) {
+  if (choice === "around") return Layout.ELEMENTS.indexOf(module) !== -1 ? [aroundShape(module)] : []
+  return Layout.SHAPE_TEMPLATES.indexOf(choice) !== -1 ? Layout.template(choice) : []
+}
+
+// Whether the look has room for a choice (four shapes, two of them frosted).
+function canAddShape(look, choice, module) {
+  var added = choiceShapes(choice, module)
+  var all = shapesOf(look).concat(added)
+  return added.length > 0 && all.length <= Layout.SHAPE_LIMITS.count
+    && all.filter(Layout.isFrosted).length <= Layout.SHAPE_LIMITS.frosted
+}
+
+// Add a template's shapes (cinema: both bars) or a box around `module` at
+// the end of the list (drawn last).
+function addShape(draft, choice, module) {
+  var added = choiceShapes(choice, module)
+  if (added.length === 0) return draft
+  return shapeEdit(draft, function(look) { look.background.shapes = shapesOf(look).concat(added) })
+}
+
+function removeShape(draft, index) {
+  return shapeEdit(draft, function(look) {
+    var list = shapesOf(look).slice()
+    if (index >= 0 && index < list.length) list.splice(index, 1)
+    look.background.shapes = list
+  })
+}
+
+// Move shape `index` to `to` in the drawing order.
+function moveShape(draft, index, to) {
+  return shapeEdit(draft, function(look) {
+    var list = shapesOf(look).slice()
+    if (index < 0 || index >= list.length || to < 0 || to >= list.length) return
+    var shape = list.splice(index, 1)[0]
+    list.splice(to, 0, shape)
+    look.background.shapes = list
+  })
+}
+
+// The range a numeric key keeps to (Layout.SHAPE_LIMITS), by its path.
+function shapeRange(kind, keys) {
+  var limits = Layout.SHAPE_LIMITS
+  var last = keys[keys.length - 1]
+  if (keys[0] === "pad") return limits.pad[kind]
+  if (keys[0] === "inset" || keys[0] === "radius") return limits[keys[0]][kind]
+  if (keys[0] === "size") return limits.size[last]
+  if (last === "opacity") return limits.opacity
+  if (keys[0] === "border" && last === "width") return limits.border
+  return null
+}
+
+// A number for `path`: within its range, whole pixels for lengths,
+// hundredths for opacities and fractions of the screen.
+function cleanShapeValue(kind, keys, value) {
+  var range = shapeRange(kind, keys)
+  if (!range || typeof value !== "number" || !isFinite(value)) return value
+  var last = keys[keys.length - 1]
+  var fine = last === "opacity" || last === "screen"
+  return clamp(fine ? roundTo(value, 2) : Math.round(value), range.min, range.max)
+}
+
+// Set one key of shape `index` by its path (null or undefined: back to the
+// default). A box's padding starts from its default pair; leaving "across"
+// takes the box's inset with it.
+function setShape(draft, index, path, value) {
+  return shapeEdit(draft, function(look) {
+    var list = copy(shapesOf(look))
+    var shape = list[index]
+    if (!shape) return
+    var keys = String(path).split(".")
+    if (keys[0] === "kind") return
+    var defaults = Layout.SHAPE_DEFAULTS[shape.kind] || {}
+    if (keys[0] === "pad" && keys.length > 1 && !isPlainObject(shape.pad)) shape.pad = copy(defaults.pad)
+    var target = shape
+    for (var i = 0; i < keys.length - 1; i++) {
+      if (!isPlainObject(target[keys[i]])) target[keys[i]] = {}
+      target = target[keys[i]]
+    }
+    var last = keys[keys.length - 1]
+    if (value === undefined || value === null) delete target[last]
+    else target[last] = cleanShapeValue(shape.kind, keys, copy(value))
+    if (shape.kind === "box" && shape.stretch !== "across") delete shape.inset
+    if (isPlainObject(shape.size) && Object.keys(shape.size).length === 0) delete shape.size
+    look.background.shapes = list
+  })
+}
+
+// What a shape wraps: "zones", "modules" or "none" (a panel only).
+function wrapMode(shape) {
+  if (!shape || !shape.wrap) return "none"
+  return shape.wrap.modules ? "modules" : "zones"
+}
+
+// Wrap zones, modules or (a panel) nothing: zones become the zones of the
+// shown modules wrapped, modules the shown modules in the zones (the clock
+// when none), so the shape stays around the same things where it can.
+function setWrapMode(draft, index, mode) {
+  var look = lookOf(draft)
+  var shape = shapesOf(look)[index]
+  if (!shape || wrapMode(shape) === mode) return draft
+  if (mode === "none") return shape.kind === "panel" ? setShape(draft, index, "wrap", null) : draft
+  var names = []
+  for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+    var name = Layout.ELEMENTS[i]
+    var item = look.elements[name]
+    if (item.hidden && name !== "password") continue
+    var wrap = shape.wrap
+    if (wrap && (wrap.zones ? wrap.zones.indexOf(item.zone) !== -1 : wrap.modules.indexOf(name) !== -1)) names.push(name)
+  }
+  if (mode === "modules") return setShape(draft, index, "wrap", { modules: names.length > 0 ? names : ["clock"] })
+  if (mode !== "zones") return draft
+  var zones = []
+  for (var n = 0; n < names.length; n++) if (zones.indexOf(look.elements[names[n]].zone) === -1) zones.push(look.elements[names[n]].zone)
+  return setShape(draft, index, "wrap", { zones: zones.length > 0 ? zones : [look.elements.clock.zone] })
+}
+
+// Wrap `value` (a zone or a module, by the shape's mode) or not; the last
+// one stays (a wrap names at least one).
+function toggleWrapped(draft, index, value, on) {
+  var shape = shapesOf(lookOf(draft))[index]
+  var mode = wrapMode(shape)
+  if (mode === "none") return draft
+  var list = shape.wrap[mode].slice()
+  var at = list.indexOf(value)
+  if (on && at === -1) list.push(value)
+  else if (!on && at !== -1 && list.length > 1) list.splice(at, 1)
+  else return draft
+  var next = {}
+  next[mode] = list
+  return setShape(draft, index, "wrap", next)
+}
+
+// The shape around exactly this module ("Wrap in a shape" made it, or one
+// like it), or -1.
+function shapeAround(look, name) {
+  var list = shapesOf(look)
+  for (var i = 0; i < list.length; i++) {
+    var wrap = list[i].wrap
+    if (wrap && wrap.modules && wrap.modules.length === 1 && wrap.modules[0] === name) return i
+  }
+  return -1
+}
+
+// The shapes whose wrap takes in `name` (where it is now, by its zone or by
+// name), for the canvas's highlight.
+function shapesWrapping(look, name) {
+  var out = []
+  var list = shapesOf(look)
+  var item = look.elements[name]
+  for (var i = 0; i < list.length; i++) {
+    var wrap = list[i].wrap
+    if (wrap && item && (wrap.modules ? wrap.modules.indexOf(name) !== -1 : wrap.zones.indexOf(item.zone) !== -1)) out.push(i)
+  }
+  return out
+}
+
+// The modules a shape shows as wrapped (shown ones, in DISPLAY_ORDER), for
+// its summary.
+function wrappedModules(look, shape) {
+  var out = []
+  if (!shape || !shape.wrap) return out
+  for (var i = 0; i < DISPLAY_ORDER.length; i++) {
+    var name = DISPLAY_ORDER[i]
+    var item = look.elements[name]
+    if (!item || (item.hidden && name !== "password")) continue
+    if (shape.wrap.modules ? shape.wrap.modules.indexOf(name) !== -1 : shape.wrap.zones.indexOf(item.zone) !== -1) out.push(name)
+  }
+  return out
+}
+
+// --- order in a zone (the inspector's Move up and Move down) -------------------
+
+// `name`'s place in its zone's stack (the shown elements, top first) and
+// how many there are: { at, count }.
+function placeInZone(look, name) {
+  var item = look.elements[name]
+  if (!item) return { at: -1, count: 0 }
+  var names = Layout.stack(look.elements, item.zone)
+  return { at: names.indexOf(name), count: names.length }
+}
+
+// Move `name` up (-1) or down (1) in its zone's stack. The stack is then
+// numbered 0, 1, 2… from the top, so its order says just that.
+function moveInZone(draft, name, step) {
+  var place = placeInZone(lookOf(draft), name)
+  if (place.at === -1 || place.at + step < 0 || place.at + step >= place.count) return draft
+  return editElement(draft, name, function(item, look) {
+    var names = Layout.stack(look.elements, item.zone)
+    var at = names.indexOf(name)
+    var to = at + step
+    if (at === -1 || to < 0 || to >= names.length) return
+    names.splice(at, 1)
+    names.splice(to, 0, name)
+    for (var i = 0; i < names.length; i++) look.elements[names[i]].order = i
+  })
+}
+
+if (typeof module !== "undefined") {
+  var shapeExports = { SHAPE_CHOICES: SHAPE_CHOICES, shapesOf: shapesOf, aroundShape: aroundShape, choiceShapes: choiceShapes,
+    canAddShape: canAddShape, addShape: addShape, removeShape: removeShape, moveShape: moveShape, setShape: setShape,
+    cleanShapeValue: cleanShapeValue, wrapMode: wrapMode, setWrapMode: setWrapMode, toggleWrapped: toggleWrapped,
+    shapeAround: shapeAround, shapesWrapping: shapesWrapping, wrappedModules: wrappedModules, placeInZone: placeInZone,
+    moveInZone: moveInZone }
+  for (var shapeKey in shapeExports) module.exports[shapeKey] = shapeExports[shapeKey]
+}
