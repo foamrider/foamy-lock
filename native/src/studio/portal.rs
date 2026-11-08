@@ -1,10 +1,13 @@
-//! `studio pick-picture [title [filter name]]`: the desktop's file chooser,
-//! through xdg-desktop-portal's `org.freedesktop.portal.FileChooser.OpenFile`
-//! on the session bus.
+//! `studio pick-picture [title [filter name [media filter name]]]`: the
+//! desktop's file chooser, through xdg-desktop-portal's
+//! `org.freedesktop.portal.FileChooser.OpenFile` on the session bus.
 //!
 //! The call: no parent window, the title (default "Choose a picture"),
 //! `modal`, one file, and one filter (default name "Images") of the MIME
-//! types the lock can decode: `image/png`, `image/jpeg`, `image/webp`. The
+//! types the lock can decode: `image/png`, `image/jpeg`, `image/webp`. With
+//! a media filter name, that filter comes first and is the current one: the
+//! pictures and the videos the helper converts (`video/mp4`, `video/x-m4v`,
+//! `video/quicktime`, `video/x-matroska`, `video/webm`). The
 //! bus is `$DBUS_SESSION_BUS_ADDRESS`, else `$XDG_RUNTIME_DIR/bus`, else
 //! `/run/user/<uid>/bus`. The helper waits up to 30 minutes for the choice
 //! and dies with its parent.
@@ -27,6 +30,14 @@ use super::{Env, random_suffix};
 pub const DEFAULT_TITLE: &str = "Choose a picture";
 pub const DEFAULT_FILTER: &str = "Images";
 pub const MIME_TYPES: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
+/// The videos the helper converts (video-probe, video-convert).
+pub const VIDEO_MIME_TYPES: [&str; 5] = [
+    "video/mp4",
+    "video/x-m4v",
+    "video/quicktime",
+    "video/x-matroska",
+    "video/webm",
+];
 const PORTAL: &str = "org.freedesktop.portal.Desktop";
 const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 const REQUEST: &str = "org.freedesktop.portal.Request";
@@ -49,20 +60,28 @@ pub fn bus_address(env: &Env) -> Result<Address, Failure> {
     Ok(Address::Path(runtime.join("bus")))
 }
 
-/// `OpenFile`'s body (`ssa{sv}`).
-pub fn open_file_body(title: &str, filter: &str, token: &str) -> Vec<u8> {
-    let images = |w: &mut Writer| {
-        w.structure(|w| {
-            w.string(filter);
-            w.array(8, |w| {
-                for mime in MIME_TYPES {
-                    w.structure(|w| {
-                        w.u32(1);
-                        w.string(mime);
-                    });
-                }
-            });
+/// One `(sa(us))` filter: the pictures, and with `videos` the videos too.
+fn write_filter(w: &mut Writer, name: &str, videos: bool) {
+    let extra: &[&str] = if videos { &VIDEO_MIME_TYPES } else { &[] };
+    w.structure(|w| {
+        w.string(name);
+        w.array(8, |w| {
+            for mime in MIME_TYPES.iter().chain(extra) {
+                w.structure(|w| {
+                    w.u32(1);
+                    w.string(mime);
+                });
+            }
         });
+    });
+}
+
+/// `OpenFile`'s body (`ssa{sv}`): the pictures filter, or with `media` that
+/// one first and current (pictures and videos), then the pictures.
+pub fn open_file_body(title: &str, filter: &str, media: Option<&str>, token: &str) -> Vec<u8> {
+    let current = |w: &mut Writer| match media {
+        Some(name) => write_filter(w, name, true),
+        None => write_filter(w, filter, false),
     };
     let mut w = Writer::new();
     w.string("");
@@ -72,8 +91,15 @@ pub fn open_file_body(title: &str, filter: &str, token: &str) -> Vec<u8> {
         w.entry("modal", "b", |w| w.boolean(true));
         w.entry("multiple", "b", |w| w.boolean(false));
         w.entry("directory", "b", |w| w.boolean(false));
-        w.entry("filters", "a(sa(us))", |w| w.array(8, images));
-        w.entry("current_filter", "(sa(us))", images);
+        w.entry("filters", "a(sa(us))", |w| {
+            w.array(8, |w| {
+                current(w);
+                if media.is_some() {
+                    write_filter(w, filter, false);
+                }
+            })
+        });
+        w.entry("current_filter", "(sa(us))", current);
     });
     w.buf
 }
@@ -153,6 +179,7 @@ pub fn pick_on(
     address: &Address,
     title: &str,
     filter: &str,
+    media: Option<&str>,
     deadline: Instant,
 ) -> Result<Value, Failure> {
     let mut bus = Connection::open(address, deadline).map_err(failed)?;
@@ -187,7 +214,7 @@ pub fn pick_on(
                 "org.freedesktop.portal.FileChooser",
                 "OpenFile",
             )
-            .with_body("ssa{sv}", open_file_body(title, filter, &token)),
+            .with_body("ssa{sv}", open_file_body(title, filter, media, &token)),
         )
         .map_err(failed)?;
     loop {
@@ -245,10 +272,16 @@ pub fn pick_on(
 }
 
 /// `studio pick-picture`.
-pub fn pick(env: &Env, title: &str, filter: &str) -> Result<Value, Failure> {
+pub fn pick(env: &Env, title: &str, filter: &str, media: Option<&str>) -> Result<Value, Failure> {
     // A studio that quits takes its question with it.
     let _ = foamy_helper::process::die_with_parent();
-    pick_on(&bus_address(env)?, title, filter, Instant::now() + WAIT)
+    pick_on(
+        &bus_address(env)?,
+        title,
+        filter,
+        media,
+        Instant::now() + WAIT,
+    )
 }
 
 #[cfg(test)]
@@ -258,6 +291,74 @@ mod tests {
     use crate::studio::tests::Scratch;
     use std::os::unix::net::UnixListener;
     use std::thread;
+
+    type Filters = (Vec<(String, Vec<String>)>, String);
+
+    /// The filters (name, MIME types) and the current filter's name.
+    fn filters_of(body: Vec<u8>) -> Filters {
+        let message = Message::default().with_body("ssa{sv}", body);
+        let mut r: Reader = message.reader();
+        assert_eq!(r.string().unwrap(), "");
+        r.string().unwrap();
+        let mut filters = Vec::new();
+        let mut current = String::new();
+        let filter = |r: &mut Reader| -> Result<(String, Vec<String>), Error> {
+            r.align(8)?;
+            let name = r.string()?.to_string();
+            let mut mimes = Vec::new();
+            r.array(8, |r| {
+                r.align(8)?;
+                assert_eq!(r.u32()?, 1);
+                mimes.push(r.string()?.to_string());
+                Ok(())
+            })?;
+            Ok((name, mimes))
+        };
+        r.array(8, |r| {
+            r.align(8)?;
+            let key = r.string()?.to_string();
+            let signature = r.signature()?.to_string();
+            match key.as_str() {
+                "filters" => r.array(8, |r| {
+                    filters.push(filter(r)?);
+                    Ok(())
+                }),
+                "current_filter" => {
+                    current = filter(r)?.0;
+                    Ok(())
+                }
+                _ => r.skip(&signature),
+            }
+        })
+        .unwrap();
+        (filters, current)
+    }
+
+    #[test]
+    fn the_media_filter_adds_videos_and_comes_first() {
+        let pictures: Vec<String> = MIME_TYPES.iter().map(|m| m.to_string()).collect();
+        assert_eq!(
+            filters_of(open_file_body("T", "Bilder", None, "t")),
+            (vec![("Bilder".into(), pictures.clone())], "Bilder".into())
+        );
+        let mut media = pictures.clone();
+        media.extend(VIDEO_MIME_TYPES.iter().map(|m| m.to_string()));
+        assert_eq!(
+            filters_of(open_file_body(
+                "T",
+                "Bilder",
+                Some("Bilder og videoer"),
+                "t"
+            )),
+            (
+                vec![
+                    ("Bilder og videoer".into(), media),
+                    ("Bilder".into(), pictures)
+                ],
+                "Bilder og videoer".into()
+            )
+        );
+    }
 
     #[test]
     fn file_uris_become_paths() {
@@ -453,6 +554,7 @@ mod tests {
             &Address::Path(socket),
             title,
             "Bilder",
+            None,
             Instant::now() + Duration::from_secs(10),
         );
         (result, server.join().unwrap())
@@ -508,6 +610,7 @@ mod tests {
             &missing,
             DEFAULT_TITLE,
             DEFAULT_FILTER,
+            None,
             Instant::now() + Duration::from_secs(1),
         )
         .unwrap_err();
@@ -519,6 +622,7 @@ mod tests {
             &Address::Path(scratch.path("silent")),
             DEFAULT_TITLE,
             DEFAULT_FILTER,
+            None,
             Instant::now() + Duration::from_millis(200),
         )
         .unwrap_err();

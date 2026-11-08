@@ -23,7 +23,8 @@
 //! - `studio apply`: see [`apply`].
 //! - `studio preset save` / `preset rename` / `preset delete`: see
 //!   [`preset`].
-//! - `studio pick-picture [title [filter name]]`: see [`portal`].
+//! - `studio pick-picture [title [filter name [media filter name]]]`: see
+//!   [`portal`].
 //!
 //! Codes: `INVALID_ARGUMENT` (unknown subcommand or arguments),
 //! `INVALID_REQUEST` (stdin isn't what the subcommand takes),
@@ -371,7 +372,7 @@ pub fn iso8601(time: SystemTime) -> String {
     )
 }
 
-const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name]]]";
+const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name [media filter name]]]]";
 
 /// `foamy-lock-helper studio <args>`.
 pub fn main(args: &[OsString]) -> Result<Value, Failure> {
@@ -396,9 +397,10 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
             &read_stdin(preset::MAX_REQUEST)?,
             &apply::Options::default(),
         ),
-        ["pick-picture"] => portal::pick(&env, portal::DEFAULT_TITLE, portal::DEFAULT_FILTER),
-        ["pick-picture", title] => portal::pick(&env, title, portal::DEFAULT_FILTER),
-        ["pick-picture", title, filter] => portal::pick(&env, title, filter),
+        ["pick-picture"] => portal::pick(&env, portal::DEFAULT_TITLE, portal::DEFAULT_FILTER, None),
+        ["pick-picture", title] => portal::pick(&env, title, portal::DEFAULT_FILTER, None),
+        ["pick-picture", title, filter] => portal::pick(&env, title, filter, None),
+        ["pick-picture", title, filter, media] => portal::pick(&env, title, filter, Some(media)),
         _ => Err(Failure::coded("INVALID_ARGUMENT", USAGE)),
     }
 }
