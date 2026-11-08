@@ -62,7 +62,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 16] = [
+const CAPTURES: [&str; 18] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -79,6 +79,8 @@ const CAPTURES: [&str; 16] = [
     "studio-reset",
     "studio-look",
     "studio-tips",
+    "studio-user-presets",
+    "studio-preset-name",
 ];
 /// The lock's entry the app reads (read-only) for the canvas.
 const SHELL_JSON: &str =
@@ -88,21 +90,25 @@ const SHELL_JSON: &str =
 /// shell. It answers what `$dir/mode` says (a result of `studio apply`;
 /// "not-responding-once:<token>" doesn't answer once per token, then says
 /// "unchanged") and records each call's arguments in `$dir/call-<n>`, the
-/// number of calls in `$dir/count`. Anything but `foamy.lock saveLook` or
-/// `previewLook` with one argument is refused.
+/// number of calls in `$dir/count`. The user preset operations (savePreset,
+/// renamePreset, deletePreset) answer what `$dir/preset-mode` says instead
+/// (ok by default). Anything but `foamy.lock saveLook`, `previewLook`,
+/// `savePreset` or `deletePreset` with one argument, or `renamePreset`
+/// with two, is refused.
 const FAKE_SHELL: &str = r#"#!/bin/bash
 dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
 echo "$n" > "$dir/count"
 printf '%s\n' "$@" > "$dir/call-$n"
-if [[ $# -ne 3 || $1 != foamy.lock || ( $2 != saveLook && $2 != previewLook ) ]]; then
-  echo "fake omarchy-shell: unexpected call" >&2
-  exit 2
-fi
-mode=$(cat "$dir/mode" 2>/dev/null || echo ok)
+case $1:$2:$# in
+  foamy.lock:saveLook:3|foamy.lock:previewLook:3) mode=$(cat "$dir/mode" 2>/dev/null || echo ok) ;;
+  foamy.lock:savePreset:3|foamy.lock:deletePreset:3|foamy.lock:renamePreset:4)
+    mode=$(cat "$dir/preset-mode" 2>/dev/null || echo ok) ;;
+  *) echo "fake omarchy-shell: unexpected call" >&2; exit 2 ;;
+esac
 not_responding() { echo 'omarchy-shell is not responding' >&2; exit 1; }
 case $mode in
-  ok|unchanged|invalid-json|locked|unsupported|no-entry) echo "$mode" ;;
+  ok|unchanged|invalid-json|locked|unsupported|no-entry|write-failed|full|too-large|unknown-preset) echo "$mode" ;;
   invalid) echo 'invalid: layout has an unknown element: x' ;;
   unexpected) echo 'saved, probably' ;;
   not-responding) not_responding ;;

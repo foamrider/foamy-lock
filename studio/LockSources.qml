@@ -53,6 +53,12 @@ import "Draft.js" as Draft
 // - **Preview full screen**: previewLook(entry) runs the lock's
 //   `foamy.lock previewLook` through omarchy-shell itself (the helper has no
 //   subcommand for it); previewed(report).
+// - **User presets**: runPreset(op, request) runs `studio preset save`,
+//   `rename` or `delete` (the lock's savePreset, renamePreset and
+//   deletePreset, one retry when it doesn't answer), one at a time;
+//   presetDone(op, report, request). The list (`userPresets`) is read from
+//   the same foamy.lock entry, and after an operation the lock confirmed it
+//   is updated at once (Draft.presetsAfter) until shell.json says so too.
 Item {
   id: sources
 
@@ -104,6 +110,13 @@ Item {
   signal draftDone(string op, var result)
   signal applied(var report, var entry)
   signal previewed(var report)
+
+  // User presets (Draft.userPresetsOf): { id, name, look, effective },
+  // newest first; the items the lock skips are counted.
+  property var userPresets: []
+  property int userPresetsInvalid: 0
+  property bool presetBusy: false
+  signal presetDone(string op, var report, var request)
 
   // The prepared picture, the source path it was made from, and why not.
   property string picturePath: ""
@@ -427,6 +440,28 @@ Item {
     previewed(Draft.previewReport(exitCode, stdout, stderr))
   }
 
+  // --- user presets ------------------------------------------------------------
+
+  // `op` is "save" ({ id, name, look }), "rename" ({ id, name }) or
+  // "delete" ({ id }).
+  function runPreset(op, request) {
+    if (presetBusy || ["save", "rename", "delete"].indexOf(op) === -1) return false
+    presetProc.op = op
+    presetProc.payload = request
+    presetProc.request = JSON.stringify(request)
+    presetProc.stdinEnabled = true
+    presetBusy = true
+    presetProc.running = true
+    return true
+  }
+
+  // The helper's answer (also a test hook): a Draft.applyReport.
+  function applyPresetReply(op, exitCode, text, request) {
+    var report = Draft.applyReport(exitCode, text)
+    if (report.saved) userPresets = Draft.presetsAfter(userPresets, op, request)
+    presetDone(op, report, request)
+  }
+
   Process {
     id: draftProc
     property string op: ""
@@ -460,6 +495,24 @@ Item {
     onExited: function(exitCode) {
       sources.applying = false
       sources.applyApply(exitCode, applyOutput.text, applyProc.entry)
+    }
+  }
+
+  // `studio preset` waits as `studio apply` does.
+  Process {
+    id: presetProc
+    property string op: "save"
+    property var payload: null
+    property string request: ""
+    command: ["timeout", "--kill-after=1s", "20s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "preset", op]))
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: presetOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.presetBusy = false
+      sources.applyPresetReply(presetProc.op, exitCode, presetOutput.text, presetProc.payload)
     }
   }
 
@@ -572,12 +625,17 @@ Item {
       sources.settingsError = result.error
       if (result.valid) sources.settings = result.settings
       sources.configEntry = result.entry || null
+      var presets = Draft.userPresetsOf(result.entry)
+      sources.userPresets = presets.presets
+      sources.userPresetsInvalid = presets.invalid
       sources.configKnown = true
     }
     onFileChanged: reload()
     onLoadFailed: {
       sources.settingsError = "unreadable"
       sources.configEntry = null
+      sources.userPresets = []
+      sources.userPresetsInvalid = 0
       sources.configKnown = true
     }
   }

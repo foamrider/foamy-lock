@@ -68,6 +68,7 @@ Rectangle {
       // The label never gives way to the value: the value elides first.
       width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth : Math.min(implicitWidth, row.width)
       text: button.text
+      textFormat: Text.PlainText
       elide: Text.ElideRight
       color: button.primary ? FoamyPalette.onAccent : FoamyPalette.text
       font.family: FoamyStyle.fontFamily
@@ -80,6 +81,7 @@ Rectangle {
       visible: button.detail !== ""
       width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth : Math.max(0, row.width - label.width - row.spacing)
       text: button.detail
+      textFormat: Text.PlainText
       elide: Text.ElideRight
       horizontalAlignment: button.horizontalAlignment === Text.AlignHCenter ? Text.AlignLeft : Text.AlignRight
       color: button.primary ? FoamyPalette.onAccent : FoamyPalette.mutedText

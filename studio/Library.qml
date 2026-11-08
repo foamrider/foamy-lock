@@ -85,8 +85,8 @@ FocusScope {
     height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
     horizontalAlignment: Text.AlignLeft
     trailing: FoamyStyle.iconSize + FoamyStyle.gap
-    text: FoamyI18n.t("studio.preset", library.app.presetLabel(library.app.draft.preset))
-    detail: library.app.changes > 0 ? FoamyI18n.t("studio.edited") : ""
+    text: FoamyI18n.t("studio.preset", library.app.basisLabel)
+    detail: library.app.presetChanged ? FoamyI18n.t("studio.edited") : ""
     checked: library.app.presetMenu.visible
     Accessible.role: Accessible.ButtonMenu
     Accessible.name: text

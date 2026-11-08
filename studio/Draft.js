@@ -56,11 +56,11 @@ function same(a, b) {
   return stable(a) === stable(b)
 }
 
-// An entry in the lock's key order (preset, layout, background, glass),
-// for saving.
+// An entry in the lock's key order (preset, layout, background, glass,
+// then userPreset, the user preset it is based on), for saving.
 function ordered(draft) {
   var out = { preset: draft.preset }
-  var keys = ["layout", "background", "glass"]
+  var keys = ["layout", "background", "glass", "userPreset"]
   for (var i = 0; i < keys.length; i++) if (draft[keys[i]] !== undefined) out[keys[i]] = copy(draft[keys[i]])
   return out
 }
@@ -746,13 +746,14 @@ var LOOK_KEYS = ["preset", "layout", "background", "glass"]
 // The saved look as a sparse entry, from the foamy.lock entry in shell.json
 // (Model.parseConfig's `entry`): the default preset when there is no entry
 // or it has no look keys; null when the lock refuses its look (the lock then
-// keeps the look it had, and so does the app).
+// keeps the look it had, and so does the app). It keeps the entry's link
+// to a user preset (`userPreset`).
 function savedEntry(configEntry) {
   var source = {}
   for (var i = 0; i < LOOK_KEYS.length; i++)
     if (isPlainObject(configEntry) && configEntry[LOOK_KEYS[i]] !== undefined) source[LOOK_KEYS[i]] = configEntry[LOOK_KEYS[i]]
   var parsed = Layout.parseLook(source)
-  return parsed.valid ? entry(parsed.look) : null
+  return parsed.valid ? carry(entry(parsed.look), linkOf(configEntry)) : null
 }
 
 // Two entries give the lock the same look (sparse or not, any key order).
@@ -777,10 +778,10 @@ function restore(saved) {
   var steps = Array.isArray(saved.history) ? saved.history : []
   for (var i = 0; i < steps.length; i++) {
     var step = isPlainObject(steps[i]) ? parse(steps[i]) : null
-    if (step && step.valid) past.push(entry(step.look))
+    if (step && step.valid) past.push(carry(entry(step.look), linkOf(steps[i])))
   }
   if (past.length > HISTORY_LIMIT) past = past.slice(past.length - HISTORY_LIMIT)
-  return { past: past, present: entry(present.look), future: [] }
+  return { past: past, present: carry(entry(present.look), linkOf(saved.look)), future: [] }
 }
 
 // The last line of a helper's stdout as a JSON object, or null.
@@ -830,8 +831,10 @@ function draftError(exitCode, text) {
   return exitCode === 0 && data && data.ok === true ? "" : codeOf(data)
 }
 
-// The answers `studio apply` tells apart (native/src/studio/apply.rs).
-var APPLY_RESULTS = ["ok", "unchanged", "invalid-json", "invalid", "locked", "unsupported", "no-entry", "unexpected",
+// The answers `studio apply` and `studio preset` tell apart
+// (native/src/studio/apply.rs, preset.rs).
+var APPLY_RESULTS = ["ok", "unchanged", "invalid-json", "invalid", "locked", "unsupported", "no-entry", "write-failed",
+  "full", "too-large", "unknown-preset", "unexpected",
   "not-responding", "not-ready", "not-running", "target-not-found", "function-not-found", "no-omarchy-shell", "failed"]
 
 // `studio apply`: { result, saved, confirmed, reason, code }. `result` is
@@ -892,4 +895,142 @@ if (typeof module !== "undefined") module.exports = {
   resizeScale: resizeScale, probeLook: probeLook, draggedLook: draggedLook, scaledLook: scaledLook,
   problemElements: problemElements, neighbourModule: neighbourModule,
   REFERENCE_SIZES: REFERENCE_SIZES, monitorEntries: monitorEntries, scalePercent: scalePercent
+}
+
+// --- user presets (round 2, step R2-2) -----------------------------------------
+//
+// User presets live in the lock's entry (`userPresets`, read by
+// Layout.parseUserPresets). A draft based on one carries its id as
+// `userPreset` (the "link"): every edit keeps it (StudioWindow.commit),
+// picking a built-in preset drops it, and it is saved with the look as
+// saveLook's fifth key. An id that isn't in the list counts as no link.
+
+// The draft's link, or "".
+function linkOf(draft) {
+  var id = isPlainObject(draft) ? draft.userPreset : undefined
+  return typeof id === "string" && Layout.userPresetIdError(id) === "" ? id : ""
+}
+
+// A copy of the entry with `link` as its link ("" for none).
+function carry(draft, link) {
+  var out = copy(draft) || {}
+  delete out.userPreset
+  if (link) out.userPreset = link
+  return out
+}
+
+// The user presets in a foamy.lock entry: { presets, invalid, error }.
+function userPresetsOf(configEntry) {
+  return Layout.parseUserPresets(configEntry)
+}
+
+// The user preset the draft is based on (in `presets`), or null.
+function linkedPreset(draft, presets) {
+  var id = linkOf(draft)
+  return id ? Layout.findUserPreset(presets, id) : null
+}
+
+// The draft as the lock gets it: the link only when it names a preset in
+// `presets`.
+function forSaving(draft, presets) {
+  return carry(draft, linkedPreset(draft, presets) ? linkOf(draft) : "")
+}
+
+// What Apply does with this draft:
+// - "user": based on a user preset, with changes: update that preset, then
+//   apply;
+// - "builtin": a built-in preset with changes: ask for a name first;
+// - "plain": nothing to keep as a preset (a preset as it comes): apply.
+function saveMode(draft, presets) {
+  var linked = linkedPreset(draft, presets)
+  if (linked) return sameLook(draft, linked.look) ? "plain" : "user"
+  return changeCount(draft) > 0 ? "builtin" : "plain"
+}
+
+// The draft has changes on top of what it is based on.
+function presetChanged(draft, presets) {
+  var linked = linkedPreset(draft, presets)
+  return linked ? !sameLook(draft, linked.look) : changeCount(draft) > 0
+}
+
+// The draft for a user preset as it was saved, linked to it.
+function presetEntry(preset) {
+  return carry(entry(preset.effective || Layout.parseLook(preset.look).look), preset.id)
+}
+
+// The item savePreset takes: { id, name, look } in the lock's key order,
+// without the link.
+function presetItem(id, name, draft) {
+  return { id: id, name: name, look: ordered(carry(draft, "")) }
+}
+
+// A new id: the time in base 36 and a few random letters (`salt`), so
+// it's unique and a retry of the same save keeps it.
+function presetId(now, salt) {
+  var tail = String(salt || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8)
+  return "u" + Math.max(0, Math.floor(Number(now) || 0)).toString(36) + (tail ? "-" + tail : "")
+}
+
+// "" when the lock takes `text` (trimmed) as a name, else why not.
+function nameProblem(text) {
+  return Layout.userPresetNameError(String(text === undefined ? "" : text).trim())
+}
+
+// `name`, or with " 2", " 3", … after it when a preset already has it.
+function uniqueName(name, presets) {
+  var taken = {}
+  for (var i = 0; i < (presets || []).length; i++) taken[presets[i].name] = true
+  var base = String(name).slice(0, Layout.USER_PRESET_NAME_LENGTH).trim()
+  if (!taken[base]) return base
+  for (var n = 2; n < 1000; n++) {
+    var suffix = " " + n
+    var candidate = base.slice(0, Layout.USER_PRESET_NAME_LENGTH - suffix.length).trim() + suffix
+    if (!taken[candidate]) return candidate
+  }
+  return base
+}
+
+// The history with its present linked to `link`, as no new undo step (a
+// save that names the draft changes no look).
+function relink(h, link) {
+  return { past: h.past, present: carry(h.present, link), future: h.future }
+}
+
+// The list after an operation the lock confirmed, until shell.json says
+// so too: "save" (`request` is the item: replaced where it is, else
+// first), "rename" ({ id, name }) or "delete" ({ id }).
+function presetsAfter(presets, op, request) {
+  var list = (presets || []).slice()
+  var at = -1
+  for (var i = 0; i < list.length; i++) if (list[i].id === request.id) at = i
+  if (op === "delete") return at === -1 ? list : list.filter(function(p) { return p.id !== request.id })
+  if (op === "rename") {
+    if (at !== -1) list[at] = { id: list[at].id, name: request.name, look: list[at].look, effective: list[at].effective }
+    return list
+  }
+  if (op === "save") {
+    var parsed = Layout.parseLook(request.look)
+    if (!parsed.valid) return list
+    var item = { id: request.id, name: request.name, look: copy(request.look), effective: parsed.look }
+    if (at === -1) list.unshift(item)
+    else list[at] = item
+  }
+  return list
+}
+
+if (typeof module !== "undefined") {
+  module.exports.linkOf = linkOf
+  module.exports.carry = carry
+  module.exports.userPresetsOf = userPresetsOf
+  module.exports.linkedPreset = linkedPreset
+  module.exports.forSaving = forSaving
+  module.exports.saveMode = saveMode
+  module.exports.presetChanged = presetChanged
+  module.exports.presetEntry = presetEntry
+  module.exports.presetItem = presetItem
+  module.exports.presetId = presetId
+  module.exports.nameProblem = nameProblem
+  module.exports.uniqueName = uniqueName
+  module.exports.relink = relink
+  module.exports.presetsAfter = presetsAfter
 }

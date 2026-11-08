@@ -12,14 +12,14 @@ import "kit"
 // last is kept in the app's state (LockSources.setTip), so the next start
 // shows it again.
 //
-// Tips about features still to come (your own presets, the keyboard layout
-// in the status) join the list with those features.
+// Tips about features still to come (the keyboard layout in the status)
+// join the list with those features.
 Rectangle {
   id: tips
 
   // LockSources: tip, setTip(), mugshotAvailable, openMugshot().
   property var sources: null
-  readonly property var ids: ["mugshot", "library", "drag", "keys", "look", "preview", "shortcuts"]
+  readonly property var ids: ["mugshot", "library", "drag", "keys", "look", "presets", "preview", "shortcuts"]
   readonly property string current: sources && ids.indexOf(sources.tip) !== -1 ? sources.tip : ids[0]
   readonly property int index: Math.max(0, ids.indexOf(current))
   readonly property bool mugshotShown: current === "mugshot" && sources !== null && sources.mugshotAvailable

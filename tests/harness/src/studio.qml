@@ -64,6 +64,10 @@ Item {
     studio.resetAsked = false
     studio.pendingPreset = ""
     studio.libraryDrag = ""
+    studio.nameAsked = ""
+    studio.nameTarget = ""
+    studio.deleteAsked = ""
+    studio.applyAfterPreset = null
     studio.presetMenu.close()
   }
   // The first item under `item` with this objectName, or null.
@@ -151,6 +155,20 @@ Item {
   function fakeCalls() { return Number(readFile(fake + "/count").trim()) || 0 }
   function fakeCall(n) { return readFile(fake + "/call-" + n).replace(/\n$/, "").split("\n") }
   function setMode(mode) { writeFile(fake + "/mode", mode + "\n") }
+  // User presets: the fake's answer to savePreset, renamePreset and
+  // deletePreset, the lock's entry the app reads, and waiting for a save.
+  function setPresetMode(mode) { writeFile(fake + "/preset-mode", mode + "\n") }
+  readonly property string shellJson: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
+  function writeEntry(extra) {
+    var plugin = { id: "foamy.lock", timeFormat: "12h" }
+    for (var key in extra) plugin[key] = extra[key]
+    writeFile(shellJson, JSON.stringify({ version: 1, plugins: [plugin] }) + "\n")
+  }
+  function savingDone() {
+    return !studio.sources.applying && !studio.sources.presetBusy && !studio.applyAfterPreset
+      && studio.notice !== null && studio.notice.kind !== "busy"
+  }
+  function nameField() { return find(studio, "studioPresetName") }
   function hasDraft() { return readFile(draftPath).trim() !== "" }
   // Poll `condition` every 50 ms, then next(); fail after `limit` ms.
   function waitFor(condition, what, next, limit) {
@@ -205,7 +223,10 @@ Item {
     waitFor(settled, "the checker", function() {
       expect(studio.canApply, "Apply is enabled with a change: " + json(studio.draft))
       studio.apply()
-      expect(studio.notice && studio.notice.kind === "busy" && !studio.canApply, "applying shows and holds Apply")
+      // Changes on a built-in preset ask for a name first; these cases apply as is.
+      expect(studio.nameAsked === "new" && find(studio, "studioNameDialog").visible, "Apply asks for a name")
+      find(studio, "studioNamePlain").clicked()
+      expect(studio.nameAsked === "" && studio.notice && studio.notice.kind === "busy" && !studio.canApply, "applying shows and holds Apply")
       waitFor(function() { return !studio.sources.applying && studio.notice && studio.notice.kind !== "busy" }, "the apply result", function() {
         var expected = c.value ? FoamyI18n.t(c.text, c.value) : FoamyI18n.t(c.text)
         expect(noticeIs(expected, c.kind), c.mode + ": notice " + json(studio.notice) + ", expected " + expected)
@@ -247,6 +268,218 @@ Item {
 
   FileView { id: status; path: "/proc/self/status"; printErrors: false; blockLoading: true }
   FileView { id: ipcDone; path: test.path("ipc-done"); printErrors: false; blockLoading: true }
+
+  // --- user presets (R2-2), against the fake: each step a body ---------------
+  function userPresetSteps() {
+    return [
+    { name: "user presets: read from shell.json, a bad one skipped", wait: 0, run: function(next) {
+        reset()
+        setMode("ok")
+        setPresetMode("ok")
+        writeEntry({ userPresets: [{ id: "calm", name: "Calm <b>x</b>", look: { preset: "zen", background: { dim: 0.6 } } },
+          { id: "Bad Id", name: "x", look: {} }] })
+        waitFor(function() { return studio.sources.userPresets.length === 1 && studio.sources.userPresetsInvalid === 1 }, "the presets read", function() {
+          studio.presetMenu.open()
+          var mine = find(studio.presetMenu, "studioPresetsMine"), builtin = find(studio.presetMenu, "studioPresetsBuiltin")
+          var tile = find(studio.presetMenu, "studioUserPreset-calm")
+          expect(tile && tile.visible && tile.label === "Calm <b>x</b>", "the user preset is listed")
+          expect(mine.mapToItem(null, 0, 0).y < tile.mapToItem(null, 0, 0).y
+            && tile.mapToItem(null, 0, 0).y < builtin.mapToItem(null, 0, 0).y, "Your presets first, then Built-in")
+          expect(mine.text === FoamyI18n.t("studio.presets.mine") && builtin.text === FoamyI18n.t("studio.presets.builtin"), "the headings")
+          expect(!find(studio.presetMenu, "studioPresetsEmpty").visible, "no empty note")
+          expect(studio.presetMenu.cursor === 1, "open on the current built-in preset, after the user one: " + studio.presetMenu.cursor)
+          studio.presetMenu.keyPressed(Qt.Key_Up)
+          expect(studio.presetMenu.cursor === 0, "Up reaches Your presets: " + studio.presetMenu.cursor)
+          studio.presetMenu.keyPressed(Qt.Key_Down)
+          expect(studio.presetMenu.cursor === 1, "Down goes back to Built-in")
+          studio.presetMenu.keyPressed(Qt.Key_Home)
+          capture("studio-user-presets", function() {
+            studio.presetMenu.keyPressed(Qt.Key_Return)
+            expect(!studio.presetMenu.visible, "picked and closed")
+            expectDraft('{"preset":"zen","background":{"dim":0.6},"userPreset":"calm"}')
+            var row = find(studio.library, "studioPresetButton")
+            expect(row.text === FoamyI18n.t("studio.preset", "Calm <b>x</b>") && row.detail === "", "the row names it: " + row.text)
+            expect(studio.linkedPreset && studio.linkedPreset.id === "calm" && !studio.presetChanged, "based on it, unchanged")
+            studio.undo()
+            expectDraft('{"preset":"foamy"}')
+            next()
+          })
+        })
+      } },
+    { name: "user presets: Apply on a built-in preset with changes asks for a name", wait: 0, run: function(next) {
+        reset()
+        studio.commit({ preset: "corner", background: { dim: 0.5 } })
+        waitFor(settled, "the checker", function() {
+          var before = fakeCalls()
+          studio.apply()
+          var field = nameField()
+          var expected = FoamyI18n.t("studio.presetName.default", studio.presetLabel("corner"))
+          expect(studio.nameAsked === "new" && find(studio, "studioNameDialog").visible && studio.questionOpen, "the name question")
+          expect(field.field.text === expected, "prefilled: " + field.field.text + " vs " + expected)
+          expect(field.field.inputActiveFocus, "the name field has the keyboard")
+          expect(find(studio, "studioNamePlain").visible, "Apply without saving a preset is offered")
+          field.field.text = "   "
+          expect(studio.nameProblem !== "" && !find(studio, "studioNameSave").enabled, "an empty name can't be saved")
+          field.field.text = expected
+          capture("studio-preset-name", function() {
+            expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && studio.nameAsked === "", "Esc cancels")
+            expectDraft('{"preset":"corner","background":{"dim":0.5}}')
+            expect(fakeCalls() === before && studio.unapplied, "nothing sent, the draft kept")
+            studio.apply()
+            nameField().field.text = "  Mine ✓ نمط  "
+            find(studio, "studioNameSave").clicked()
+            waitFor(savingDone, "the save and apply", function() {
+              expect(fakeCalls() - before === 2, (fakeCalls() - before) + " calls")
+              var save = fakeCall(fakeCalls() - 1), apply = fakeCall(fakeCalls())
+              var item = JSON.parse(save[2])
+              expect(save[0] === "foamy.lock" && save[1] === "savePreset" && save.length === 3, "savePreset first: " + json(save))
+              expect(item.name === "Mine ✓ نمط" && Layout.userPresetIdError(item.id) === ""
+                && JSON.stringify(item.look) === '{"preset":"corner","background":{"dim":0.5}}', "the item: " + save[2])
+              expect(apply[1] === "saveLook" && JSON.parse(apply[2]).userPreset === item.id
+                && JSON.stringify(JSON.parse(apply[2])) === JSON.stringify({ preset: "corner", background: { dim: 0.5 }, userPreset: item.id }),
+                "then saveLook with the link: " + apply[2])
+              expect(noticeIs(FoamyI18n.t("studio.applied"), "ok"), "applied: " + json(studio.notice))
+              expect(studio.linkedPreset && studio.linkedPreset.id === item.id && studio.userPresets[0].id === item.id, "the draft is based on it")
+              expect(Draft.linkOf(studio.savedDraft) === item.id && !studio.unapplied, "the saved look has the link")
+              test.saved.mine = item.id
+              next()
+            })
+          })
+        })
+      } },
+    { name: "user presets: Apply on a user preset with changes updates it", wait: 0, run: function(next) {
+        studio.commit(Draft.setBackground(studio.draft, "dim", 0.65))
+        expect(Draft.linkOf(studio.draft) === test.saved.mine && studio.presetChanged, "an edit keeps the link")
+        expect(find(studio.library, "studioPresetButton").detail === FoamyI18n.t("studio.edited"), "edited shows")
+        waitFor(settled, "the checker", function() {
+          var before = fakeCalls()
+          studio.apply()
+          expect(studio.nameAsked === "", "no name asked")
+          waitFor(savingDone, "the update and apply", function() {
+            var save = fakeCall(fakeCalls() - 1)
+            var item = JSON.parse(save[2])
+            expect(fakeCalls() - before === 2 && item.id === test.saved.mine && item.name === "Mine ✓ نمط"
+              && item.look.background.dim === 0.65, "the same preset, updated: " + save[2])
+            expect(fakeCall(fakeCalls())[1] === "saveLook" && studio.userPresets[0].look.background.dim === 0.65, "then applied")
+            next()
+          })
+        })
+      } },
+    { name: "user presets: a refused save stops before Apply", wait: 0, run: function(next) {
+        var modes = ["full", "too-large", "write-failed"]
+        var round = function(i) {
+          if (i === modes.length) {
+            setPresetMode("ok")
+            next()
+            return
+          }
+          setPresetMode(modes[i])
+          studio.commit(Draft.setBackground(studio.draft, "dim", 0.7 + i / 100))
+          var saved = studio.savedDraft
+          waitFor(settled, "the checker", function() {
+            var before = fakeCalls()
+            studio.apply()
+            waitFor(savingDone, modes[i], function() {
+              expect(fakeCalls() - before === 1 && fakeCall(fakeCalls())[1] === "savePreset", modes[i] + ": only savePreset")
+              expect(noticeIs(FoamyI18n.t("studio.result." + modes[i]), "error"), modes[i] + ": " + json(studio.notice))
+              expect(Draft.same(studio.savedDraft, saved) && studio.unapplied && studio.canApply, modes[i] + ": nothing saved")
+              round(i + 1)
+            })
+          })
+        }
+        round(0)
+      } },
+    { name: "user presets: Save as new", wait: 0, run: function(next) {
+        studio.presetMenu.open()
+        find(studio.presetMenu, "studioPresetSaveNew").clicked()
+        expect(studio.nameAsked === "copy" && !studio.presetMenu.visible && !find(studio, "studioNamePlain").visible, "the name question, no plain apply")
+        expect(nameField().field.text === FoamyI18n.t("studio.presetName.default", "Mine ✓ نمط"), "prefilled: " + nameField().field.text)
+        nameField().field.text = "Second"
+        var before = fakeCalls()
+        // Enter in the field saves.
+        nameField().field.accepted()
+        waitFor(savingDone, "the save and apply", function() {
+          var item = JSON.parse(fakeCall(fakeCalls() - 1)[2])
+          expect(fakeCalls() - before === 2 && item.id !== test.saved.mine && item.name === "Second", "a new preset: " + json(item))
+          expect(studio.userPresets.length === 3 && studio.userPresets[0].id === item.id && studio.linkedPreset.id === item.id, "first, and the draft is based on it")
+          test.saved.second = item.id
+          next()
+        })
+      } },
+    { name: "user presets: rename", wait: 0, run: function(next) {
+        studio.presetMenu.open()
+        find(studio.presetMenu, "studioUserPresetRename-" + test.saved.second).clicked()
+        expect(studio.nameAsked === "rename" && nameField().field.text === "Second", "rename asks, with the name")
+        expect(find(studio, "studioNameSave").text === FoamyI18n.t("studio.presetName.rename"), "the button says rename")
+        nameField().field.text = "Zweite"
+        var before = fakeCalls()
+        find(studio, "studioNameSave").clicked()
+        waitFor(savingDone, "the rename", function() {
+          var call = fakeCall(fakeCalls())
+          expect(fakeCalls() - before === 1 && json(call) === json(["foamy.lock", "renamePreset", test.saved.second, "Zweite"]), "renamePreset: " + json(call))
+          expect(noticeIs(FoamyI18n.t("studio.presets.done.rename"), "ok"), "renamed: " + json(studio.notice))
+          expect(studio.userPresets[0].name === "Zweite" && find(studio.library, "studioPresetButton").text === FoamyI18n.t("studio.preset", "Zweite"), "the new name shows")
+          // F2 on the menu's cursor, and Esc.
+          studio.presetMenu.open()
+          studio.presetMenu.keyPressed(Qt.Key_Home)
+          studio.presetMenu.keyPressed(Qt.Key_F2)
+          expect(studio.nameAsked === "rename" && studio.nameTarget === test.saved.second, "F2 renames")
+          studio.answerName("cancel")
+          expect(fakeCalls() === before + 1, "nothing sent")
+          next()
+        })
+      } },
+    { name: "user presets: delete asks first", wait: 0, run: function(next) {
+        studio.presetMenu.open()
+        find(studio.presetMenu, "studioUserPresetDelete-" + test.saved.second).clicked()
+        var dialog = find(studio, "studioDeleteDialog")
+        expect(studio.deleteAsked === test.saved.second && dialog.visible && find(studio, "studioDeleteCancel").activeFocus, "the question, Cancel first")
+        expect(dialog.title === FoamyI18n.t("studio.presets.deleteTitle", "Zweite"), "names it: " + dialog.title)
+        var before = fakeCalls()
+        expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && studio.deleteAsked === "" && fakeCalls() === before, "Esc keeps it")
+        studio.presetMenu.open()
+        studio.presetMenu.keyPressed(Qt.Key_Home)
+        studio.presetMenu.keyPressed(Qt.Key_Delete)
+        expect(studio.deleteAsked === test.saved.second, "Delete asks too")
+        find(studio, "studioDeleteConfirm").clicked()
+        waitFor(savingDone, "the delete", function() {
+          expect(json(fakeCall(fakeCalls())) === json(["foamy.lock", "deletePreset", test.saved.second]), "deletePreset")
+          expect(studio.userPresets.length === 2 && !Layout.findUserPreset(studio.userPresets, test.saved.second), "gone from the list")
+          expect(studio.linkedPreset === null && studio.basisLabel === studio.presetLabel("corner"), "the draft keeps its look, without the link")
+          next()
+        })
+      } },
+    { name: "user presets: picking one with changes, and Reset to it", wait: 0, run: function(next) {
+        reset()
+        studio.commit({ preset: "foamy", background: { dim: 0.5 } })
+        studio.requestPreset("user:calm")
+        expect(studio.pendingPreset === "user:calm" && !find(studio, "studioPresetKeep").visible
+          && find(studio, "studioPresetReplace").activeFocus, "only replace: " + studio.pendingPreset)
+        studio.answerPreset(false)
+        expectDraft('{"preset":"zen","background":{"dim":0.6},"userPreset":"calm"}')
+        studio.commit(Draft.setBackground(studio.draft, "blur", 0.5))
+        studio.requestReset()
+        var preset = find(studio, "studioResetPreset")
+        expect(preset.enabled && preset.text === FoamyI18n.t("studio.reset.preset", "Calm <b>x</b>"), "Reset offers the user preset: " + preset.text)
+        studio.answerReset("preset")
+        expectDraft('{"preset":"zen","background":{"dim":0.6},"userPreset":"calm"}')
+        // A built-in preset drops the link.
+        studio.requestPreset("dock")
+        expectDraft('{"preset":"dock"}')
+        next()
+      } },
+    { name: "user presets: back to the plain entry", wait: 0, run: function(next) {
+        reset()
+        writeFile(shellJson, JSON.stringify({ version: 1, plugins: [{ id: "foamy.lock", timeFormat: "12h" }] }) + "\n")
+        waitFor(function() { return studio.sources.userPresets.length === 0 && studio.sources.userPresetsInvalid === 0 }, "no presets", function() {
+          studio.presetMenu.open()
+          expect(find(studio.presetMenu, "studioPresetsEmpty").visible && studio.presetMenu.cursor === 0, "the empty note")
+          studio.presetMenu.close()
+          next()
+        })
+      } }
+    ]
+  }
 
   // Each step: a name, how long to wait before it, and its body, which
   // calls next() when it is done (captures finish asynchronously).
@@ -1224,6 +1457,7 @@ Item {
         expect(studio.unapplied && Draft.same(studio.savedDraft, { preset: "foamy" }), "nothing saved")
         next()
       } },
+  ]).concat(userPresetSteps()).concat([
     { name: "apply needs a change and no problem on a screen", wait: 0, run: function(next) {
         reset()
         expect(!studio.canApply && !find(studio, "studioApply").enabled, "nothing to apply")

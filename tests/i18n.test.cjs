@@ -40,7 +40,11 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['NO_SESSION_BUS', 'PORTAL_UNAVAILABLE', 'PORTAL_FAILED', 'UNSUPPORTED'].map(c => 'pick.' + c),
   // Apply and Preview results (StudioWindow.resultText).
   ...['invalid-json', 'unsupported', 'no-entry', 'unexpected', 'not-ready', 'not-running', 'target-not-found', 'function-not-found',
-    'no-omarchy-shell', 'failed', 'locked.apply', 'locked.preview'].map(r => 'result.' + r)];
+    'no-omarchy-shell', 'failed', 'locked.apply', 'locked.preview', 'write-failed', 'full', 'too-large', 'unknown-preset',
+    'not-responding.preset'].map(r => 'result.' + r),
+  // User preset operations (StudioWindow.resultText) and the tips (Tips.qml).
+  ...['save', 'rename', 'delete'].map(op => 'presets.done.' + op),
+  ...['mugshot', 'library', 'drag', 'keys', 'look', 'presets', 'preview', 'shortcuts'].map(t => 'tip.' + t)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);
