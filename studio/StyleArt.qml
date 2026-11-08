@@ -182,6 +182,7 @@ Item {
     case "decor:island": return decorIsland
     case "decor:frame": return decorFrame
     case "decor:card": return decorCard
+    case "decor:around": return decorAround
     }
     return generic
   }
@@ -1274,6 +1275,37 @@ Item {
           color: "transparent"
           border.width: Math.max(1.5, root.u * 1.2)
           border.color: root.ink
+        }
+        Field { anchors.centerIn: parent }
+      }
+    }
+  }
+  // A box around one module (the media pill here), as its background.
+  Component {
+    id: decorAround
+    Item {
+      Screen {
+        Rectangle {
+          id: aroundBox
+          anchors.left: parent.left
+          anchors.leftMargin: root.u * 3
+          anchors.bottom: parent.bottom
+          anchors.bottomMargin: root.u * 3
+          width: parent.width * 0.42
+          height: root.u * 8
+          radius: height / 2
+          color: root.soft
+          border.width: Math.max(1, root.u * 0.6)
+          border.color: Commons.Color.accent
+        }
+        Rectangle {
+          anchors.verticalCenter: aroundBox.verticalCenter
+          anchors.left: aroundBox.left
+          anchors.leftMargin: root.u * 1.5
+          width: root.u * 5
+          height: width
+          radius: width / 2
+          color: Qt.alpha(root.ink, 0.5)
         }
         Field { anchors.centerIn: parent }
       }

@@ -11,8 +11,13 @@ import "Draft.js" as Draft
 //   Animation), then what that source needs: the image (picture or video),
 //   the colour (theme swatches and a #rrggbb field) or the animation (tiles
 //   drawn by the lock's own code, one per Layout.DRAWN_SOURCES); then the
-//   blur and the decoration (drawn tiles);
+//   blur;
 // - "glass": the dim (in 1 % steps), and the glass's opacity and tint;
+// - "shapes": the look's shapes in drawing order (select, move up or
+//   down, remove), Add shape (the templates' drawings, and a box around
+//   the selected module), and the selected shape's keys: what it wraps,
+//   its shape (padding, corners, width, edge, size, inset, style), fill,
+//   border and whether it is the background of the modules inside;
 // - "look": both, for the look as a whole (nothing is selected: a click
 //   beside the lock on the canvas, or Esc).
 // Values are the lock's 0–1 amounts shown as percentages, within its
@@ -27,7 +32,8 @@ FocusScope {
   readonly property bool backgroundShown: page === "background" || page === "look"
   readonly property bool glassShown: page === "glass" || page === "look"
   readonly property string title: page === "look" ? FoamyI18n.t("studio.look")
-    : page === "glass" ? FoamyI18n.t("studio.glassDim") : FoamyI18n.t("studio.background")
+    : page === "glass" ? FoamyI18n.t("studio.glassDim")
+    : page === "shapes" ? FoamyI18n.t("studio.shapes") : FoamyI18n.t("studio.background")
 
   readonly property var look: app ? app.look : LockLayout.defaults()
   readonly property var background: look.background
@@ -585,20 +591,6 @@ FocusScope {
           onCommitted: function(v) { scene.commit(Draft.setBackground(scene.app.draft, "blur", v)) }
         }
 
-        SectionLabel {
-          text: FoamyI18n.t("studio.decoration")
-          topPadding: FoamyStyle.gap
-        }
-        StyleTiles {
-          objectName: "studioDecor"
-          width: parent.width
-          element: "decor"
-          title: FoamyI18n.t("studio.decoration")
-          options: LockLayout.DECORATIONS
-          value: scene.background.decor || "none"
-          labelFor: function(name) { return FoamyI18n.t("studio.decor." + name) }
-          onPicked: function(decor) { scene.commit(Draft.setBackground(scene.app.draft, "decor", decor)) }
-        }
       }
 
       // --- glass and dim ----------------------------------------------------
@@ -666,7 +658,503 @@ FocusScope {
         }
       }
 
+      // --- shapes ------------------------------------------------------------
+      Column {
+        objectName: "studioSceneShapesSection"
+        width: parent.width
+        spacing: FoamyStyle.gap
+        visible: scene.page === "shapes"
+
+        // The list, in drawing order (frosted shapes are drawn first on the lock).
+        Column {
+          id: shapeList
+          objectName: "studioShapeList"
+          width: parent.width
+          spacing: FoamyStyle.gapTiny
+          Accessible.role: Accessible.List
+          Accessible.name: FoamyI18n.t("studio.shapes")
+
+          Repeater {
+            model: scene.shapes.length
+            RowLayout {
+              id: shapeRow
+              required property int index
+              width: shapeList.width
+              spacing: FoamyStyle.gapTiny
+              StudioButton {
+                objectName: "studioShape-" + shapeRow.index
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignLeft
+                text: scene.shapeText(shapeRow.index)
+                checked: scene.shapeIndex === shapeRow.index
+                Accessible.role: Accessible.ListItem
+                onClicked: scene.app.selectShape(shapeRow.index)
+              }
+              IconButton {
+                objectName: "studioShapeUp-" + shapeRow.index
+                icon: "chevron-up"
+                name: FoamyI18n.t("studio.shape.up")
+                enabled: shapeRow.index > 0
+                onClicked: scene.moveShape(shapeRow.index, shapeRow.index - 1)
+              }
+              IconButton {
+                objectName: "studioShapeDown-" + shapeRow.index
+                icon: "chevron-down"
+                name: FoamyI18n.t("studio.shape.down")
+                enabled: shapeRow.index < scene.shapes.length - 1
+                onClicked: scene.moveShape(shapeRow.index, shapeRow.index + 1)
+              }
+              IconButton {
+                objectName: "studioShapeRemove-" + shapeRow.index
+                icon: "trash"
+                name: FoamyI18n.t("studio.shape.remove")
+                onClicked: scene.removeShape(shapeRow.index)
+              }
+            }
+          }
+        }
+        PaneNote {
+          objectName: "studioShapesEmpty"
+          visible: scene.shapes.length === 0
+          text: FoamyI18n.t("studio.shapes.empty")
+        }
+
+        SectionLabel {
+          text: FoamyI18n.t("studio.shape.add")
+          topPadding: FoamyStyle.gap
+        }
+        StyleTiles {
+          objectName: "studioAddShape"
+          width: parent.width
+          element: "decor"
+          title: FoamyI18n.t("studio.shape.add")
+          options: Draft.SHAPE_CHOICES
+          value: ""
+          enabled: scene.shapes.length < LockLayout.SHAPE_LIMITS.count
+          opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+          labelFor: function(choice) { return scene.choiceLabel(choice) }
+          onPicked: function(choice) { scene.addShape(choice) }
+        }
+        PaneNote {
+          objectName: "studioAddShapeNote"
+          text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full")
+            : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickModule")
+            : scene.addRefused !== "" ? FoamyI18n.t("studio.shape.noRoom", scene.choiceLabel(scene.addRefused))
+            : ""
+        }
+
+        // --- the selected shape -------------------------------------------------
+        Column {
+          objectName: "studioShapeInspector"
+          width: parent.width
+          spacing: FoamyStyle.gap
+          visible: scene.shape !== null
+
+          SectionLabel {
+            text: scene.shape ? scene.kindLabel(scene.shapeKind) : ""
+            topPadding: FoamyStyle.sectionGap
+          }
+          PaneNote {
+            objectName: "studioShapeBand"
+            visible: scene.shape !== null && LockLayout.bottomBand([scene.shape])
+            text: FoamyI18n.t("studio.shape.band")
+          }
+
+          // What it wraps.
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind !== "frame"
+            text: FoamyI18n.t("studio.shape.wraps")
+            Segmented {
+              objectName: "studioShapeWrap"
+              name: FoamyI18n.t("studio.shape.wraps")
+              options: ["zones", "modules"].concat(scene.shapeKind === "panel" ? ["none"] : [])
+                .map(function(mode) { return { value: mode, label: FoamyI18n.t("studio.shape.wrap." + mode) } })
+              value: Draft.wrapMode(scene.shape)
+              onPicked: function(mode) { scene.commit(Draft.setWrapMode(scene.app.draft, scene.shapeIndex, mode)) }
+            }
+          }
+          // In a RowLayout, so it starts on the reading start.
+          RowLayout {
+            width: parent.width
+            visible: Draft.wrapMode(scene.shape) === "zones"
+            ZonePicker {
+              objectName: "studioShapeZones"
+              name: FoamyI18n.t("studio.shape.zones")
+              zones: scene.shape && scene.shape.wrap && scene.shape.wrap.zones ? scene.shape.wrap.zones : []
+              onPicked: function(zone) {
+                var on = scene.shape.wrap.zones.indexOf(zone) === -1
+                scene.commit(Draft.toggleWrapped(scene.app.draft, scene.shapeIndex, zone, on))
+              }
+            }
+            Item { Layout.fillWidth: true }
+          }
+          Column {
+            objectName: "studioShapeModules"
+            width: parent.width
+            visible: Draft.wrapMode(scene.shape) === "modules"
+            Accessible.role: Accessible.List
+            Accessible.name: FoamyI18n.t("studio.shape.modules")
+            Repeater {
+              model: Draft.DISPLAY_ORDER
+              StudioToggle {
+                required property string modelData
+                readonly property var wrapped: scene.shape && scene.shape.wrap && scene.shape.wrap.modules ? scene.shape.wrap.modules : []
+                objectName: "studioShapeModule-" + modelData
+                width: parent.width
+                text: scene.app ? scene.app.moduleLabel(modelData) : modelData
+                checked: wrapped.indexOf(modelData) !== -1
+                // The last one stays.
+                enabled: !checked || wrapped.length > 1
+                opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+                onToggled: scene.commit(Draft.toggleWrapped(scene.app.draft, scene.shapeIndex, modelData, !checked))
+              }
+            }
+          }
+
+          // Its shape.
+          SectionLabel {
+            text: FoamyI18n.t("studio.shape.shape")
+            topPadding: FoamyStyle.gap
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind === "panel"
+            text: FoamyI18n.t("studio.shape.edge")
+            Segmented {
+              objectName: "studioShapeEdge"
+              name: FoamyI18n.t("studio.shape.edge")
+              options: LockLayout.SHAPE_EDGES.map(function(edge) { return { value: edge, label: FoamyI18n.t("studio.shape.edge." + edge) } })
+              value: scene.shape && scene.shape.edge ? scene.shape.edge : ""
+              onPicked: function(edge) { scene.setShape("edge", edge) }
+            }
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind === "frame"
+            text: FoamyI18n.t("studio.shape.style")
+            Segmented {
+              objectName: "studioShapeStyle"
+              name: FoamyI18n.t("studio.shape.style")
+              options: LockLayout.FRAME_STYLES.map(function(style) { return { value: style, label: FoamyI18n.t("studio.shape.style." + style) } })
+              value: scene.shapeKind === "frame" ? scene.shapeValue("style") : ""
+              onPicked: function(style) { scene.setShape("style", style) }
+            }
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind === "box"
+            text: FoamyI18n.t("studio.shape.padX")
+            StepField {
+              objectName: "studioShapePadX"
+              name: FoamyI18n.t("studio.shape.padX")
+              value: scene.shapeKind === "box" ? scene.shapeValue("pad").x : 0
+              onCommitted: function(v) { scene.setShape("pad.x", v) }
+            }
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind === "box"
+            text: FoamyI18n.t("studio.shape.padY")
+            StepField {
+              objectName: "studioShapePadY"
+              name: FoamyI18n.t("studio.shape.padY")
+              value: scene.shapeKind === "box" ? scene.shapeValue("pad").y : 0
+              onCommitted: function(v) { scene.setShape("pad.y", v) }
+            }
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind === "panel"
+            text: FoamyI18n.t("studio.shape.pad")
+            StepField {
+              objectName: "studioShapePad"
+              name: FoamyI18n.t("studio.shape.pad")
+              value: scene.shapeKind === "panel" ? scene.shapeValue("pad") : 0
+              onCommitted: function(v) { scene.setShape("pad", v) }
+            }
+          }
+          StudioToggle {
+            objectName: "studioShapeAcross"
+            width: parent.width
+            visible: scene.shapeKind === "box"
+            text: FoamyI18n.t("studio.shape.across")
+            checked: scene.shapeKind === "box" && scene.shapeValue("stretch") === "across"
+            onToggled: scene.setShape("stretch", checked ? null : "across")
+          }
+          // A panel's size: each bound off, a percentage of the screen across
+          // it, or pixels.
+          Repeater {
+            model: scene.shapeKind === "panel" ? ["min", "max", "fillPast"] : []
+            Column {
+              id: boundRow
+              required property string modelData
+              width: parent ? parent.width : 0
+              spacing: FoamyStyle.gapTiny
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                text: FoamyI18n.t("studio.shape." + boundRow.modelData)
+                horizontalAlignment: Text.AlignLeft
+                color: FoamyPalette.secondaryText
+                font.family: FoamyStyle.fontFamily
+                font.pixelSize: FoamyStyle.font.body
+                wrapMode: Text.Wrap
+              }
+              // A RowLayout, so it starts on the reading start.
+              RowLayout {
+                width: parent.width
+                spacing: FoamyStyle.gapSmall
+                StepField {
+                  objectName: "studioShapeSize-" + boundRow.modelData
+                  visible: scene.boundUnit(boundRow.modelData) !== "off"
+                  name: FoamyI18n.t("studio.shape." + boundRow.modelData)
+                  value: scene.boundValue(boundRow.modelData)
+                  onCommitted: function(v) { scene.setBound(boundRow.modelData, scene.boundUnit(boundRow.modelData), v) }
+                }
+                Segmented {
+                  objectName: "studioShapeUnit-" + boundRow.modelData
+                  name: FoamyI18n.t("studio.shape." + boundRow.modelData)
+                  options: [{ value: "off", label: FoamyI18n.t("studio.shape.off") }, { value: "screen", label: "%" }, { value: "px", label: "px" }]
+                  value: scene.boundUnit(boundRow.modelData)
+                  onPicked: function(unit) { if (unit !== scene.boundUnit(boundRow.modelData)) scene.setBound(boundRow.modelData, unit) }
+                }
+                Item { Layout.fillWidth: true }
+              }
+            }
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shape !== null && (scene.shapeKind !== "box" || scene.shapeValue("stretch") === "across")
+            text: FoamyI18n.t("studio.shape.inset")
+            StepField {
+              objectName: "studioShapeInset"
+              name: FoamyI18n.t("studio.shape.inset")
+              value: scene.shape ? scene.shapeValue("inset") : 0
+              onCommitted: function(v) { scene.setShape("inset", v) }
+            }
+          }
+          StudioToggle {
+            objectName: "studioShapeRadiusAuto"
+            width: parent.width
+            visible: scene.shapeKind === "box"
+            text: FoamyI18n.t("studio.shape.radiusAuto")
+            checked: scene.shapeKind === "box" && scene.shapeValue("radius") === "auto"
+            onToggled: scene.setShape("radius", checked ? null : "auto")
+          }
+          StudioSlider {
+            objectName: "studioShapeRadius"
+            width: parent.width
+            visible: scene.shape !== null
+            enabled: !(scene.shapeKind === "box" && scene.shapeValue("radius") === "auto")
+            label: FoamyI18n.t("studio.shape.radius")
+            from: 0
+            to: scene.shape ? LockLayout.SHAPE_LIMITS.radius[scene.shapeKind].max : 1
+            stepSize: 1
+            value: scene.shape && scene.shapeValue("radius") !== "auto" ? scene.shapeValue("radius") : scene.shapeDefaults.radius || 0
+            valueText: FoamyI18n.t("studio.px", FoamyI18n.number(shown, 0))
+            onMoved: function(v) { scene.previewShape("radius", v) }
+            onCommitted: function(v) { scene.setShape("radius", v) }
+          }
+
+          // Its fill.
+          SectionLabel {
+            visible: scene.shapeKind !== "frame"
+            text: FoamyI18n.t("studio.shape.fill")
+            topPadding: FoamyStyle.gap
+          }
+          Segmented {
+            objectName: "studioShapeFill"
+            visible: scene.shapeKind !== "frame"
+            name: FoamyI18n.t("studio.shape.fill")
+            options: LockLayout.SHAPE_FILLS.map(function(color) { return { value: color, label: FoamyI18n.t("studio.shape.fill." + color) } })
+            value: scene.shape ? scene.fillValue("color") : ""
+            onPicked: function(color) { scene.setShape("fill.color", color) }
+          }
+          PaneNote {
+            objectName: "studioShapeFillNote"
+            visible: scene.shapeKind !== "frame" && scene.fillValue("color") === "auto"
+            text: FoamyI18n.t("studio.shape.fill.autoHint")
+          }
+          StudioSlider {
+            objectName: "studioShapeOpacity"
+            width: parent.width
+            visible: scene.shapeKind !== "frame"
+            label: FoamyI18n.t("studio.opacity")
+            from: 0
+            to: 1
+            // 1 %: the templates use 0.55, 0.72 and 0.82.
+            stepSize: 0.01
+            value: scene.shape ? scene.fillValue("opacity") : 0
+            valueText: scene.percent(shown)
+            onMoved: function(v) { scene.previewShape("fill.opacity", v) }
+            onCommitted: function(v) { scene.setShape("fill.opacity", v) }
+          }
+          StudioToggle {
+            objectName: "studioShapeFrost"
+            width: parent.width
+            visible: scene.shapeKind !== "frame"
+            text: FoamyI18n.t("studio.shape.frost")
+            checked: scene.shape !== null && scene.fillValue("frost") === true
+            onToggled: scene.setShape("fill.frost", checked ? null : true)
+          }
+          PaneNote {
+            objectName: "studioShapeFrostNote"
+            visible: scene.shapeKind !== "frame" && scene.fillValue("frost") === true
+            text: FoamyI18n.t("studio.shape.frostNote")
+          }
+
+          // Its border.
+          SectionLabel {
+            visible: scene.shapeKind !== "frame"
+            text: FoamyI18n.t("studio.shape.border")
+            topPadding: FoamyStyle.gap
+          }
+          Segmented {
+            objectName: "studioShapeBorder"
+            visible: scene.shapeKind !== "frame"
+            name: FoamyI18n.t("studio.shape.border")
+            options: ["none"].concat(LockLayout.SHAPE_BORDERS).map(function(color) { return { value: color, label: FoamyI18n.t("studio.shape.border." + color) } })
+            value: !scene.shape ? "" : scene.borderValue("width") === 0 ? "none" : scene.borderValue("color")
+            onPicked: function(color) {
+              if (color === "none") return scene.setShape("border.width", 0)
+              var next = Draft.setShape(scene.app.draft, scene.shapeIndex, "border.color", color)
+              if (scene.borderValue("width") === 0) next = Draft.setShape(next, scene.shapeIndex, "border.width", null)
+              scene.commit(next)
+            }
+          }
+          Labelled {
+            width: parent.width
+            visible: scene.shapeKind !== "frame" && scene.borderValue("width") > 0
+            text: FoamyI18n.t("studio.shape.borderWidth")
+            StepField {
+              objectName: "studioShapeBorderWidth"
+              name: FoamyI18n.t("studio.shape.borderWidth")
+              value: scene.shape ? scene.borderValue("width") : 0
+              onCommitted: function(v) { if (v >= 1) scene.setShape("border.width", v) }
+            }
+          }
+          StudioToggle {
+            objectName: "studioShapeInner"
+            width: parent.width
+            visible: scene.shapeKind === "panel" && scene.borderValue("width") > 0
+            text: FoamyI18n.t("studio.shape.inner")
+            checked: scene.shapeKind === "panel" && scene.borderValue("sides") === "inner"
+            onToggled: scene.setShape("border.sides", checked ? null : "inner")
+          }
+
+          // The modules' only background.
+          StudioToggle {
+            objectName: "studioShapeAbsorb"
+            width: parent.width
+            visible: scene.shapeKind !== "frame"
+            text: FoamyI18n.t("studio.shape.absorb")
+            checked: scene.shape !== null && scene.shapeValue("absorb") === true
+            onToggled: scene.setShape("absorb", checked ? null : true)
+          }
+          PaneNote {
+            objectName: "studioShapeAbsorbNote"
+            visible: scene.shapeKind !== "frame" && scene.shapeValue("absorb") === true
+            text: FoamyI18n.t("studio.shape.absorbNote")
+          }
+        }
+      }
+
       Item { width: 1; height: FoamyStyle.gap }
+    }
+  }
+
+  // --- shapes -----------------------------------------------------------------
+  readonly property var shapes: look.background.shapes || []
+  readonly property int shapeIndex: app && app.selectedShape >= 0 && app.selectedShape < shapes.length ? app.selectedShape : -1
+  readonly property var shape: shapeIndex >= 0 ? shapes[shapeIndex] : null
+  readonly property string shapeKind: shape ? shape.kind : ""
+  readonly property var shapeDefaults: shape ? LockLayout.SHAPE_DEFAULTS[shape.kind] : ({})
+  // A template that had no room, or "around" without a module ("" when none).
+  property string addRefused: ""
+
+  function shapeValue(key) { return shape && shape[key] !== undefined ? shape[key] : shapeDefaults[key] }
+  function fillValue(key) {
+    var fill = shape && shape.fill ? shape.fill : {}
+    return fill[key] !== undefined ? fill[key] : LockLayout.SHAPE_FILL_DEFAULTS[key]
+  }
+  function borderValue(key) {
+    var border = shape && shape.border ? shape.border : {}
+    return border[key] !== undefined ? border[key] : LockLayout.SHAPE_BORDER_DEFAULTS[key]
+  }
+  function setShape(path, value) { commit(Draft.setShape(app.draft, shapeIndex, path, value)) }
+  function previewShape(path, value) { preview(Draft.setShape(app.draft, shapeIndex, path, value)) }
+  function kindLabel(kind) { return FoamyI18n.t("studio.shape.kind." + kind) }
+  // A shape in words: "Box around Clock, Date", "Frame: Glow", …
+  function shapeText(index) {
+    var item = shapes[index]
+    if (!item) return ""
+    if (item.kind === "frame") return FoamyI18n.t("studio.shape.frameText", FoamyI18n.t("studio.shape.style." + (item.style || "auto")))
+    if (!item.wrap) return FoamyI18n.t("studio.shape.alone", [kindLabel(item.kind), FoamyI18n.t("studio.shape.edge." + item.edge).toLowerCase()])
+    var names = Draft.wrappedModules(look, item)
+    if (names.length === 0) return FoamyI18n.t("studio.shape.aroundNothing", kindLabel(item.kind))
+    return FoamyI18n.t("studio.shape.around", [kindLabel(item.kind), names.map(function(name) { return app.moduleLabel(name) }).join(", ")])
+  }
+  function choiceLabel(choice) {
+    if (choice !== "around") return FoamyI18n.t("studio.decor." + choice)
+    return app && app.selected ? FoamyI18n.t("studio.decor.aroundModule", app.moduleLabel(app.selected)) : FoamyI18n.t("studio.decor.around")
+  }
+  // Add a template (or a box around the selected module) and select it.
+  function addShape(choice) {
+    var module = choice === "around" && app ? app.selected : ""
+    if (!Draft.canAddShape(look, choice, module)) {
+      addRefused = choice
+      return
+    }
+    addRefused = ""
+    var at = shapes.length
+    commit(Draft.addShape(app.draft, choice, module))
+    app.selectShape(at)
+  }
+  function moveShape(index, to) {
+    commit(Draft.moveShape(app.draft, index, to))
+    app.selectShape(to)
+  }
+  function removeShape(index) {
+    commit(Draft.removeShape(app.draft, index))
+    app.selectShape(Math.min(index, shapes.length - 1))
+  }
+  // A size bound's unit: "off", "screen" (a percentage) or "px".
+  function boundUnit(bound) {
+    var size = shape && shape.size ? shape.size : {}
+    return !size[bound] ? "off" : size[bound].px !== undefined ? "px" : "screen"
+  }
+  function boundValue(bound) {
+    var unit = boundUnit(bound)
+    return unit === "off" ? 0 : unit === "px" ? shape.size[bound].px : Math.round(shape.size[bound].screen * 100)
+  }
+  readonly property var boundStarts: ({ min: { screen: 0.3, px: 400 }, max: { screen: 0.5, px: 800 }, fillPast: { screen: 0.6, px: 1200 } })
+  function setBound(bound, unit, value) {
+    if (unit === "off") return setShape("size." + bound, null)
+    var next = {}
+    next[unit] = value === undefined ? boundStarts[bound][unit] : unit === "screen" ? value / 100 : value
+    setShape("size." + bound, next)
+  }
+
+  // A label on the reading start and a control on the end.
+  component Labelled: RowLayout {
+    property string text: ""
+    default property alias control: slot.data
+    spacing: FoamyStyle.gap
+    Text {
+      textFormat: Text.PlainText
+      Layout.fillWidth: true
+      text: parent.text
+      horizontalAlignment: Text.AlignLeft
+      color: FoamyPalette.secondaryText
+      font.family: FoamyStyle.fontFamily
+      font.pixelSize: FoamyStyle.font.body
+      wrapMode: Text.Wrap
+    }
+    Item {
+      id: slot
+      implicitWidth: childrenRect.width
+      implicitHeight: childrenRect.height
     }
   }
 }

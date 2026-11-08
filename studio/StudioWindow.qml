@@ -64,8 +64,11 @@ FocusScope {
   // A slider's value while it is dragged (shown, not yet committed).
   property var previewDraft: null
   property string selected: "clock"
-  // The inspector pane: "module" (the selection), "background" or "glass".
+  // The inspector pane: "module" (the selection), "background", "glass" or
+  // "shapes" (the look's shapes, and the one selected).
   property string page: "module"
+  // The shape selected on the shapes page (-1: none).
+  property int selectedShape: -1
   property string monitorKey: ""
   readonly property var monitors: monitorList(Quickshell.screens, lockSources.nativeMonitors)
   readonly property var monitor: monitorFor(monitorKey)
@@ -92,7 +95,8 @@ FocusScope {
   readonly property alias presetMenu: presetMenu
   readonly property var lockSettings: lockSources.settings
   readonly property var problems: lockChecker.problems
-  readonly property bool applyBlocked: problems.some(function(problem) { return !problem.reference })
+  // Shape advice (Layout.shapeAdvice) only warns, like a reference size.
+  readonly property bool applyBlocked: problems.some(function(problem) { return !problem.reference && !problem.advice })
   readonly property int changes: Draft.changeCount(draft)
   readonly property var panes: [library, canvasPane, inspectorPane, header]
 
@@ -492,9 +496,32 @@ FocusScope {
     page = "module"
   }
 
+  // The shapes page with shape `index` selected (-1: none); the module
+  // stays the one "Around selected module" wraps.
+  function selectShape(index) {
+    selectedShape = index
+    page = "shapes"
+  }
+
+  // "Wrap in a shape" on a module: a box around it (see Draft.aroundShape),
+  // or the one it has, selected on the shapes page.
+  function wrapModule(name) {
+    var at = Draft.shapeAround(look, name)
+    if (at === -1) {
+      var next = Draft.addShape(draft, "around", name)
+      if (Draft.same(next, draft)) return false
+      at = Draft.shapesOf(look).length
+      commit(next)
+    }
+    selected = name
+    selectShape(at)
+    return true
+  }
+
   // Nothing selected: the inspector shows the look as a whole.
   function deselect() {
     selected = ""
+    selectedShape = -1
     page = "module"
   }
 
@@ -645,13 +672,20 @@ FocusScope {
     case "password-high":
     case "password-missing":
       return FoamyI18n.t("studio.problem." + problem.code, where)
+    // Shape advice: warnings, never a block.
+    case "shape-straddles":
+    case "shape-outside-frame":
+      return FoamyI18n.t("studio.problem." + problem.code, [moduleLabel(names[0] || ""), problem.shape + 1, where])
+    case "frost-overlap":
+    case "shape-empty":
+      return FoamyI18n.t("studio.problem." + problem.code, [problem.shape + 1, where])
     }
     return FoamyI18n.t("studio.problem.other", [problem.code, where])
   }
 
   // The modules to outline on the screen shown.
   function problemNamesFor(key) {
-    for (var i = 0; i < problems.length; i++) if (problems[i].key === key) return problems[i].names
+    for (var i = 0; i < problems.length; i++) if (problems[i].key === key && !problems[i].advice) return problems[i].names
     return []
   }
 
@@ -713,6 +747,11 @@ FocusScope {
     }
     if (key === Qt.Key_Escape && shortcutsOpen) {
       shortcutsOpen = false
+      return true
+    }
+    // Esc on the shapes page: no shape selected.
+    if (key === Qt.Key_Escape && page === "shapes" && selectedShape !== -1) {
+      selectedShape = -1
       return true
     }
     // Esc with nothing else to close: the look as a whole.
@@ -986,7 +1025,9 @@ FocusScope {
             Layout.fillHeight: true
             focus: true
             draft: studio.previewDraft || studio.draft
-            selected: studio.selected
+            // A module or a shape, by the page shown.
+            selected: studio.page === "shapes" ? "" : studio.selected
+            selectedShape: studio.page === "shapes" ? studio.selectedShape : -1
             screenWidth: studio.monitor.width
             screenHeight: studio.monitor.height
             previewState: studio.previewState
@@ -1003,6 +1044,7 @@ FocusScope {
             hideArea: libraryPane
             onEdited: function(next) { studio.commit(next) }
             onSelectRequested: function(name) { studio.selectModule(name) }
+            onShapeSelectRequested: function(index) { studio.selectShape(index) }
             onDeselectRequested: studio.deselect()
           }
 
@@ -1023,7 +1065,9 @@ FocusScope {
 
             Column {
               id: problemColumn
-              readonly property var sorted: studio.problems.slice().sort(function(a, b) { return (a.reference ? 1 : 0) - (b.reference ? 1 : 0) })
+              // Blocking problems first, then reference sizes and shape advice.
+              readonly property var sorted: studio.problems.slice().sort(function(a, b) {
+                return (a.reference || a.advice ? 1 : 0) - (b.reference || b.advice ? 1 : 0) })
               readonly property string summary: sorted.map(function(p) { return studio.problemText(p) }).join("\n")
               x: FoamyStyle.gapLarge
               y: FoamyStyle.gap
@@ -1038,7 +1082,7 @@ FocusScope {
                   text: studio.problemText(modelData)
                   horizontalAlignment: Text.AlignLeft
                   wrapMode: Text.Wrap
-                  color: modelData.reference ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
+                  color: modelData.reference || modelData.advice ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
                   font.family: FoamyStyle.fontFamily
                   font.pixelSize: FoamyStyle.font.bodySmall
                 }
@@ -1090,7 +1134,7 @@ FocusScope {
             visible: !inspectorPage.visible
             focus: visible
             app: studio
-            page: studio.page === "glass" ? "glass" : studio.page === "background" ? "background" : "look"
+            page: ["glass", "background", "shapes"].indexOf(studio.page) !== -1 ? studio.page : "look"
           }
         }
       }

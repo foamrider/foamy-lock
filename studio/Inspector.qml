@@ -9,7 +9,8 @@ import "Model.js" as Model
 // The inspector for the selected module (mockup A, right pane): whether it
 // shows, its style (drawn tiles), size, opacity and glass, its zone, its
 // place in the zone's stack (Move up / Move down in zone), offset (grid
-// steps, pixels at the screen shown) and screens. Every
+// steps, pixels at the screen shown), screens, and "Wrap in a shape" (a box
+// around it that is its background; "Edit its shape" once it has one). Every
 // change is one Draft edit committed through the window (`app`), so
 // undo and redo cover them; a slider drag shows live (app.preview) and
 // commits once on release.
@@ -37,6 +38,8 @@ FocusScope {
   readonly property bool coverStyle: !!item && name === "media" && LockLayout.ARTWORK_STYLES.indexOf(item.style) !== -1
   // Its place in its zone's stack: { at, count } (at -1 while hidden).
   readonly property var zonePlace: item ? Draft.placeInZone(look, name) : ({ at: -1, count: 0 })
+  // The shape around exactly this module, or -1.
+  readonly property int ownShape: item ? Draft.shapeAround(look, name) : -1
 
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.inspector")
@@ -417,6 +420,23 @@ FocusScope {
       PaneNote {
         visible: LockLayout.SCREENS_ELEMENTS.indexOf(inspector.name) !== -1
         text: FoamyI18n.t("studio.screensHint")
+      }
+
+      // A box around it, as its background (Draft.aroundShape), on the
+      // shapes page; once it has one, that one.
+      FoamyButton {
+        objectName: "studioWrapShape"
+        focusable: true
+        width: parent.width
+        text: inspector.ownShape !== -1 ? FoamyI18n.t("studio.shape.editOwn") : FoamyI18n.t("studio.shape.wrapIn")
+        enabled: inspector.ownShape !== -1 || Draft.canAddShape(inspector.look, "around", inspector.name)
+        onClicked: inspector.app.wrapModule(inspector.name)
+        Accessible.name: text
+      }
+      PaneNote {
+        objectName: "studioWrapShapeNote"
+        visible: inspector.ownShape === -1 && !Draft.canAddShape(inspector.look, "around", inspector.name)
+        text: FoamyI18n.t("studio.shape.full")
       }
 
       Item { width: 1; height: FoamyStyle.gap }

@@ -38,7 +38,7 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['omarchy', 'picture', 'color', 'animation'].map(s => 'source.' + s), ...Layout.THEME_COLORS.map(c => 'color.' + c),
   ...['move', 'nudge', 'zone', 'scale', 'hide', 'show', 'select', 'free', 'axis', 'undo', 'redo', 'panes', 'help', 'quit'].flatMap(k => ['key.' + k, 'key.' + k + '.keys']),
   ...['password-overlap', 'password-covered', 'password-offscreen', 'password-high', 'password-missing', 'element-offscreen', 'element-overlap'].map(c => 'problem.' + c),
-  ...Layout.DECORATIONS.map(d => 'decor.' + d), ...Layout.GLASS_TINTS.map(t => 'tint.' + t),
+  ...Layout.SHAPE_TEMPLATES.map(d => 'decor.' + d), ...Layout.GLASS_TINTS.map(t => 'tint.' + t),
   ...['NO_SESSION_BUS', 'PORTAL_UNAVAILABLE', 'PORTAL_FAILED', 'UNSUPPORTED'].map(c => 'pick.' + c),
   // Apply and Preview results (StudioWindow.resultText).
   ...['invalid-json', 'unsupported', 'no-entry', 'unexpected', 'not-ready', 'not-running', 'target-not-found', 'function-not-found',
@@ -58,6 +58,13 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['decode-failed', 'unsupported-format', 'video-missing', 'decoder-unavailable'].map(c => 'video.problem.' + c),
   ...['busy', 'job-timeout', 'output-too-large'].map(c => 'video.failed.' + c)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
+// The shapes page (ScenePage.qml) and the shapes' advice (StudioWindow.problemText).
+const shapeKeys = [...['around', 'aroundModule'].map(d => 'decor.' + d), ...Layout.SHAPE_KINDS.map(k => 'shape.kind.' + k),
+  ...Layout.FRAME_STYLES.map(s => 'shape.style.' + s), ...Layout.SHAPE_EDGES.map(e => 'shape.edge.' + e),
+  ...['zones', 'modules', 'none'].map(m => 'shape.wrap.' + m), ...Layout.SHAPE_FILLS.map(f => 'shape.fill.' + f),
+  ...['none', ...Layout.SHAPE_BORDERS].map(b => 'shape.border.' + b), ...['min', 'max', 'fillPast'].map(b => 'shape.' + b),
+  ...['shape-straddles', 'shape-outside-frame', 'frost-overlap', 'shape-empty'].map(c => 'problem.' + c)];
+for (const key of shapeKeys) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);
 assert.equal(I.text('Unknown %1 {name}', 'no', ['$& %2']), '$& %2 {name}'.replace(/^/, 'Unknown '));

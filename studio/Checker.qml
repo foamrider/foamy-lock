@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import "Draft.js" as Draft
+import "Layout.js" as Layout
 
 // The geometry check for every size the look must work on: one hidden lock
 // view per connected screen and reference size, running the lock's own
@@ -8,7 +9,10 @@ import "Draft.js" as Draft
 // debounce). Each view has the widest samples (SampleView.widest).
 // `problems` lists what is wrong where:
 //   [{ key, label, reference, width, height, code, names }]
-// `names` are the modules to outline (Draft.problemElements).
+// `names` are the modules to outline (Draft.problemElements). The shapes'
+// advice (Layout.shapeAdvice: a module across a shape's edge or outside a
+// frame, frosted shapes overlapping, a shape around nothing) comes after,
+// with `advice: true` and the shape's index: a warning, never a block.
 Item {
   id: checker
 
@@ -44,10 +48,13 @@ Item {
       var view = views.itemAt(i)
       if (!view || !(view.width > 0) || !view.size) continue
       var code = view.geometryProblem()
-      if (!code) continue
       var size = view.size
-      found.push({ key: size.key, label: size.label, reference: !!size.reference, width: size.width, height: size.height,
+      if (code) found.push({ key: size.key, label: size.label, reference: !!size.reference, width: size.width, height: size.height,
         code: code, names: Draft.problemElements(code, view.placed, view.elementRects, view.width, view.height) })
+      var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
+      for (var a = 0; a < advice.length; a++)
+        found.push({ key: size.key, label: size.label, reference: !!size.reference, width: size.width, height: size.height,
+          code: advice[a].code, names: advice[a].names, advice: true, shape: advice[a].index })
     }
     lastCheckMs = Date.now() - started
     if (!Draft.same(found, problems)) problems = found

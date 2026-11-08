@@ -6,7 +6,7 @@ import "Draft.js" as Draft
 
 // The library (mockup A, left pane): first the preset ("Preset: Foamy ▾",
 // which opens the preset menu), then the modules, each with its zone or
-// "Hidden", and the scene pages (background, glass and dim). The list
+// "Hidden", and the scene pages (background, glass and dim, shapes). The list
 // scrolls (wheel, and the keyboard keeps the row it is on in view) when the
 // pane is short; the window pins the tips card under it.
 //
@@ -220,6 +220,18 @@ FocusScope {
         checked: library.app.page === "glass"
         Accessible.role: Accessible.PageTab
         onClicked: library.app.page = "glass"
+      }
+      StudioButton {
+        objectName: "studioSceneShapes"
+        readonly property int count: (library.app.look.background.shapes || []).length
+        width: parent.width
+        height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+        horizontalAlignment: Text.AlignLeft
+        text: FoamyI18n.t("studio.shapes")
+        detail: count > 0 ? FoamyI18n.tn("studio.shapes.count", count) : FoamyI18n.t("studio.shapes.none")
+        checked: library.app.page === "shapes"
+        Accessible.role: Accessible.PageTab
+        onClicked: library.app.selectShape(library.app.selectedShape)
       }
     }
   }

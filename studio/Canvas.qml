@@ -19,11 +19,18 @@ import "Draft.js" as Draft
 // A click on the canvas beside the lock image (the letterbox around it)
 // asks to clear the selection (deselectRequested); the window then shows
 // the look as a whole. Esc does the same (StudioWindow.appKey).
+//
+// Shapes are the lock's own drawing. A click on one where no module is
+// selects it (shapeSelectRequested); the selected shape is outlined, with
+// what it wraps (its zones' cells, or its modules' outlines). Delete
+// removes it. No handles: a shape's size comes from what it wraps.
 FocusScope {
   id: canvas
 
   property var draft: ({ preset: Layout.DEFAULT_PRESET })
   property string selected: ""
+  // The shape selected on the shapes page (-1: none).
+  property int selectedShape: -1
   property int screenWidth: 1920
   property int screenHeight: 1080
   // "idle", "typing", "wrong" or "noMedia".
@@ -49,6 +56,7 @@ FocusScope {
 
   signal edited(var draft)
   signal selectRequested(string name)
+  signal shapeSelectRequested(int index)
   signal deselectRequested()
 
   readonly property var look: Draft.lookOf(draft)
@@ -63,6 +71,18 @@ FocusScope {
   readonly property alias view: view
   readonly property var rects: view.elementRects
   readonly property var selectedRect: selected && rects[selected] ? rects[selected] : null
+  // The selected shape as drawn (Layout.shapeRects), or null.
+  readonly property var shapeRect: {
+    var all = view.shapeGeometry
+    for (var i = 0; i < all.length; i++) if (all[i].index === selectedShape) return all[i]
+    return null
+  }
+  // What it wraps: the shown modules, and the zones of a zone shape.
+  readonly property var shapeModules: shapeRect ? shapeRect.wraps || [] : []
+  readonly property var shapeZones: {
+    var shape = (look.background.shapes || [])[selectedShape]
+    return shape && shape.wrap && shape.wrap.zones ? shape.wrap.zones : []
+  }
   // A module dragged from the canvas is over the library: a drop hides it.
   readonly property bool hiding: gesture !== null && gesture.overHide === true
   // The lock image in the canvas's own coordinates.
@@ -115,6 +135,31 @@ FocusScope {
     return { name: g.name, width: geo.width, height: geo.height, margin: geo.margin, rightToLeft: geo.rightToLeft,
       start: g.start, delta: g.delta, axis: altHeld ? g.axis : "", snapping: snapping && !shiftHeld,
       radius: Draft.snapRadius(zoom), anchors: g.anchors, others: g.others }
+  }
+
+  // The shape drawn at a point in view pixels (the last drawn on top), or
+  // -1: inside a box or panel, or on a frame's band (between the screen's
+  // edge and a little inside its line).
+  function shapeHit(x, y) {
+    var all = view.shapeGeometry
+    for (var i = all.length - 1; i >= 0; i--) {
+      var s = all[i]
+      var inside = x >= s.x && y >= s.y && x <= s.x + s.width && y <= s.y + s.height
+      if (s.kind !== "frame" && inside) return s.index
+      var reach = s.inset + Math.round(16 * view.uiScale)
+      if (s.kind === "frame" && (x < reach || y < reach || x > view.width - reach || y > view.height - reach)) return s.index
+    }
+    return -1
+  }
+
+  // A tap on the lock at (x, y) in view pixels: the module there, else the
+  // shape there.
+  function tapAt(x, y) {
+    var name = hit(x, y)
+    if (name) return selectRequested(name)
+    var shape = shapeHit(x, y)
+    if (shape !== -1) shapeSelectRequested(shape)
+    else selectRequested("")
   }
 
   // Start moving `name` (the pointer pressed on it, or a test).
@@ -267,6 +312,12 @@ FocusScope {
       cancelGesture()
       return true
     }
+    // The selected shape (the shapes page): Delete removes it.
+    if (!selected && !gesture && selectedShape !== -1 && key === Qt.Key_Delete) {
+      var removed = Draft.removeShape(draft, selectedShape)
+      if (!Draft.same(removed, draft)) edited(removed)
+      return true
+    }
     if (!selected || gesture) return false
     var directions = {}
     directions[Qt.Key_Left] = "left"
@@ -409,6 +460,49 @@ FocusScope {
           }
         }
 
+        // The selected shape: its zones' cells, its modules, its outline.
+        Repeater {
+          model: canvas.shapeZones
+          Rectangle {
+            required property string modelData
+            readonly property var cell: canvas.zoneCell(modelData)
+            x: Math.round(overlay.width * cell.column / 3)
+            y: Math.round(overlay.height * cell.row / 3)
+            width: Math.round(overlay.width / 3)
+            height: Math.round(overlay.height / 3)
+            color: Qt.alpha(FoamyPalette.accent, 0.08)
+          }
+        }
+        Repeater {
+          model: canvas.shapeModules
+          Rectangle {
+            required property string modelData
+            readonly property var r: canvas.rects[modelData]
+            visible: r !== undefined
+            x: r ? r.x * canvas.zoom - 2 : 0
+            y: r ? r.y * canvas.zoom - 2 : 0
+            width: r ? r.width * canvas.zoom + 4 : 0
+            height: r ? r.height * canvas.zoom + 4 : 0
+            color: "transparent"
+            radius: 2
+            border.width: 1
+            border.color: Qt.alpha(FoamyPalette.accent, 0.7)
+          }
+        }
+        Rectangle {
+          objectName: "studioShapeSelection"
+          readonly property var r: canvas.shapeRect
+          visible: r !== null
+          x: r ? r.x * canvas.zoom - 2 : 0
+          y: r ? r.y * canvas.zoom - 2 : 0
+          width: r ? r.width * canvas.zoom + 4 : 0
+          height: r ? r.height * canvas.zoom + 4 : 0
+          color: "transparent"
+          radius: r && r.radius ? r.radius * canvas.zoom + 2 : 2
+          border.width: canvas.activeFocus ? 2 : 1.5
+          border.color: FoamyPalette.accent
+        }
+
         // Problem outlines.
         Repeater {
           model: canvas.problemNames
@@ -505,7 +599,7 @@ FocusScope {
         TapHandler {
           onTapped: function(eventPoint) {
             canvas.forceActiveFocus(Qt.MouseFocusReason)
-            canvas.selectRequested(canvas.hit(eventPoint.position.x / canvas.zoom, eventPoint.position.y / canvas.zoom))
+            canvas.tapAt(eventPoint.position.x / canvas.zoom, eventPoint.position.y / canvas.zoom)
           }
         }
 

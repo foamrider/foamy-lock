@@ -10,10 +10,15 @@ import "Layout.js" as Layout
 //
 // Keyboard: Tab focuses it on the current zone; the arrow keys move the
 // cursor, Enter or Space pick. `zone` is the caller's; picked(zone) asks.
+// With `zones` (a list) it picks several: each cell is a check box, filled
+// when its zone is in the list, and picked(zone) asks to switch it.
 FocusScope {
   id: picker
 
   property string zone: ""
+  // Several zones (null: one, `zone`).
+  property var zones: null
+  readonly property bool multiple: zones !== null && zones !== undefined
   // The zones the module may use.
   property var allowed: Layout.ZONES
   property string name: ""
@@ -26,7 +31,7 @@ FocusScope {
   implicitWidth: grid.implicitWidth
   implicitHeight: grid.implicitHeight
   activeFocusOnTab: true
-  onActiveFocusChanged: if (activeFocus) cursor = Math.max(0, Layout.ZONES.indexOf(zone))
+  onActiveFocusChanged: if (activeFocus) cursor = Math.max(0, Layout.ZONES.indexOf(multiple && zones.length > 0 ? zones[0] : zone))
 
   Accessible.role: Accessible.List
   Accessible.name: name
@@ -77,7 +82,7 @@ FocusScope {
         id: cell
         required property string modelData
         required property int index
-        readonly property bool current: picker.zone === modelData
+        readonly property bool current: picker.multiple ? picker.zones.indexOf(modelData) !== -1 : picker.zone === modelData
         readonly property bool open: picker.usable(modelData)
         readonly property bool cursorHere: picker.activeFocus && picker.cursor === index
         objectName: "studioZone-" + modelData
@@ -89,7 +94,7 @@ FocusScope {
         border.width: cursorHere ? 2 : FoamyStyle.borderWidth
         border.color: cursorHere ? FoamyPalette.text : current ? FoamyPalette.accent : FoamyPalette.border
 
-        Accessible.role: Accessible.RadioButton
+        Accessible.role: picker.multiple ? Accessible.CheckBox : Accessible.RadioButton
         Accessible.name: FoamyI18n.t("studio.zone." + modelData)
         Accessible.checkable: true
         Accessible.checked: current

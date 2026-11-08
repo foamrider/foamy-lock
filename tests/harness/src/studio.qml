@@ -68,6 +68,7 @@ Item {
     studio.shortcutsOpen = false
     studio.page = "module"
     studio.selected = "clock"
+    studio.selectedShape = -1
     studio.resetAsked = false
     studio.pendingPreset = ""
     studio.libraryDrag = ""
@@ -1336,10 +1337,9 @@ Item {
         expect(studio.page === "background" && page.visible && !studio.inspector.visible, "the background page shows")
         find(page, "studioSource-animation").clicked()
         expectDraft('{"preset":"foamy","background":{"source":"aurora"}}')
-        find(page, "studioDecor").picked("frame")
         find(page, "studioSource-omarchy").clicked()
         find(page, "studioBlur").committed(0.5)
-        expectDraft('{"preset":"foamy","background":{"decor":"frame","blur":0.5}}')
+        expectDraft('{"preset":"foamy","background":{"blur":0.5}}')
         // The Omarchy wallpaper, as the lock finds it.
         expect(studio.sources.wallpaperPath !== "" && view.backgroundPath === studio.sources.wallpaperPath && !view.backgroundPrepared,
           "the wallpaper on the canvas: " + view.backgroundPath)
@@ -1360,10 +1360,10 @@ Item {
         expect(studio.sources.pickError === "", "cancelled is no error")
         studio.sources.applyPick(0, '{"ok":true,"path":"/home/you/clip.gif"}')
         expect(studio.sources.pickError === "UNSUPPORTED", "a file the lock can't use: " + studio.sources.pickError)
-        expectDraft('{"preset":"foamy","background":{"decor":"frame","blur":0.5}}')
+        expectDraft('{"preset":"foamy","background":{"blur":0.5}}')
         // A picture: the theme colour until the helper has prepared it.
         studio.sources.applyPick(0, JSON.stringify({ ok: true, path: test.picture }))
-        expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.picture, decor: "frame", blur: 0.5 } }))
+        expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.picture, blur: 0.5 } }))
         expect(view.backgroundPath === "", "not decoded here, not yet prepared: " + view.backgroundPath)
         test.saved.waits = 0
         next()
@@ -1625,6 +1625,177 @@ Item {
             next()
           })
         })
+      } },
+    { name: "shapes: the page, add, edit, move, remove", wait: 0, run: function(next) {
+        reset()
+        find(studio.library, "studioSceneShapes").clicked()
+        var page = studio.scenePage
+        expect(studio.page === "shapes" && page.visible && find(page, "studioSceneShapesSection").visible, "the shapes page shows")
+        expect(find(page, "studioShapesEmpty").visible && !find(page, "studioShapeInspector").visible, "no shapes, nothing selected")
+        expect(find(studio.library, "studioSceneShapes").detail === FoamyI18n.t("studio.shapes.none"), "the library says none")
+        var add = find(page, "studioAddShape")
+        expect(json(add.options) === json(Draft.SHAPE_CHOICES), "the templates and a box around the module: " + json(add.options))
+        for (var c = 0; c < Draft.SHAPE_CHOICES.length; c++)
+          expect(find(add, "studioTile-" + Draft.SHAPE_CHOICES[c]) !== null, "a drawing of " + Draft.SHAPE_CHOICES[c])
+        add.picked("island")
+        expectDraft(json({ preset: "foamy", background: { shapes: Layout.template("island") } }))
+        expect(studio.selectedShape === 0 && find(page, "studioShapeInspector").visible, "the new shape is selected")
+        expect(find(page, "studioShape-0").text === FoamyI18n.t("studio.shape.around", [FoamyI18n.t("studio.shape.kind.box"),
+          [studio.moduleLabel("clock"), studio.moduleLabel("date")].join(", ")]), "its summary: " + find(page, "studioShape-0").text)
+        expect(find(studio.library, "studioSceneShapes").detail === FoamyI18n.tn("studio.shapes.count", 1), "the library counts it")
+        // The canvas draws it with the lock's own code and outlines it.
+        expect(view.shapeGeometry.length === 1 && find(canvas, "studioShapeSelection").visible, "drawn and outlined")
+        // Edits: padding, corners, fill; each one step, and back is nothing.
+        var steps = studio.history.past.length
+        find(page, "studioShapePadX").committed(40)
+        expect(Draft.shapesOf(studio.look)[0].pad.x === 40 && studio.history.past.length === steps + 1, "padding: one step")
+        find(page, "studioShapePadX").committed(34)
+        expectDraft(json({ preset: "foamy", background: { shapes: Layout.template("island") } }))
+        find(page, "studioShapeRadiusAuto").toggled()
+        expect(Draft.shapesOf(studio.look)[0].radius === "auto" && !find(page, "studioShapeRadius").enabled, "match the module's corners")
+        find(page, "studioShapeRadiusAuto").toggled()
+        find(page, "studioShapeRadius").committed(40)
+        find(page, "studioShapeOpacity").moved(0.5)
+        expect(view.shapeGeometry[0].opacity === 0.5 && Draft.shapesOf(studio.look)[0].fill.opacity === 0.82, "a drag shows on the canvas only")
+        find(page, "studioShapeOpacity").committed(0.83)
+        expect(Draft.shapesOf(studio.look)[0].fill.opacity === 0.83, "1 % steps: " + json(Draft.shapesOf(studio.look)[0].fill))
+        find(page, "studioShapeOpacity").committed(0.82)
+        find(page, "studioShapeFill").picked("glass")
+        expect(view.shapeGeometry[0].fill === "glass", "the fill on the canvas")
+        find(page, "studioShapeFill").picked("auto")
+        expectDraft(json({ preset: "foamy", background: { shapes: Layout.template("island") } }))
+        // What it wraps: modules, then one more.
+        find(page, "studioShapeWrap").picked("modules")
+        expect(json(Draft.shapesOf(studio.look)[0].wrap) === json({ modules: ["date", "clock"] }), "modules: " + json(Draft.shapesOf(studio.look)[0].wrap))
+        find(page, "studioShapeModule-media").toggled()
+        expect(json(Draft.shapesOf(studio.look)[0].wrap) === json({ modules: ["date", "clock", "media"] }), "one more module")
+        find(page, "studioShapeWrap").picked("zones")
+        var zones = find(page, "studioShapeZones")
+        expect(zones.visible && zones.multiple && zones.zones.length === 2, "the zone picker picks several: " + json(zones.zones))
+        zones.picked("bottom-start")
+        expect(json(Draft.shapesOf(studio.look)[0].wrap.zones) === json(["top-center"]), "a zone off: " + json(Draft.shapesOf(studio.look)[0].wrap))
+        // A second shape: order, then remove; Delete on the canvas and Esc.
+        add.picked("frame")
+        expect(studio.selectedShape === 1 && find(page, "studioShape-1").text === FoamyI18n.t("studio.shape.frameText", FoamyI18n.t("studio.shape.style.auto")),
+          "the frame, selected: " + find(page, "studioShape-1").text)
+        expect(find(page, "studioShapeStyle").visible && !find(page, "studioShapeFill").visible, "a frame's keys only")
+        find(page, "studioShapeUp-1").clicked()
+        expect(Draft.shapesOf(studio.look)[0].kind === "frame" && studio.selectedShape === 0, "moved up")
+        find(page, "studioShapeDown-0").clicked()
+        expect(Draft.shapesOf(studio.look)[1].kind === "frame" && studio.selectedShape === 1, "moved down")
+        canvas.forceActiveFocus()
+        canvas.keyPressed(Qt.Key_Delete, 0)
+        expect(Draft.shapesOf(studio.look).length === 1, "Delete removes the selected shape")
+        studio.selectShape(0)
+        studio.appKey(Qt.Key_Escape, 0, "")
+        expect(studio.selectedShape === -1 && studio.page === "shapes", "Esc: no shape selected")
+        // A click on the shape where no module is selects it.
+        var s0 = view.shapeGeometry[0]
+        canvas.tapAt(s0.x + 3, s0.y + s0.height / 2)
+        expect(studio.selectedShape === 0, "a click on the shape selects it")
+        find(page, "studioShapeRemove-0").clicked()
+        expectDraft('{"preset":"foamy"}')
+        studio.undo()
+        expect(Draft.shapesOf(studio.look).length === 1, "undo brings it back")
+        // Four at most: the tiles are disabled, with the reason.
+        for (var n = 0; n < 3; n++) studio.commit(Draft.addShape(studio.draft, "frame"))
+        expect(!add.enabled && find(page, "studioAddShapeNote").text === FoamyI18n.t("studio.shape.full"), "four shapes")
+        studio.commit(Draft.removeShape(studio.draft, 3))
+        add.picked("cinema")
+        expect(Draft.shapesOf(studio.look).length === 3 && find(page, "studioAddShapeNote").text !== "", "no room for two bars: " + find(page, "studioAddShapeNote").text)
+        studio.history = Draft.history({ preset: "foamy" })
+        studio.commit(Draft.addShape({ preset: "foamy" }, "sheet"))
+        studio.selectShape(0)
+        expect(find(page, "studioShapeEdge").visible && find(page, "studioShapeSize-min").visible && find(page, "studioShapeInner").visible,
+          "a panel's keys")
+        capture("studio-shapes", function() {
+          // The panel's keys, scrolled into view.
+          var flick = null
+          for (var f = 0; f < page.children.length; f++) if (page.children[f].contentY !== undefined) flick = page.children[f]
+          flick.contentY = Math.max(0, flick.contentHeight - flick.height)
+          capture("studio-shapes-panel", function() {
+            flick.contentY = 0
+            next()
+          })
+        })
+      } },
+    { name: "shapes: the controls recreate island, cinema and sheet", wait: 0, run: function(next) {
+        var cases = [
+          { preset: "island", template: "island", control: "studioShapePadX", change: 40, back: 34 },
+          { preset: "cinema", template: "cinema", control: "studioShapePad", change: 30, back: 26 },
+          { preset: "sheet", template: "sheet", control: "studioShapeOpacity", change: 0.6, back: 0.55 }
+        ]
+        test.saved.recreate = cases
+        test.saved.recreateAt = 0
+        next()
+      } },
+    { name: "shapes: one preset from the controls", wait: 0, run: function(next) {
+        var one = test.saved.recreate[test.saved.recreateAt]
+        reset()
+        // The preset without its shapes, then its template from Add shape,
+        // a change on a real control and back: the preset itself.
+        studio.commit({ preset: one.preset, background: { shapes: [] } })
+        find(studio.library, "studioSceneShapes").clicked()
+        var page = studio.scenePage
+        find(page, "studioAddShape").picked(one.template)
+        studio.selectShape(0)
+        find(page, one.control).committed(one.change)
+        expect(!Draft.same(studio.draft, { preset: one.preset }), one.control + " changed the shape")
+        find(page, one.control).committed(one.back)
+        expectDraft(json({ preset: one.preset }))
+        // The canvas draws what a view of the preset itself draws.
+        var reference = Qt.createQmlObject('import QtQuick; SampleView { visible: false }', test, Qt.resolvedUrl("ReferenceView.qml"))
+        reference.width = view.width
+        reference.height = view.height
+        reference.rightToLeft = view.rightToLeft
+        reference.timeFormat = view.timeFormat
+        reference.showUserInfo = view.showUserInfo
+        reference.showMedia = view.showMedia
+        reference.previewState = view.previewState
+        reference.look = Layout.preset(one.preset)
+        waitFor(function() { return reference.shapeGeometry.length === view.shapeGeometry.length && reference.shapeGeometry.length > 0 }, "the reference view", function() {
+          var a = find(view, "decoration").surfaces, b = find(reference, "decoration").surfaces
+          expect(json(a) === json(b), one.preset + ": the canvas draws " + json(a) + ", the preset " + json(b))
+          ok(one.preset + " recreated: " + a.length + " surfaces identical")
+          reference.destroy()
+          if (++test.saved.recreateAt < test.saved.recreate.length) test.at--
+          next()
+        })
+      } },
+    { name: "shapes: Wrap in a shape on the media card", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("media")
+        var wrap = find(studio.inspector, "studioWrapShape")
+        expect(wrap.visible && wrap.text === FoamyI18n.t("studio.shape.wrapIn"), "the inspector offers it: " + wrap.text)
+        wrap.clicked()
+        expectDraft(json({ preset: "foamy", background: { shapes: [Draft.aroundShape("media")] } }))
+        expect(studio.page === "shapes" && studio.selectedShape === 0, "its shape, selected")
+        var media = find(view, "mediaRow")
+        var r = view.drawnRect("media"), s = view.shapeGeometry[0]
+        expect(media.color.a === 0 && near(s.x, r.x, 1e-6) && near(s.width, r.width, 1e-6) && near(s.radius, media.radius, 1e-6),
+          "exactly the card's own surface: " + json(s) + " for " + json(r))
+        // It follows the card wherever it goes.
+        studio.commit(Draft.setOffset(studio.draft, "media", { x: 0.05, y: -0.04 }))
+        r = view.drawnRect("media")
+        s = view.shapeGeometry[0]
+        expect(near(s.x, r.x, 1e-6) && near(s.y, r.y, 1e-6), "it follows an offset: " + json(s) + " for " + json(r))
+        studio.selectModule("media")
+        expect(find(studio.inspector, "studioWrapShape").text === FoamyI18n.t("studio.shape.editOwn"), "then: Edit its shape")
+        find(studio.inspector, "studioWrapShape").clicked()
+        expect(studio.page === "shapes" && studio.selectedShape === 0 && Draft.shapesOf(studio.look).length === 1, "the same shape again")
+        capture("studio-wrap", next)
+      } },
+    { name: "shapes: advice in the checker, never a block", wait: 0, run: function(next) {
+        reset()
+        studio.commit({ preset: "foamy", background: { shapes: [{ kind: "box", wrap: { modules: ["weather"] } }] } })
+        next()
+      } },
+    { name: "shapes: advice reported", wait: 900, run: function(next) {
+        var advice = studio.checker.problems.filter(function(p) { return p.advice })
+        expect(advice.length >= 1 && advice[0].code === "shape-empty" && advice[0].shape === 0, "advice: " + json(studio.checker.problems))
+        expect(!studio.applyBlocked && json(canvas.problemNames) === "[]", "advice never blocks Apply nor outlines a problem")
+        expect(studio.problemText(advice[0]) === FoamyI18n.t("studio.problem.shape-empty", [1, advice[0].label]), "in words: " + studio.problemText(advice[0]))
+        next()
       } },
     { name: "Move up and Move down in zone", wait: 0, run: function(next) {
         reset()
