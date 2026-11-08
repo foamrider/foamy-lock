@@ -1,10 +1,14 @@
 // Style sweep: every style of every element, in each column of its row, on
 // one view through two sizes, 12- and 24-hour time, typing and idle, primary
 // and secondary; then every style switched on the same view and back to the
-// default, which must restore the geometry exactly. Written into a temporary
-// app by the harness, which replaces __CAPTURE__.
+// default, which must restore the geometry exactly; then password.reveal
+// "typing" on every field style, typed into on primary and secondary
+// screens. The status runs with every item and the weather with its widest
+// sample (the full details, a long condition and place). Written into a
+// temporary app by the harness, which replaces __CAPTURE__.
 import QtQuick
 import Quickshell
+import "fixtures" as Fixture
 import "Layout.js" as Layout
 ShellRoot {
   id: shellRoot
@@ -13,19 +17,27 @@ ShellRoot {
   readonly property var columns: ["start", "center", "end"]
   readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField",
     "editorArea", "passwordInput", "unlockHint", "submitArrow", "fingerprintNotice", "mediaRow", "albumArt",
-    "mediaControls", "statusFooter", "networkStatus", "batteryStatus", "calendarBlock"]
+    "mediaControls", "statusFooter", "networkStatus", "batteryStatus", "calendarBlock", "weatherBlock"]
   // Parts drawn by a style, each inside its element (when visible).
   readonly property var parts: ({
-    dateLabel: ["dateDetail"],
+    dateLabel: ["dateDetail", "dateStack"],
     clockLabel: ["clockStacked", "clockOutline", "clockDots", "clockFlip", "clockAnalog", "clockPoster", "clockRing"],
     identityBlock: ["avatar", "nameLabel"],
     inputField: ["editorArea", "passwordInput", "cardGreeting", "cardPill", "terminalPrompt", "submitArrow"],
     mediaRow: ["albumArt", "mediaTitle", "mediaArtist", "mediaControls", "mediaLine"],
-    statusFooter: ["networkStatus", "batteryStatus", "systemPanel"],
-    calendarBlock: ["calendarCard", "calendarTitle"]
+    statusFooter: ["networkStatus", "batteryStatus", "volumeStatus", "bluetoothStatus", "keyboardStatus", "uptimeStatus",
+      "loadStatus", "memoryStatus", "systemPanel"],
+    calendarBlock: ["calendarCard", "calendarTitle"],
+    weatherBlock: ["weatherSurface", "weatherHead", "weatherIcon", "weatherTemperature", "weatherCondition", "weatherRange", "weatherLocation",
+      "weatherLine"]
   })
   readonly property var elementItems: ({ date: "dateLabel", clock: "clockLabel", account: "identityBlock",
-    password: "inputField", media: "mediaRow", status: "statusFooter", calendar: "calendarBlock" })
+    password: "inputField", media: "mediaRow", status: "statusFooter", calendar: "calendarBlock", weather: "weatherBlock" })
+  // The widest weather: every detail, a 64-character condition and an
+  // 80-character place (the reply's limits).
+  readonly property var widestWeather: ({ temperature: -12, unit: "C", code: "heavyrainandthunder", group: "thunder",
+    condition: "Heavy rain and thunder with strong gusts along the coast tonight", high: -3, low: -18,
+    location: "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru", updatedAtMs: 1 })
 
   // One case per element, style and column: the layout overrides that put
   // the element (and its usual partner) in that column of its row, moving
@@ -47,6 +59,18 @@ ShellRoot {
       // In the center, above the account and the field.
       layout.media.zone = "bottom-" + column
       if (column === "center") layout.media.order = -1
+    } else if (element === "weather") {
+      // Hidden by default: shown in the top row with every detail. Beside
+      // the centre the date and clock make room (they'd overlap on a
+      // narrow screen), and the status leaves its corner.
+      layout.weather.hidden = false
+      layout.weather.details = "full"
+      layout.weather.location = true
+      layout.weather.zone = "top-" + column
+      if (column === "center") layout.weather.order = -1
+      else layout.date = layout.clock = { hidden: true }
+      if (column === "end") layout.status = { zone: "top-start" }
+      if (column === "start") layout.status = { zone: "top-end", style: "icons" }
     } else if (element === "calendar") {
       // Hidden by default: shown alone in the middle row.
       layout.calendar.hidden = false
@@ -72,6 +96,15 @@ ShellRoot {
         for (var c = 0; c < columns.length; c++)
           out.push({ element: element, style: styles[s], column: columns[c], layout: layoutFor(element, styles[s], columns[c]) })
     }
+    // Every status item at once, in every style and column (the date and
+    // clock make room).
+    for (var t = 0; t < Layout.STYLES.status.length; t++) {
+      for (var k = 0; k < columns.length; k++) {
+        var items = { status: { style: Layout.STYLES.status[t], items: Layout.STATUS_ITEMS.slice(), zone: "top-" + columns[k] },
+          date: { hidden: true }, clock: { hidden: true } }
+        out.push({ element: "status", style: Layout.STYLES.status[t] + " (all items)", column: columns[k], layout: items })
+      }
+    }
     return out
   }
   // Each state: [size index, 12h, typing, primary].
@@ -93,6 +126,7 @@ ShellRoot {
         var layout = {}
         layout[element] = { style: Layout.STYLES[element][s] }
         if (element === "calendar") layout.calendar.hidden = false
+        if (element === "weather") layout.weather.hidden = false
         out.push({ name: element + " " + Layout.STYLES[element][s], layout: layout })
       }
     }
@@ -109,6 +143,105 @@ ShellRoot {
   }
 
   property int caseAt: 0
+  property int revealAt: -1
+  // The field's rectangle with reveal "always", per style and screen.
+  property var revealRects: ({})
+
+  // password.reveal "typing": per style, on a primary and a secondary
+  // screen, the field idle (surface hidden on the underline, box, terminal
+  // and card; the hint and fingerprint notice still there on the primary;
+  // the editor focused), typed into through the editor itself (all shows),
+  // failed and checking (all shows). Its rectangle never moves.
+  readonly property var revealSteps: {
+    var out = []
+    var styles = Layout.STYLES.password
+    for (var i = 0; i < styles.length; i++) {
+      for (var p = 1; p >= 0; p--) (function(style, primary) {
+        var key = style + (primary ? "" : " secondary")
+        var hides = Layout.REVEAL_STYLES.indexOf(style) !== -1
+        function reset(reveal) {
+          view.width = 1920; view.height = 1080
+          view.rightToLeft = false
+          view.primary = primary
+          view.passwordText = ""
+          view.failureMessage = ""
+          view.authenticatingPassword = false
+          view.fingerprintUnavailable = false
+          view.look = Layout.parseLook({ layout: { password: { style: style, reveal: reveal } } }).look
+        }
+        out.push({ name: key + " always", apply: function() { reset("always") }, check: function() {
+          shellRoot.revealRects[key] = JSON.stringify(rect(findNamed(view, "inputField")))
+          shellRoot.revealRects[key + " parts"] = JSON.stringify(shellRoot.chrome())
+        } })
+        out.push({ name: key + " idle", apply: function() { reset("typing") }, check: function() {
+          shellRoot.checkReveal(key, primary, hides ? false : null)
+        } })
+        out.push({ name: key + " fingerprint notice", apply: function() { view.fingerprintUnavailable = true }, check: function() {
+          shellRoot.checkReveal(key, primary, hides ? false : null)
+          if (findNamed(view, "fingerprintNotice").visible !== primary) shellRoot.fail("the fingerprint notice must stay on the primary screen")
+        } })
+        out.push({ name: key + " typed", apply: function() {
+          view.fingerprintUnavailable = false
+          var input = findNamed(view, "passwordInput")
+          if (!input.activeFocus) shellRoot.fail("the editor isn't focused while the field is hidden")
+          input.insert(input.cursorPosition, "secret")
+        }, check: function() {
+          if (view.passwordText !== "secret") shellRoot.fail("typing into the hidden field didn't reach the view: " + JSON.stringify(view.passwordText))
+          shellRoot.checkReveal(key, primary, true)
+          if (findNamed(view, "passwordInput").opacity !== 1) shellRoot.fail("typed dots are invisible")
+        } })
+        out.push({ name: key + " failed", apply: function() {
+          view.passwordText = ""
+          view.failureMessage = "Authentication failed"
+        }, check: function() { shellRoot.checkReveal(key, primary, primary ? true : null) } })
+        out.push({ name: key + " checking", apply: function() {
+          view.failureMessage = ""
+          view.authenticatingPassword = true
+        }, check: function() { shellRoot.checkReveal(key, primary, primary ? true : null) } })
+      })(styles[i], p === 1)
+    }
+    return out
+  }
+
+  // What of the field's chrome shows: its surface and the named parts.
+  function chrome() {
+    var field = findNamed(view, "inputField")
+    var out = { surface: field.border.width > 0 && field.color.a > 0 }
+    var names = ["fieldUnderline", "terminalPrompt", "cardGreeting", "cardPill", "boxDivider", "submitArrow", "unlockHint"]
+    for (var i = 0; i < names.length; i++) {
+      var part = findNamed(field, names[i])
+      var shown = !!part && part.visible
+      for (var at = part; shown && at && at !== field; at = at.parent) shown = at.visible
+      out[names[i]] = shown
+    }
+    return out
+  }
+
+  // `shown`: true (the chrome shows as with reveal "always"), false (only
+  // the hint: no surface or part), null (exactly as with "always").
+  function checkReveal(key, primary, shown) {
+    var field = findNamed(view, "inputField")
+    var input = findNamed(view, "passwordInput")
+    if (JSON.stringify(rect(field)) !== revealRects[key]) return fail("the field moved: " + JSON.stringify(rect(field)) + ", was " + revealRects[key])
+    if (!field.visible || !input.enabled && !view.authenticatingPassword) return fail("the password field must stay live")
+    if (!view.authenticatingPassword && !input.activeFocus) return fail("the password input lost focus")
+    var now = chrome()
+    if (shown === false) {
+      for (var name in now)
+        if (name !== "unlockHint" && now[name]) return fail(name + " shows while the field is hidden")
+      if (now.unlockHint !== primary) return fail("the unlock hint must stay on the primary screen")
+      if (input.opacity !== 0) return fail("the idle editor shows")
+      var scrim = findNamed(view, "scrim")
+      if (scrim.color.a < 0.15 - 0.01) return fail("no scrim behind a hidden field: " + scrim.color.a)
+    } else if (shown === null) {
+      if (!view.authenticatingPassword && !view.failureMessage && !view.passwordText && !view.fingerprintUnavailable
+          && JSON.stringify(now) !== revealRects[key + " parts"])
+        return fail("reveal typing changed a style it doesn't apply to: " + JSON.stringify(now) + ", was " + revealRects[key + " parts"])
+    } else if (!now.surface && !now.fieldUnderline && Layout.REVEAL_STYLES.indexOf(view.placed.password.style) !== -1) {
+      return fail("the field stays hidden: " + JSON.stringify(now))
+    }
+    checked++
+  }
   property int stateAt: 0
   property int cycleAt: -1
   property var reference: null
@@ -138,7 +271,9 @@ ShellRoot {
       artworkPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
       fingerprintConfigured: true
       avatarPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
+      weather: shellRoot.widestWeather
       onPasswordTextEdited: function(value) { passwordText = value }
+      onClearFailureRequested: failureMessage = ""
     }
   }
   QtObject {
@@ -261,6 +396,19 @@ ShellRoot {
     if (primary && !view.placed.account.hidden && !account.visible) return fail("the account is missing on the primary screen")
     if (account.visible && avatar.visible && Math.abs(avatar.width - avatar.height) > 1)
       return fail("the avatar isn't square: " + avatar.width + "x" + avatar.height)
+    // Every named item shows, once its source has read something.
+    var items = view.placed.status.items
+    if (items && findNamed(view, "statusFooter").visible) {
+      var line = view.placed.status.style !== "system"
+      for (var n = 0; n < items.length; n++) {
+        var proc = ["uptime", "load", "memory"].indexOf(items[n]) !== -1
+        if (proc && !(view.systemUptime >= 0 && view.memoryTotal > 0 && view.systemLoad !== "")) continue
+        if (line && !findNamed(view, items[n] + "Status").visible) return fail("status item " + items[n] + " is missing")
+      }
+      if (!line && findNamed(view, "systemPanel").height <= 0) return fail("the system panel is empty")
+    }
+    if (view.placed.weather && !view.placed.weather.hidden && !findNamed(view, "weatherBlock").visible)
+      return fail("the weather is missing")
     for (var owner in parts) {
       var item = findNamed(view, owner)
       if (!item.visible) continue
@@ -371,11 +519,29 @@ ShellRoot {
         shellRoot.cycleAt++
         return
       }
-      var now = shellRoot.geometry()
-      for (var key in now)
-        if (now[key] !== shellRoot.reference[key])
-          return shellRoot.fail("after the cycle " + key + " is " + now[key] + ", was " + shellRoot.reference[key])
-      console.log("styles ok: cycle through " + (shellRoot.cycle.length - 1) + " looks back to foamy")
+      if (shellRoot.revealAt === -1) {
+        var now = shellRoot.geometry()
+        for (var key in now)
+          if (now[key] !== shellRoot.reference[key])
+            return shellRoot.fail("after the cycle " + key + " is " + now[key] + ", was " + shellRoot.reference[key])
+        console.log("styles ok: cycle through " + (shellRoot.cycle.length - 1) + " looks back to foamy")
+        shellRoot.revealAt = 0
+        return
+      }
+      if (shellRoot.revealAt < shellRoot.revealSteps.length) {
+        var revealStep = shellRoot.revealSteps[shellRoot.revealAt]
+        shellRoot.label = "reveal " + revealStep.name
+        if (!shellRoot.applied) {
+          revealStep.apply()
+          shellRoot.applied = true
+          return
+        }
+        shellRoot.applied = false
+        revealStep.check()
+        shellRoot.revealAt++
+        return
+      }
+      console.log("styles ok: reveal typing on " + Layout.STYLES.password.length + " field styles, primary and secondary")
       console.log("STYLES_PASS: " + shellRoot.cases.length + " cases, " + shellRoot.checked + " checks, " + shellRoot.captured + " captures")
       step.running = false
       Qt.quit()

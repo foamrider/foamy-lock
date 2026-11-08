@@ -119,8 +119,8 @@ avatar thumbnail at `$XDG_CACHE_HOME/omarchy/foamy.lock/avatar.png`, falling bac
 
 ## Look: presets, layout and background
 
-The lock screen is made of seven elements (date, clock, account, password field,
-media, status, calendar) on a background. A preset chooses where each element sits and how
+The lock screen is made of eight elements (date, clock, account, password field,
+media, status, calendar, weather) on a background. A preset chooses where each element sits and how
 it looks. `layout` changes single elements, and `background` and `glass` change
 what is behind them. All four keys sit on the same `foamy.lock` entry and are
 optional; without them the lock looks exactly as in 1.2.0.
@@ -184,17 +184,41 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
   beside any clock; it keeps one size (six weeks) whatever the month.
 - **The `system` panel** reads `/proc/uptime`, `/proc/loadavg` and
   `/proc/meminfo` every five seconds, only while it is shown and the display
-  is on; nothing is read or kept otherwise.
+  is on; nothing is read or kept otherwise. With `items`, each file is read
+  only while an item shows it, in any style.
+- **The weather** comes from [Foamy Weather](https://github.com/foamrider/foamy-weather)
+  (its `current()` call; see below). No built-in preset shows it.
 
 | Element | Styles |
 | --- | --- |
-| `date` | `long` (default), `caps`, `short` (abbreviated, "Sat 7 Nov"), `serif` (a large serif weekday over the spaced date) |
+| `date` | `long` (default), `caps`, `short` (abbreviated, "Sat 7 Nov"), `serif` (a large serif weekday over the spaced date), `numeric` (the locale's short date), `stacked` (a large day number beside the month and weekday), `week` (the ISO week number and the date) |
 | `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog`, `small` (one line, for a bar or card), `poster` (huge hours over accent minutes), `ring` (the time in a ring that fills over the hour) |
 | `account` | `avatar` (default), `chip`, `name` (the name alone) |
 | `password` | `pill` (default), `underline`, `box` (an always-visible glass box with the arrow), `dots` (no surface), `terminal` (a "Password:" prompt in the mono font), `card` (a greeting above the field) |
 | `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below) |
 | `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill), `system` (a panel with uptime, memory, load and the battery, or the network without one) |
-| `calendar` | `card` (default; this month on glass, today ringed in the accent), `plain`. Hidden unless a preset or `hidden: false` shows it. |
+| `calendar` | `card` (default; this month on glass, today ringed in the accent), `plain`, `week` (this week's seven days on a glass strip), `mini` (a smaller month without a card). Hidden unless a preset or `hidden: false` shows it. |
+| `weather` | `compact` (default; an icon and the temperature), `pill` (one line in a glass pill), `detailed` (a glass card). Hidden unless `hidden: false` shows it, and only while Foamy Weather has a report. |
+
+**Element keys of their own.** Optional, and accepted only on their element:
+
+| Key | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `password.reveal` | `always`, `typing` | `always` | `typing` hides the `underline`, `box`, `terminal` and `card` field's surface, line, prompt, greeting and arrow until you type or a failure or check shows; the unlock hint and the fingerprint notice stay, and the field is live and keeps its place. `pill` and `dots` already show only the hint, so they ignore it. |
+| `status.items` | An ordered list of `network`, `battery`, `volume`, `bluetooth`, `keyboard`, `uptime`, `load`, `memory`, each at most once | the style's own (network and battery; the `system` panel's four rows) | What the status shows, in that order, in any style. An item whose source has nothing (no battery, no PipeWire sink, no Bluetooth adapter) is left out. The volume (the default sink, PipeWire), Bluetooth (on or off and connected devices) and keyboard layout (Hyprland's active layout, read with `hyprctl -j devices`; nothing is switched) are read only while their item shows. A line wider than the centre column wraps. |
+| `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low. |
+| `weather.location` | `true`, `false` | `false` | Shows the forecast's place name. Off by default: anyone can see a lock screen. |
+
+**Weather.** While the lock or the preview shows a look with the weather, the
+lock asks Foamy Weather (`foamy.weather current`, in-process on Omarchy 4.5)
+when it opens and then every 15 minutes while the display is on. Nothing is
+called when no `foamy.weather` target is loaded; a starting service is asked
+again up to three times, 10 s apart. A reply is shown only when every field
+checks out (numbers in range, one-line text within the documented lengths, no
+control or direction-override characters), as plain text, and only while it
+is under three hours old; otherwise, and for an older Foamy Weather without
+`current()`, the weather is hidden. `lock status` reports its state, never the
+place.
 
 **Size, finish and free placement.** Every key is optional; without them an
 element draws exactly as its preset says.
@@ -204,8 +228,8 @@ element draws exactly as its preset says.
 | `scale` | 0.5 to 2 in steps of 0.05; the field 0.85 to 1.5 | 1 | The element's size. A scaled date or clock in a centre column widens with it, up to the screen less its margins. |
 | `opacity` | 0.3 to 1; the field 0.7 to 1 | 1 | The whole element's opacity. |
 | `offset` | `{ "x": …, "y": … }`, both required, each -0.5 to 0.5 | none | A move from where the zone puts it, as a fraction of the screen's width (`x`) and height (`y`), so one look fits every screen size. `x` mirrors in right-to-left languages, like start and end. The rest of the zone's stack stays where it was, and decorations keep fitting the zones, not the moved element. |
-| `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, and the calendar `card`; the element's other styles ignore it. The date has no glass and rejects the key. |
-| `screens` | `all`, `primary` | `all` | `primary` shows the element only on the monitor that receives your keystrokes (or on every monitor until one does). For the date, clock, media, status and calendar; the account and the field already follow that monitor and reject the key. |
+| `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, the calendar `card` and `week`, and the weather `pill` and `detailed`; the element's other styles ignore it. The date has no glass and rejects the key. |
+| `screens` | `all`, `primary` | `all` | `primary` shows the element only on the monitor that receives your keystrokes (or on every monitor until one does). For the date, clock, media, status, calendar and weather; the account and the field already follow that monitor and reject the key. |
 
 ```json
 "layout": { "clock": { "scale": 1.25, "offset": { "x": -0.1, "y": 0.02 } }, "media": { "glass": 0.4, "screens": "primary" } }
@@ -293,8 +317,8 @@ every monitor, so a keystroke is never lost.
 the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
-Editors use three more calls on the same target: `catalog` (version 2) lists the elements, zones,
-styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`), presets (with their thumbnails), background sources, decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
+Editors use three more calls on the same target: `catalog` (version 3) lists the elements, zones,
+styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources, decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
@@ -624,10 +648,14 @@ Shared foamy components (translations, IPC, style tokens) live in `kit/`, copied
 from [foamy-kit](https://github.com/foamrider/foamy-kit); `tests/kit-check.sh`
 verifies they are unedited.
 
-`LockView.qml` owns the view's data sources (network, battery, the wall clock)
-and places the elements in `elements/` (date, clock, account, password field,
-media, status), which only draw what the view gives them. The render and parity
-tests replace those data sources in `LockView.qml` alone.
+`LockView.qml` owns the view's data sources (network, battery, the wall clock,
+/proc, and the volume, Bluetooth and keyboard sources in `elements/sources`, which
+it loads by path only while a status item needs them) and places the elements in
+`elements/` (date, clock, account, password field, media, status, calendar,
+weather), which only draw what the view gives them. Every reading is a view
+property, so a host can supply samples (`liveSources: false` opens no PipeWire,
+Bluetooth or Hyprland connection). The tests replace those data sources in
+`LockView.qml` alone (`tests/harness/fixtures`).
 
 The render, parity, layout, styles, placement, runtime, studio and thumbnails commands run through `tests/harness.sh`, which builds and
 runs `tests/harness`: a development-only Rust crate (std only apart from `serde_json`
@@ -663,17 +691,24 @@ The placement cases (`placement`, also run by `layout` without `--preset`) put
 the screen, onto another zone's element, into its own stack or onto the field,
 the field moved above the top third, a scale that overflows, an offset mirrored
 right-to-left, a primary-only element on a secondary view, and decorations that
-keep fitting the un-offset zones. Each expects its geometry code, and a view with
-`latchFallback: false` (for an editor) must report it without falling back.
+keep fitting the un-offset zones, weather arriving after the check, the weather's
+glass, details and screens, and the status sources (made only while an item needs
+them, none with `liveSources: false`, an empty status hidden). Each expects its
+geometry code, and a view with `latchFallback: false` (for an editor) must report
+it without falling back.
 
 The style sweep (`styles`, also run by `layout` without `--preset`) shows every
 style of every element in each column of its row at 1920 × 1080 and 800 × 1000,
 in 12- and 24-hour time, typing and idle, on primary and secondary screens. The
 field must stay on screen, uncovered, live, focused and one size; every element
 and its parts must stay in place, the avatar square, and nothing may fall back.
-It then switches one view through every style, left-to-right and mirrored, and
-back to the default, whose geometry must return exactly. With `FOAMY_RENDER_OUT`
-it keeps two captures per case.
+It also shows every status item at once in each status style and column, and the
+weather with its widest sample (every detail, a 64-character condition and an
+80-character place). It then switches one view through every style, left-to-right
+and mirrored, and back to the default, whose geometry must return exactly, and
+types into each field style with `reveal: "typing"` on primary and secondary
+screens (hidden while idle with the hint kept, shown when typed into, failed or
+checking, never moved). With `FOAMY_RENDER_OUT` it keeps two captures per case.
 
 The render test uses the real view with synthetic account, network, battery, and
 media data. It saves wide, narrow, error, and busy-state images in a temporary
@@ -690,7 +725,11 @@ a restricted agent/container sandbox may prevent these even when the desktop
 supports them. The runtime test runs the real `Service.qml` with an isolated home,
 runtime directory and session bus, simulated PAM, session-lock and view objects, and
 stand-in desktop commands, and drives it over `quickshell ipc`; it does not lock the
-desktop or authenticate a user.
+desktop or authenticate a user. It also covers the weather: a stand-in
+`foamy.weather` target in IpcRegistry (no target: nothing is called; an older one
+without `current()` reaches a recording `omarchy-shell` stand-in), asked on opening
+and every poll only for a shown weather and never while blanked, pending retries,
+and stale, not-ok and invalid replies hidden.
 It runs the real helper against a temporary wallpaper link: relative and retargeted
 links, touched and rewritten files, dangling links, directories and a missing helper.
 A real password/fingerprint unlock, suspend/resume, and multi-monitor lock cycle

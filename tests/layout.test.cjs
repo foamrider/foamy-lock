@@ -66,7 +66,7 @@ test('mistakes in the look are reported, never guessed', () => {
     {preset: 'field-only'}, {preset: 'Foamy'}, {preset: 1}, {layout: []}, {layout: null},
     {layout: {clock: {zone: 'top-left'}}}, {layout: {clock: {style: 'pill'}}}, {layout: {clock: {size: 2}}},
     {layout: {clock: {order: 1.5}}}, {layout: {clock: {order: 100}}}, {layout: {clock: {hidden: 'yes'}}},
-    {layout: {clock: 'thin'}}, {layout: {weather: {zone: 'top-start'}}},
+    {layout: {clock: 'thin'}}, {layout: {forecast: {zone: 'top-start'}}},
     {background: {source: 'video'}}, {background: {blur: 2}}, {background: {dim: 0.95}}, {background: {dim: '0.2'}},
     {background: {path: 'relative.png'}}, {background: {path: '/tmp/../etc/x.png'}}, {background: {path: '/tmp/x.gif'}},
     {background: {source: 'picture'}}, {background: {colour: 'red'}}, {background: []},
@@ -119,13 +119,14 @@ test('the geometry check finds a missing, offscreen or covered field', () => {
 
 test('every element offers its shipped styles, defaults first', () => {
   assert.deepEqual(Layout.STYLES, {
-    date: ['long', 'caps', 'short', 'serif'],
+    date: ['long', 'caps', 'short', 'serif', 'numeric', 'stacked', 'week'],
     clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog', 'small', 'poster', 'ring'],
     account: ['avatar', 'chip', 'name'],
     password: ['pill', 'underline', 'box', 'dots', 'terminal', 'card'],
     media: ['card', 'line', 'pill', 'art'],
     status: ['text', 'icons', 'pill', 'system'],
-    calendar: ['card', 'plain']
+    calendar: ['card', 'plain', 'week', 'mini'],
+    weather: ['compact', 'pill', 'detailed']
   })
   // The foamy preset uses each element's first style.
   for (const name of Layout.ELEMENTS) assert.equal(Layout.PRESETS.foamy.elements[name].style, Layout.STYLES[name][0], name)
@@ -233,7 +234,7 @@ test('an offset is whole: x and y, each a fraction of the screen from -0.5 to 0.
 })
 
 test('glass is per element, only where a style draws glass, with a floor for the field', () => {
-  assert.deepEqual(Object.keys(Layout.GLASS_STYLES).sort(), ['account', 'calendar', 'clock', 'media', 'password', 'status'])
+  assert.deepEqual(Object.keys(Layout.GLASS_STYLES).sort(), ['account', 'calendar', 'clock', 'media', 'password', 'status', 'weather'])
   for (const [name, styles] of Object.entries(Layout.GLASS_STYLES))
     for (const style of styles) assert.ok(Layout.STYLES[name].includes(style), `${name} ${style}`)
   for (const name of Object.keys(Layout.GLASS_STYLES)) {
@@ -254,7 +255,7 @@ test('glass is per element, only where a style draws glass, with a floor for the
 
 test('screens is "all" or "primary", and only for the elements that show everywhere', () => {
   assert.deepEqual(Layout.SCREENS, ['all', 'primary'])
-  for (const name of ['date', 'clock', 'media', 'status', 'calendar'])
+  for (const name of ['date', 'clock', 'media', 'status', 'calendar', 'weather'])
     for (const screens of Layout.SCREENS) assert.equal(errorOf(name, {screens}), '', `${name} ${screens}`)
   for (const screens of ['Primary', 'secondary', '', true, null])
     assert.equal(errorOf('clock', {screens}), 'layout.clock.screens must be one of all, primary', String(screens))
@@ -356,4 +357,78 @@ test('a look in canonical form compares by what it shows', () => {
   assert.equal(look.elements.clock.scale, 1, 'the argument is not changed')
   look.elements.clock.scale = 1.2
   assert.notEqual(JSON.stringify(Layout.canonical(look)), JSON.stringify(Layout.defaults()))
+})
+
+test('the weather is last, and hidden in every preset', () => {
+  assert.equal(Layout.ELEMENTS[Layout.ELEMENTS.length - 1], 'weather')
+  assert.deepEqual(Layout.ELEMENTS.slice(0, 7), ['date', 'clock', 'account', 'password', 'media', 'status', 'calendar'])
+  for (const name of Object.keys(Layout.PRESETS)) {
+    const weather = Layout.preset(name).elements.weather
+    assert.equal(weather.hidden, true, name)
+    assert.equal(weather.zone, 'top-start', name)
+    assert.equal(weather.style, 'compact', name)
+  }
+  assert.ok(Layout.SCREENS_ELEMENTS.includes('weather'))
+  assert.deepEqual(Layout.GLASS_STYLES.weather, ['pill', 'detailed'])
+  const shown = Layout.parseLook({layout: {weather: {hidden: false, style: 'detailed', details: 'full', location: true, glass: 0.5}}})
+  assert.ok(shown.valid, shown.error)
+  assert.deepEqual(Layout.stack(shown.look.elements, 'top-start'), ['weather'])
+})
+
+test('element-only keys are accepted on their own element and only there', () => {
+  const valid = [
+    ['password', {reveal: 'always'}], ['password', {reveal: 'typing'}],
+    ['status', {items: ['network']}], ['status', {items: [...Layout.STATUS_ITEMS]}], ['status', {items: ['keyboard', 'battery']}],
+    ['weather', {details: 'temperature'}], ['weather', {details: 'full'}], ['weather', {location: true}], ['weather', {location: false}]
+  ]
+  for (const [name, value] of valid) assert.equal(errorOf(name, value), '', `${name} ${JSON.stringify(value)}`)
+  // Each key belongs to one element: not in the common ELEMENT_KEYS.
+  for (const key of ['reveal', 'items', 'details', 'location']) assert.ok(!Layout.ELEMENT_KEYS.includes(key), key)
+  for (const [name, key] of [['clock', 'reveal'], ['date', 'items'], ['media', 'details'], ['status', 'location'], ['password', 'items']])
+    assert.equal(errorOf(name, {[key]: 'x'}), `layout.${name} has an unknown key: ${key}`)
+  assert.deepEqual(Layout.elementKeys('password'), [...Layout.ELEMENT_KEYS, 'reveal'])
+  assert.deepEqual(Layout.elementKeys('status'), [...Layout.ELEMENT_KEYS, 'items'])
+  assert.deepEqual(Layout.elementKeys('weather'), [...Layout.ELEMENT_KEYS, 'details', 'location'])
+  assert.deepEqual(Layout.elementKeys('clock'), Layout.ELEMENT_KEYS)
+  const items = 'layout.status.items must be a list of one or more of ' + Layout.STATUS_ITEMS.join(', ')
+  for (const value of [[], 'network', null, {network: true}, [...Layout.STATUS_ITEMS, 'network']])
+    assert.equal(errorOf('status', {items: value}), items, JSON.stringify(value))
+  assert.equal(errorOf('status', {items: ['wifi']}), 'layout.status.items must only name ' + Layout.STATUS_ITEMS.join(', '))
+  assert.equal(errorOf('status', {items: ['volume', 'battery', 'volume']}), 'layout.status.items names volume twice')
+  for (const reveal of ['Typing', 'never', true, null, ''])
+    assert.equal(errorOf('password', {reveal}), 'layout.password.reveal must be one of always, typing', String(reveal))
+  for (const details of ['Full', 'all', 1])
+    assert.equal(errorOf('weather', {details}), 'layout.weather.details must be one of temperature, full')
+  for (const location of ['true', 1, null])
+    assert.equal(errorOf('weather', {location}), 'layout.weather.location must be true or false')
+  // The reveal option keeps the field: it can't hide it, and every style accepts it.
+  for (const style of Layout.STYLES.password)
+    assert.ok(Layout.parseLook({layout: {password: {style, reveal: 'typing'}}}).valid, style)
+  assert.deepEqual(Layout.REVEAL_STYLES, ['underline', 'box', 'terminal', 'card'])
+})
+
+test('element-only defaults leave the look canonical; items stay as named', () => {
+  const plain = Layout.parseLook({layout: {password: {reveal: 'always'}, weather: {details: 'temperature', location: false}}})
+  assert.equal(JSON.stringify(plain.look), JSON.stringify(Layout.defaults()))
+  const named = Layout.parseLook({layout: {status: {items: ['battery', 'network']}}})
+  assert.deepEqual(named.look.elements.status.items, ['battery', 'network'], 'the order is kept')
+  assert.notEqual(JSON.stringify(named.look), JSON.stringify(Layout.defaults()), 'naming the items is not the default')
+  // The user's entry is never shared with the look.
+  const entry = {layout: {status: {items: ['volume']}}}
+  Layout.parseLook(entry).look.elements.status.items.push('battery')
+  assert.deepEqual(entry.layout.status.items, ['volume'])
+})
+
+test('an editor is offered each element-only key with its values and defaults', () => {
+  const limits = Layout.elementLimits()
+  assert.deepEqual(limits.password.options, {reveal: {values: ['always', 'typing'], default: 'always',
+    styles: ['underline', 'box', 'terminal', 'card']}})
+  assert.deepEqual(limits.status.options.items.items, Layout.STATUS_ITEMS)
+  assert.deepEqual(limits.status.options.items.defaults, Layout.STATUS_DEFAULT_ITEMS)
+  assert.deepEqual(Object.keys(limits.status.options.items.defaults), Layout.STYLES.status)
+  assert.deepEqual(limits.weather.options, {details: {values: ['temperature', 'full'], default: 'temperature'},
+    location: {values: [false, true], default: false}})
+  for (const name of ['date', 'clock', 'account', 'media', 'calendar']) assert.deepEqual(limits[name].options, {}, name)
+  for (const [style, items] of Object.entries(Layout.STATUS_DEFAULT_ITEMS))
+    assert.equal(errorOf('status', {style, items}), '', style)
 })

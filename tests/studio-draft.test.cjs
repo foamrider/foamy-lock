@@ -409,7 +409,10 @@ test('[ and ] walk the modules in library order', () => {
   assert.equal(Draft.neighbourModule('clock', -1), 'status')
   assert.equal(Draft.neighbourModule('status', 1), 'clock')
   assert.equal(Draft.neighbourModule('nope', 1), 'clock')
-  assert.deepEqual([...Draft.DISPLAY_ORDER].sort(), [...Layout.ELEMENTS].sort())
+  // The weather joins the library with its availability row (round 2, step
+  // R2-4, app side); until then the library leaves it out.
+  assert.deepEqual([...Draft.DISPLAY_ORDER].filter(n => n !== 'weather').sort(),
+    Layout.ELEMENTS.filter(n => n !== 'weather').sort())
 })
 
 test('screens show their native size from Hyprland, then the reference sizes', () => {
@@ -465,7 +468,8 @@ test('comparisons ignore key order; saving restores the lock\'s order', () => {
 
 test('a module dragged in from the library is shown where it lands, in one step', () => {
   const shown = Draft.place({ preset: 'foamy' }, 'calendar', 'top-start', { x: 0.05, y: 0.02 }, true)
-  assert.deepEqual(plain(shown), { preset: 'foamy', layout: { calendar: { zone: 'top-start', hidden: false, offset: { x: 0.05, y: 0.02 } } } })
+  // After the hidden weather, which waits in top-start.
+  assert.deepEqual(plain(shown), { preset: 'foamy', layout: { calendar: { zone: 'top-start', order: 1, hidden: false, offset: { x: 0.05, y: 0.02 } } } })
   // Already in that zone: only shown (and moved).
   assert.deepEqual(plain(Draft.place({ preset: 'foamy' }, 'calendar', 'middle-end', null, true)),
     { preset: 'foamy', layout: { calendar: { hidden: false } } })

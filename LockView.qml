@@ -112,15 +112,44 @@ Item {
     && GraphicsInfo.api !== GraphicsInfo.Software
   readonly property Item wallpaperItem: wallpaper
 
-  // The "system" status style reads /proc while it shows, and only then;
-  // nothing is read or kept while it doesn't. procRoot is for the tests.
+  // The status element's readings beyond network and battery. Each source
+  // runs only while the status shows an item that needs it (status.items,
+  // or the "system" style's own rows); nothing is read or kept otherwise.
+  // Every reading is a plain property here, so a host (Lock Studio) can
+  // supply samples instead: with liveSources false the view opens no
+  // PipeWire, Bluetooth or Hyprland connection of its own.
+  property bool liveSources: true
+  // The status is placed and could show (whether or not its items have
+  // read anything yet: they read only while this holds).
+  readonly property bool statusLive: !placed.status.hidden && (placed.status.screens !== "primary" || primary)
+    && visible && loadBackground
+  // /proc, read every few seconds while awake; procRoot is for the tests.
   property string procRoot: "/proc"
-  readonly property bool systemShown: placed.status.style === "system" && elementShown("status") && visible
-    && loadBackground && displayAwake
+  readonly property bool uptimeWanted: statusLive && displayAwake && statusShows("uptime")
+  readonly property bool loadWanted: statusLive && displayAwake && statusShows("load")
+  readonly property bool memoryWanted: statusLive && displayAwake && statusShows("memory")
+  readonly property bool systemShown: uptimeWanted || loadWanted || memoryWanted
   property real systemUptime: -1
   property string systemLoad: ""
   property real memoryTotal: 0
   property real memoryAvailable: 0
+  // The default sink (PipeWire), read-only.
+  readonly property bool volumeWanted: liveSources && statusLive && statusShows("volume")
+  property bool hasVolume: volumeLoader.item ? volumeLoader.item.available : false
+  property int volumePercent: volumeLoader.item ? volumeLoader.item.percent : 0
+  property bool volumeMuted: volumeLoader.item ? volumeLoader.item.muted : false
+  // The default adapter (Quickshell.Bluetooth), read-only.
+  readonly property bool bluetoothWanted: liveSources && statusLive && statusShows("bluetooth")
+  property bool hasBluetooth: bluetoothLoader.item ? bluetoothLoader.item.available : false
+  property bool bluetoothEnabled: bluetoothLoader.item ? bluetoothLoader.item.enabled : false
+  property int bluetoothConnected: bluetoothLoader.item ? bluetoothLoader.item.connected : 0
+  // The active keyboard layout's name ("" until known), from Hyprland.
+  readonly property bool keyboardWanted: liveSources && statusLive && statusShows("keyboard")
+  property string keyboardLayout: keyboardLoader.item ? keyboardLoader.item.layout : ""
+  // The current weather, checked (Model.parseWeather's weather) and fresh,
+  // or null: the weather element shows only with one. The service fetches
+  // it from Foamy Weather; Lock Studio supplies a sample.
+  property var weather: null
 
   signal submitPassword(string password)
   signal passwordTextEdited(string password)
@@ -223,6 +252,7 @@ Item {
 
   function elementItem(name) {
     switch (name) {
+    case "weather": return weatherBlock
     case "calendar": return calendarBlock
     case "date": return dateLabel
     case "clock": return clockLabel
@@ -241,7 +271,28 @@ Item {
     if (item.screens === "primary" && !primary) return false
     if (name === "account") return showUserInfo && primary
     if (name === "media") return hasMedia
+    if (name === "weather") return weather !== null && weather !== undefined
+    // Items whose sources have nothing yet leave the status empty.
+    if (name === "status") return statusFooter.hasContent
     return true
+  }
+
+  // Whether the status reads `item`: one of its items, or one of the
+  // "system" style's own rows without them.
+  function statusShows(item) {
+    var status = placed.status
+    if (status.items) return status.items.indexOf(item) !== -1
+    return status.style === "system" && ["uptime", "memory", "load"].indexOf(item) !== -1
+  }
+
+  // The ISO week number of a date (the date's "week" style).
+  function weekOf(date) {
+    return Model.isoWeek(date).week
+  }
+
+  // A MET symbol code's icon group (the weather element's icons).
+  function weatherGroup(code) {
+    return Model.weatherGroup(code)
   }
 
   function shownMap() {
@@ -485,31 +536,31 @@ Item {
     layoutError = ""
   }
 
-  onSystemShownChanged: {
-    if (systemShown) return
-    systemUptime = -1
-    systemLoad = ""
+  onUptimeWantedChanged: if (!uptimeWanted) systemUptime = -1
+  onLoadWantedChanged: if (!loadWanted) systemLoad = ""
+  onMemoryWantedChanged: {
+    if (memoryWanted) return
     memoryTotal = 0
     memoryAvailable = 0
   }
 
   FileView {
     id: uptimeFile
-    path: root.systemShown ? root.procRoot + "/uptime" : ""
+    path: root.uptimeWanted ? root.procRoot + "/uptime" : ""
     printErrors: false
     onLoaded: root.systemUptime = Number(String(text()).split(" ")[0])
   }
 
   FileView {
     id: loadFile
-    path: root.systemShown ? root.procRoot + "/loadavg" : ""
+    path: root.loadWanted ? root.procRoot + "/loadavg" : ""
     printErrors: false
     onLoaded: root.systemLoad = String(text()).split(" ").slice(0, 3).join(" ")
   }
 
   FileView {
     id: memoryFile
-    path: root.systemShown ? root.procRoot + "/meminfo" : ""
+    path: root.memoryWanted ? root.procRoot + "/meminfo" : ""
     printErrors: false
     onLoaded: {
       var info = String(text())
@@ -520,16 +571,44 @@ Item {
     }
   }
 
-  // A slow refresh, only while the panel shows.
+  // A slow refresh, only while a reading shows.
   Timer {
     interval: 5000
     repeat: true
     running: root.systemShown
     onTriggered: {
-      uptimeFile.reload()
-      loadFile.reload()
-      memoryFile.reload()
+      if (root.uptimeWanted) uptimeFile.reload()
+      if (root.loadWanted) loadFile.reload()
+      if (root.memoryWanted) memoryFile.reload()
     }
+  }
+
+  // The other sources, created only while an item needs them (see
+  // liveSources). Their files hold the only PipeWire, Bluetooth and Hyprland
+  // imports, so a lock without these items never loads those modules.
+  Loader {
+    id: volumeLoader
+    active: root.volumeWanted
+    source: "elements/sources/VolumeSource.qml"
+  }
+
+  Loader {
+    id: bluetoothLoader
+    active: root.bluetoothWanted
+    source: "elements/sources/BluetoothSource.qml"
+  }
+
+  Loader {
+    id: keyboardLoader
+    active: root.keyboardWanted
+    source: "elements/sources/KeyboardSource.qml"
+  }
+
+  Binding {
+    target: keyboardLoader.item
+    property: "awake"
+    value: root.displayAwake
+    when: keyboardLoader.item !== null
   }
 
   Timer {
@@ -597,8 +676,9 @@ Item {
     Rectangle {
       objectName: "scrim"
       anchors.fill: parent
+      // The same holds for a field shown only while typing (password.reveal).
       color: Qt.rgba(0.005, 0.01, 0.025, Math.max(root.effectiveLook.background.dim,
-        ["underline", "dots"].indexOf(root.placed.password.style) !== -1 ? 0.15 : 0))
+        ["underline", "dots"].indexOf(root.placed.password.style) !== -1 || root.placed.password.reveal === "typing" ? 0.15 : 0))
     }
 
     MouseArea {
@@ -672,6 +752,7 @@ Item {
       glassOpacity: root.elementGlass("password")
       chromeVisible: root.primary
       styleName: root.placed.password.style
+      reveal: root.placed.password.reveal || "always"
       alignment: root.elementAlignment("password")
       x: root.placeX("password", width)
       y: root.placeY("password")
@@ -709,9 +790,25 @@ Item {
       opacity: root.elementOpacity("status")
       glassOpacity: root.elementGlass("status")
       styleName: root.placed.status.style
+      items: root.placed.status.items || null
       visible: root.elementShown("status")
       x: root.placeX("status", width)
       y: root.placeY("status")
+    }
+
+    WeatherElement {
+      id: weatherBlock
+      view: root
+      uiScale: root.elementScale("weather")
+      opacity: root.elementOpacity("weather")
+      glassOpacity: root.elementGlass("weather")
+      styleName: root.placed.weather.style
+      details: root.placed.weather.details || "temperature"
+      showLocation: root.placed.weather.location === true
+      alignment: root.elementAlignment("weather")
+      visible: root.elementShown("weather")
+      x: root.placeX("weather", width)
+      y: root.placeY("weather")
     }
   }
 }

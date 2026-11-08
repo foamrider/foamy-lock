@@ -155,3 +155,89 @@ test('artwork roots are normalised exactly like os.path.abspath (the helper\'s r
   assert.equal(Model.artworkPrecheck('file:///home/u/Music/../Music/a.png', [], ['/home/u/Music']), 'invalid-file-path')
   assert.equal(Model.artworkPrecheck('https://i.scdn.co/a', ['BAD HOST'], []), 'invalid-hosts')
 })
+
+test('ISO week numbers, across year boundaries', () => {
+  const week = (y, m, d) => Model.isoWeek(new Date(y, m - 1, d))
+  assert.deepEqual(week(2026, 9, 26), {week: 39, year: 2026})
+  assert.deepEqual(week(2026, 1, 1), {week: 1, year: 2026}, 'a Thursday')
+  assert.deepEqual(week(2027, 1, 1), {week: 53, year: 2026}, 'a Friday in 2026\'s last week')
+  assert.deepEqual(week(2027, 1, 4), {week: 1, year: 2027})
+  assert.deepEqual(week(2024, 12, 30), {week: 1, year: 2025}, 'a Monday in next year\'s first week')
+  assert.deepEqual(week(2021, 1, 3), {week: 53, year: 2020}, 'a Sunday ends the week')
+  assert.deepEqual(week(2021, 1, 4), {week: 1, year: 2021})
+  assert.deepEqual(week(2023, 1, 1), {week: 52, year: 2022})
+  assert.deepEqual(week(2026, 12, 31), {week: 53, year: 2026})
+  // Every day of a long span: weeks run 1..52|53 and change only on Mondays.
+  let last = week(2019, 12, 30)
+  for (let day = new Date(2019, 11, 31); day < new Date(2031, 0, 1); day.setDate(day.getDate() + 1)) {
+    const now = Model.isoWeek(day)
+    if (day.getDay() === 1) assert.ok(now.week === last.week + 1 || (now.week === 1 && last.week >= 52), day.toDateString())
+    else assert.deepEqual(now, last, day.toDateString())
+    last = now
+  }
+})
+
+test('weather replies are checked field by field and hidden when old', () => {
+  const now = Date.parse('2026-11-08T10:00:00Z')
+  const good = {ok: true, temperature: 6, unit: 'C', code: 'lightrain', condition: 'Light rain', high: 10, low: 2,
+    location: 'Bergen', updatedAt: '2026-11-08T08:30:00.000Z'}
+  const parse = (value, at = now) => Model.parseWeather(typeof value === 'string' ? value : JSON.stringify(value), at)
+  assert.deepEqual(parse(good), {state: 'ok', weather: {temperature: 6, unit: 'C', code: 'lightrain', group: 'rain',
+    condition: 'Light rain', high: 10, low: 2, location: 'Bergen', updatedAtMs: Date.parse(good.updatedAt)}})
+  assert.equal(parse({...good, high: null, low: null}).weather.high, null)
+  assert.equal(parse({...good, unit: 'F', temperature: -40}).state, 'ok')
+  assert.equal(parse({...good, condition: '', location: ''}).state, 'ok')
+  for (const reason of ['no-location', 'offline', 'unsupported', 'error', 'whatever'])
+    assert.deepEqual(parse({ok: false, reason}), {state: 'unavailable', weather: null}, reason)
+  assert.deepEqual(parse({ok: false, reason: 'pending'}), {state: 'pending', weather: null})
+  // Three hours is the cutoff; a clock slightly ahead is fine, far ahead is not.
+  assert.equal(parse(good, Date.parse('2026-11-08T11:30:00Z')).state, 'ok')
+  assert.equal(parse(good, Date.parse('2026-11-08T11:30:01Z')).state, 'stale')
+  assert.equal(parse(good, Date.parse('2026-11-08T08:25:00Z')).state, 'ok')
+  assert.equal(parse(good, Date.parse('2026-11-08T08:00:00Z')).state, 'stale')
+  assert.equal(parse({...good, updatedAt: ''}).state, 'stale', 'unknown age')
+  assert.equal(Model.weatherFresh(parse(good).weather, Date.parse('2026-11-08T12:00:00Z')), false)
+  const invalid = [
+    '', 'nope', '[]', 'null', '{"ok":"true"}', JSON.stringify({...good, ok: undefined}), 'x'.repeat(5000),
+    {...good, temperature: '6'}, {...good, temperature: 6.5}, {...good, temperature: 1e9}, {...good, temperature: null},
+    {...good, high: '10'}, {...good, low: true}, {...good, unit: 'K'}, {...good, unit: undefined},
+    {...good, code: 'Light Rain'}, {...good, code: 'a'.repeat(49)}, {...good, code: ''}, {...good, code: 3},
+    {...good, condition: 'x'.repeat(65)}, {...good, condition: 'Rain\nand more'}, {...good, condition: 7}, {...good, condition: undefined},
+    {...good, location: 'y'.repeat(81)}, {...good, location: 'Ber‮gen'}, {...good, location: '<b>x</b>\u0000'},
+    {...good, updatedAt: 'yesterday'}, {...good, updatedAt: '2026-11-08'}, {...good, updatedAt: 1762590600000}, {...good, updatedAt: undefined}
+  ]
+  for (const value of invalid)
+    assert.deepEqual(parse(value), {state: 'invalid', weather: null}, typeof value === 'string' ? value.slice(0, 40) : JSON.stringify(value).slice(0, 120))
+  // Markup is only text: the lock draws it as plain text.
+  assert.equal(parse({...good, condition: '<img src=x>'}).weather.condition, '<img src=x>')
+})
+
+test('MET symbol codes map to eight icon groups', () => {
+  const groups = {clearsky_day: 'clear', clearsky_night: 'clear', clearsky_polartwilight: 'clear', fair_day: 'partly',
+    partlycloudy_night: 'partly', cloudy: 'cloudy', fog: 'fog', lightrain: 'rain', rainshowers_day: 'rain', heavyrain: 'rain',
+    sleet: 'sleet', lightsleetshowers_night: 'sleet', snow: 'snow', heavysnowshowers_day: 'snow', rainandthunder: 'thunder',
+    lightssnowshowersandthunder_day: 'thunder', heavysleetandthunder: 'thunder', somethingnew: 'cloudy', '': 'cloudy'}
+  for (const [code, group] of Object.entries(groups)) assert.equal(Model.weatherGroup(code), group, code)
+  assert.equal(new Set(Object.values(groups)).size, 8)
+})
+
+test('the keyboard layout comes from the keyboard being typed on', () => {
+  const devices = {keyboards: [
+    {name: 'power-button', active_keymap: 'English (US)', active_layout_index: 3},
+    {name: 'at-translated-set-2-keyboard', active_keymap: 'English (US)', active_layout_index: 0},
+    {name: 'usb-keyboard', active_keymap: 'Norwegian', active_layout_index: 1},
+    {name: 'hl-virtual-keyboard', active_keymap: 'English (US)', active_layout_index: 5}
+  ]}
+  const text = JSON.stringify(devices)
+  assert.equal(Model.keyboardLayout(text, ''), 'Norwegian', 'furthest through the list')
+  assert.equal(Model.keyboardLayout(text, 'at-translated-set-2-keyboard'), 'English (US)', 'named by the event')
+  assert.equal(Model.keyboardLayout(text, 'power-button'), 'Norwegian', 'never a button')
+  for (const bad of ['', 'nope', '{}', '{"keyboards":{}}', '{"keyboards":[]}', '{"keyboards":[{"name":"k","active_keymap":"x\\ny"}]}',
+    JSON.stringify({keyboards: [{name: 'k', active_keymap: 'z'.repeat(81)}]}), JSON.stringify({keyboards: [{name: 'k'}]})])
+    assert.equal(Model.keyboardLayout(bad, ''), '', bad)
+  assert.equal(Model.eventKeyboardName('usb-keyboard,Norwegian'), 'usb-keyboard')
+  assert.equal(Model.eventKeyboardName('hl-virtual-keyboard,English (US)'), '')
+  assert.equal(Model.keyboardShort('English (US)'), 'ENG')
+  assert.equal(Model.keyboardShort('Norwegian'), 'NOR')
+  assert.equal(Model.keyboardShort(''), '')
+})

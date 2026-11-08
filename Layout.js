@@ -3,13 +3,15 @@
 // relies on. Pure functions over plain data; the view does the geometry.
 //
 // A layout maps each element to { zone, style, order, hidden } and the
-// optional scale, opacity, offset, glass and screens (see ELEMENT_KEYS). Zones are a
+// optional scale, opacity, offset, glass and screens (see ELEMENT_KEYS), plus
+// a few keys of its own on some elements (ELEMENT_OPTIONS). Zones are a
 // 3×3 grid named by row (top, middle, bottom) and column (start, center,
 // end); start and end mean left and right in left-to-right languages and
 // mirror in right-to-left ones. Elements in one zone stack by `order`.
 
-// `calendar` came last (1.3.0), so the tie-break order of the others holds.
-var ELEMENTS = ["date", "clock", "account", "password", "media", "status", "calendar"]
+// `calendar` came last (1.3.0) and `weather` after it, so the tie-break
+// order of the others holds.
+var ELEMENTS = ["date", "clock", "account", "password", "media", "status", "calendar", "weather"]
 var ROWS = ["top", "middle", "bottom"]
 var COLUMNS = ["start", "center", "end"]
 var ZONES = (function() {
@@ -19,17 +21,46 @@ var ZONES = (function() {
   return zones
 })()
 var STYLES = {
-  date: ["long", "caps", "short", "serif"],
+  date: ["long", "caps", "short", "serif", "numeric", "stacked", "week"],
   clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog", "small", "poster", "ring"],
   account: ["avatar", "chip", "name"],
   password: ["pill", "underline", "box", "dots", "terminal", "card"],
   media: ["card", "line", "pill", "art"],
   status: ["text", "icons", "pill", "system"],
-  calendar: ["card", "plain"]
+  calendar: ["card", "plain", "week", "mini"],
+  weather: ["compact", "pill", "detailed"]
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]
 var ELEMENT_KEYS = ["zone", "style", "order", "hidden", "scale", "opacity", "offset", "glass", "screens"]
+// What the status element can show, in any of its styles (`status.items`).
+var STATUS_ITEMS = ["network", "battery", "volume", "bluetooth", "keyboard", "uptime", "load", "memory"]
+// What each status style shows without `items` (its built-in behaviour):
+// "system" shows the battery row, or the network row on a machine without
+// one; the others show the battery only where there is one.
+var STATUS_DEFAULT_ITEMS = {
+  text: ["network", "battery"],
+  icons: ["network", "battery"],
+  pill: ["network", "battery"],
+  system: ["uptime", "memory", "load", "battery"]
+}
+// Keys only one element takes (1.3.0, round 2), each optional, validated only there:
+// - password.reveal: "always" (the default) or "typing": the field's surface
+//   shows only once something is typed or a state needs it (REVEAL_STYLES;
+//   the other styles already show only the hint when idle).
+// - status.items: an ordered list of STATUS_ITEMS, each at most once; absent
+//   means the style's built-in contents (STATUS_DEFAULT_ITEMS).
+// - weather.details: "temperature" (the default) or "full" (adds the
+//   condition and today's high and low).
+// - weather.location: true shows the place name (default false: a lock
+//   screen is seen by anyone).
+var ELEMENT_OPTIONS = {
+  password: { reveal: { values: ["always", "typing"], fallback: "always" } },
+  status: { items: { list: STATUS_ITEMS } },
+  weather: { details: { values: ["temperature", "full"], fallback: "temperature" },
+    location: { values: [false, true], fallback: false } }
+}
+var REVEAL_STYLES = ["underline", "box", "terminal", "card"]
 // Free placement and finish (1.3.0), every key optional; absent means the
 // default, which draws exactly as before:
 // - scale: the element's size, a multiple of 0.05 (default 1).
@@ -58,7 +89,7 @@ var PASSWORD_LIMITS = {
 var SCREENS = ["all", "primary"]
 // The account and the field already follow the primary screen (see
 // isPrimary); they take no `screens`.
-var SCREENS_ELEMENTS = ["date", "clock", "media", "status", "calendar"]
+var SCREENS_ELEMENTS = ["date", "clock", "media", "status", "calendar", "weather"]
 // The styles that draw a glass surface, per element.
 var GLASS_STYLES = {
   clock: ["analog", "ring"],
@@ -66,7 +97,8 @@ var GLASS_STYLES = {
   password: ["pill", "box", "card"],
   media: ["card", "pill", "art"],
   status: ["pill", "system"],
-  calendar: ["card"]
+  calendar: ["card", "week"],
+  weather: ["pill", "detailed"]
 }
 // The defaults of the optional keys, left out of a canonical look.
 var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
@@ -99,11 +131,18 @@ function noCalendar() {
   return element("middle-end", "card", 0, true)
 }
 
+// The weather came after it; no built-in preset shows it (it needs Foamy
+// Weather, and the user turns it on).
+function noWeather() {
+  return element("top-start", "compact", 0, true)
+}
+
 // A preset from the elements it shows; everything not named is hidden in a
 // zone of its own. `shown` maps element names to [zone, style, order].
 function compose(shown, back, glass) {
   var hiddenAt = { date: ["top-center", "long"], clock: ["top-center", "thin"], account: ["bottom-center", "avatar"],
-    media: ["bottom-start", "card"], status: ["top-end", "text"], calendar: ["middle-end", "card"] }
+    media: ["bottom-start", "card"], status: ["top-end", "text"], calendar: ["middle-end", "card"],
+    weather: ["top-start", "compact"] }
   var elements = {}
   for (var i = 0; i < ELEMENTS.length; i++) {
     var name = ELEMENTS[i]
@@ -128,7 +167,8 @@ var PRESETS = {
       password: element("bottom-center", "pill", 1),
       media: element("bottom-start", "card", 0),
       status: element("top-end", "text", 0),
-      calendar: noCalendar()
+      calendar: noCalendar(),
+      weather: noWeather()
     },
     background: background("omarchy", 0, 0.25)
   },
@@ -140,7 +180,8 @@ var PRESETS = {
       password: element("bottom-end", "underline", 1),
       media: element("top-start", "line", 0),
       status: element("top-end", "icons", 0),
-      calendar: noCalendar()
+      calendar: noCalendar(),
+      weather: noWeather()
     },
     background: background("omarchy", 0, 0.3)
   },
@@ -152,7 +193,8 @@ var PRESETS = {
       password: element("middle-start", "underline", 3),
       media: element("bottom-start", "line", 0),
       status: element("top-end", "text", 0),
-      calendar: noCalendar()
+      calendar: noCalendar(),
+      weather: noWeather()
     },
     background: background("omarchy", 0, 0.45)
   },
@@ -164,7 +206,8 @@ var PRESETS = {
       password: element("middle-center", "underline", 0),
       media: element("bottom-start", "card", 0, true),
       status: element("top-end", "text", 0, true),
-      calendar: noCalendar()
+      calendar: noCalendar(),
+      weather: noWeather()
     },
     background: background("omarchy", 1, 0.4)
   },
@@ -240,7 +283,8 @@ var PRESETS = {
       password: element("middle-center", "pill", 0),
       media: element("bottom-start", "card", 0, true),
       status: element("top-end", "text", 0, true),
-      calendar: noCalendar()
+      calendar: noCalendar(),
+      weather: noWeather()
     },
     background: background("theme", 0, 0.25)
   }
@@ -273,8 +317,15 @@ function screenColumn(zone, rightToLeft) {
 // error string ("" when valid).
 function elementError(name, value) {
   if (!isPlainObject(value)) return "layout." + name + " must be an object"
+  var keys = elementKeys(name)
   for (var key in value) {
-    if (ELEMENT_KEYS.indexOf(key) === -1) return "layout." + name + " has an unknown key: " + key
+    if (keys.indexOf(key) === -1) return "layout." + name + " has an unknown key: " + key
+  }
+  var options = ELEMENT_OPTIONS[name] || {}
+  for (var option in options) {
+    if (value[option] === undefined) continue
+    var problem = optionError(name, option, options[option], value[option])
+    if (problem) return problem
   }
   if (value.zone !== undefined && ZONES.indexOf(value.zone) === -1)
     return "layout." + name + ".zone must be one of " + ZONES.join(", ")
@@ -315,6 +366,31 @@ function elementError(name, value) {
   return ""
 }
 
+// The keys `name` takes: the common ones and its own (ELEMENT_OPTIONS).
+function elementKeys(name) {
+  return ELEMENT_KEYS.concat(Object.keys(ELEMENT_OPTIONS[name] || {}))
+}
+
+// One element-only key: a value from its list, or (status.items) an ordered
+// list of distinct names. "" when valid.
+function optionError(name, key, spec, value) {
+  var path = "layout." + name + "." + key
+  if (spec.list) {
+    if (!Array.isArray(value) || value.length === 0 || value.length > spec.list.length)
+      return path + " must be a list of one or more of " + spec.list.join(", ")
+    for (var i = 0; i < value.length; i++) {
+      if (spec.list.indexOf(value[i]) === -1) return path + " must only name " + spec.list.join(", ")
+      if (value.indexOf(value[i]) !== i) return path + " names " + value[i] + " twice"
+    }
+    return ""
+  }
+  if (spec.values.indexOf(value) === -1) {
+    var booleans = typeof spec.values[0] === "boolean"
+    return path + " must be " + (booleans ? "true or false" : "one of " + spec.values.join(", "))
+  }
+  return ""
+}
+
 // An element's name in a message.
 function label(name) {
   return name === "password" ? "password field" : name
@@ -336,8 +412,10 @@ function onStep(value, step) {
 }
 
 // What an editor may offer for each element: the numeric ranges, the
-// styles that draw glass (null: the element takes no `glass`) and the
-// `screens` values (null: it takes none).
+// styles that draw glass (null: the element takes no `glass`), the
+// `screens` values (null: it takes none) and its own keys (`options`:
+// { key: { values, default } } or, for status.items, { items, defaults }
+// with each style's built-in contents; {} when it has none).
 function elementLimits() {
   var out = {}
   for (var i = 0; i < ELEMENTS.length; i++) {
@@ -345,19 +423,46 @@ function elementLimits() {
     var limits = copy(limitsFor(name))
     out[name] = { scale: limits.scale, opacity: limits.opacity, offset: limits.offset,
       glass: GLASS_STYLES[name] ? { min: limits.glass.min, max: limits.glass.max, styles: GLASS_STYLES[name].slice() } : null,
-      screens: SCREENS_ELEMENTS.indexOf(name) !== -1 ? SCREENS.slice() : null }
+      screens: SCREENS_ELEMENTS.indexOf(name) !== -1 ? SCREENS.slice() : null,
+      options: elementOptions(name) }
   }
   return out
 }
 
+function elementOptions(name) {
+  var out = {}
+  var options = ELEMENT_OPTIONS[name] || {}
+  for (var key in options) {
+    var spec = options[key]
+    out[key] = spec.list ? { items: spec.list.slice(), defaults: copy(STATUS_DEFAULT_ITEMS) }
+      : { values: spec.values.slice(), default: spec.fallback }
+  }
+  if (name === "password") out.reveal.styles = REVEAL_STYLES.slice()
+  return out
+}
+
+// The element-only keys' defaults (each key belongs to one element).
+var OPTION_DEFAULTS = (function() {
+  var out = {}
+  for (var name in ELEMENT_OPTIONS)
+    for (var key in ELEMENT_OPTIONS[name]) if (!ELEMENT_OPTIONS[name][key].list) out[key] = ELEMENT_OPTIONS[name][key].fallback
+  return out
+})()
+
 // One element in canonical form: the optional keys only where they differ
 // from their defaults (a zero offset is no offset; glass stays once set),
 // and the scale exactly on its step. Absent and default then compare equal.
+// `items` stays as given: absent (the style's own contents) is not the same
+// as naming them.
 function canonicalElement(item) {
   if (item.scale !== undefined) item.scale = Math.round(item.scale * 20) / 20
   for (var key in ELEMENT_DEFAULTS) {
     if (item[key] === ELEMENT_DEFAULTS[key]) delete item[key]
   }
+  for (var option in OPTION_DEFAULTS) {
+    if (item[option] === OPTION_DEFAULTS[option]) delete item[option]
+  }
+  if (Array.isArray(item.items)) item.items = item.items.slice()
   if (item.offset !== undefined) {
     if (item.offset.x === 0 && item.offset.y === 0) delete item.offset
     else item.offset = { x: item.offset.x, y: item.offset.y }
@@ -569,10 +674,11 @@ if (typeof module !== "undefined") module.exports = {
   ELEMENTS: ELEMENTS, ZONES: ZONES, STYLES: STYLES, PASSWORD_ZONES: PASSWORD_ZONES, PRESETS: PRESETS,
   SELECTABLE_PRESETS: SELECTABLE_PRESETS, BACKGROUND_SOURCES: BACKGROUND_SOURCES, DRAWN_SOURCES: DRAWN_SOURCES,
   BACKGROUND_KEYS: BACKGROUND_KEYS, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
-  ELEMENT_KEYS: ELEMENT_KEYS, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
+  ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
+  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
-  elementError: elementError, elementLimits: elementLimits, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
+  elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError,
   canonical: canonical, isOffset: isOffset, lookGeometryError: lookGeometryError
 }

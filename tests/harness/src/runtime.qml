@@ -4,6 +4,13 @@ import Quickshell.Io
 ShellRoot {
   id: shell
   property var stock: null
+  // A stand-in for Foamy Weather's service (4.5 only): a foamy.weather
+  // target in IpcRegistry that answers current() with `reply`, where
+  // __UPDATED__ becomes the time `age` seconds ago (ISO 8601).
+  property var weatherPeer: null
+  property string weatherReply: ""
+  property int weatherAge: 0
+  property int weatherCalls: 0
   // Stands in for Omarchy's shell: records what saveLook asks it to write.
   QtObject {
     id: fakeShell
@@ -17,6 +24,10 @@ ShellRoot {
     }
   }
   Service { id: service; shell: fakeShell }
+  function weatherAnswer() {
+    weatherCalls++
+    return weatherReply.replace("__UPDATED__", new Date(Date.now() - weatherAge * 1000).toISOString())
+  }
   IpcHandler {
     target: "test"
     function submit(value: string): string { service.submitPassword(value); return "ok" }
@@ -95,6 +106,30 @@ ShellRoot {
       return JSON.stringify({first: found.handlerFor("lock") !== shell.stock,
         status: found.call("lock", "status", []), isLocked: found.call("lock", "isLocked", []),
         lock: found.call("lock", "lock", [])})
+    }
+    // "none" removes the target; current false stands in for an older
+    // Foamy Weather (the target without current()).
+    function weatherPeer(reply: string, age: string, current: bool): string {
+      shell.weatherReply = reply
+      shell.weatherAge = Number(age)
+      shell.weatherCalls = 0
+      var kind = reply === "none" ? "" : current ? "current" : "older"
+      if (shell.weatherPeer && shell.weatherPeer.kind === kind) return "ok"
+      if (shell.weatherPeer) {
+        registry().unregister(shell.weatherPeer)
+        shell.weatherPeer.destroy()
+        shell.weatherPeer = null
+      }
+      if (!kind) return "ok"
+      var body = current ? 'function current(): string { return shell.weatherAnswer() }' : 'function forecast(): string { return "{}" }'
+      shell.weatherPeer = Qt.createQmlObject('import qs.Commons; ShellIpc { target: "foamy.weather"; readonly property string kind: "'
+        + kind + '"; ' + body + ' }', shell, "WeatherPeer")
+      return "ok"
+    }
+    function weather(): string {
+      return JSON.stringify({ calls: shell.weatherCalls, state: service.weatherState, polls: service.weatherPolls,
+        pendingLeft: service.weatherPendingLeft, retrying: service.testWeatherRetry.running, wanted: service.weatherWanted,
+        report: service.weatherReport, shown: service.weather })
     }
     function registryCleanup(): string {
       var found = registry()

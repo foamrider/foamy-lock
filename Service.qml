@@ -105,6 +105,28 @@ Item {
   // (no single foamy.lock entry), or "unreadable" (not a version 1 object,
   // or not read at all), where Omarchy skips the write (persistShellConfig).
   property string entryState: "unreadable"
+  // The weather element's data: Foamy Weather's `current()` over
+  // FoamyPeerIpc (see pollWeather), checked by Model.parseWeather. Fetched
+  // only while a lock or preview shows a look with the weather in it: when
+  // it opens, then every weatherPollMs while the display is awake. Shown
+  // while under three hours old; hidden on no answer, an error or an
+  // invalid reply. weatherState is the last answer's state, or "absent"
+  // (no foamy.weather target: nothing is called) or "idle".
+  property var weatherReport: null
+  property string weatherState: "idle"
+  property double weatherClockMs: Date.now()
+  property double weatherPolledAtMs: 0
+  property int weatherPolls: 0
+  property int weatherPendingLeft: 0
+  property bool weatherBusy: false
+  readonly property int weatherPollMs: 900000
+  // A cold service answers "pending" for a few seconds: ask again, at most
+  // this many times, this far apart.
+  readonly property int weatherRetryMs: 10000
+  readonly property int weatherRetries: 3
+  readonly property var weather: Model.weatherFresh(weatherReport, weatherClockMs) ? weatherReport : null
+  readonly property bool weatherWanted: (lockRequested && !displayBlanked && lookShowsWeather(look))
+    || (previewVisible && lookShowsWeather(previewLook || look))
   // Lock surfaces that have keyboard focus: the field shows there, or on
   // every surface while none does (Layout.isPrimary).
   property int activeSurfaces: 0
@@ -619,6 +641,7 @@ Item {
     armBlankTimer()
     logEvent("lock-requested")
     queueSessionLock()
+    openWeather()
 
     Qt.callLater(function() {
       root.refreshBackground()
@@ -627,6 +650,63 @@ Item {
     })
 
     return true
+  }
+
+  // Whether a look shows the weather element.
+  function lookShowsWeather(target) {
+    var item = target && target.elements ? target.elements.weather : null
+    return !!item && !item.hidden
+  }
+
+  // A lock or preview opened: fetch the weather now (when its look shows it).
+  function openWeather() {
+    weatherPolledAtMs = 0
+    Qt.callLater(pollWeatherIfDue)
+  }
+
+  function pollWeatherIfDue() {
+    if (weatherWanted && Date.now() - weatherPolledAtMs >= weatherPollMs) pollWeather()
+  }
+
+  function pollWeather() {
+    if (!weatherWanted) return
+    weatherPendingLeft = weatherRetries
+    weatherPolledAtMs = Date.now()
+    requestWeather()
+  }
+
+  // One call. An absent Foamy Weather costs nothing: without a foamy.weather
+  // target in IpcRegistry nothing is called and no process starts.
+  function requestWeather() {
+    weatherRetryTimer.stop()
+    if (IpcResolver.handlersFor(root, "foamy.weather").length === 0) {
+      weatherState = "absent"
+      weatherReport = null
+      return
+    }
+    if (weatherBusy) return
+    weatherBusy = true
+    weatherPolls++
+    weatherPeer.call("foamy.weather", "current", [], function(ok, output) {
+      root.weatherBusy = false
+      root.applyWeatherReply(ok, output)
+    })
+  }
+
+  // A reply ("Function not found." from an older Foamy Weather is not ok):
+  // pending asks again later and keeps what shows; anything else replaces it.
+  function applyWeatherReply(ok, output) {
+    weatherClockMs = Date.now()
+    var parsed = ok ? Model.parseWeather(output, weatherClockMs) : { state: "unavailable", weather: null }
+    weatherState = parsed.state
+    if (parsed.state === "pending") {
+      if (weatherPendingLeft > 0 && weatherWanted) {
+        weatherPendingLeft--
+        weatherRetryTimer.restart()
+      }
+      return
+    }
+    weatherReport = parsed.state === "ok" ? parsed.weather : null
   }
 
   function finishUnlock() {
@@ -899,6 +979,7 @@ Item {
         Component.onDestruction: if (surfaceActive) root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
         look: root.look
         displayAwake: !root.displayBlanked
+        weather: root.weather
         primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
         onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
@@ -967,6 +1048,7 @@ Item {
       avatarPath: root.userAvatarRenderPath
       avatarVersion: root.userAvatarVersion
       look: root.previewLook || root.look
+      weather: root.weather
       primary: true
       onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
     }
@@ -985,6 +1067,36 @@ Item {
       focus: true
       Keys.onPressed: function(event) { root.previewKeyPressed(event) }
     }
+  }
+
+  FoamyPeerIpc {
+    id: weatherPeer
+    // One call at a time (weatherBusy); the omarchy-shell fallback, for a
+    // target IpcRegistry can't run, is bounded the same way.
+    limit: 1
+  }
+
+  // Every weatherPollMs while a shown look has the weather (the display awake).
+  Timer {
+    interval: root.weatherPollMs
+    repeat: true
+    running: root.weatherWanted
+    onRunningChanged: if (running) Qt.callLater(root.pollWeatherIfDue)
+    onTriggered: root.pollWeather()
+  }
+
+  Timer {
+    id: weatherRetryTimer
+    interval: root.weatherRetryMs
+    onTriggered: if (root.weatherWanted) root.requestWeather()
+  }
+
+  // The three-hour cutoff applies while a report is held, replies or not.
+  Timer {
+    interval: 60000
+    repeat: true
+    running: root.weatherReport !== null
+    onTriggered: root.weatherClockMs = Date.now()
   }
 
   function previewKeyPressed(event) {
@@ -1437,6 +1549,9 @@ Item {
       userPresetsInvalid: root.userPresetsInvalid,
       userPresetsError: root.userPresetsError,
       userPreset: root.userPresetLink,
+      // Never the place name: status is readable by any local process.
+      weather: { state: root.weatherState, shown: root.weather !== null, polls: root.weatherPolls,
+        updatedAt: root.weatherReport ? new Date(root.weatherReport.updatedAtMs).toISOString() : "" },
       locked: root.currentlyLocked(),
       requested: root.lockRequested,
       pending: root.pendingSessionLock,
@@ -1501,6 +1616,7 @@ Item {
       root.refreshUserIdentity()
       root.previewLook = null
       root.previewVisible = true
+      root.openWeather()
       return "ok"
     }
 
@@ -1536,7 +1652,12 @@ Item {
     // elements, zones, styles, the element keys and their limits, presets (with
     // their looks and thumbnails), background sources and the saved look.
     // Read-only. Version 2 added elementLimits (scale, opacity, offset, glass,
-    // screens; see Layout.elementLimits).
+    // screens; see Layout.elementLimits). Version 3 added the weather element,
+    // the new date and calendar styles, each element's own keys
+    // (elementKeysFor; their values and defaults in elementLimits.*.options),
+    // statusItems, and weather: whether Foamy Weather answers here
+    // (`target`: a foamy.weather target is registered; `state`: the last
+    // answer's, see weatherState).
     function catalog(): string {
       var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
       var presets = []
@@ -1544,7 +1665,11 @@ Item {
         var name = Layout.SELECTABLE_PRESETS[i]
         presets.push({ name: name, look: Layout.preset(name), thumbnail: dir + "/previews/presets/" + name + ".png" })
       }
-      return JSON.stringify({ version: 2, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+      var keysFor = {}
+      for (var e = 0; e < Layout.ELEMENTS.length; e++) keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
+      return JSON.stringify({ version: 3, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+        elementKeysFor: keysFor, statusItems: Layout.STATUS_ITEMS,
+        weather: { target: IpcResolver.handlersFor(root, "foamy.weather").length > 0, state: root.weatherState },
         elementLimits: Layout.elementLimits(), screens: Layout.SCREENS,
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
         presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
@@ -1572,6 +1697,7 @@ Item {
       root.refreshUserIdentity()
       root.previewLook = parsed.look
       root.previewVisible = true
+      root.openWeather()
       return "ok"
     }
 
@@ -1617,6 +1743,7 @@ Item {
       root.refreshUserIdentity()
       root.previewLook = user ? user.effective : Layout.preset(name)
       root.previewVisible = true
+      root.openWeather()
       return "ok"
     }
 

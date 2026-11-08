@@ -28,6 +28,7 @@ Item {
   property bool primary: true
   property bool backgroundPrepared: false
   property bool displayAwake: true
+  property var weather: null
   signal artworkFailed(string path)
   signal layoutFellBack(string error, string preset)
 }
