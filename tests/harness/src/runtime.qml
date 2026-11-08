@@ -101,10 +101,20 @@ ShellRoot {
       }
       var banner = find(service, "previewBanner")
       var view = find(service, "previewView")
+      var title = banner ? find(banner, "previewBannerTitle") : null
+      var hint = banner ? find(banner, "previewBannerHint") : null
+      // Drawn, not only set (the banner once laid out at zero width and drew
+      // an empty box): the title whole on its line, the hint with room.
+      function drawn(text) {
+        return !!text && text.text !== "" && text.width > 0 && text.paintedWidth > 0 && text.paintedHeight > 0
+          && !text.truncated && text.opacity > 0
+      }
       return JSON.stringify({ visible: service.previewVisible, holding: service.previewHolding,
-        banner: !!banner && banner.visible, title: banner ? find(banner, "previewBannerTitle").text : "",
-        hint: banner ? find(banner, "previewBannerHint").text : "",
-        plain: !!banner && find(banner, "previewBannerTitle").textFormat === Text.PlainText && find(banner, "previewBannerHint").textFormat === Text.PlainText,
+        banner: !!banner && banner.visible, title: title ? title.text : "", hint: hint ? hint.text : "",
+        plain: !!title && title.textFormat === Text.PlainText && hint.textFormat === Text.PlainText,
+        drawn: drawn(title) && drawn(hint) && title.width >= Math.ceil(title.implicitWidth) - 1
+          && banner.width >= title.width && banner.height > title.height + hint.height,
+        size: banner ? [banner.width, banner.height, title.width, title.implicitWidth, title.paintedWidth] : [],
         view: !!view && view.visible, unlockHint: view ? view.showUnlockHint : null })
     }
     // 4.5 only: what the omarchy-shell socket would answer, with a second

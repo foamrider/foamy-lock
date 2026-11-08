@@ -277,8 +277,9 @@ impl Test {
         let mkdir = |path: &Path| fs::create_dir_all(path).map_err(app::io(path.display()));
         mkdir(&app.join("mocks"))?;
         link(&commons, &app.join("Commons"))?;
-        // The plugin's stamped kit (FoamyIpc, FoamyI18n) and catalogs, unmodified.
-        for name in ["kit", "i18n", "bin"] {
+        // The plugin's stamped kit (FoamyIpc, FoamyI18n), catalogs and elements
+        // (the preview banner), unmodified.
+        for name in ["kit", "i18n", "bin", "elements"] {
             link(source.join(name), &app.join(name))?;
         }
         // Model.js, FingerprintModel.js and any other script Service.qml may import.
@@ -659,6 +660,7 @@ fn preview(test: &Test) -> R {
             && text(&parts, "title")? == "Preview"
             && text(&parts, "hint")? == "Not locked. Any key or click closes the preview."
             && on(&parts, "plain")?
+            && on(&parts, "drawn")?
             && on(&parts, "view")?
             && *at(&parts, "unlockHint")? == json!(false),
         "the preview's banner and view: {parts}"

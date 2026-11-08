@@ -4,6 +4,8 @@
 import QtQuick
 import Quickshell
 import "fixtures" as Fixture
+import "elements" as Elements
+import "kit"
 ShellRoot {
   FloatingWindow {
     id: window
@@ -22,6 +24,17 @@ ShellRoot {
       fingerprintConfigured: true
       onPasswordTextEdited: function(value) { passwordText = value }
       onClearFailureRequested: failureMessage = ""
+    }
+    // The preview overlay's banner (Service.qml), shown over the last state.
+    Elements.PreviewBanner {
+      id: banner
+      parent: view
+      z: 100
+      visible: false
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: FoamyStyle.gap * 3
+      maximumWidth: view.width - FoamyStyle.gap * 4
     }
     QtObject {
       id: player
@@ -163,7 +176,24 @@ ShellRoot {
             if (end.x > field.width / 2) throw new Error("Submit arrow should sit at the leading (left) edge in right-to-left")
             console.log("PASS: right-to-left mirroring with fixed transport order")
             console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
-            Qt.quit()
+            // The preview banner reads in the shell's language: its title whole
+            // on one line, the hint drawn, both inside the screen.
+            banner.visible = true
+            var title = banner.title, bannerHint = banner.hint
+            if (title.text === "" || title.text !== FoamyI18n.t("Preview") || bannerHint.text === "")
+              throw new Error("The preview banner has no text: " + JSON.stringify([title.text, bannerHint.text]))
+            if (title.truncated || !(title.paintedWidth > 0) || title.width < Math.ceil(title.implicitWidth) - 1
+                || bannerHint.truncated || !(bannerHint.paintedWidth > 0) || !(bannerHint.width > 0))
+              throw new Error("The preview banner's text isn't drawn: " + JSON.stringify([banner.width, title.width, title.implicitWidth, title.paintedWidth, bannerHint.width]))
+            var bannerAt = banner.mapToItem(view, 0, 0)
+            if (bannerAt.x < 0 || bannerAt.x + banner.width > view.width || banner.height < title.height + bannerHint.height)
+              throw new Error("The preview banner doesn't fit: " + bannerAt.x + " " + banner.width + "x" + banner.height)
+            if (!view.grabToImage(function(shot) {
+              if (!shot.saveToFile(Qt.resolvedUrl("capture-banner.png").toString().replace("file://", "")))
+                throw new Error("Screenshot save failed")
+              console.log("PASS: preview banner reads " + JSON.stringify(title.text) + " " + JSON.stringify(bannerHint.text))
+              Qt.quit()
+            })) throw new Error("Screenshot capture failed")
             return
           }
           step.restart()

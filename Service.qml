@@ -15,6 +15,7 @@ import "Model.js" as Model
 // Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
 import "Layout.js" as Layout
+import "elements" as Elements
 
 Item {
   id: root
@@ -1214,52 +1215,12 @@ Item {
     }
 
     // Says what this is: a look on the screen, not a lock.
-    Rectangle {
-      objectName: "previewBanner"
+    Elements.PreviewBanner {
       visible: root.previewVisible
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.top: parent.top
       anchors.topMargin: FoamyStyle.gap * 3
-      width: Math.min(parent.width - FoamyStyle.gap * 4, bannerColumn.implicitWidth + FoamyStyle.gap * 4)
-      height: bannerColumn.implicitHeight + FoamyStyle.gap * 2
-      radius: FoamyStyle.radius
-      color: Qt.alpha(FoamyPalette.background, 0.92)
-      border.width: 1
-      border.color: FoamyPalette.border
-      Accessible.role: Accessible.AlertMessage
-      Accessible.name: previewBannerTitle.text + ". " + previewBannerHint.text
-
-      Column {
-        id: bannerColumn
-        anchors.centerIn: parent
-        width: parent.width - FoamyStyle.gap * 4
-        spacing: Math.round(FoamyStyle.gap / 2)
-        Text {
-          id: previewBannerTitle
-          objectName: "previewBannerTitle"
-          textFormat: Text.PlainText
-          width: parent.width
-          text: FoamyI18n.t("Preview")
-          horizontalAlignment: Text.AlignHCenter
-          elide: Text.ElideRight
-          color: FoamyPalette.text
-          font.family: FoamyStyle.fontFamily
-          font.pixelSize: FoamyStyle.font.heading
-          font.weight: Font.DemiBold
-        }
-        Text {
-          id: previewBannerHint
-          objectName: "previewBannerHint"
-          textFormat: Text.PlainText
-          width: parent.width
-          text: FoamyI18n.t("Not locked. Any key or click closes the preview.")
-          horizontalAlignment: Text.AlignHCenter
-          wrapMode: Text.Wrap
-          color: FoamyPalette.secondaryText
-          font.family: FoamyStyle.fontFamily
-          font.pixelSize: FoamyStyle.font.body
-        }
-      }
+      maximumWidth: parent.width - FoamyStyle.gap * 4
     }
 
     MouseArea {

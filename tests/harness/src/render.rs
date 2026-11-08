@@ -94,6 +94,19 @@ fn run_host(name: &str, shell: &Path, language: &str) -> Result<PathBuf, String>
             base.display()
         ));
     }
+    // The preview banner's title in the languages the plugin ships (other
+    // languages: any text; render.qml refuses an empty or undrawn one).
+    let title = match language {
+        "en" => "Preview",
+        "no" => "Forhåndsvisning",
+        _ => "",
+    };
+    if !output.contains(&format!("PASS: preview banner reads \"{title}")) {
+        return Err(format!(
+            "the preview banner doesn't read {title:?} ({name}, language {language}); log: {}",
+            base.display()
+        ));
+    }
     for (index, expected) in SIZES.iter().enumerate() {
         let path = dir.join(format!("capture-{index}.png"));
         let bytes = fs::read(&path).map_err(app::io(path.display()))?;
@@ -127,6 +140,8 @@ fn keep_captures(app: &Path, host: Option<&str>) -> Result<(), String> {
         let name = format!("capture-{index}.png");
         fs::copy(app.join(&name), out.join(&name)).map_err(app::io(&name))?;
     }
+    fs::copy(app.join("capture-banner.png"), out.join("capture-banner.png"))
+        .map_err(app::io("capture-banner.png"))?;
     Ok(())
 }
 
