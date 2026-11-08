@@ -436,6 +436,27 @@ Decisions made while building:
 
 Open: live validation on a real lock (as before), and steps 4 to 9.
 
+**Step 4, Rust half** (branch `feat/studio-native`, merged): `foamy-lock-helper studio` is in
+(`native/src/studio/`, contract in its module docs): `open` (root build,
+raise, detached start), `install`/`uninstall`, `draft-load`/`draft-save`/
+`draft-clear`, `apply` and `pick-picture`. 47 unit tests and 4 CLI tests;
+binaries rebuilt and pinned (x86_64 +132 KiB, aarch64 +113 KiB; no new
+crates).
+- **Spike, single-file links:** they work. An offscreen Quickshell ran a
+  root whose `shell.qml` and `LockView.qml` are symlinks; it loaded
+  `LockView` with `qs.Commons` and answered `studio raise`. Quickshell
+  keys the instance by the root path, not the link target. So the root
+  links files and doesn't copy them.
+- **Picker:** a hand-written D-Bus client (std only) instead of zbus.
+  Tests run it against an in-process fake bus and portal; the real
+  portal hasn't been called yet.
+- **Root extras:** `previews` and `bin` are linked too. The app finds
+  the helper as `bin/$HOSTTYPE/foamy-lock-helper` from its own root
+  through FoamyNative.
+- **Apply:** an unclear reply is retried once with `saveLook`, not
+  followed by a `catalog` re-read (see Drafts and saving). An `unchanged`
+  answer to the retry confirms the save.
+
 ## Open questions for the user
 
 None. Decisions 5 to 7 were confirmed on 2026-11-08 (Rust for the logic,
@@ -480,26 +501,3 @@ code; both blockers checked by hand):
   - The `.desktop` entry has an owner (the launcher's `install`).
   - Facts: zone overflow isn't checked; glass and primary semantics;
     `displayAwake`; ordering against the pending real-lock test.
-
-## Progress
-
-**2026-11-08, step 4 (Rust half):** `foamy-lock-helper studio` is in
-(`native/src/studio/`, contract in its module docs): `open` (root build,
-raise, detached start), `install`/`uninstall`, `draft-load`/`draft-save`/
-`draft-clear`, `apply` and `pick-picture`. 47 unit tests and 4 CLI tests;
-binaries rebuilt and pinned (x86_64 +132 KiB, aarch64 +113 KiB; no new
-crates).
-- **Spike, single-file links:** they work. An offscreen Quickshell ran a
-  root whose `shell.qml` and `LockView.qml` are symlinks; it loaded
-  `LockView` with `qs.Commons` and answered `studio raise`. Quickshell
-  keys the instance by the root path, not the link target. So the root
-  links files and doesn't copy them.
-- **Picker:** a hand-written D-Bus client (std only) instead of zbus.
-  Tests run it against an in-process fake bus and portal; the real
-  portal hasn't been called yet.
-- **Root extras:** `previews` and `bin` are linked too. The app finds
-  the helper as `bin/$HOSTTYPE/foamy-lock-helper` from its own root
-  through FoamyNative.
-- **Apply:** an unclear reply is retried once with `saveLook`, not
-  followed by a `catalog` re-read (see Drafts and saving). An `unchanged`
-  answer to the retry confirms the save.
