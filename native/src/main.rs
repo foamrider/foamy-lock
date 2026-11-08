@@ -153,6 +153,7 @@ use serde_json::{Value, json};
 mod fetch;
 mod image;
 mod store;
+mod studio;
 mod url;
 mod wallpaper;
 
@@ -323,7 +324,7 @@ fn watch(started: Instant, wake: OwnedFd) {
 
 /// Marks every descriptor above stderr close-on-exec, so nothing the shell
 /// leaked reaches bubblewrap or the decoder (Python's `close_fds=True`).
-fn cloexec_inherited() {
+pub(crate) fn cloexec_inherited() {
     const CLOSE_RANGE_CLOEXEC: libc::c_uint = 1 << 2;
     // SAFETY: close_range(2) with integer arguments only.
     let done = unsafe {
@@ -429,10 +430,14 @@ fn artwork() -> Value {
 }
 
 fn main() -> ExitCode {
+    // Lock Studio: its own replies (`json::error_reply`) and no sandbox.
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "studio") {
+        return json::run(|| studio::main(&args[1..]), json::error_reply);
+    }
     // A reply on every path, even a helper bug (then exit 101, no core dump).
     json::run(
         || -> Result<Value, foamy_helper::Failure> {
-            let args: Vec<OsString> = std::env::args_os().skip(1).collect();
             match (args.first().and_then(|a| a.to_str()), args.len()) {
                 (Some("artwork"), 1) => Ok(artwork()),
                 (Some("wallpaper"), 2) => Ok(wallpaper::probe(&args[1])),
