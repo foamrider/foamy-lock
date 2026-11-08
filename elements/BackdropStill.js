@@ -456,3 +456,43 @@ function starsPoints(ctx, s) {
 }
 
 animation("stars", 7, stars, starsPoints)
+
+// ---- matrix (matrix.frag) ---------------------------------------------------
+
+function matrixDot(glyph, gx, gy) {
+  var mirrored = hash(glyph, 0, 7) < 0.65 ? Math.min(gx, 4 - gx) : gx
+  return hash(glyph, mirrored + 5 * gy, 8) < 0.46
+}
+
+function matrixPoints(ctx, s) {
+  var head = mix3(s.accent, s.ink, 0.75)
+  for (var l = 0; l < 2; l++) {
+    var scale = l === 0 ? 0.62 : 1
+    var cw = 15 * s.unit * scale, ch = 21 * s.unit * scale
+    var salt = 200 + 20 * l
+    var offset = l === 0 ? 0.5 * cw : 0
+    var rows = Math.ceil(s.h / ch)
+    var gain = l === 0 ? 0.32 : 0.78
+    var trailColor = l === 0 ? mix3(s.accent, s.base, 0.3) : s.accent
+    var dw = 0.72 * cw / 5, dh = 0.8 * ch / 7
+    for (var c = Math.floor(offset / cw); c * cw - offset < s.w; c++) {
+      var period = Math.floor(rows * (1.15 + 0.9 * hash(c, 0, salt)))
+      var laps = Math.floor((l === 0 ? 10 : 14) + 14 * hash(c, 0, salt + 1))
+      var top = Math.floor(fract(hash(c, 0, salt + 2) + laps * s.t / s.loop) * period)
+      var trail = 7 + Math.floor(22 * hash(c, 0, salt + 3))
+      for (var r = 0; r < rows; r++) {
+        var behind = posmod(top - r, period)
+        if (behind >= trail) continue
+        var changes = Math.floor(60 + 300 * hash(c, r, salt + 4))
+        var glyph = Math.floor(fract(hash(c, r, salt + 5) + s.t / s.loop) * changes) + 1000 * c + 37 * r
+        ctx.fillStyle = css(behind < 1 ? head : trailColor, Math.pow(1 - behind / trail, 1.6) * gain)
+        var x0 = c * cw - offset + 0.14 * cw, y0 = r * ch + 0.1 * ch
+        for (var gy = 0; gy < 7; gy++)
+          for (var gx = 0; gx < 5; gx++)
+            if (matrixDot(glyph, gx, gy)) ctx.fillRect(x0 + (gx + 0.1) * dw, y0 + (gy + 0.1) * dh, 0.8 * dw, 0.8 * dh)
+      }
+    }
+  }
+}
+
+animation("matrix", 9.5, skyField(0.7, 0.7), matrixPoints)

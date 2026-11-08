@@ -114,11 +114,12 @@ var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
 // names, still read: the theme's background and #000000 (canonical looks
 // say "color"). The drawn ones (DRAWN_SOURCES) are the animations;
 // "constellation" is the older name of "stars", still read.
-var BACKGROUND_SOURCES = ["omarchy", "picture", "color", "theme", "black", "aurora", "rain", "stars", "constellation"]
+var BACKGROUND_SOURCES = ["omarchy", "picture", "color", "theme", "black", "aurora", "rain", "stars", "constellation",
+  "matrix"]
 // The animations, drawn by the view in the theme's colours (elements/
 // Backdrop.qml, a shader each in elements/shaders), in the order Lock
 // Studio's picker lists them.
-var DRAWN_SOURCES = ["aurora", "rain", "stars"]
+var DRAWN_SOURCES = ["aurora", "rain", "stars", "matrix"]
 // Older names of animations, read as the one they became.
 var DRAWN_ALIASES = { constellation: "stars" }
 var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor", "motion", "pauseOnBattery", "color"]
