@@ -1,4 +1,4 @@
-# foamy-kit 0.5.2 c22726fd9bcc76692032f5158a33303838c556215b571f62f168ec4e7e1507a2 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.5.2 4f1ec25593e26533d81df8bd7ec8dafae76fa1c6e09ff495bf3564c7ec37339e — do not edit; change foamy-kit and run sync
 FoamyButton 1.0 FoamyButton.qml
 FoamyDropdown 1.0 FoamyDropdown.qml
 singleton FoamyI18n 1.0 FoamyI18n.qml
@@ -8,6 +8,7 @@ FoamyIpcPreference 1.0 FoamyIpcPreference.qml
 singleton FoamyMotion 1.0 FoamyMotion.qml
 FoamyNumberField 1.0 FoamyNumberField.qml
 singleton FoamyPalette 1.0 FoamyPalette.qml
+FoamyPeerIpc 1.0 FoamyPeerIpc.qml
 singleton FoamyStyle 1.0 FoamyStyle.qml
 FoamyTextSettingField 1.0 FoamyTextSettingField.qml
 FoamyWallClock 1.0 FoamyWallClock.qml
