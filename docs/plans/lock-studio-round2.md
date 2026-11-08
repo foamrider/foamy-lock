@@ -395,6 +395,55 @@ is memory handling and safe handling of input data:
     the JSON request parser, run for a bounded time.
   - Fixes on a branch with tests for each finding.
 
+## Round 3 results (2026-11-08)
+
+The review (read-only, with fuzz drivers for the D-Bus reader, the JSON
+requests and the binary sniffers) reported these findings; the fixes, one
+commit each on `feat/layout-engine`:
+- **Rich text (Medium).** 33 studio `Text`s used the default AutoText, so a
+  file named `<img src='data:…'>.png` made Qt decode the image in Studio's
+  process, outside the sandbox. Every Text is now PlainText (the lock's
+  already were); `tests/plaintext.test.cjs` lints every QML file outside
+  `tests/` (kit included) and refuses rich formats; the studio harness picks
+  such a file name and walks every Text. `52ad2ea`
+- **D-Bus reader (Medium/Low).** The fuzzer hung it: an `a()` or `a{}`
+  element read nothing, so a long array looped forever, and `{)` passed
+  as a bracket. `Reader::array` refuses an element that doesn't advance;
+  `split_type` checks brackets on a stack (matching kinds, no empty
+  structs, `{` only after `a`, two fields, a basic key, nesting ≤ 32);
+  `decode` refuses a bad body signature; the deadline is checked before
+  every message; `text()`'s `length + 1` is checked; the portal's
+  `Response` counts only from the unique name that answered `OpenFile`.
+  Studio's pick-picture runs under `timeout 1830s`. The reviewer's hang
+  inputs are regression tests. `350cd96`
+- **Preview overlay (Low).** It looked like the lock. Now a "Preview"
+  banner (en, no), no unlock hint, 500 ms of swallowed keys after it
+  closes (the window stays mapped, empty, pointer-transparent; a real lock
+  ends it), and `lock preview` answers `locked` while locked. `b005f4d`
+- **IPC sizes (Low).** `previewLook`, `saveLook` and `savePreset` refuse
+  an argument over 64 KiB before `JSON.parse`; `parseUserPresets` stops at
+  the 50th item (or the 256 KiB one) and counts the rest unread. `b084006`
+- **Decoder seccomp denylists (foamy-kit).** Both profiles also deny
+  io_uring, `add_key`, `request_key`, `keyctl` and `userfaultfd`; the image
+  decoder's pinned bytes changed on purpose (foamy-kit `89659cb`, 0.6.0
+  unreleased). Synced and the helper rebuilt and verified. `6c633e9`
+- **Optional: Omarchy's poster.sh.** A video Omarchy wallpaper's still came
+  from ffmpegthumbnailer outside any sandbox; the lock and Studio now use
+  the helper's sandboxed `video-probe` poster (the same probe and cache as a
+  video look). On 4.0, which has no poster.sh, a video wallpaper now gets a
+  still too. `1a64622`
+
+Checks, all green: foamy-kit `tests/run-all.sh` and its crate (92 unit
+tests: the BPF interpreter for both profiles and arches, live probes on
+x86_64); node (115); harness parity, runtime, layout, render, styles,
+video, studio en/no/ar; kit-check; `check.sh --lint-only`; qmllint (the
+same warning kinds as at 607f2fe); `omarchy-plugin-validate`;
+build-native `--test` and `--verify` (both arches reproducible).
+
+Not fixed: Qt Quick Controls' own placeholder inside the kit's text field
+keeps its default text format (Studio sets no placeholder; the studio
+harness skips it by name).
+
 ## Risks
 
 - **Weather couples two plugins.** It goes over IPC only, and the lock
