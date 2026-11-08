@@ -86,20 +86,22 @@ test('what a shape wraps: zones, modules or nothing', () => {
   const island = { preset: 'island' }
   // Modules: the shown ones in its zones; zones: the modules' zones.
   const modules = Draft.setWrapMode(island, 0, 'modules')
-  assert.deepEqual(shapesOf(modules)[0].wrap, { modules: ['date', 'clock'] })
+  assert.deepEqual(shapesOf(modules)[0].wrap, { modules: ['date', 'clock', 'media'] })
   assert.deepEqual(shapesOf(Draft.setWrapMode(modules, 0, 'zones'))[0].wrap, { zones: ['top-center'] })
   assert.equal(Draft.setWrapMode(island, 0, 'none'), island, 'a box wraps something')
   const panel = Draft.setWrapMode({ preset: 'sheet' }, 0, 'none')
   assert.equal(shapesOf(panel)[0].wrap, undefined)
   assert.deepEqual(shapesOf(Draft.setWrapMode(panel, 0, 'modules'))[0].wrap, { modules: ['clock'] })
   // One more or one less; the last one stays.
-  const both = Draft.toggleWrapped(modules, 0, 'media', true)
+  const two = Draft.toggleWrapped(modules, 0, 'media', false)
+  assert.deepEqual(shapesOf(two)[0].wrap, { modules: ['date', 'clock'] })
+  const both = Draft.toggleWrapped(two, 0, 'media', true)
   assert.deepEqual(shapesOf(both)[0].wrap, { modules: ['date', 'clock', 'media'] })
-  const one = Draft.toggleWrapped(Draft.toggleWrapped(modules, 0, 'date', false), 0, 'clock', false)
+  const one = Draft.toggleWrapped(Draft.toggleWrapped(two, 0, 'date', false), 0, 'clock', false)
   assert.deepEqual(shapesOf(one)[0].wrap, { modules: ['clock'] })
   assert.deepEqual(shapesOf(Draft.toggleWrapped(island, 0, 'top-end', true))[0].wrap, { zones: ['top-center', 'top-end'] })
   assert.equal(Draft.wrapMode(shapesOf(island)[0]), 'zones')
-  assert.deepEqual(plain(Draft.wrappedModules(Draft.lookOf(island), shapesOf(island)[0])), ['clock', 'date'])
+  assert.deepEqual(plain(Draft.wrappedModules(Draft.lookOf(island), shapesOf(island)[0])), ['clock', 'date', 'media'])
 })
 
 test('"Wrap in a shape" finds the shape around a module', () => {

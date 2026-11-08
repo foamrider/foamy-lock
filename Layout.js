@@ -267,24 +267,26 @@ var PRESETS = {
     },
     background: background("omarchy", 1, 0.4)
   },
-  // Everything in one band along the bottom.
-  "dock": compose({ clock: ["bottom-start", "small"], password: ["bottom-center", "box"], date: ["bottom-end", "short"],
-    media: ["top-start", "line"], status: ["top-end", "icons"] }, background("omarchy", 0.3, 0.2, "strip")),
-  // The time and date in a pill at the top, the field in the middle.
-  "island": compose({ clock: ["top-center", "small"], date: ["top-center", "short", 1], password: ["middle-center", "box"],
-    media: ["bottom-start", "line"], status: ["top-end", "icons"] }, background("omarchy", 0.4, 0.25, "island")),
-  // A solid panel on the start side with the clock and the field.
+  // A dock along the bottom: the time and date, the field and the player.
+  "dock": compose({ clock: ["bottom-start", "small"], date: ["bottom-start", "short", 1], password: ["bottom-center", "box"],
+    media: ["bottom-end", "pill"], status: ["top-end", "icons"] }, background("omarchy", 0.3, 0.2, "strip")),
+  // A dynamic island at the top: the time and date, and what plays, in one
+  // black pill that grows with it; the field in the middle.
+  "island": compose({ clock: ["top-center", "small"], date: ["top-center", "short", 1], media: ["top-center", "minimal", 2],
+    password: ["middle-center", "pill", 0, { reveal: "always" }], status: ["top-end", "icons"] },
+  background("omarchy", 0.4, 0.3, "island")),
+  // A solid panel on the start side with the date, clock, name and field.
   "split": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "bold", 1], account: ["middle-start", "name", 2],
-    password: ["middle-start", "box", 3], media: ["bottom-start", "line"], status: ["top-end", "text"] },
-  background("omarchy", 0, 0.1, "split")),
-  // A frosted panel on the end side with the account, clock and field.
+    password: ["middle-start", "box", 3], media: ["bottom-start", "minimal"], status: ["top-end", "text"] },
+  background("omarchy", 0, 0.15, "split")),
+  // Everything on a frosted sheet at the end side, the wallpaper free.
   "sheet": compose({ account: ["middle-end", "avatar"], clock: ["middle-end", "thin", 1], date: ["middle-end", "long", 2],
-    password: ["middle-end", "pill", 3], media: ["bottom-start", "card"], status: ["top-start", "icons"] },
+    password: ["middle-end", "pill", 3], media: ["bottom-end", "pill"], status: ["top-end", "icons"] },
   background("omarchy", 0, 0.12, "sheet")),
-  // A greeting card in the middle.
-  "card": compose({ account: ["middle-center", "avatar"], clock: ["middle-center", "small", 1], date: ["middle-center", "short", 2],
-    password: ["middle-center", "box", 3], media: ["bottom-start", "line"], status: ["top-end", "icons"] },
-  background("omarchy", 0.5, 0.3, "card")),
+  // A greeting card in the middle: your picture, the time, the date, the field.
+  "card": compose({ account: ["middle-center", "avatar"], clock: ["middle-center", "thin", 1, { scale: 0.5 }],
+    date: ["middle-center", "caps", 2], password: ["middle-center", "box", 3], media: ["bottom-start", "minimal"],
+    status: ["top-end", "icons"] }, background("omarchy", 0.5, 0.3, "card")),
   // Black bars top and bottom: the time in one, the field in the other.
   "cinema": compose({ clock: ["top-center", "small"], date: ["top-center", "caps", 1], password: ["bottom-center", "underline"] },
     background("omarchy", 0, 0.1, "cinema")),

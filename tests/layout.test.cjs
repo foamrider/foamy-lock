@@ -432,11 +432,12 @@ test('password.reveal defaults to each style\'s own drawing and drops out there'
   assert.equal(Layout.canonical(look).elements.password.reveal, 'typing')
   assert.equal(Layout.revealOf(null), 'always')
   assert.ok(Layout.optionFollowsStyle('reveal') && !Layout.optionFollowsStyle('details') && !Layout.optionFollowsStyle('items'))
-  // Every built-in preset keeps its field's drawing.
+  // Every built-in preset keeps its field's drawing, except the island's
+  // pill, which shows its glass while empty too.
   for (const name of Layout.SELECTABLE_PRESETS) {
     const item = Layout.preset(name).elements.password
-    assert.equal(item.reveal, undefined, name)
-    assert.equal(Layout.revealOf(item), own[item.style], name)
+    assert.equal(item.reveal, name === 'island' ? 'always' : undefined, name)
+    assert.equal(Layout.revealOf(item), name === 'island' ? 'always' : own[item.style], name)
   }
 })
 
