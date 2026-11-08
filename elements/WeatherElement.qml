@@ -39,8 +39,11 @@ Item {
   readonly property real maxWidth: view.contentWidthAt(uiScale)
   readonly property real padding: Math.round((pill ? 18 : detailed ? 20 : 0) * unit)
   readonly property real gap: Math.round(10 * unit)
-  // "compact" and "detailed": the second line (condition, high and low).
-  readonly property string detailText: [conditionText, rangeText].filter(function(part) { return part !== "" }).join("  ·  ")
+  // "compact": the second line, the high and low first (they are short, so
+  // a long condition elides after them); "detailed": the condition alone,
+  // the high and low on a line of their own.
+  readonly property string detailText: detailed ? conditionText
+    : [rangeText, conditionText].filter(function(part) { return part !== "" }).join("  ·  ")
   readonly property real headWidth: icon.width + gap + temperature.implicitWidth
   // The width it needs (and takes: the weather never fills the centre column).
   readonly property real naturalWidth: detailed ? Math.min(maxWidth, Math.round(300 * unit))
@@ -51,9 +54,11 @@ Item {
 
   objectName: "weatherBlock"
   width: naturalWidth
-  height: pill ? Math.round(44 * unit)
-    : (placeLine.visible ? placeLine.y + placeLine.height : detailLine.visible ? detailLine.y + detailLine.height
-      : head.y + head.height) + padding
+  height: pill ? Math.round(44 * unit) : lastLineBottom + padding
+  // Where the lines below the temperature end.
+  readonly property real lastLineBottom: placeLine.visible ? placeLine.y + placeLine.height
+    : rangeLine.visible ? rangeLine.y + rangeLine.height
+    : detailLine.visible ? detailLine.y + detailLine.height : head.y + head.height
 
   // Where a part of `partWidth` starts inside the element, on screen.
   function startX(partWidth) {
@@ -146,12 +151,31 @@ Item {
     elide: Text.ElideRight
   }
 
+  // "detailed": today's high and low.
+  Text {
+    id: rangeLine
+    objectName: "weatherRange"
+    visible: weather.detailed && weather.rangeText !== ""
+    x: weather.padding
+    y: (detailLine.visible ? detailLine.y + detailLine.height : head.y + head.height) + Math.round(2 * weather.unit)
+    width: weather.innerWidth
+    textFormat: Text.PlainText
+    text: weather.rangeText
+    color: weather.view.foreground
+    opacity: 0.8
+    font.family: weather.view.textFontFamily
+    font.pixelSize: Math.round(14 * weather.unit)
+    horizontalAlignment: detailLine.horizontalAlignment
+    elide: Text.ElideRight
+  }
+
   Text {
     id: placeLine
     objectName: "weatherLocation"
     visible: !weather.pill && weather.locationText !== ""
     x: weather.padding
-    y: (detailLine.visible ? detailLine.y + detailLine.height : head.y + head.height) + Math.round(2 * weather.unit)
+    y: (rangeLine.visible ? rangeLine.y + rangeLine.height : detailLine.visible ? detailLine.y + detailLine.height
+      : head.y + head.height) + Math.round(2 * weather.unit)
     width: weather.innerWidth
     textFormat: Text.PlainText
     text: weather.locationText
