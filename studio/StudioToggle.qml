@@ -4,12 +4,14 @@ import qs.Commons as Commons
 import "kit"
 
 // A labelled switch: the label on the reading start, the switch on the
-// end. The switch is drawn as the shell's own (Ui/ToggleSwitch, which the
-// kit's FoamyToggle uses): a track filled and bordered by the theme's
-// "selected" or "normal" control state, a knob thrown to the end when on,
-// pill-shaped when Hyprland's corners are rounded, square when they're
-// sharp. The app's root has no `qs.Ui`, so it is drawn here from the same
-// Commons tokens.
+// end. Its shape is the shell's own (Ui/ToggleSwitch, which the kit's
+// FoamyToggle uses): a knob thrown to the end when on, pill-shaped when
+// Hyprland's corners are rounded, square when they're sharp; off, the
+// theme's "normal" control fill and border. On, the track is the accent
+// with the accent's own text colour for the knob: the theme's "selected"
+// state is often a faint grey (Catppuccin's is the foreground at 18 %),
+// too close to off for a switch that has no other sign of its state. The
+// app's root has no `qs.Ui`, so it is drawn here from the Commons tokens.
 //
 // `checked` is bound by the caller, `toggled()` asks for the change. Space
 // or Enter flips it; focus draws a ring around the switch.
@@ -29,7 +31,7 @@ Item {
   readonly property int trackWidth: Math.round(trackHeight * 1.9)
   readonly property int knobSize: Math.max(6, Math.round(trackHeight * 0.72))
   readonly property int knobInset: Math.max(1, Math.round((trackHeight - knobSize) / 2))
-  readonly property var borderSpec: Commons.Border.controlSpec(checked ? "selected" : "normal", foreground, accent)
+  readonly property var borderSpec: Commons.Border.controlSpec("normal", foreground, accent)
   readonly property alias switchItem: track
 
   implicitHeight: FoamyStyle.controlHeight
@@ -79,9 +81,8 @@ Item {
       width: toggle.trackWidth
       height: toggle.trackHeight
       radius: Style.cornerRadius > 0 ? height / 2 : 0
-      color: toggle.checked ? Style.selectedFillFor(toggle.foreground, toggle.accent)
-        : Style.normalFillFor(toggle.foreground, toggle.accent)
-      border.width: Commons.Border.uniformWidth(toggle.borderSpec)
+      color: toggle.checked ? toggle.accent : Style.normalFillFor(toggle.foreground, toggle.accent)
+      border.width: toggle.checked ? 0 : Commons.Border.uniformWidth(toggle.borderSpec)
       border.color: Commons.Border.color(toggle.borderSpec)
 
       Rectangle {
@@ -92,7 +93,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         // Thrown to the reading end when on (mirrored right to left).
         x: toggle.checked !== toggle.mirrored ? track.width - width - toggle.knobInset : toggle.knobInset
-        color: toggle.checked ? Style.selectedStateColor(toggle.foreground, toggle.accent) : Qt.darker(toggle.foreground, 1.25)
+        color: toggle.checked ? FoamyPalette.onAccent : Qt.darker(toggle.foreground, 1.25)
       }
     }
   }
