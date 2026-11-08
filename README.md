@@ -299,6 +299,71 @@ styles, the element keys with their limits (`elementLimits`: ranges, glass style
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
 
+## Lock Studio
+
+Lock Studio is a desktop app for designing the lock screen: pick a preset, drag
+the elements around a live copy of the lock, and adjust each one (style, size,
+opacity, glass, position, which screens show it), the background and the glass.
+It runs the lock's own drawing code in its own window, so what you see is what the
+lock shows, and it saves through the lock (`saveLook`), never by writing
+`shell.json` itself.
+
+Add it to the app launcher once:
+
+```sh
+~/.config/omarchy/plugins/foamy.lock/bin/$HOSTTYPE/foamy-lock-helper studio install
+```
+
+Then open **Lock Studio** from the launcher, or run the same helper with
+`studio open` (or just `studio`). Opening it again brings the open window to the
+front. `studio uninstall` removes the launcher entry.
+
+**Editing.** Drag an element on the canvas; it snaps to where it would sit in each
+zone, to the screen's centre lines, to the other elements' edges and to a grid. The
+library on the left lists every element: drag a hidden one onto the canvas to show
+it, or drag one from the canvas back to the library to hide it. Everything the
+pointer does, the keyboard does too. The canvas shows each connected screen and two
+reference sizes (1280 × 720, 1920 × 1080); a problem on a connected screen (an
+element off screen, two elements overlapping, the password field covered or too
+high) is listed under the canvas and stops Apply, one only at a reference size is
+a warning.
+
+| Keys | |
+| --- | --- |
+| Arrows | Move one grid step |
+| Shift+arrows | Move one pixel |
+| Ctrl+arrows | Move to the next zone |
+| `+` / `-` | Larger or smaller |
+| Delete / Insert | Hide or show the element |
+| `[` / `]` | Previous or next element |
+| Shift while dragging | Drag without snapping |
+| Alt while dragging | Drag along one axis |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
+| Tab, F6 | Next control, next pane |
+| `?` | All shortcuts |
+| Ctrl+Q | Quit |
+
+**Saving.**
+- **Your draft** (the look and its undo steps) is kept in
+  `~/.local/state/foamy-lock/studio-draft.json` a moment after each edit, so closing
+  the app or a crash loses nothing. When you open the app with a draft the lock
+  doesn't have, it asks: **Continue editing**, or **Start from saved** (which deletes
+  the draft).
+- **Apply to lock** saves the look through the running lock. The header says how it
+  went: applied, refused (with the lock's reason), the screen is locked, the shell
+  isn't running or didn't answer (it is asked once more; if it still doesn't
+  answer, the look may or may not be saved). Anything but a save keeps the draft.
+- **Preview full screen** shows the look on the lock's own preview overlay without
+  saving; click or press any key to close it.
+- **Quitting** with changes the lock doesn't have asks: **Apply and quit**,
+  **Discard** (deletes the draft) or **Cancel**.
+
+**Privacy.** The canvas uses a sample account and a sample track, never your name,
+avatar or what is playing. The clock, network and battery are real. The full-screen
+preview is the lock's own and shows your real account and media.
+
+Screenshots of the app will follow.
+
 ## Fingerprint recovery
 
 Temporary reader or daemon errors are retried with increasing delays. If the
@@ -490,6 +555,7 @@ bash tests/harness.sh parity                  # geometry against 1.2.0 (needs th
 bash tests/harness.sh layout                  # every preset, the style sweep and the placement cases (also: styles, placement alone)
 bash tests/harness.sh runtime                 # service, PAM, fingerprint, wallpaper and IPC flows
 bash tests/harness.sh thumbnails              # re-render previews/presets/*.png (480 × 270)
+bash tests/harness.sh studio                  # Lock Studio offscreen, saving against a fake omarchy-shell (--language no, ar)
 bash tests/kit-check.sh
 ```
 
@@ -532,7 +598,7 @@ and places the elements in `elements/` (date, clock, account, password field,
 media, status), which only draw what the view gives them. The render and parity
 tests replace those data sources in `LockView.qml` alone.
 
-The render, parity, layout, styles, placement, runtime and thumbnails commands run through `tests/harness.sh`, which builds and
+The render, parity, layout, styles, placement, runtime, studio and thumbnails commands run through `tests/harness.sh`, which builds and
 runs `tests/harness`: a development-only Rust crate (std only apart from `serde_json`
 for the runtime test's status replies, its own workspace, so the helper's `native.pin`
 doesn't cover it; built under `~/.cache/foamy-native`, never inside the plugin;
