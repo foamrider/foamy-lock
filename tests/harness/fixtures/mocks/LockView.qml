@@ -10,6 +10,7 @@ Item {
   property string failureMessage: ""
   property int failedAttempts: 0
   property bool inputEnabled: true
+  property bool showUnlockHint: true
   property bool loadBackground: true
   property var activePlayer: null
   property string artworkPath: ""

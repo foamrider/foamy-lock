@@ -200,7 +200,7 @@ Rectangle {
       : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
     y: hintArea.y + (hintArea.height - height) / 2
     spacing: Math.round(10 * field.uiScale)
-    visible: field.chromeShown && !field.view.showPassword
+    visible: field.chromeShown && !field.view.showPassword && field.view.showUnlockHint
 
     FingerprintIcon {
       id: unlockHintIcon

@@ -89,6 +89,11 @@ ShellRoot {
             if (clipper.clip && (inside.x < 0 || inside.y < 0 || inside.x + hint.width > clipper.width || inside.y + hint.height > clipper.height))
               throw new Error("Unlock hint is clipped by " + clipper + ": " + hintText.text)
           }
+          // The preview overlay turns it off (it isn't a lock).
+          view.showUnlockHint = false
+          if (hint.visible) throw new Error("showUnlockHint: false leaves the unlock hint")
+          view.showUnlockHint = true
+          if (!hint.visible) throw new Error("the unlock hint didn't come back")
         }
         if (!view.grabToImage(function(result) {
           if (!result.saveToFile(Qt.resolvedUrl("capture-" + step.index + ".png").toString().replace("file://", "")))

@@ -11,6 +11,8 @@
   "Checking…": "Checking…",
   "Authentication failed (%1)": "Authentication failed (%1)",
   "Welcome back": "Welcome back",
+  "Preview": "Preview",
+  "Not locked. Any key or click closes the preview.": "Not locked. Any key or click closes the preview.",
   "Password:": "Password:",
   "Uptime": "Uptime",
   "Memory": "Memory",

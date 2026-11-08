@@ -11,6 +11,8 @@
   "Checking…": "Kontrollerer…",
   "Authentication failed (%1)": "Godkjenning mislyktes (%1)",
   "Welcome back": "Velkommen tilbake",
+  "Preview": "Forhåndsvisning",
+  "Not locked. Any key or click closes the preview.": "Ikke låst. Trykk en tast eller klikk for å lukke forhåndsvisningen.",
   "Password:": "Passord:",
   "Uptime": "Oppetid",
   "Memory": "Minne",

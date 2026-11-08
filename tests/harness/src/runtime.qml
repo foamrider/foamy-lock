@@ -80,6 +80,23 @@ ShellRoot {
     function doubleReport(value: bool): string { service.testPasswordPam.doubleReport = value; return "ok" }
     function previewState(): string { return String(service.previewVisible) }
     function previewKey(): string { var event = { accepted: false }; service.previewKeyPressed(event); return String(event.accepted) }
+    // The overlay's parts: the banner, the hint, the keyboard hold.
+    function previewParts(): string {
+      function find(item, name) {
+        if (!item) return null
+        if (item.objectName === name) return item
+        var children = item.children || []
+        for (var i = 0; i < children.length; i++) { var found = find(children[i], name); if (found) return found }
+        return null
+      }
+      var banner = find(service, "previewBanner")
+      var view = find(service, "previewView")
+      return JSON.stringify({ visible: service.previewVisible, holding: service.previewHolding,
+        banner: !!banner && banner.visible, title: banner ? find(banner, "previewBannerTitle").text : "",
+        hint: banner ? find(banner, "previewBannerHint").text : "",
+        plain: !!banner && find(banner, "previewBannerTitle").textFormat === Text.PlainText && find(banner, "previewBannerHint").textFormat === Text.PlainText,
+        view: !!view && view.visible, unlockHint: view ? view.showUnlockHint : null })
+    }
     // 4.5 only: what the omarchy-shell socket would answer, with a second
     // "lock" handler (standing in for omarchy.lock) registered ahead of foamy.
     function registry() {

@@ -163,13 +163,16 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
         }
         text = text.replace(from, to);
     }
-    // The preview window's layer-shell properties have no Rectangle equivalent.
+    // The preview window's layer-shell properties and input mask have no
+    // Rectangle equivalent.
     Ok(text
         .split_inclusive('\n')
         .filter(|line| {
             !(line.ends_with('\n')
                 && line.strip_prefix("    ").is_some_and(|rest| {
-                    rest.starts_with("WlrLayershell.") || rest.starts_with("exclusionMode:")
+                    rest.starts_with("WlrLayershell.")
+                        || rest.starts_with("exclusionMode:")
+                        || rest.starts_with("mask:")
                 }))
         })
         .collect())
@@ -524,7 +527,7 @@ fn scenarios(test: &Test) -> R {
     ensure!(test.lock("lock")? == "missing-pam");
     ensure!(!on(&test.status()?, "locked")?);
     println!(
-        "PASS: settings reload/atomic save, invalid/missing settings retain policy and locking, disabled/timed blanking, simulated wrong/right password, missing PAM refuses lock"
+        "PASS: settings reload/atomic save, invalid/missing settings retain policy and locking, disabled/timed blanking, simulated wrong/right password, missing PAM refuses lock, a lock ends the preview hold and preview refuses while locked"
     );
     Ok(())
 }
@@ -628,8 +631,54 @@ fn registry(test: &Test) -> R {
 
 fn preview(test: &Test) -> R {
     ensure!(test.lock("preview")? == "ok" && test.test("previewState")? == "true");
+    // A banner says it is a preview, in plain text; the view has no unlock
+    // hint (it isn't a lock).
+    let parts = parse(&test.test("previewParts")?)?;
+    ensure!(
+        on(&parts, "banner")?
+            && text(&parts, "title")? == "Preview"
+            && text(&parts, "hint")? == "Not locked. Any key or click closes the preview."
+            && on(&parts, "plain")?
+            && on(&parts, "view")?
+            && *at(&parts, "unlockHint")? == json!(false),
+        "the preview's banner and view: {parts}"
+    );
+    // Any key closes it; for previewHoldMs after, keys are still swallowed
+    // (accepted, the overlay stays closed) and the view and banner are gone.
+    let closed = Instant::now();
     ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
+    let parts = parse(&test.test("previewParts")?)?;
+    ensure!(
+        on(&parts, "holding")? && !on(&parts, "banner")? && !on(&parts, "view")?,
+        "holding the keyboard after closing: {parts}"
+    );
+    ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
+    loop {
+        let parts = parse(&test.test("previewParts")?)?;
+        if !on(&parts, "holding")? {
+            break;
+        }
+        ensure!(
+            closed.elapsed() < Duration::from_secs(3),
+            "the hold never ends"
+        );
+        ms(25);
+    }
+    let held = closed.elapsed();
+    ensure!(held >= Duration::from_millis(450), "held only {held:?}");
+    // Opening it again during a hold ends the hold.
     ensure!(test.lock("preview")? == "ok");
+    ensure!(test.lock("hidePreview")? == "ok");
+    ensure!(on(&parse(&test.test("previewParts")?)?, "holding")?);
+    ensure!(test.lock("preview")? == "ok");
+    let parts = parse(&test.test("previewParts")?)?;
+    ensure!(
+        on(&parts, "visible")? && !on(&parts, "holding")? && on(&parts, "banner")?,
+        "reopened: {parts}"
+    );
+    println!(
+        "PASS: the preview overlay has a Preview banner and no unlock hint, any key closes it and keys are swallowed for {held:?} after"
+    );
     Ok(())
 }
 
@@ -1647,12 +1696,22 @@ fn settings_and_password(test: &Test) -> R {
     // Simulate a stale QML property binding during a pre-suspend IPC call.
     test.ipc("test", "staleLock", &["true"])?;
     ensure!(test.lock("isLocked")? == "false");
+    // A preview just closed by a key holds the keyboard; a real lock ends
+    // the hold at once.
+    ensure!(test.lock("preview")? == "ok" && test.test("previewKey")? == "true");
+    ensure!(on(&parse(&test.test("previewParts")?)?, "holding")?);
     ensure!(test.lock("lock")? == "ok");
     test.wait_for(|s| Ok(on(s, "requested")? && on(s, "secure")?))?;
     ensure!(
         test.test("previewState")? == "false",
         "a real lock hides the preview overlay"
     );
+    ensure!(
+        !on(&parse(&test.test("previewParts")?)?, "holding")?,
+        "a real lock ends the preview's keyboard hold"
+    );
+    // Like previewLook and previewPreset, preview refuses over a real lock.
+    ensure!(test.lock("preview")? == "locked" && test.test("previewState")? == "false");
     test.ipc("test", "staleLock", &["false"])?;
     test.submit("test-password")?;
     test.wait_for(|s| Ok(!on(s, "locked")?))?;

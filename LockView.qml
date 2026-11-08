@@ -22,6 +22,9 @@ Item {
   property string failureMessage: ""
   property int failedAttempts: 0
   property bool inputEnabled: true
+  // The password field's "Enter password to unlock" (false in the preview
+  // overlay, which isn't a lock).
+  property bool showUnlockHint: true
   property bool loadBackground: true
   property var activePlayer: null
   property string artworkPath: ""

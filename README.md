@@ -595,8 +595,11 @@ omarchy-shell lock hidePreview
 omarchy-shell lock status
 ```
 
-Preview is a visual overlay, **not a secure lock**. Click it or press any key to
-dismiss it; a real lock request also closes it. Preview
+Preview is a visual overlay, **not a secure lock**: a "Preview" banner says so, and
+the password field shows no unlock hint. Click it or press any key to dismiss it;
+for half a second after, it still takes the keyboard, so keys typed into it don't
+reach the window below. A real lock request also closes it, and the preview calls
+answer `locked` while the screen is locked. Preview
 and status use your real account details; the README screenshot is generated
 separately with synthetic data. Status includes effective settings, configuration
 errors, lock state, and local account information. Do not share its output without

@@ -52,6 +52,12 @@ Item {
   property double fingerprintResumedAtMs: 0
   property int fingerprintProbeStreak: 0
   property bool previewVisible: false
+  // For previewHoldMs after the preview overlay closes, its window stays
+  // mapped, empty and input-transparent but holding the keyboard: keys
+  // typed into the overlay (a password, perhaps, as on a real lock) don't
+  // spill into the window below. A real lock ends it at once.
+  property bool previewHolding: false
+  readonly property int previewHoldMs: 500
   property string enteredPassword: ""
   property string pendingPassword: ""
   property string failureMessage: ""
@@ -537,7 +543,16 @@ Item {
     refreshAvatarThumbnail()
   }
 
-  onPreviewVisibleChanged: if (!previewVisible) previewLook = null
+  onPreviewVisibleChanged: {
+    if (previewVisible) {
+      previewHolding = false
+      previewHoldTimer.stop()
+    } else {
+      previewLook = null
+      previewHolding = true
+      previewHoldTimer.restart()
+    }
+  }
   onPreviewLookChanged: {
     Qt.callLater(refreshPicture)
     refreshVideoScreens()
@@ -755,6 +770,7 @@ Item {
     resetAuthenticationState()
     // The preview overlay is not a lock; never leave it behind a real one.
     previewVisible = false
+    endPreviewHold()
     lockRequested = true
     displayBlanked = false
     armBlankTimer()
@@ -1141,16 +1157,24 @@ Item {
 
   PanelWindow {
     id: previewWindow
-    visible: root.previewVisible
+    visible: root.previewVisible || root.previewHolding
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "foamy-lock-preview"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
+    // While holding (closed, keys still swallowed) the pointer goes through.
+    mask: root.previewVisible ? null : previewNoInput
+
+    Region { id: previewNoInput }
 
     LockView {
+      objectName: "previewView"
       anchors.fill: parent
+      visible: root.previewVisible
+      // A preview isn't a lock: it never asks for the password.
+      showUnlockHint: false
       backgroundPath: root.isVideoPicture(root.pictureLook)
         ? (root.videoRequestKey === root.previewVideoKey ? root.videoPosterRender : "")
         : !root.previewPictureKey ? root.lockWallpaperPath
@@ -1182,14 +1206,65 @@ Item {
       onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
     }
 
+    // Says what this is: a look on the screen, not a lock.
+    Rectangle {
+      objectName: "previewBanner"
+      visible: root.previewVisible
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: FoamyStyle.gap * 3
+      width: Math.min(parent.width - FoamyStyle.gap * 4, bannerColumn.implicitWidth + FoamyStyle.gap * 4)
+      height: bannerColumn.implicitHeight + FoamyStyle.gap * 2
+      radius: FoamyStyle.radius
+      color: Qt.alpha(FoamyPalette.background, 0.92)
+      border.width: 1
+      border.color: FoamyPalette.border
+      Accessible.role: Accessible.AlertMessage
+      Accessible.name: previewBannerTitle.text + ". " + previewBannerHint.text
+
+      Column {
+        id: bannerColumn
+        anchors.centerIn: parent
+        width: parent.width - FoamyStyle.gap * 4
+        spacing: Math.round(FoamyStyle.gap / 2)
+        Text {
+          id: previewBannerTitle
+          objectName: "previewBannerTitle"
+          textFormat: Text.PlainText
+          width: parent.width
+          text: FoamyI18n.t("Preview")
+          horizontalAlignment: Text.AlignHCenter
+          elide: Text.ElideRight
+          color: FoamyPalette.text
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.heading
+          font.weight: Font.DemiBold
+        }
+        Text {
+          id: previewBannerHint
+          objectName: "previewBannerHint"
+          textFormat: Text.PlainText
+          width: parent.width
+          text: FoamyI18n.t("Not locked. Any key or click closes the preview.")
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.Wrap
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+        }
+      }
+    }
+
     MouseArea {
       anchors.fill: parent
+      enabled: root.previewVisible
       acceptedButtons: Qt.LeftButton | Qt.RightButton
       onClicked: root.previewVisible = false
     }
 
     // The overlay holds exclusive keyboard focus, so any key closes it too:
     // without a pointer it would otherwise block the keyboard until hidePreview.
+    // While holding, keys are swallowed the same way.
     Item {
       id: previewKeys
       anchors.fill: parent
@@ -1228,9 +1303,21 @@ Item {
     onTriggered: root.weatherClockMs = Date.now()
   }
 
+  // Any key closes the preview; while holding, keys are only swallowed.
   function previewKeyPressed(event) {
     previewVisible = false
     if (event) event.accepted = true
+  }
+
+  function endPreviewHold() {
+    previewHoldTimer.stop()
+    previewHolding = false
+  }
+
+  Timer {
+    id: previewHoldTimer
+    interval: root.previewHoldMs
+    onTriggered: root.previewHolding = false
   }
 
   PamContext {
@@ -1774,6 +1861,8 @@ Item {
     }
 
     function preview(): string {
+      // Like previewLook and previewPreset: no overlay over a real lock.
+      if (root.currentlyLocked()) return "locked"
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
