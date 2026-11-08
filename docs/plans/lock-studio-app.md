@@ -1,6 +1,6 @@
 # Plan: Lock Studio, a desktop app for the Foamy lock screen
 
-Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–3 done (see Progress). Builds on
+Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–5 done (see Progress). Builds on
 [layout-engine.md](layout-engine.md) (zones, presets, safety checks, IPC).
 
 ## Goal
@@ -456,6 +456,86 @@ crates).
 - **Apply:** an unclear reply is retried once with `saveLook`, not
   followed by a `catalog` re-read (see Drafts and saving). An `unchanged`
   answer to the retry confirms the save.
+
+**Step 4, QML half, and step 5** (offscreen only; nothing ran on the
+desktop):
+- **The app:** `studio/shell.qml` (AppId `foamy-lock-studio`, a
+  `FloatingWindow` "Lock Studio", `IpcHandler` `studio.raise()`:
+  un-minimises, shows and `requestActivate()`s the window, answers
+  `raised`), `StudioWindow.qml` (mockup A's three panes; keys), `Canvas.qml`,
+  `Checker.qml`, `SampleView.qml` (LockView with the sample user and track,
+  `enabled: false` so nothing reaches the lock's own controls) and three
+  small controls (`StudioButton`, `Segmented`, `StudioToggle`): this
+  plugin's kit has no FoamyButton or FoamyDropdown, so they follow
+  DESIGN.md's tokens by hand. The library lists the modules (select, zone
+  or "Hidden") and the scene; the inspector shows the selection's values
+  only; the presets strip picks a preset (undoable, no confirmation yet).
+  Preview and Apply are shown disabled.
+- **Draft.js:** the draft is the sparse entry (`entry()` diffs the
+  effective look against its preset). Edits (`place`, `setZone`,
+  `setOffset`, `setScale`, `scaleBy`, `setOrder`, `setHidden`,
+  `setPreset`) return a new entry and refuse what the lock would refuse.
+  History keeps 100 steps. Comparisons are order-insensitive (`stable()`):
+  a QML `var` property hands objects back with sorted keys; `ordered()`
+  restores the lock's key order for saving.
+- **Snapping:** per axis, anchors and guides within the radius win
+  (nearest; anchors before guides on a tie), else the grid. Guides: the
+  screen's centre lines and the other shown modules' edges and centres.
+  Anchors are measured at drag start on a hidden probe LockView, one look
+  per allowed zone, with the lock's own placement code (2.4 ms for nine
+  zones). Offsets are measured centre to centre across and top to top
+  down, in whole pixels, so the grid is "whole cells from the nearest
+  anchor" and a drop lands exactly where it was shown. Mid-drag the module
+  moves by an unlimited offset in its own zone; the zone changes on drop.
+  A snap that the limits push back is not shown as one.
+- **Keys:** arrows step to the next grid line (repeats never drift),
+  Shift+arrows one pixel, Ctrl+arrows the neighbouring zone (on screen,
+  so mirrored right-to-left; the field never into the top row), `+`/`-`,
+  Delete (not the field), `[`/`]`, Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y),
+  F6 / Shift+F6, `?`, Esc, Ctrl+Q (quits at once; the guard is step 7).
+- **Checker:** one hidden `SampleView` per connected screen and reference
+  size, following committed looks only (never mid-drag), checked 300 ms
+  after the look settles with `geometryProblem()`, plus
+  `Draft.problemElements()` for the modules to outline. A problem on a
+  connected screen sets `applyBlocked`; one only at a reference size is
+  shown as a warning.
+- **Costs** (harness: offscreen, software renderer, 1920 × 1080 canvas):
+  each hidden checker view costs about 15 MB of RSS (measured with
+  `gc()`, six extra views at one size) and 0.4 ms per committed edit;
+  creating one takes about 10 ms; the check itself is under 1 ms for nine
+  views; one pointer move (snap, dragged look, relayout, no painting)
+  0.2 ms. The app is about 130 MB with three checker views. If memory
+  matters on machines with many screens: one hidden view resized through
+  the sizes in turn (`geometryProblem()` is synchronous) keeps it to one
+  view's cost.
+- **Harness `studio`:** builds the root by `root.rs`'s rules in a
+  temporary HOME (with the fixture-patched `LockView.qml`, `fixtures/` and
+  the driver as `StudioTest.qml`, which the real `shell.qml` loads only
+  with `FOAMY_LOCK_STUDIO_TEST=1`), runs it offscreen and checks: the
+  window and title, no text input with active focus, every shown module
+  drawn (pixel contrast inside each rectangle of a PPM capture), drags to
+  an anchor, Shift (free) and Shift pressed mid-drag, Alt, the field's
+  limits, resize, keyboard edits, undo/redo, preview states, the checker,
+  the shortcuts overlay, F6, and `quickshell ipc … call studio raise`.
+  Expected look JSON is compared exactly (key order aside). It runs
+  mirrored too (`--language ar`).
+- **Validator:** `omarchy-plugin-validate` accepts `studio/` as it is (it
+  checks the manifest, entry points and symlinks; the shell loads only
+  `Service.qml`), so nothing needed changing.
+- **Lint:** the repo's command is unchanged (120). The studio files can
+  only be linted in a built root (qmllint follows the links back to
+  `studio/`, where `kit` isn't): 20 warnings, all `FoamyStyle.font.*`
+  typed as QObject by the kit.
+
+Open for steps 6 to 8: the inspector's controls and the background page;
+dragging from the library (show a hidden module at the drop point, hide by
+dropping on the library); the preset picker in the header (a menu) and the
+confirmation before a preset drops changes; the picture background (via
+the helper) and the Omarchy wallpaper on the canvas (it shows the theme
+colour today); the lock's time format and "show user info" settings on the
+canvas; drafts on disk, Apply, Preview and the quit guard; `displayAwake`
+also off while the session is locked; screen hot-plug while a check runs;
+accessibility review with a screen reader.
 
 ## Open questions for the user
 
