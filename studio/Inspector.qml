@@ -188,13 +188,21 @@ FocusScope {
           font.pixelSize: FoamyStyle.font.body
           wrapMode: Text.Wrap
         }
+        // The card always shows the full report.
         Segmented {
           objectName: "studioDetails"
           name: FoamyI18n.t("studio.details")
+          enabled: !inspector.item || inspector.item.style !== "card"
+          opacity: enabled ? 1 : FoamyStyle.disabledOpacity
           options: inspector.options.weather.options.details.values.map(function(v) { return { value: v, label: FoamyI18n.t("studio.details." + v) } })
           value: Draft.optionOf(inspector.look, "weather", "details")
           onPicked: function(value) { inspector.commit(Draft.setOption(inspector.app.draft, "weather", "details", value)) }
         }
+      }
+      PaneNote {
+        objectName: "studioDetailsNote"
+        visible: inspector.name === "weather" && inspector.item !== null && inspector.item.style === "card"
+        text: FoamyI18n.t("studio.details.card")
       }
       StudioToggle {
         objectName: "studioLocation"

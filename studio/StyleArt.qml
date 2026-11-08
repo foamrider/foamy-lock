@@ -165,6 +165,9 @@ Item {
     case "weather:compact": return weatherCompact
     case "weather:pill": return weatherPill
     case "weather:detailed": return weatherDetailed
+    case "weather:line": return weatherLine
+    case "weather:large": return weatherLarge
+    case "weather:card": return weatherCard
     case "decor:none": return decorNone
     case "decor:split": return decorSplit
     case "decor:sheet": return decorSheet
@@ -1047,6 +1050,60 @@ Item {
           spacing: root.u * 2.5
           Bar { width: root.u * 30; opacity: 0.8 }
           Bar { width: root.u * 22; opacity: 0.55 }
+        }
+      }
+    }
+  }
+
+  // One line of text: the condition, then the temperature.
+  Component {
+    id: weatherLine
+    Item {
+      Row {
+        anchors.centerIn: parent
+        spacing: root.u * 3
+        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 24; opacity: 0.7 }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: "·"
+          color: root.ink
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: Math.round(root.u * 9)
+        }
+        Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 9); font.weight: Font.DemiBold }
+      }
+    }
+  }
+  // A large temperature, the condition small under it.
+  Component {
+    id: weatherLarge
+    Item {
+      Column {
+        anchors.centerIn: parent
+        spacing: root.u * 1.5
+        Temperature { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: Math.round(root.u * 22); font.weight: Font.Light }
+        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 20; opacity: 0.6 }
+      }
+    }
+  }
+  // A centred glass card: the icon, the temperature, the condition, the
+  // high and low.
+  Component {
+    id: weatherCard
+    Item {
+      Glass {
+        anchors.centerIn: parent
+        width: root.u * 34
+        height: parent.height
+        radius: root.u * 4
+        Column {
+          anchors.centerIn: parent
+          spacing: root.u * 1.5
+          WeatherIcon { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 10; height: width }
+          Temperature { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: Math.round(root.u * 10); font.weight: Font.Light }
+          Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 20; opacity: 0.8 }
+          Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 14; opacity: 0.55 }
         }
       }
     }

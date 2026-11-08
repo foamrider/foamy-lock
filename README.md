@@ -198,7 +198,7 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 | `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below) |
 | `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill), `system` (a panel with uptime, memory, load and the battery, or the network without one) |
 | `calendar` | `card` (default; this month on glass, today ringed in the accent), `plain`, `week` (this week's seven days on a glass strip), `mini` (a smaller month without a card). Hidden unless a preset or `hidden: false` shows it. |
-| `weather` | `compact` (default; an icon and the temperature), `pill` (one line in a glass pill), `detailed` (a glass card). Hidden unless `hidden: false` shows it, and only while Foamy Weather has a report. |
+| `weather` | `compact` (default; an icon and the temperature), `pill` (one line in a glass pill), `detailed` (a glass card), `line` (one line of text, "Light rain · 6°"), `large` (a large temperature, the condition small under it), `card` (a centred glass card with the icon, temperature, condition and today's high and low, always). Hidden unless `hidden: false` shows it, and only while Foamy Weather has a report. |
 
 **Element keys of their own.** Optional, and accepted only on their element:
 
@@ -206,7 +206,7 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 | --- | --- | --- | --- |
 | `password.reveal` | `always`, `typing` | `typing` for `pill` and `dots`, `always` for the others (each style's drawing before 1.3.0) | `typing` shows only the unlock hint until you type or a failure or check shows: the field's surface, line, prompt, greeting and arrow (the pill's glass, the dots' track) come with the first key. `always` shows the field while it is empty too: the pill keeps its glass with the hint inside it, and the dots get a dotted track under the editor. Either way the unlock hint and the fingerprint notice stay, and the field is live and keeps its place. A value equal to the style's own is left out of the look. |
 | `status.items` | An ordered list of `network`, `battery`, `volume`, `bluetooth`, `keyboard`, `uptime`, `load`, `memory`, each at most once | the style's own (network and battery; the `system` panel's four rows) | What the status shows, in that order, in any style. An item whose source has nothing (no battery, no PipeWire sink, no Bluetooth adapter) is left out. The volume (the default sink, PipeWire), Bluetooth (on or off and connected devices) and keyboard layout (Hyprland's active layout, read with `hyprctl -j devices`; nothing is switched) are read only while their item shows. A line wider than the centre column wraps. |
-| `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low. |
+| `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low (the `line` and `large` styles show the condition anyway; the `card` always shows everything). |
 | `weather.location` | `true`, `false` | `false` | Shows the forecast's place name. Off by default: anyone can see a lock screen. |
 
 **Weather.** While the lock or the preview shows a look with the weather, the
@@ -228,7 +228,7 @@ element draws exactly as its preset says.
 | `scale` | 0.5 to 2 in steps of 0.05; the field 0.85 to 1.5 | 1 | The element's size. A scaled date or clock in a centre column widens with it, up to the screen less its margins. |
 | `opacity` | 0.3 to 1; the field 0.7 to 1 | 1 | The whole element's opacity. |
 | `offset` | `{ "x": …, "y": … }`, both required, each -0.5 to 0.5 | none | A move from where the zone puts it, as a fraction of the screen's width (`x`) and height (`y`), so one look fits every screen size. `x` mirrors in right-to-left languages, like start and end. The rest of the zone's stack stays where it was, and decorations keep fitting the zones, not the moved element. |
-| `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, the calendar `card` and `week`, and the weather `pill` and `detailed`; the element's other styles ignore it. The date has no glass and rejects the key. |
+| `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, the calendar `card` and `week`, and the weather `pill`, `detailed` and `card`; the element's other styles ignore it. The date has no glass and rejects the key. |
 | `screens` | `all`, `primary` | `all` | `primary` shows the element only on the monitor that receives your keystrokes (or on every monitor until one does). For the date, clock, media, status, calendar and weather; the account and the field already follow that monitor and reject the key. |
 
 ```json

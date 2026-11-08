@@ -28,7 +28,7 @@ var STYLES = {
   media: ["card", "line", "pill", "art"],
   status: ["text", "icons", "pill", "system"],
   calendar: ["card", "plain", "week", "mini"],
-  weather: ["compact", "pill", "detailed"]
+  weather: ["compact", "pill", "detailed", "line", "large", "card"]
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]
@@ -100,7 +100,7 @@ var GLASS_STYLES = {
   media: ["card", "pill", "art"],
   status: ["pill", "system"],
   calendar: ["card", "week"],
-  weather: ["pill", "detailed"]
+  weather: ["pill", "detailed", "card"]
 }
 // The defaults of the optional keys, left out of a canonical look.
 var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }

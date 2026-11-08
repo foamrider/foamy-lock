@@ -3,12 +3,21 @@ import "../kit"
 
 // The current weather from Foamy Weather (the service fetches and checks it;
 // see Model.parseWeather): the view's `weather`, or nothing (LockView hides
-// the element without one). Styles: "compact" (an icon and the temperature,
-// no surface), "pill" (one line in a glass pill) and "detailed" (a glass
-// card). `details` "full" adds the condition and today's high and low;
-// `showLocation` the place name. Every string is drawn as plain text and
-// elides within the element, so a long condition or place can't push it
-// off screen. Plain x, mirrored by hand, like the other elements.
+// the element without one). Styles:
+// - "compact": an icon and the temperature, no surface;
+// - "pill": one line in a glass pill;
+// - "detailed": a glass card;
+// - "line": one line of text, no icon or surface: the condition and the
+//   temperature ("Light rain · 6°");
+// - "large": the temperature in the display face, the condition small
+//   under it;
+// - "card": a centred glass card: the icon, the temperature, the condition
+//   and today's high and low, always (the full report).
+// `details` "full" adds the condition and today's high and low (the line
+// and large styles show the condition anyway); `showLocation` the place
+// name. Every string is drawn as plain text and elides within the element,
+// so a long condition or place can't push it off screen. Plain x, mirrored
+// by hand, like the other elements.
 Item {
   id: weather
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
@@ -27,34 +36,52 @@ Item {
   readonly property bool compact: styleName === "compact"
   readonly property bool pill: styleName === "pill"
   readonly property bool detailed: styleName === "detailed"
+  readonly property bool textLine: styleName === "line"
+  readonly property bool large: styleName === "large"
+  readonly property bool card: styleName === "card"
+  // The styles drawn on glass, and those with the icon.
+  readonly property bool glassy: pill || detailed || card
+  readonly property bool iconShown: compact || detailed || card
+  readonly property bool full: details === "full" || card
   readonly property var report: view.weather || null
   readonly property real unit: uiScale
   readonly property string temperatureText: report ? FoamyI18n.number(report.temperature) + "°" : ""
-  readonly property string conditionText: report && details === "full" ? String(report.condition || "") : ""
-  readonly property string rangeText: report && details === "full" && report.high !== null && report.low !== null
+  // The condition: with "full", and always in the line, large and card.
+  readonly property string conditionText: report && (full || textLine || large) ? String(report.condition || "") : ""
+  readonly property string rangeText: report && full && report.high !== null && report.low !== null
     ? FoamyI18n.t("High %1", [FoamyI18n.number(report.high) + "°"]) + "  " + FoamyI18n.t("Low %1", [FoamyI18n.number(report.low) + "°"])
     : ""
   readonly property string locationText: report && showLocation ? String(report.location || "") : ""
   // The widest it grows: the centre column at its scale.
   readonly property real maxWidth: view.contentWidthAt(uiScale)
-  readonly property real padding: Math.round((pill ? 18 : detailed ? 20 : 0) * unit)
+  readonly property real padding: Math.round((pill ? 18 : detailed || card ? 20 : 0) * unit)
   readonly property real gap: Math.round(10 * unit)
-  // "compact": the second line, the high and low first (they are short, so
-  // a long condition elides after them); "detailed": the condition alone,
-  // the high and low on a line of their own.
-  readonly property string detailText: detailed ? conditionText
-    : [rangeText, conditionText].filter(function(part) { return part !== "" }).join("  ·  ")
-  readonly property real headWidth: icon.width + gap + temperature.implicitWidth
+  // The line under the temperature: "compact", the high and low first (they
+  // are short, so a long condition elides after them); "large", the
+  // condition, then the high and low; "detailed" and "card", the condition
+  // alone, the high and low on a line of their own.
+  readonly property string detailText: detailed || card ? conditionText
+    : (compact ? [rangeText, conditionText] : [conditionText, rangeText])
+      .filter(function(part) { return part !== "" }).join("  ·  ")
+  // "line": everything on one line, the condition first.
+  readonly property string lineText: [conditionText, temperatureText, rangeText, locationText]
+    .filter(function(part) { return part !== "" }).join(" · ")
+  readonly property real headWidth: (iconShown && !card ? icon.width + gap : 0) + temperature.implicitWidth
   // The width it needs (and takes: the weather never fills the centre column).
   readonly property real naturalWidth: detailed ? Math.min(maxWidth, Math.round(300 * unit))
+    : card ? Math.min(maxWidth, Math.round(240 * unit))
     : pill ? Math.min(maxWidth, line.implicitWidth + 2 * padding)
+    : textLine ? Math.min(maxWidth, lineLabel.implicitWidth)
     : Math.min(maxWidth, Math.max(headWidth, detailLine.shown ? detailLine.implicitWidth : 0,
       placeLine.shown ? placeLine.implicitWidth : 0))
   readonly property real innerWidth: width - 2 * padding
+  // The card centres its lines; the others follow the zone.
+  readonly property int textAlignment: card || alignment === "center" ? Text.AlignHCenter
+    : alignment === "end" ? Text.AlignRight : Text.AlignLeft
 
   objectName: "weatherBlock"
   width: naturalWidth
-  height: pill ? Math.round(44 * unit) : lastLineBottom + padding
+  height: pill ? Math.round(44 * unit) : textLine ? Math.round(30 * unit) : lastLineBottom + padding
   // Where the lines below the temperature end. Each line's own `shown`, not
   // `visible`, which is false in a hidden view (Lock Studio measures and
   // checks looks in views that are never drawn).
@@ -65,7 +92,7 @@ Item {
   // Where a part of `partWidth` starts inside the element, on screen.
   function startX(partWidth) {
     var free = Math.max(0, innerWidth - partWidth)
-    var start = alignment === "center" || pill ? free / 2 : alignment === "start" ? 0 : free
+    var start = alignment === "center" || pill || card ? free / 2 : alignment === "start" ? 0 : free
     return padding + (view.rightToLeft ? free - start : start)
   }
 
@@ -85,33 +112,38 @@ Item {
     return cloud
   }
 
-  // The glass behind the pill and the card.
+  // The glass behind the pill and the cards.
   Rectangle {
     objectName: "weatherSurface"
     anchors.fill: parent
-    visible: !weather.compact
+    visible: weather.glassy
     radius: weather.pill ? height / 2 : Math.round(22 * weather.unit)
     color: weather.glassFill
     border.width: 1
     border.color: weather.view.glassBorder
   }
 
-  // "compact" and "detailed": the icon and the temperature.
+  // "compact", "detailed", "large" and "card": the temperature, after the
+  // icon (the card: under it, centred; "large": no icon).
   Item {
     id: head
     objectName: "weatherHead"
-    visible: !weather.pill
-    x: weather.startX(width)
+    // Its own flag, not `visible` (false in a hidden view).
+    readonly property bool shown: weather.compact || weather.detailed || weather.large || weather.card
+    visible: shown
+    readonly property real iconHeight: weather.card ? icon.height + Math.round(4 * weather.unit) : 0
+    x: weather.card ? weather.padding : weather.startX(width)
     y: weather.padding
-    width: Math.min(weather.headWidth, weather.innerWidth)
-    height: Math.round((weather.detailed ? 52 : 40) * weather.unit)
+    width: weather.card ? weather.innerWidth : Math.min(weather.headWidth, weather.innerWidth)
+    height: iconHeight + Math.round((weather.large ? 64 : weather.detailed ? 52 : weather.card ? 48 : 40) * weather.unit)
 
     LineIcon {
       id: icon
       objectName: "weatherIcon"
-      x: weather.view.rightToLeft ? head.width - width : 0
-      anchors.verticalCenter: parent.verticalCenter
-      width: Math.round((weather.detailed ? 40 : 28) * weather.unit)
+      visible: weather.iconShown
+      x: weather.card ? (head.width - width) / 2 : weather.view.rightToLeft ? head.width - width : 0
+      y: weather.card ? 0 : (head.height - height) / 2
+      width: Math.round((weather.detailed ? 40 : weather.card ? 36 : 28) * weather.unit)
       height: width
       pathData: weather.iconPath(weather.report ? weather.view.weatherGroup(weather.report.code) : "")
       opacity: 0.9
@@ -120,16 +152,18 @@ Item {
     Text {
       id: temperature
       objectName: "weatherTemperature"
-      x: weather.view.rightToLeft ? 0 : icon.width + weather.gap
-      width: Math.max(0, head.width - icon.width - weather.gap)
-      height: head.height
+      readonly property real lead: weather.iconShown && !weather.card ? icon.width + weather.gap : 0
+      x: weather.view.rightToLeft || weather.card ? 0 : lead
+      y: head.iconHeight
+      width: Math.max(0, head.width - (weather.card ? 0 : lead))
+      height: head.height - head.iconHeight
       textFormat: Text.PlainText
       text: weather.temperatureText
       color: weather.view.foreground
       font.family: weather.view.displayFontFamily
-      font.pixelSize: Math.round((weather.detailed ? 44 : 30) * weather.unit)
-      font.weight: weather.detailed ? Font.Light : Font.Normal
-      horizontalAlignment: Text.AlignLeft
+      font.pixelSize: Math.round((weather.large ? 56 : weather.detailed ? 44 : weather.card ? 40 : 30) * weather.unit)
+      font.weight: weather.detailed || weather.large || weather.card ? Font.Light : Font.Normal
+      horizontalAlignment: weather.card ? Text.AlignHCenter : Text.AlignLeft
       verticalAlignment: Text.AlignVCenter
       elide: Text.ElideRight
     }
@@ -138,7 +172,7 @@ Item {
   Text {
     id: detailLine
     objectName: "weatherCondition"
-    readonly property bool shown: !weather.pill && weather.detailText !== ""
+    readonly property bool shown: head.shown && weather.detailText !== ""
     visible: shown
     x: weather.padding
     y: head.y + head.height + Math.round(2 * weather.unit)
@@ -148,17 +182,17 @@ Item {
     color: weather.view.foreground
     opacity: 0.86
     font.family: weather.view.textFontFamily
-    font.pixelSize: Math.round(15 * weather.unit)
+    font.pixelSize: Math.round((weather.large ? 14 : 15) * weather.unit)
     font.weight: Font.Medium
-    horizontalAlignment: weather.alignment === "center" ? Text.AlignHCenter : weather.alignment === "end" ? Text.AlignRight : Text.AlignLeft
+    horizontalAlignment: weather.textAlignment
     elide: Text.ElideRight
   }
 
-  // "detailed": today's high and low.
+  // "detailed" and "card": today's high and low.
   Text {
     id: rangeLine
     objectName: "weatherRange"
-    readonly property bool shown: weather.detailed && weather.rangeText !== ""
+    readonly property bool shown: (weather.detailed || weather.card) && weather.rangeText !== ""
     visible: shown
     x: weather.padding
     y: (detailLine.shown ? detailLine.y + detailLine.height : head.y + head.height) + Math.round(2 * weather.unit)
@@ -169,14 +203,14 @@ Item {
     opacity: 0.8
     font.family: weather.view.textFontFamily
     font.pixelSize: Math.round(14 * weather.unit)
-    horizontalAlignment: detailLine.horizontalAlignment
+    horizontalAlignment: weather.textAlignment
     elide: Text.ElideRight
   }
 
   Text {
     id: placeLine
     objectName: "weatherLocation"
-    readonly property bool shown: !weather.pill && weather.locationText !== ""
+    readonly property bool shown: head.shown && weather.locationText !== ""
     visible: shown
     x: weather.padding
     y: (rangeLine.shown ? rangeLine.y + rangeLine.height : detailLine.shown ? detailLine.y + detailLine.height
@@ -188,7 +222,26 @@ Item {
     opacity: 0.72
     font.family: weather.view.textFontFamily
     font.pixelSize: Math.round(14 * weather.unit)
-    horizontalAlignment: detailLine.horizontalAlignment
+    horizontalAlignment: weather.textAlignment
+    elide: Text.ElideRight
+  }
+
+  // "line": the condition, the temperature (then the high and low, and the
+  // place) as one line of text, eliding at the end.
+  Text {
+    id: lineLabel
+    objectName: "weatherText"
+    visible: weather.textLine
+    x: weather.startX(width)
+    anchors.verticalCenter: parent.verticalCenter
+    width: Math.min(implicitWidth, weather.innerWidth)
+    textFormat: Text.PlainText
+    text: weather.lineText
+    color: weather.view.foreground
+    opacity: 0.9
+    font.family: weather.view.textFontFamily
+    font.pixelSize: Math.round(16 * weather.unit)
+    font.weight: Font.Medium
     elide: Text.ElideRight
   }
 

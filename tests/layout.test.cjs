@@ -126,7 +126,7 @@ test('every element offers its shipped styles, defaults first', () => {
     media: ['card', 'line', 'pill', 'art'],
     status: ['text', 'icons', 'pill', 'system'],
     calendar: ['card', 'plain', 'week', 'mini'],
-    weather: ['compact', 'pill', 'detailed']
+    weather: ['compact', 'pill', 'detailed', 'line', 'large', 'card']
   })
   // The foamy preset uses each element's first style.
   for (const name of Layout.ELEMENTS) assert.equal(Layout.PRESETS.foamy.elements[name].style, Layout.STYLES[name][0], name)
@@ -369,7 +369,7 @@ test('the weather is last, and hidden in every preset', () => {
     assert.equal(weather.style, 'compact', name)
   }
   assert.ok(Layout.SCREENS_ELEMENTS.includes('weather'))
-  assert.deepEqual(Layout.GLASS_STYLES.weather, ['pill', 'detailed'])
+  assert.deepEqual(Layout.GLASS_STYLES.weather, ['pill', 'detailed', 'card'])
   const shown = Layout.parseLook({layout: {weather: {hidden: false, style: 'detailed', details: 'full', location: true, glass: 0.5}}})
   assert.ok(shown.valid, shown.error)
   assert.deepEqual(Layout.stack(shown.look.elements, 'top-start'), ['weather'])

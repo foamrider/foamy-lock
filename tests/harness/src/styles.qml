@@ -29,7 +29,7 @@ ShellRoot {
       "loadStatus", "memoryStatus", "systemPanel"],
     calendarBlock: ["calendarCard", "calendarTitle"],
     weatherBlock: ["weatherSurface", "weatherHead", "weatherIcon", "weatherTemperature", "weatherCondition", "weatherRange", "weatherLocation",
-      "weatherLine"]
+      "weatherLine", "weatherText"]
   })
   readonly property var elementItems: ({ date: "dateLabel", clock: "clockLabel", account: "identityBlock",
     password: "inputField", media: "mediaRow", status: "statusFooter", calendar: "calendarBlock", weather: "weatherBlock" })
