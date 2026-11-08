@@ -293,30 +293,35 @@ var PRESETS = {
   // Huge hours over minutes in the accent, printed on the wallpaper.
   "poster": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "poster", 1], password: ["bottom-start", "underline"],
     media: ["bottom-end", "minimal"], status: ["top-end", "text"] }, background("omarchy", 0, 0.4)),
-  "analog": compose({ clock: ["middle-center", "analog"], date: ["middle-center", "long", 1], password: ["middle-center", "pill", 2],
-    media: ["bottom-start", "card"], status: ["top-end", "text"] }, background("omarchy", 0.2, 0.3)),
-  "flip": compose({ clock: ["middle-center", "flip"], date: ["middle-center", "caps", 1], password: ["middle-center", "box", 2],
-    media: ["bottom-start", "pill"], status: ["top-end", "icons"] }, background("omarchy", 0.2, 0.3)),
+  // A watch face: a large analogue clock, the day in serif, the field.
+  "analog": compose({ clock: ["middle-center", "analog", 0, { scale: 1.3 }], date: ["middle-center", "serif", 1],
+    password: ["middle-center", "pill", 2], media: ["bottom-start", "minimal"], status: ["top-end", "text"] },
+  background("omarchy", 0.2, 0.4)),
+  // A flip clock on the desk: two cards, the date, the field.
+  "flip": compose({ clock: ["middle-center", "flip", 0, { scale: 1.1 }], date: ["middle-center", "caps", 1],
+    password: ["middle-center", "box", 2], media: ["bottom-start", "pill"], status: ["top-end", "icons"] },
+  background("omarchy", 0.2, 0.4)),
   // The time inside a ring that fills over the hour.
   "ring": compose({ clock: ["middle-center", "ring"], date: ["middle-center", "short", 1], password: ["middle-center", "pill", 2],
-    media: ["bottom-start", "line"], status: ["top-end", "icons"] }, background("omarchy", 0.2, 0.3)),
-  // The clock and field beside this month's calendar.
-  "calendar": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "bold", 1], password: ["middle-start", "box", 2],
-    calendar: ["middle-end", "card"], media: ["bottom-start", "line"], status: ["top-end", "text"] },
-  background("omarchy", 0, 0.3)),
+    media: ["bottom-start", "pill"], status: ["top-end", "pill"] }, background("omarchy", 0.2, 0.4)),
+  // A planner: the week, the time and the field beside this month.
+  "calendar": compose({ date: ["middle-start", "week"], clock: ["middle-start", "bold", 1], password: ["middle-start", "box", 2],
+    calendar: ["middle-end", "card", 0, { scale: 1.3 }], media: ["bottom-start", "line"], status: ["top-end", "text"] },
+  background("omarchy", 0, 0.4)),
   // A console login on black.
   "terminal": compose({ date: ["middle-start", "iso"], clock: ["middle-start", "mono", 1], account: ["middle-start", "name", 2],
     password: ["middle-start", "terminal", 3], media: ["bottom-start", "minimal"], status: ["top-end", "icons"] },
   solid(BLACK, 0, 0)),
   // Accent edges and a glowing frame over a dark wallpaper.
-  "neon": compose({ date: ["middle-center", "caps"], clock: ["middle-center", "outline", 1], password: ["middle-center", "box", 2],
-    status: ["top-end", "icons"] }, background("omarchy", 0, 0.7, "frame"), { opacity: 1, tint: "accent" }),
+  "neon": compose({ date: ["middle-center", "caps"], clock: ["middle-center", "outline", 1, { scale: 1.2 }],
+    password: ["middle-center", "box", 2], status: ["top-end", "icons"] },
+  background("omarchy", 0, 0.7, "frame"), { opacity: 1, tint: "accent" }),
   // Uptime, memory, load and battery beside the clock and field.
   "system": compose({ date: ["middle-start", "caps"], clock: ["middle-start", "bold", 1], password: ["middle-start", "box", 2],
-    status: ["middle-end", "system"], media: ["bottom-start", "line"] }, background("omarchy", 0, 0.35)),
-  // Now playing in the middle, artwork first.
-  "music": compose({ clock: ["top-center", "small"], date: ["top-center", "short", 1], media: ["middle-center", "art"],
-    password: ["middle-center", "pill", 1], status: ["top-end", "icons"] }, background("omarchy", 0.5, 0.35)),
+    status: ["middle-end", "system"], media: ["bottom-start", "line"] }, background("omarchy", 0, 0.4)),
+  // Now playing: the cover large in the middle over a blurred wallpaper.
+  "music": compose({ clock: ["top-center", "small"], date: ["top-center", "short", 1], media: ["middle-center", "art", 0, { scale: 1.35 }],
+    password: ["middle-center", "pill", 1], status: ["top-end", "icons"] }, background("omarchy", 0.6, 0.4)),
   "aurora": compose({ date: ["middle-center", "long"], clock: ["middle-center", "thin", 1], password: ["middle-center", "pill", 2],
     media: ["bottom-start", "card"], status: ["top-end", "text"] }, background("aurora", 0, 0.1)),
   "rain": compose({ clock: ["middle-center", "mono"], date: ["middle-center", "caps", 1], password: ["middle-center", "terminal", 2],
