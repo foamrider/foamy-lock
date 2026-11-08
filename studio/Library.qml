@@ -8,7 +8,7 @@ import "Draft.js" as Draft
 // which opens the preset menu), then the modules, each with its zone or
 // "Hidden", and the scene pages (background, glass and dim). The list
 // scrolls (wheel, and the keyboard keeps the row it is on in view) when the
-// pane is short.
+// pane is short; the window pins the tips card under it.
 //
 // Drag a module onto the canvas to show it (or move it) where it lands,
 // with the canvas's snapping; drag a shown one from the canvas onto this
@@ -213,11 +213,6 @@ FocusScope {
         checked: library.app.page === "glass"
         Accessible.role: Accessible.PageTab
         onClicked: library.app.page = "glass"
-      }
-
-      PaneNote {
-        topPadding: FoamyStyle.gap
-        text: FoamyI18n.t("studio.libraryHint")
       }
     }
   }

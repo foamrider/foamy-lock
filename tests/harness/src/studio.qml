@@ -233,6 +233,12 @@ Item {
     property var check: null
     onTriggered: check()
   }
+  // Runs a bash line (the fake Mugshot is written and made executable here).
+  Process {
+    id: shellLine
+    property string line: ""
+    command: ["bash", "-c", line]
+  }
   Process {
     id: whichShell
     command: ["bash", "-c", "command -v omarchy-shell"]
@@ -828,7 +834,7 @@ Item {
           names.push(stop.objectName || name)
         }
         var wanted = ["studioPresetButton", "studioPreview", "studioHelp", "studioLibrary-clock", "studioSceneBackground", "studioZonesSwitch",
-          "studioSnapSwitch", "studioStates"]
+          "studioSnapSwitch", "studioStates", "studioTipPrevious", "studioTipNext"]
         for (var w = 0; w < wanted.length; w++) expect(names.indexOf(wanted[w]) !== -1, "Tab reaches " + wanted[w] + ": " + json(names))
         expect(stops.indexOf(find(studio, "studioMonitor").triggerItem) !== -1, "Tab reaches the screen dropdown")
         // Disabled buttons are skipped (nothing to apply, undo or reset).
@@ -1005,6 +1011,98 @@ Item {
         canvas.selectRequested("clock")
         expect(studio.selected === "clock" && studio.inspector.visible, "selecting on the canvas")
         next()
+      } },
+    { name: "tips: pinned to the sidebar's bottom edge", wait: 0, run: function(next) {
+        reset()
+        var tips = find(studio, "studioTips")
+        var pane = tips.parent
+        var bottom = tips.mapToItem(null, 0, tips.height).y, paneBottom = pane.mapToItem(null, 0, pane.height).y
+        expect(near(bottom, paneBottom, 0.5) && near(tips.width, pane.width, 0.5), "the card's bottom edge is the pane's: " + bottom + " vs " + paneBottom)
+        var list = studio.library.flickable
+        var listBottom = list.mapToItem(null, 0, list.height).y, tipsTop = tips.mapToItem(null, 0, 0).y
+        expect(listBottom <= tipsTop && list.clip, "the list ends above it: " + listBottom + " vs " + tipsTop)
+        // Short: the list scrolls, the card stays.
+        var shortHeight = Math.max(80, list.contentHeight / 2)
+        studio.library.anchors.bottom = undefined
+        studio.library.height = shortHeight + list.y
+        var lastScene = find(studio.library, "studioSceneGlass")
+        lastScene.forceActiveFocus(Qt.TabFocusReason)
+        expect(list.contentY > 0 && near(tips.mapToItem(null, 0, tips.height).y, paneBottom, 0.5), "scrolled to the focused row: " + list.contentY)
+        find(studio.library, "studioLibrary-clock").forceActiveFocus(Qt.TabFocusReason)
+        var clockRow = find(studio.library, "studioLibrary-clock")
+        expect(clockRow.mapToItem(list, 0, 0).y >= 0, "and back to the first module: " + list.contentY)
+        studio.library.anchors.bottom = tips.top
+        canvas.forceActiveFocus()
+        next()
+      } },
+    { name: "tips: one at a time, previous and next, remembered", wait: 0, run: function(next) {
+        var tips = find(studio, "studioTips")
+        var sources = studio.sources
+        // No state file yet: the first tip, Mugshot.
+        expect(sources.stateKnown && tips.current === "mugshot" && tips.index === 0, "the first tip: " + tips.current)
+        var count = find(tips, "studioTipCount")
+        expect(count.text === FoamyI18n.t("studio.tip.count", [FoamyI18n.number(1, 0), FoamyI18n.number(tips.ids.length, 0)]), "count " + count.text)
+        var height = tips.height
+        find(tips, "studioTipNext").clicked()
+        expect(tips.current === "library" && find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.library"), "next: " + tips.current)
+        expect(tips.height === height || !tips.mugshotShown, "the card keeps its height")
+        find(tips, "studioTipPrevious").clicked()
+        find(tips, "studioTipPrevious").clicked()
+        expect(tips.current === tips.ids[tips.ids.length - 1], "previous wraps to the last: " + tips.current)
+        find(tips, "studioTipNext").clicked()
+        find(tips, "studioTipNext").clicked()
+        find(tips, "studioTipNext").clicked()
+        expect(tips.current === "drag", "next wraps to the start: " + tips.current)
+        for (var i = 0; i < tips.ids.length; i++) expect(tips.tipText(tips.ids[i]) !== "" && tips.tipText(tips.ids[i]).indexOf("studio.") !== 0, "words for " + tips.ids[i])
+        waitFor(function() { return readFile(sources.statePath).indexOf('"tip":"drag"') !== -1 }, "the state file", function() {
+          expect(JSON.parse(readFile(sources.statePath)).version === 1, "versioned")
+          // Read back on the next start (the file's text, as loaded).
+          sources.applyState('{"version":1,"tip":"keys"}')
+          expect(tips.current === "keys", "a remembered tip: " + tips.current)
+          sources.applyState('{"version":1,"tip":"../nope"}')
+          sources.applyState('not json')
+          expect(tips.current === "keys", "a bad state file changes nothing")
+          sources.applyState('{"version":1,"tip":"gone"}')
+          expect(tips.current === "mugshot", "an unknown tip shows the first")
+          capture("studio-tips", next)
+        })
+      } },
+    { name: "tips: Mugshot, absent and present", wait: 0, run: function(next) {
+        var tips = find(studio, "studioTips")
+        var sources = studio.sources
+        var fakeMugshot = test.out + "/bin/mugshot"
+        waitFor(function() { return !sources.mugshotChecking }, "the first check", function() {
+          // Never the real one here.
+          sources.mugshotPath = test.out + "/no-such-mugshot"
+          sources.checkMugshot()
+          waitFor(function() { return !sources.mugshotChecking }, "the check", function() {
+            expect(!sources.mugshotAvailable && !find(tips, "studioTipAction").visible, "no Mugshot: no button")
+            expect(find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.mugshotMissing"), "the tip says how to install it")
+            expect(!sources.openMugshot(), "nothing to open")
+            shellLine.line = "mkdir -p \"$1\" && printf '%s\\n' '#!/bin/bash' 'echo ran > \"$0.ran\"' > \"$2\" && chmod 755 \"$2\""
+            shellLine.command = ["bash", "-c", shellLine.line, "fake-mugshot", test.out + "/bin", fakeMugshot]
+            shellLine.running = true
+            waitFor(function() { return !shellLine.running && readFile(fakeMugshot).indexOf("ran") !== -1 }, "the fake Mugshot", function() {
+              sources.mugshotPath = fakeMugshot
+              sources.checkMugshot()
+              waitFor(function() { return !sources.mugshotChecking }, "the check", function() {
+                var action = find(tips, "studioTipAction")
+                expect(sources.mugshotAvailable && action.visible && action.text === FoamyI18n.t("studio.tip.mugshotOpen"), "Mugshot: the button shows")
+                expect(find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.mugshot"), "the tip")
+                action.clicked()
+                waitFor(function() { return readFile(fakeMugshot + ".ran").indexOf("ran") !== -1 }, "Mugshot started", function() {
+                  expect(!sources.mugshotFailed, "started")
+                  // Another tip has no button.
+                  find(tips, "studioTipNext").clicked()
+                  expect(!find(tips, "studioTipAction").visible, "only the Mugshot tip has it")
+                  sources.mugshotPath = test.out + "/no-such-mugshot"
+                  sources.checkMugshot()
+                  waitFor(function() { return !sources.mugshotChecking }, "the check", next)
+                })
+              })
+            })
+          })
+        })
       } },
     // --- saving ---------------------------------------------------------------
     { name: "the fake omarchy-shell comes first", wait: 0, run: function(next) {

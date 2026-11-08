@@ -9,7 +9,8 @@ import "Draft.js" as Draft
 
 // Lock Studio's window content (mockup A, "Canvas"): a header (the screen
 // shown, undo, redo and reset, the status, preview, help and Apply), the
-// library (the preset, modules and scene) on the reading start, the live canvas in the middle with its preview
+// library (the preset, modules and scene, with the tips card pinned under
+// it) on the reading start, the live canvas in the middle with its preview
 // states, switches and problems, and the inspector (a scene page, or the
 // look as a whole when nothing is selected) on the reading end.
 //
@@ -735,10 +736,20 @@ FocusScope {
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.bottom: parent.bottom
+          anchors.bottom: tips.top
           anchors.margins: FoamyStyle.gapLarge
           app: studio
           dropTarget: lockCanvas.hiding
+        }
+
+        // Pinned to the pane's bottom edge, whatever the list holds.
+        Studio.Tips {
+          id: tips
+          objectName: "studioTips"
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.bottom: parent.bottom
+          sources: lockSources
         }
 
         Rectangle {

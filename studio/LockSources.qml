@@ -36,6 +36,11 @@ import "Draft.js" as Draft
 //   only knows the integer wl_output scale, so `devicePixelRatio` would say
 //   5504 × 2304 for a 3440 × 1440 screen at 125 %. Outside Hyprland there is
 //   none, and the window shows the logical size.
+// - **Mugshot** (`/usr/bin/mugshot`, which sets the account's picture and
+//   real name that the lock shows): whether it is installed (checked when
+//   the window shows), and openMugshot() starts it detached.
+// - **The app's own state** (`$XDG_STATE_HOME/foamy-lock/studio-state.json`,
+//   written atomically here; never in the plugin folder): the last tip seen.
 //
 // And what goes out, all through the helper's `studio` subcommands
 // (native/src/studio), one process per action, the replies turned into
@@ -134,6 +139,20 @@ Item {
     return out
   }
 
+  // Mugshot: where it is, and whether it is there (the test points it
+  // elsewhere).
+  property string mugshotPath: "/usr/bin/mugshot"
+  property bool mugshotAvailable: false
+  // Set when the check is asked for, cleared when it answers.
+  property bool mugshotChecking: false
+  property bool mugshotFailed: false
+
+  // The app's state: the last tip seen ("" until read, or without one).
+  readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || home + "/.local/state"
+  readonly property string statePath: stateHome + "/foamy-lock/studio-state.json"
+  property string tip: ""
+  property bool stateKnown: false
+
   // Choosing a picture.
   property bool picking: false
   property string pickError: ""
@@ -143,9 +162,13 @@ Item {
     refreshWallpaper()
     refreshPicture()
     refreshMonitors()
+    checkMugshot()
   }
   onPictureKeyChanged: pictureDebounce.restart()
-  Component.onCompleted: refreshWallpaper()
+  Component.onCompleted: {
+    refreshWallpaper()
+    checkMugshot()
+  }
 
   Connections {
     target: Quickshell
@@ -155,6 +178,40 @@ Item {
   // Hyprland's monitors again (a read-only query: scale or mode changes).
   function refreshMonitors() {
     if (hyprland) Hyprland.refreshMonitors()
+  }
+
+  function checkMugshot() {
+    if (mugshotChecking) return
+    mugshotChecking = true
+    mugshotProbe.running = true
+  }
+
+  // Started on its own, outside this app's process group.
+  function openMugshot() {
+    if (!mugshotAvailable) return false
+    mugshotFailed = false
+    try {
+      Quickshell.execDetached([mugshotPath])
+    } catch (error) {
+      mugshotFailed = true
+      return false
+    }
+    return true
+  }
+
+  // The last tip seen, kept for the next start.
+  function setTip(id) {
+    if (!/^[a-z-]{1,32}$/.test(String(id)) || id === tip) return
+    tip = id
+    stateFile.setText(JSON.stringify({ version: 1, tip: id }) + "\n")
+  }
+
+  // The state file's text (also a test hook): a version 1 object.
+  function applyState(text) {
+    var data = null
+    try { data = JSON.parse(String(text || "")) } catch (error) { data = null }
+    if (data && data.version === 1 && typeof data.tip === "string" && /^[a-z-]{1,32}$/.test(data.tip)) tip = data.tip
+    stateKnown = true
   }
 
   Connections {
@@ -484,6 +541,24 @@ Item {
       ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter")])
     stdout: StdioCollector { id: pickOutput; waitForEnd: true }
     onExited: function(exitCode) { sources.applyPick(exitCode, pickOutput.text) }
+  }
+
+  Process {
+    id: mugshotProbe
+    command: ["test", "-x", sources.mugshotPath]
+    onExited: function(exitCode) {
+      sources.mugshotAvailable = exitCode === 0
+      sources.mugshotChecking = false
+    }
+  }
+
+  FileView {
+    id: stateFile
+    path: sources.statePath
+    printErrors: false
+    atomicWrites: true
+    onLoaded: sources.applyState(text())
+    onLoadFailed: sources.stateKnown = true
   }
 
   // Read only: nothing here ever writes shell.json.
