@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons as Commons
 import "kit"
@@ -29,6 +30,12 @@ import "Draft.js" as Draft
 //   desktop's file chooser through the portal); picked(path) on a choice.
 // - **The saved look**: the same foamy.lock entry (`configEntry`), read the
 //   way the lock reads it (Draft.savedEntry).
+// - **Screens' native size**: Hyprland's own report of each monitor
+//   (`HyprlandMonitor.lastIpcObject`: width, height, scale, transform),
+//   read only, refreshed when the screens change or the window shows. Qt
+//   only knows the integer wl_output scale, so `devicePixelRatio` would say
+//   5504 × 2304 for a 3440 × 1440 screen at 125 %. Outside Hyprland there is
+//   none, and the window shows the logical size.
 //
 // And what goes out, all through the helper's `studio` subcommands
 // (native/src/studio), one process per action, the replies turned into
@@ -113,6 +120,20 @@ Item {
   readonly property bool backgroundPrepared: !!look && look.background.source === "picture"
   readonly property int backgroundVersion: wallpaperVersion
 
+  // Native pixels and scale per Hyprland monitor name (Draft.monitorEntries).
+  readonly property bool hyprland: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== ""
+  readonly property var nativeMonitors: {
+    var out = {}
+    var monitors = hyprland ? Hyprland.monitors.values : []
+    for (var i = 0; i < monitors.length; i++) {
+      var ipc = monitors[i].lastIpcObject
+      if (!monitors[i].name || !ipc) continue
+      out[monitors[i].name] = { width: Number(ipc.width) || 0, height: Number(ipc.height) || 0,
+        scale: Number(ipc.scale) || 1, transform: Number(ipc.transform) || 0 }
+    }
+    return out
+  }
+
   // Choosing a picture.
   property bool picking: false
   property string pickError: ""
@@ -121,9 +142,20 @@ Item {
   onActiveChanged: if (active) {
     refreshWallpaper()
     refreshPicture()
+    refreshMonitors()
   }
   onPictureKeyChanged: pictureDebounce.restart()
   Component.onCompleted: refreshWallpaper()
+
+  Connections {
+    target: Quickshell
+    function onScreensChanged() { sources.refreshMonitors() }
+  }
+
+  // Hyprland's monitors again (a read-only query: scale or mode changes).
+  function refreshMonitors() {
+    if (hyprland) Hyprland.refreshMonitors()
+  }
 
   Connections {
     target: Commons.Color

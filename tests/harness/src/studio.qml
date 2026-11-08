@@ -60,6 +60,8 @@ Item {
     studio.previewState = "idle"
     studio.shortcutsOpen = false
     studio.page = "module"
+    studio.selected = "clock"
+    studio.resetAsked = false
     studio.pendingPreset = ""
     studio.libraryDrag = ""
     studio.presetMenu.close()
@@ -628,6 +630,30 @@ Item {
         canvas.forceActiveFocus()
         next()
       } },
+    { name: "presets: the sidebar's first row opens the menu", wait: 0, run: function(next) {
+        reset()
+        expect(find(studio, "studioPresetStrip") === null, "no presets strip")
+        var row = find(studio.library, "studioPresetButton")
+        expect(row && row.visible && row.Accessible.role === Accessible.ButtonMenu, "the preset row")
+        expect(row.text === FoamyI18n.t("studio.preset", FoamyI18n.t("studio.preset.foamy")) && row.detail === "", "row text: " + row.text + " / " + row.detail)
+        // The first row of the library, above the modules.
+        var rowTop = row.mapToItem(studio.library, 0, 0).y
+        var clockTop = find(studio.library, "studioLibrary-clock").mapToItem(studio.library, 0, 0).y
+        expect(rowTop === 0 && clockTop > rowTop + row.height, "the first row: " + rowTop + ", modules from " + clockTop)
+        row.clicked()
+        expect(studio.presetMenu.visible && studio.presetMenu.activeFocus, "the row opens the menu")
+        var card = find(studio.presetMenu, "studioPresetMenu")
+        var rowBottom = row.mapToItem(studio.presetMenu, 0, row.height).y
+        expect(card.y >= rowBottom && card.y <= rowBottom + FoamyStyle.gap, "the menu drops from the row: " + card.y + " vs " + rowBottom)
+        expect(studio.presetMenu.keyPressed(Qt.Key_Escape) && !studio.presetMenu.visible && row.activeFocus, "Esc closes it, back on the row")
+        studio.commit({ preset: "foamy", layout: { clock: { scale: 1.2 } } })
+        expect(row.detail === FoamyI18n.t("studio.edited"), "edited shows: " + row.detail)
+        row.clicked()
+        expect(studio.presetMenu.visible, "open again")
+        row.clicked()
+        expect(!studio.presetMenu.visible, "the row closes it too")
+        next()
+      } },
     { name: "presets: the menu", wait: 0, run: function(next) {
         reset()
         studio.presetMenu.open()
@@ -668,10 +694,11 @@ Item {
         studio.requestPreset("zen")
         expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && studio.pendingPreset === "", "Esc cancels")
         expectDraft('{"preset":"foamy","layout":{"clock":{"scale":1.2}},"background":{"dim":0.5}}')
-        // The strip asks the same way.
+        // Esc on the question puts the keyboard back on the sidebar's preset row.
         studio.requestPreset("island")
-        expect(studio.pendingPreset === "island", "the strip asks too")
+        expect(studio.pendingPreset === "island", "it asks again")
         studio.cancelPreset()
+        expect(studio.library.presetButton.activeFocus, "the preset row has the keyboard after the question")
         next()
       } },
     { name: "background page", wait: 0, run: function(next) {
@@ -800,12 +827,183 @@ Item {
           expect(stop.visible && stop.enabled, "a hidden or disabled stop: " + stop)
           names.push(stop.objectName || name)
         }
-        var wanted = ["studioPresetButton", "studioPreview", "studioLibrary-clock", "studioSceneBackground", "studioZonesSwitch",
-          "studioSnapSwitch", "studioPresetStrip"]
+        var wanted = ["studioPresetButton", "studioPreview", "studioHelp", "studioLibrary-clock", "studioSceneBackground", "studioZonesSwitch",
+          "studioSnapSwitch", "studioStates"]
         for (var w = 0; w < wanted.length; w++) expect(names.indexOf(wanted[w]) !== -1, "Tab reaches " + wanted[w] + ": " + json(names))
-        // Disabled buttons are skipped (nothing to apply, nothing to undo).
-        expect(names.indexOf("studioApply") === -1 && names.indexOf("studioUndo") === -1, "disabled buttons are skipped")
+        expect(stops.indexOf(find(studio, "studioMonitor").triggerItem) !== -1, "Tab reaches the screen dropdown")
+        // Disabled buttons are skipped (nothing to apply, undo or reset).
+        expect(names.indexOf("studioApply") === -1 && names.indexOf("studioUndo") === -1 && names.indexOf("studioReset") === -1,
+          "disabled buttons are skipped")
         ok(stops.length + " tab stops, all named")
+        next()
+      } },
+    { name: "header: icon buttons with names and tooltips", wait: 0, run: function(next) {
+        reset()
+        var buttons = [
+          { id: "studioUndo", name: "studio.undo", keys: "studio.key.undo.keys", icon: "undo-2" },
+          { id: "studioRedo", name: "studio.redo", keys: "studio.key.redo.keys", icon: "undo-2", flipped: true },
+          { id: "studioReset", name: "studio.reset", icon: "undo-dot" },
+          { id: "studioPreview", name: "studio.preview", icon: "eye" },
+          { id: "studioHelp", name: "studio.help", keys: "studio.key.help.keys", icon: "circle-help" }
+        ]
+        for (var i = 0; i < buttons.length; i++) {
+          var b = buttons[i], button = find(studio, b.id)
+          var name = FoamyI18n.t(b.name)
+          expect(button && button.visible, b.id + " is there")
+          expect(button.text === "" && button.width === FoamyStyle.controlHeight && button.height === FoamyStyle.controlHeight, b.id + " is icon-only")
+          expect(button.icon === b.icon && button.flipped === (b.flipped === true), b.id + " icon " + button.icon)
+          expect(button.Accessible.name === name && button.Accessible.role === Accessible.Button, b.id + " name " + button.Accessible.name)
+          var tip = b.keys ? FoamyI18n.t("studio.withKeys", [name, FoamyI18n.t(b.keys)]) : name
+          expect(button.tooltipText === tip, b.id + " tooltip " + button.tooltipText)
+        }
+        var apply = find(studio, "studioApply")
+        expect(apply.text === FoamyI18n.t("studio.apply") && apply.kind === "primary" && apply.Accessible.name === apply.text, "Apply stays a labelled primary button")
+        // Help opens and closes the shortcuts.
+        find(studio, "studioHelp").clicked()
+        expect(studio.shortcutsOpen, "help opens the shortcuts")
+        find(studio, "studioHelp").clicked()
+        expect(!studio.shortcutsOpen, "and closes them")
+        // Undo and redo follow the history.
+        expect(!find(studio, "studioUndo").enabled && !find(studio, "studioRedo").enabled && !find(studio, "studioReset").enabled, "nothing to undo or reset")
+        studio.commit({ preset: "zen" })
+        expect(find(studio, "studioUndo").enabled && find(studio, "studioReset").enabled, "an edit enables undo and reset")
+        find(studio, "studioUndo").clicked()
+        expectDraft('{"preset":"foamy"}')
+        expect(find(studio, "studioRedo").enabled, "redo")
+        find(studio, "studioRedo").clicked()
+        expectDraft('{"preset":"zen"}')
+        next()
+      } },
+    { name: "reset: the question", wait: 0, run: function(next) {
+        reset()
+        // Saved: zen, dimmed. The draft: corner with a bigger clock.
+        studio.savedDraft = { preset: "zen", background: { dim: 0.55 } }
+        studio.commit({ preset: "corner", layout: { clock: { scale: 1.2 } } })
+        expect(studio.canReset && studio.unapplied && studio.changes > 0, "reset is possible")
+        find(studio, "studioReset").clicked()
+        var dialog = find(studio, "studioResetDialog")
+        expect(studio.resetAsked && dialog.visible && studio.questionOpen, "the question shows")
+        expect(dialog.title === FoamyI18n.t("studio.reset.title") && dialog.body === FoamyI18n.t("studio.reset.body", FoamyI18n.t("studio.preset.corner")), "its words")
+        expect(find(studio, "studioResetPreset").text === FoamyI18n.t("studio.reset.preset", FoamyI18n.t("studio.preset.corner")), "the preset's choice names it")
+        expect(find(studio, "studioResetSaved").activeFocus, "Last saved look has the keyboard")
+        expect(!studio.appKey(Qt.Key_Z, Qt.ControlModifier, ""), "keys behind it do nothing")
+        capture("studio-reset", next)
+      } },
+    { name: "reset: last saved look, preset, undo and Esc", wait: 0, run: function(next) {
+        find(studio, "studioResetSaved").clicked()
+        expect(!studio.resetAsked, "answered")
+        expectDraft('{"preset":"zen","background":{"dim":0.55}}')
+        expect(!studio.unapplied, "the lock's look again")
+        studio.undo()
+        expectDraft('{"preset":"corner","layout":{"clock":{"scale":1.2}}}')
+        studio.requestReset()
+        find(studio, "studioResetPreset").clicked()
+        expectDraft('{"preset":"corner"}')
+        studio.undo()
+        expectDraft('{"preset":"corner","layout":{"clock":{"scale":1.2}}}')
+        studio.requestReset()
+        expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && !studio.resetAsked, "Esc cancels")
+        find(studio, "studioResetCancel").clicked()
+        expectDraft('{"preset":"corner","layout":{"clock":{"scale":1.2}}}')
+        // The preset without changes, but not the saved look: only that choice.
+        studio.commit({ preset: "corner" })
+        studio.requestReset()
+        expect(!find(studio, "studioResetPreset").enabled && find(studio, "studioResetSaved").enabled, "only the saved look")
+        studio.answerReset("cancel")
+        // The saved look with changes on its preset: only the preset.
+        studio.savedDraft = { preset: "corner", layout: { clock: { scale: 1.2 } } }
+        studio.commit({ preset: "corner", layout: { clock: { scale: 1.2 } } })
+        studio.requestReset()
+        expect(find(studio, "studioResetPreset").enabled && !find(studio, "studioResetSaved").enabled && find(studio, "studioResetPreset").activeFocus,
+          "only the preset, with the keyboard")
+        studio.answerReset("cancel")
+        // Neither: nothing to reset.
+        studio.savedDraft = { preset: "corner" }
+        studio.commit({ preset: "corner" })
+        expect(!studio.canReset && !find(studio, "studioReset").enabled, "nothing to reset")
+        studio.requestReset()
+        expect(!studio.resetAsked, "and no question")
+        next()
+      } },
+    { name: "screens: the dropdown with native sizes", wait: 0, run: function(next) {
+        reset()
+        var picker = find(studio, "studioMonitor")
+        var labels = picker.options.map(function(o) { return o.label })
+        expect(json(picker.options.map(function(o) { return o.value })) === json(studio.monitors.map(function(m) { return m.key })), "every size is an entry")
+        expect(labels[labels.length - 2] === FoamyI18n.t("studio.monitor.reference", [1280, 720])
+          && labels[labels.length - 1] === FoamyI18n.t("studio.monitor.reference", [1920, 1080]), "the reference sizes last: " + json(labels))
+        expect(picker.value === "reference:1920x1080" && picker.currentLabel() === FoamyI18n.t("studio.monitor.reference", [1920, 1080]), "shows the screen shown")
+        // A scaled screen (DP-2 at 125 %): the native pixels from Hyprland, the logical size for the canvas.
+        var fake = studio.monitorList([{ name: "DP-2", width: 2752, height: 1152 }, { name: "HDMI-A-1", width: 1920, height: 1080 }, { name: "", width: 800, height: 600 }],
+          { "DP-2": { width: 3440, height: 1440, scale: 1.25, transform: 0 }, "HDMI-A-1": { width: 1920, height: 1080, scale: 1, transform: 0 } })
+        expect(fake[0].label === FoamyI18n.t("studio.monitor.screenScaled", ["DP-2", 3440, 1440, 125]) && fake[0].width === 2752 && fake[0].height === 1152,
+          "the scaled screen: " + json(fake[0]))
+        expect(fake[1].label === FoamyI18n.t("studio.monitor.screen", ["HDMI-A-1", 1920, 1080]), "an unscaled one: " + fake[1].label)
+        expect(fake[2].label === FoamyI18n.t("studio.monitor.screen", [FoamyI18n.t("studio.monitor.unnamed", 3), 800, 600]), "an unnamed one: " + fake[2].label)
+        if (FoamyI18n.t("studio.monitor.screenScaled") === "%1 · %2 × %3 · %4 %")
+          expect(fake[0].label === "DP-2 · 3440 × 1440 · 125 %", "in words: " + fake[0].label)
+        // Outside Hyprland the connected screens show their logical size.
+        expect(json(studio.sources.nativeMonitors) === "{}", "no Hyprland here: " + json(studio.sources.nativeMonitors))
+        var first = studio.monitors[0]
+        expect(!first.reference && first.nativeWidth === first.width, "logical without Hyprland: " + json(first))
+        // Picking an entry shows that size (at its logical size).
+        picker.select("reference:1280x720")
+        expect(studio.monitorKey === "reference:1280x720" && canvas.screenWidth === 1280 && canvas.screenHeight === 720, "picked " + studio.monitorKey)
+        picker.select(first.key)
+        expect(canvas.screenWidth === first.width && canvas.screenHeight === first.height, "a screen at its logical size")
+        picker.select("reference:1920x1080")
+        expect(canvas.screenWidth === 1920, "back to 1920")
+        next()
+      } },
+    { name: "the preview states' caption", wait: 0, run: function(next) {
+        var states = find(studio, "studioStates")
+        var caption = find(states, "segmentedCaption")
+        expect(states.caption === FoamyI18n.t("studio.state.caption") && caption && caption.visible && caption.text === states.caption, "the caption")
+        // Inside the group, before the first state (on the reading start).
+        var at = caption.mapToItem(states, 0, 0)
+        expect(at.x >= 0 && at.x + caption.width <= states.width && at.y >= 0 && at.y + caption.height <= states.height, "inside the group: " + json(at))
+        var idle = null
+        var row = caption.parent
+        for (var i = 0; i < row.children.length; i++) if (row.children[i].modelData && row.children[i].modelData.value === "idle") idle = row.children[i]
+        var idleAt = idle.mapToItem(states, 0, 0).x
+        expect(rtl ? at.x > idleAt : at.x < idleAt, "before Idle: " + at.x + " vs " + idleAt)
+        next()
+      } },
+    { name: "deselect: beside the lock and Esc", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("media")
+        var r = canvas.stageRect
+        // The letterbox: above the image when it is wider than the canvas, else beside it.
+        var outside = r.y > 4 ? Qt.point(r.x + r.width / 2, r.y / 2) : Qt.point(r.x / 2, r.y + r.height / 2)
+        expect(r.y > 4 || r.x > 4, "a letterbox around the image: " + json(r))
+        expect(!canvas.tapOutside(r.x + r.width / 2, r.y + r.height / 2) && studio.selected === "media", "a tap on the image doesn't deselect")
+        expect(canvas.tapOutside(outside.x, outside.y), "a tap beside it does")
+        expect(studio.selected === "" && studio.page === "module", "nothing selected")
+        expect(!studio.inspector.visible && studio.scenePage.visible && studio.scenePage.page === "look", "the look as a whole")
+        expect(find(studio.scenePage, "studioScenePageTitle").text === FoamyI18n.t("studio.look"), "titled")
+        expect(find(studio.scenePage, "studioSceneBackgroundSection").visible && find(studio.scenePage, "studioSceneGlassSection").visible
+          && find(studio.scenePage, "studioDim").visible && find(studio.scenePage, "studioSource-omarchy").visible, "background, glass and dim")
+        expect(find(canvas, "studioSelection").visible === false, "no selection drawn")
+        // Edits from the look's page are one step each, as on the scene pages.
+        find(studio.scenePage, "studioDim").committed(0.5)
+        expectDraft('{"preset":"foamy","background":{"dim":0.5}}')
+        // Keys with nothing selected change nothing.
+        var before = Draft.stable(studio.draft)
+        expect(!canvas.keyPressed(Qt.Key_Left, Qt.NoModifier) && !canvas.keyPressed(Qt.Key_Delete, Qt.NoModifier), "the canvas ignores them")
+        studio.library.keyPressed(Qt.Key_Delete, Qt.NoModifier)
+        expect(Draft.stable(studio.draft) === before && studio.history.past.length === 1, "and the library makes no step")
+        capture("studio-look", next)
+      } },
+    { name: "deselect: Esc", wait: 0, run: function(next) {
+        find(studio.library, "studioLibrary-status").clicked()
+        expect(studio.selected === "status" && studio.inspector.visible, "a click selects again")
+        expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && studio.selected === "" && studio.scenePage.page === "look", "Esc deselects")
+        expect(!studio.appKey(Qt.Key_Escape, Qt.NoModifier, ""), "Esc with nothing selected is left alone")
+        // A scene page is still chosen from the library.
+        find(studio.library, "studioSceneGlass").clicked()
+        expect(studio.scenePage.page === "glass" && !find(studio.scenePage, "studioSceneBackgroundSection").visible, "the glass page")
+        canvas.selectRequested("clock")
+        expect(studio.selected === "clock" && studio.inspector.visible, "selecting on the canvas")
         next()
       } },
     // --- saving ---------------------------------------------------------------

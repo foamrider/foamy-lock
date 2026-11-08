@@ -7,18 +7,20 @@ import "Layout.js" as LockLayout
 import "." as Studio
 import "Draft.js" as Draft
 
-// Lock Studio's window content (mockup A, "Canvas"): a header (preset menu,
-// screen, undo and redo, preview, apply), the library (modules and scene)
-// on the reading start, the live canvas in the middle with its preview
-// states, switches, problems and presets, and the inspector (or a scene
-// page) on the reading end.
+// Lock Studio's window content (mockup A, "Canvas"): a header (the screen
+// shown, undo, redo and reset, the status, preview, help and Apply), the
+// library (the preset, modules and scene) on the reading start, the live canvas in the middle with its preview
+// states, switches and problems, and the inspector (a scene page, or the
+// look as a whole when nothing is selected) on the reading end.
 //
 // It owns the draft: `history` (Draft.history) holds the entry being edited
 // and its undo steps; every edit goes through commit(). A slider drag shows
 // through preview() and commits once. Picking a preset with changes asks
 // first (keep them on the new preset, or replace them); either is one
-// undo step. Keys that work everywhere are in appKey(); the canvas, the
-// library and the controls handle their own.
+// undo step. Reset (the header) asks whether to go back to the saved look
+// or to the preset without changes; either is one undo step too. Keys that
+// work everywhere are in appKey(); the canvas, the library and the
+// controls handle their own.
 //
 // Saving (LockSources runs the helper's `studio` subcommands):
 // - **On open** the draft on disk is read. One whose look differs from the
@@ -57,12 +59,14 @@ FocusScope {
   // The inspector pane: "module" (the selection), "background" or "glass".
   property string page: "module"
   property string monitorKey: ""
-  readonly property var monitors: monitorList(Quickshell.screens)
+  readonly property var monitors: monitorList(Quickshell.screens, lockSources.nativeMonitors)
   readonly property var monitor: monitorFor(monitorKey)
   property string previewState: "idle"
   property bool showZones: true
   property bool snapping: true
   property bool shortcutsOpen: false
+  // The reset question shows.
+  property bool resetAsked: false
   // A module dragged from the library ("" otherwise), and where the
   // pointer is in the window.
   property string libraryDrag: ""
@@ -105,7 +109,9 @@ FocusScope {
   readonly property bool canApply: session === "ready" && unapplied && !applyBlocked && !lockChecker.pending
     && !lockSources.applying && !quitting
   readonly property bool canPreview: session === "ready" && !lockSources.previewing && !quitting
-  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked
+  // Reset can go back to the saved look, or to the preset without changes.
+  readonly property bool canReset: session === "ready" && !quitting && (unapplied || changes > 0)
+  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked || resetAsked
 
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
@@ -338,7 +344,36 @@ FocusScope {
     page = "module"
   }
 
-  // A preset picked (menu, strip): at once without changes, else ask.
+  // Nothing selected: the inspector shows the look as a whole.
+  function deselect() {
+    selected = ""
+    page = "module"
+  }
+
+  function togglePresetMenu() {
+    if (presetMenu.visible) presetMenu.close()
+    else presetMenu.open()
+  }
+
+  // --- reset ----------------------------------------------------------------------
+
+  function requestReset() {
+    if (!canReset || questionOpen) return
+    resetAsked = true
+    resetSaved.enabled ? resetSaved.forceActiveFocus(Qt.PopupFocusReason) : resetPreset.forceActiveFocus(Qt.PopupFocusReason)
+  }
+
+  // "saved" (the look the lock has), "preset" (the draft's preset without
+  // changes) or "cancel". Either choice is one undo step.
+  function answerReset(answer) {
+    if (!resetAsked) return
+    resetAsked = false
+    if (answer === "saved" && unapplied) commit(Draft.entry(Draft.lookOf(savedDraft)))
+    else if (answer === "preset" && changes > 0) commit(Draft.setPreset(draft, draft.preset))
+    canReset ? resetButton.forceActiveFocus(Qt.OtherFocusReason) : lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
+  }
+
+  // A preset picked (menu): at once without changes, else ask.
   function requestPreset(name) {
     presetMenu.close()
     if (LockLayout.SELECTABLE_PRESETS.indexOf(name) === -1) return
@@ -357,12 +392,12 @@ FocusScope {
     if (!name) return
     var next = keep ? Draft.presetKeeping(draft, name) : Draft.setPreset(draft, name)
     if (next) commit(next)
-    presetStrip.forceActiveFocus(Qt.OtherFocusReason)
+    library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
 
   function cancelPreset() {
     pendingPreset = ""
-    presetStrip.forceActiveFocus(Qt.OtherFocusReason)
+    library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
 
   // --- dragging from the library onto the canvas ---------------------------
@@ -392,24 +427,25 @@ FocusScope {
     libraryDrag = ""
   }
 
-  // The connected screens (logical size), then the reference sizes.
-  function monitorList(screens) {
-    var list = []
-    for (var i = 0; i < screens.length; i++) {
-      var screen = screens[i]
-      if (!(screen.width > 0 && screen.height > 0)) continue
+  // The connected screens, labelled with their native size (and scale)
+  // from Hyprland (`natives`, LockSources.nativeMonitors), then the
+  // reference sizes. `width` and `height` stay logical: the canvas and
+  // the checker lay out at the size the lock does.
+  function monitorList(screens, natives) {
+    var screenList = []
+    for (var i = 0; i < screens.length; i++) screenList.push({ name: screens[i].name, width: screens[i].width, height: screens[i].height })
+    return Draft.monitorEntries(screenList, natives || {}).map(function(m) {
+      if (m.reference) {
+        m.label = FoamyI18n.t("studio.monitor.reference", [m.width, m.height])
+        return m
+      }
       // A screen without a name (a virtual one) goes by its number.
-      var name = screen.name || FoamyI18n.t("studio.monitor.unnamed", i + 1)
-      list.push({ key: "screen:" + (screen.name || i), name: name, width: screen.width, height: screen.height, reference: false,
-        label: FoamyI18n.t("studio.monitor.screen", [name, screen.width, screen.height]) })
-    }
-    var references = [[1280, 720], [1920, 1080]]
-    for (var j = 0; j < references.length; j++) {
-      var w = references[j][0], h = references[j][1]
-      list.push({ key: "reference:" + w + "x" + h, name: "", width: w, height: h, reference: true,
-        label: FoamyI18n.t("studio.monitor.reference", [w, h]) })
-    }
-    return list
+      if (!m.name) m.name = FoamyI18n.t("studio.monitor.unnamed", m.index + 1)
+      var percent = Draft.scalePercent(m.scale)
+      m.label = percent ? FoamyI18n.t("studio.monitor.screenScaled", [m.name, m.nativeWidth, m.nativeHeight, percent])
+        : FoamyI18n.t("studio.monitor.screen", [m.name, m.nativeWidth, m.nativeHeight])
+      return m
+    })
   }
 
   function monitorFor(key) {
@@ -484,6 +520,10 @@ FocusScope {
       cancelPreset()
       return true
     }
+    if (key === Qt.Key_Escape && resetAsked) {
+      answerReset("cancel")
+      return true
+    }
     // A question is open: only its own buttons and Esc.
     if (questionOpen) return false
     if (ctrl && key === Qt.Key_Z) {
@@ -501,6 +541,11 @@ FocusScope {
     }
     if (key === Qt.Key_Escape && shortcutsOpen) {
       shortcutsOpen = false
+      return true
+    }
+    // Esc with nothing else to close: the look as a whole.
+    if (key === Qt.Key_Escape && selected !== "") {
+      deselect()
       return true
     }
     if (ctrl) return false
@@ -566,38 +611,46 @@ FocusScope {
             Accessible.name: text
           }
 
-          StudioButton {
-            id: presetButton
-            objectName: "studioPresetButton"
-            focus: true
-            text: studio.presetLabel(studio.draft.preset) + "  \u25BE"
-            detail: studio.changes > 0 ? FoamyI18n.t("studio.edited") : ""
-            checked: presetMenu.visible
-            Accessible.role: Accessible.ButtonMenu
-            Accessible.name: FoamyI18n.t("studio.preset", studio.presetLabel(studio.draft.preset))
-            onClicked: presetMenu.visible ? presetMenu.close() : presetMenu.open()
-          }
-
-          Segmented {
-            name: FoamyI18n.t("studio.monitor")
-            options: studio.monitors.map(function(m) { return { value: m.key, label: m.label } })
+          // The screen shown: its native size (and scale), then the
+          // reference sizes. The canvas lays out at the logical size.
+          FoamyDropdown {
+            id: monitorPicker
+            objectName: "studioMonitor"
+            Layout.preferredWidth: 248
+            label: FoamyI18n.t("studio.monitor")
+            showLabel: false
             value: studio.monitor.key
-            onPicked: function(value) { studio.monitorKey = value }
+            options: studio.monitors.map(function(m) { return { value: m.key, label: m.label } })
+            onChanged: function(value) { studio.monitorKey = value }
+            Component.onCompleted: triggerItem.focus = true
           }
 
-          StudioButton {
+          IconButton {
             objectName: "studioUndo"
-            text: FoamyI18n.t("studio.undo")
+            Layout.leftMargin: FoamyStyle.gap
+            icon: "undo-2"
+            name: FoamyI18n.t("studio.undo")
+            keys: FoamyI18n.t("studio.key.undo.keys")
             enabled: Draft.canUndo(studio.history)
-            Accessible.description: FoamyI18n.t("studio.key.undo.keys")
             onClicked: studio.undo()
           }
-          StudioButton {
+          IconButton {
             objectName: "studioRedo"
-            text: FoamyI18n.t("studio.redo")
+            icon: "undo-2"
+            flipped: true
+            name: FoamyI18n.t("studio.redo")
+            keys: FoamyI18n.t("studio.key.redo.keys")
             enabled: Draft.canRedo(studio.history)
-            Accessible.description: FoamyI18n.t("studio.key.redo.keys")
             onClicked: studio.redo()
+          }
+          // The kit has no rotate-ccw yet: undo-dot ("back to a mark").
+          IconButton {
+            id: resetButton
+            objectName: "studioReset"
+            icon: "undo-dot"
+            name: FoamyI18n.t("studio.reset")
+            enabled: studio.canReset
+            onClicked: studio.requestReset()
           }
 
           // How the last Apply or Preview went, else whether the lock has
@@ -625,18 +678,28 @@ FocusScope {
             Accessible.name: text
           }
 
-          StudioButton {
+          IconButton {
             id: previewButton
             objectName: "studioPreview"
-            text: FoamyI18n.t("studio.preview")
+            icon: "eye"
+            name: FoamyI18n.t("studio.preview")
             enabled: studio.canPreview
             Accessible.description: FoamyI18n.t("studio.previewHint")
             onClicked: studio.previewFull()
           }
-          StudioButton {
+          IconButton {
+            objectName: "studioHelp"
+            icon: "circle-help"
+            name: FoamyI18n.t("studio.help")
+            keys: FoamyI18n.t("studio.key.help.keys")
+            onClicked: studio.shortcutsOpen = !studio.shortcutsOpen
+          }
+          FoamyButton {
             id: applyButton
             objectName: "studioApply"
-            primary: true
+            Layout.leftMargin: FoamyStyle.gap
+            kind: "primary"
+            focusable: true
             text: lockSources.applying ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.apply")
             enabled: studio.canApply
             Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked")
@@ -669,7 +732,10 @@ FocusScope {
 
         Studio.Library {
           id: library
-          anchors.fill: parent
+          anchors.top: parent.top
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.bottom: parent.bottom
           anchors.margins: FoamyStyle.gapLarge
           app: studio
           dropTarget: lockCanvas.hiding
@@ -700,7 +766,9 @@ FocusScope {
             spacing: FoamyStyle.gap
 
             Segmented {
+              objectName: "studioStates"
               name: FoamyI18n.t("studio.state")
+              caption: FoamyI18n.t("studio.state.caption")
               options: [
                 { value: "idle", label: FoamyI18n.t("studio.state.idle") },
                 { value: "typing", label: FoamyI18n.t("studio.state.typing") },
@@ -749,6 +817,7 @@ FocusScope {
             hideArea: libraryPane
             onEdited: function(next) { studio.commit(next) }
             onSelectRequested: function(name) { studio.selectModule(name) }
+            onDeselectRequested: studio.deselect()
           }
 
           RowLayout {
@@ -817,78 +886,11 @@ FocusScope {
               }
             }
           }
-
-          // Presets (thumbnails from previews/presets).
-          ListView {
-            id: presetStrip
-            objectName: "studioPresetStrip"
-            Layout.fillWidth: true
-            Layout.preferredHeight: 78
-            orientation: ListView.Horizontal
-            spacing: FoamyStyle.gap
-            clip: true
-            model: LockLayout.SELECTABLE_PRESETS
-            activeFocusOnTab: true
-            keyNavigationEnabled: true
-            currentIndex: Math.max(0, LockLayout.SELECTABLE_PRESETS.indexOf(studio.draft.preset))
-            Accessible.role: Accessible.List
-            Accessible.name: FoamyI18n.t("studio.presets")
-            Keys.onReturnPressed: studio.requestPreset(LockLayout.SELECTABLE_PRESETS[currentIndex])
-            Keys.onSpacePressed: studio.requestPreset(LockLayout.SELECTABLE_PRESETS[currentIndex])
-
-            delegate: Rectangle {
-              id: presetTile
-              required property var modelData
-              required property int index
-              readonly property bool chosen: studio.draft.preset === modelData
-              width: 104
-              height: 78
-              radius: FoamyStyle.radiusSmall
-              color: presetMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
-              border.width: presetStrip.activeFocus && presetStrip.currentIndex === index ? 2 : chosen ? 2 : 0
-              border.color: presetStrip.activeFocus && presetStrip.currentIndex === index ? FoamyPalette.text : FoamyPalette.accent
-              Accessible.role: Accessible.ListItem
-              Accessible.name: studio.presetLabel(modelData)
-              Accessible.selected: chosen
-
-              Image {
-                x: 3
-                y: 3
-                width: parent.width - 6
-                height: 54
-                source: Qt.resolvedUrl("previews/presets/" + presetTile.modelData + ".png")
-                sourceSize.width: 208
-                sourceSize.height: 117
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-              }
-              Text {
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 2
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                text: studio.presetLabel(presetTile.modelData)
-                elide: Text.ElideRight
-                color: presetTile.chosen ? FoamyPalette.text : FoamyPalette.secondaryText
-                font.family: FoamyStyle.fontFamily
-                font.pixelSize: FoamyStyle.font.caption
-              }
-              MouseArea {
-                id: presetMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  presetStrip.currentIndex = presetTile.index
-                  studio.requestPreset(presetTile.modelData)
-                }
-              }
-            }
-          }
         }
       }
 
-      // The inspector, or the scene page chosen in the library.
+      // The inspector, or the scene page chosen in the library (or the
+      // look as a whole when nothing is selected).
       Rectangle {
         Layout.preferredWidth: 276
         Layout.fillHeight: true
@@ -909,17 +911,17 @@ FocusScope {
           Studio.Inspector {
             id: inspectorPage
             anchors.fill: parent
-            visible: studio.page === "module"
+            visible: studio.page === "module" && studio.selected !== ""
             focus: visible
             app: studio
           }
           Studio.ScenePage {
             id: scenePage
             anchors.fill: parent
-            visible: studio.page !== "module"
+            visible: !inspectorPage.visible
             focus: visible
             app: studio
-            page: studio.page === "glass" ? "glass" : "background"
+            page: studio.page === "glass" ? "glass" : studio.page === "background" ? "background" : "look"
           }
         }
       }
@@ -967,10 +969,10 @@ FocusScope {
 
   Studio.PresetMenu {
     id: presetMenu
-    anchorItem: presetButton
+    anchorItem: library.presetButton
     current: studio.draft.preset
     onPicked: function(name) { studio.requestPreset(name) }
-    onClosed: presetButton.forceActiveFocus(Qt.OtherFocusReason)
+    onClosed: library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
 
   // A question over the window: a title, a body and its buttons (declared
@@ -1054,23 +1056,62 @@ FocusScope {
       + (studio.pendingPreset && !studio.keptPreset ? "\n" + FoamyI18n.t("studio.presetCantKeep") : "")
     onDismissed: studio.cancelPreset()
 
-    StudioButton {
+    FoamyButton {
+      focusable: true
       objectName: "studioPresetCancel"
       text: FoamyI18n.t("studio.cancel")
       onClicked: studio.cancelPreset()
     }
-    StudioButton {
+    FoamyButton {
+      focusable: true
       objectName: "studioPresetReplace"
       text: FoamyI18n.t("studio.presetReplace")
       onClicked: studio.answerPreset(false)
     }
-    StudioButton {
+    FoamyButton {
       id: keepButton
+      focusable: true
       objectName: "studioPresetKeep"
-      primary: true
+      kind: "primary"
       enabled: studio.keptPreset !== null
       text: FoamyI18n.t("studio.presetKeep")
       onClicked: studio.answerPreset(true)
+    }
+  }
+
+  // Reset: the saved look, or the preset without changes.
+  Question {
+    id: resetDialog
+    objectName: "studioResetDialog"
+    visible: studio.resetAsked
+    title: FoamyI18n.t("studio.reset.title")
+    body: FoamyI18n.t("studio.reset.body", studio.presetLabel(studio.draft.preset))
+    onDismissed: studio.answerReset("cancel")
+
+    FoamyButton {
+      focusable: true
+      objectName: "studioResetCancel"
+      text: FoamyI18n.t("studio.cancel")
+      onClicked: studio.answerReset("cancel")
+    }
+    FoamyButton {
+      id: resetPreset
+      focusable: true
+      objectName: "studioResetPreset"
+      text: FoamyI18n.t("studio.reset.preset", studio.presetLabel(studio.draft.preset))
+      enabled: studio.changes > 0
+      Accessible.description: FoamyI18n.t("studio.reset.presetHint")
+      onClicked: studio.answerReset("preset")
+    }
+    FoamyButton {
+      id: resetSaved
+      focusable: true
+      objectName: "studioResetSaved"
+      kind: "primary"
+      text: FoamyI18n.t("studio.reset.saved")
+      enabled: studio.unapplied
+      Accessible.description: FoamyI18n.t("studio.reset.savedHint")
+      onClicked: studio.answerReset("saved")
     }
   }
 
@@ -1084,16 +1125,18 @@ FocusScope {
       ? FoamyI18n.t("studio.restore.bodyAt", studio.savedAtText(studio.restoreReport.savedAt)) : FoamyI18n.t("studio.restore.body")
     onDismissed: studio.answerRestore(true)
 
-    StudioButton {
+    FoamyButton {
+      focusable: true
       objectName: "studioRestoreSaved"
       text: FoamyI18n.t("studio.restore.saved")
       Accessible.description: FoamyI18n.t("studio.restore.savedHint")
       onClicked: studio.answerRestore(false)
     }
-    StudioButton {
+    FoamyButton {
       id: restoreContinue
+      focusable: true
       objectName: "studioRestoreContinue"
-      primary: true
+      kind: "primary"
       text: FoamyI18n.t("studio.restore.continue")
       onClicked: studio.answerRestore(true)
     }
@@ -1108,22 +1151,25 @@ FocusScope {
     body: FoamyI18n.t("studio.quit.body") + (studio.applyBlocked ? "\n" + FoamyI18n.t("studio.applyBlocked") : "")
     onDismissed: studio.answerQuit("cancel")
 
-    StudioButton {
+    FoamyButton {
       id: quitCancel
+      focusable: true
       objectName: "studioQuitCancel"
       text: FoamyI18n.t("studio.cancel")
       onClicked: studio.answerQuit("cancel")
     }
-    StudioButton {
+    FoamyButton {
+      focusable: true
       objectName: "studioQuitDiscard"
       text: FoamyI18n.t("studio.quit.discard")
       Accessible.description: FoamyI18n.t("studio.quit.discardHint")
       onClicked: studio.answerQuit("discard")
     }
-    StudioButton {
+    FoamyButton {
       id: quitApply
+      focusable: true
       objectName: "studioQuitApply"
-      primary: true
+      kind: "primary"
       enabled: studio.canApply || studio.quitAfterApply
       text: studio.quitAfterApply ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.quit.apply")
       onClicked: if (!studio.quitAfterApply) studio.answerQuit("apply")

@@ -15,6 +15,10 @@ import "Draft.js" as Draft
 // own zone; the drop picks the zone (Draft.drop) and emits `edited` once.
 // Shift and Alt are read from key presses and releases as well as from the
 // pointer, so pressing one mid-drag takes effect without moving.
+//
+// A click on the canvas beside the lock image (the letterbox around it)
+// asks to clear the selection (deselectRequested); the window then shows
+// the look as a whole. Esc does the same (StudioWindow.appKey).
 FocusScope {
   id: canvas
 
@@ -45,6 +49,7 @@ FocusScope {
 
   signal edited(var draft)
   signal selectRequested(string name)
+  signal deselectRequested()
 
   readonly property var look: Draft.lookOf(draft)
   // The look while a drag or resize is shown; null otherwise.
@@ -60,6 +65,8 @@ FocusScope {
   readonly property var selectedRect: selected && rects[selected] ? rects[selected] : null
   // A module dragged from the canvas is over the library: a drop hides it.
   readonly property bool hiding: gesture !== null && gesture.overHide === true
+  // The lock image in the canvas's own coordinates.
+  readonly property rect stageRect: Qt.rect(stage.x + stageArea.x, stage.y + stageArea.y, stage.width, stage.height)
 
   activeFocusOnTab: true
   Accessible.role: Accessible.Graphic
@@ -304,6 +311,17 @@ FocusScope {
     return false
   }
 
+  // A tap at (x, y) in the canvas: beside the lock image it clears the
+  // selection (true); on the image the image's own handler picks.
+  function tapOutside(x, y) {
+    var r = stageRect
+    if (x >= r.x && y >= r.y && x <= r.x + r.width && y <= r.y + r.height) return false
+    forceActiveFocus(Qt.MouseFocusReason)
+    cancelGesture()
+    deselectRequested()
+    return true
+  }
+
   function zoneCell(zone) {
     var column = Layout.screenColumn(zone, rightToLeft)
     return { column: ["start", "center", "end"].indexOf(column), row: ["top", "middle", "bottom"].indexOf(Layout.zoneRow(zone)) }
@@ -312,6 +330,14 @@ FocusScope {
   Item {
     id: stageArea
     anchors.fill: parent
+
+    // Beside the lock image: the image's handlers take taps on it.
+    TapHandler {
+      onTapped: function(eventPoint) {
+        var p = stageArea.mapToItem(canvas, eventPoint.position.x, eventPoint.position.y)
+        canvas.tapOutside(p.x, p.y)
+      }
+    }
 
     Rectangle {
       id: stage

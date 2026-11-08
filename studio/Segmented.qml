@@ -5,12 +5,14 @@ import "kit"
 // A segmented choice: `options` is [{ value, label }], `value` is bound by
 // the caller and `picked(value)` asks for a change (it never assigns
 // `value` itself). Left and Right move the choice (mirrored right-to-left).
+// `caption` (optional) titles the group inside it, before the first segment.
 Rectangle {
   id: control
 
   property var options: []
   property var value
   property string name: ""
+  property string caption: ""
   signal picked(var value)
 
   implicitHeight: FoamyStyle.controlHeight
@@ -43,6 +45,22 @@ Rectangle {
     id: segments
     anchors.centerIn: parent
     spacing: 0
+
+    Text {
+      objectName: "segmentedCaption"
+      visible: control.caption !== ""
+      height: control.height - 4
+      leftPadding: FoamyStyle.controlPaddingX
+      rightPadding: FoamyStyle.gap
+      verticalAlignment: Text.AlignVCenter
+      text: control.caption
+      color: FoamyPalette.mutedText
+      font.family: FoamyStyle.fontFamily
+      font.pixelSize: FoamyStyle.font.caption
+      font.weight: Font.DemiBold
+      font.capitalization: Font.AllUppercase
+      font.letterSpacing: 0.6
+    }
 
     Repeater {
       model: control.options

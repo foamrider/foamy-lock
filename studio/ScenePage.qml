@@ -9,7 +9,9 @@ import "Draft.js" as Draft
 // - "background": the source (the Omarchy wallpaper, your picture, the
 //   theme colour, black or a drawn scene), the picture, the blur and the
 //   decoration (drawn tiles);
-// - "glass": the dim, and the glass's opacity and tint.
+// - "glass": the dim, and the glass's opacity and tint;
+// - "look": both, for the look as a whole (nothing is selected: a click
+//   beside the lock on the canvas, or Esc).
 // Values are the lock's 0–1 amounts shown as percentages, within its
 // ranges. Every change is one Draft edit through the window (`app`);
 // slider drags show live and commit once.
@@ -19,6 +21,10 @@ FocusScope {
   // The StudioWindow: draft, look, commit(), preview(), sources.
   property var app: null
   property string page: "background"
+  readonly property bool backgroundShown: page === "background" || page === "look"
+  readonly property bool glassShown: page === "glass" || page === "look"
+  readonly property string title: page === "look" ? FoamyI18n.t("studio.look")
+    : page === "glass" ? FoamyI18n.t("studio.glassDim") : FoamyI18n.t("studio.background")
 
   readonly property var look: app ? app.look : LockLayout.defaults()
   readonly property var background: look.background
@@ -26,7 +32,7 @@ FocusScope {
   readonly property bool pictureChosen: background.path !== undefined && background.path !== ""
 
   Accessible.role: Accessible.Pane
-  Accessible.name: page === "glass" ? FoamyI18n.t("studio.glassDim") : FoamyI18n.t("studio.background")
+  Accessible.name: title
 
   function commit(next) { app.commit(next) }
   function preview(next) { app.preview(next) }
@@ -77,8 +83,9 @@ FocusScope {
       spacing: FoamyStyle.gap
 
       Text {
+        objectName: "studioScenePageTitle"
         width: parent.width
-        text: scene.page === "glass" ? FoamyI18n.t("studio.glassDim") : FoamyI18n.t("studio.background")
+        text: scene.title
         horizontalAlignment: Text.AlignLeft
         color: FoamyPalette.text
         font.family: FoamyStyle.fontFamily
@@ -88,11 +95,23 @@ FocusScope {
         Accessible.name: text
       }
 
+      PaneNote {
+        visible: scene.page === "look"
+        text: FoamyI18n.t("studio.lookHint")
+      }
+
       // --- background -------------------------------------------------------
       Column {
+        objectName: "studioSceneBackgroundSection"
         width: parent.width
         spacing: FoamyStyle.gap
-        visible: scene.page === "background"
+        visible: scene.backgroundShown
+
+        SectionLabel {
+          visible: scene.page === "look"
+          text: FoamyI18n.t("studio.background")
+          topPadding: FoamyStyle.gap
+        }
 
         SectionLabel {
           text: FoamyI18n.t("studio.source")
@@ -111,7 +130,7 @@ FocusScope {
               required property string modelData
               required property int index
               objectName: "studioSource-" + modelData
-              focus: index === 0 && scene.page === "background"
+              focus: index === 0 && scene.backgroundShown
               width: sourceList.width
               horizontalAlignment: Text.AlignLeft
               text: FoamyI18n.t("studio.source." + modelData)
@@ -145,8 +164,9 @@ FocusScope {
         }
         RowLayout {
           width: parent.width
-          StudioButton {
+          FoamyButton {
             objectName: "studioChoosePicture"
+            focusable: true
             text: FoamyI18n.t("studio.picture.chooseButton")
             enabled: scene.sources !== null && !scene.sources.picking
             onClicked: scene.sources.pick()
@@ -200,9 +220,16 @@ FocusScope {
 
       // --- glass and dim ----------------------------------------------------
       Column {
+        objectName: "studioSceneGlassSection"
         width: parent.width
         spacing: FoamyStyle.gap
-        visible: scene.page === "glass"
+        visible: scene.glassShown
+
+        SectionLabel {
+          visible: scene.page === "look"
+          text: FoamyI18n.t("studio.glassDim")
+          topPadding: FoamyStyle.sectionGap
+        }
 
         StudioSlider {
           objectName: "studioDim"

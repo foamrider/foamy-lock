@@ -3,10 +3,14 @@ import QtQuick
 import "kit"
 import "Layout.js" as Layout
 
-// The header's preset menu: every selectable preset as a thumbnail
+// The preset menu: every selectable preset as a thumbnail
 // (previews/presets/<name>.png) with its name, the current one marked. An
-// overlay inside the window, dropped from the preset button (`anchorItem`)
-// on the reading start; a press outside or Esc closes it.
+// overlay inside the window, dropped from the library's preset row
+// (`anchorItem`) on the reading start; a press outside or Esc closes it.
+//
+// User presets (round 2, step R2-2) go first, in a "Your presets" section
+// above "Built-in": `userPresets` is their list, and the headings show
+// once it has any. Until then the menu is the built-in grid alone.
 //
 // Keyboard: it takes the keys while open; the arrow keys move the cursor
 // (mirrored right to left), Home and End jump, Enter or Space pick.
@@ -21,6 +25,9 @@ FocusScope {
   property point origin: Qt.point(0, 0)
   readonly property int columns: 4
   readonly property var presets: Layout.SELECTABLE_PRESETS
+  // R2-2: [{ id, name, look }], newest first (shown before the built-ins).
+  property var userPresets: []
+  readonly property bool sectioned: userPresets.length > 0
 
   signal picked(string name)
   signal closed()
@@ -120,7 +127,7 @@ FocusScope {
       width: parent.width - 2 * FoamyStyle.gapLarge
       height: implicitHeight + FoamyStyle.gap
       horizontalAlignment: Text.AlignLeft
-      text: FoamyI18n.tn("studio.presetCount", menu.presets.length)
+      text: menu.sectioned ? FoamyI18n.t("studio.presets.builtin") : FoamyI18n.tn("studio.presetCount", menu.presets.length)
       color: FoamyPalette.mutedText
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.caption
