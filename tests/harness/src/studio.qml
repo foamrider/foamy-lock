@@ -196,8 +196,8 @@ Item {
   // Apply's result for each fake answer: the words, the kind, whether it is
   // saved, and how many calls (two when the first didn't answer).
   readonly property var applyCases: [
-    { mode: "ok", text: "studio.applied", kind: "ok", saved: true, calls: 1 },
-    { mode: "unchanged", text: "studio.applied", kind: "ok", saved: true, calls: 1 },
+    { mode: "ok", text: "", kind: "ok", saved: true, calls: 1 },
+    { mode: "unchanged", text: "", kind: "ok", saved: true, calls: 1 },
     { mode: "invalid-json", text: "studio.result.invalid-json", kind: "error", saved: false, calls: 1 },
     { mode: "invalid", text: "studio.result.invalid", value: "layout has an unknown element: x", kind: "error", saved: false, calls: 1 },
     { mode: "locked", text: "studio.result.locked.apply", kind: "warning", saved: false, calls: 1 },
@@ -210,7 +210,7 @@ Item {
     { mode: "function-not-found", text: "studio.result.function-not-found", kind: "error", saved: false, calls: 1 },
     { mode: "failed", text: "studio.result.failed", kind: "error", saved: false, calls: 1 },
     { mode: "not-responding", text: "studio.result.not-responding.apply", kind: "warning", saved: false, calls: 2 },
-    { mode: "not-responding-once", text: "studio.applied", kind: "ok", saved: true, calls: 2 }
+    { mode: "not-responding-once", text: "", kind: "ok", saved: true, calls: 2 }
   ]
   // One Apply against the fake, checked: a step body.
   function applyCase(index, next) {
@@ -229,7 +229,8 @@ Item {
       find(studio, "studioNamePlain").clicked()
       expect(studio.nameAsked === "" && studio.notice && studio.notice.kind === "busy" && !studio.canApply, "applying shows and holds Apply")
       waitFor(function() { return !studio.sources.applying && studio.notice && studio.notice.kind !== "busy" }, "the apply result", function() {
-        var expected = c.value ? FoamyI18n.t(c.text, c.value) : FoamyI18n.t(c.text)
+        // A save says nothing (the unsaved warning goes); a problem says what.
+        var expected = !c.text ? "" : c.value ? FoamyI18n.t(c.text, c.value) : FoamyI18n.t(c.text)
         expect(noticeIs(expected, c.kind), c.mode + ": notice " + json(studio.notice) + ", expected " + expected)
         expect(studio.notice.text.indexOf("Saved") === -1 && studio.notice.text.indexOf("in time") === -1, "never the helper's words")
         var calls = fakeCalls() - before
@@ -339,7 +340,7 @@ Item {
               expect(apply[1] === "saveLook" && JSON.parse(apply[2]).userPreset === item.id
                 && JSON.stringify(JSON.parse(apply[2])) === JSON.stringify({ preset: "corner", background: { dim: 0.5 }, userPreset: item.id }),
                 "then saveLook with the link: " + apply[2])
-              expect(noticeIs(FoamyI18n.t("studio.applied"), "ok"), "applied: " + json(studio.notice))
+              expect(noticeIs("", "ok"), "applied, without words: " + json(studio.notice))
               expect(studio.linkedPreset && studio.linkedPreset.id === item.id && studio.userPresets[0].id === item.id, "the draft is based on it")
               expect(Draft.linkOf(studio.savedDraft) === item.id && !studio.unapplied, "the saved look has the link")
               test.saved.mine = item.id
@@ -418,7 +419,7 @@ Item {
         waitFor(savingDone, "the rename", function() {
           var call = fakeCall(fakeCalls())
           expect(fakeCalls() - before === 1 && json(call) === json(["foamy.lock", "renamePreset", test.saved.second, "Zweite"]), "renamePreset: " + json(call))
-          expect(noticeIs(FoamyI18n.t("studio.presets.done.rename"), "ok"), "renamed: " + json(studio.notice))
+          expect(noticeIs("", "ok"), "renamed, without words: " + json(studio.notice))
           expect(studio.userPresets[0].name === "Zweite" && find(studio.library, "studioPresetButton").text === FoamyI18n.t("studio.preset", "Zweite"), "the new name shows")
           // F2 on the menu's cursor, and Esc.
           studio.presetMenu.open()
@@ -899,7 +900,7 @@ Item {
         expect(studio.notice && studio.notice.kind === "busy", "saving")
         waitFor(savingDone, "setCoverArt", function() {
           expect(fakeCalls() === calls + 1 && fakeCall(calls + 1).join(" ") === "foamy.lock setCoverArt spotify", "the call: " + fakeCall(calls + 1))
-          expect(studio.notice.kind === "ok" && studio.notice.text === FoamyI18n.t("studio.coverArt.saved"), "saved: " + json(studio.notice))
+          expect(studio.notice.kind === "ok" && studio.notice.text === "", "saved, without words: " + json(studio.notice))
           expect(Draft.same(studio.draft, { preset: "foamy" }) && !Draft.canUndo(studio.history), "a setting, not the look")
           // The lock writes shell.json; the app reads it back.
           writeEntry({ artworkHosts: ["i.scdn.co"] })
@@ -1988,10 +1989,28 @@ Item {
         reset()
         setMode("ok")
         unappliedEdit(0.45)
+        var status = find(studio, "studioStatus")
         var before = fakeCalls()
+        // Opening says nothing; the unsaved warning stays.
+        expect(studio.notice && studio.notice.kind === "busy" && status.text === FoamyI18n.t("studio.unsaved"),
+          "opening: " + json(studio.notice) + " " + status.text)
         studio.previewFull()
         waitFor(function() { return !studio.sources.previewing && studio.notice && studio.notice.kind !== "busy" }, "the preview", function() {
-          expect(noticeIs(FoamyI18n.t("studio.previewShown"), "ok"), "notice " + json(studio.notice))
+          // Shown: no words about it in the header, only the unsaved warning,
+          // on the start side right after Reset.
+          expect(noticeIs("", "ok") && status.text === FoamyI18n.t("studio.unsaved") && status.kind === "warning",
+            "notice " + json(studio.notice) + ", status " + status.text)
+          var reset = find(studio, "studioReset")
+          var preview = find(studio, "studioPreview")
+          var resetEnd = reset.mapToItem(studio, 0, 0).x + (studio.rightToLeft ? 0 : reset.width)
+          var statusAt = status.mapToItem(studio, 0, 0).x
+          var textStart = studio.rightToLeft ? statusAt + status.width - status.contentWidth : statusAt
+          expect(status.horizontalAlignment === Text.AlignLeft && status.effectiveHorizontalAlignment === (studio.rightToLeft ? Text.AlignRight : Text.AlignLeft),
+            "start-aligned: " + status.effectiveHorizontalAlignment)
+          expect(studio.rightToLeft ? (statusAt + status.width <= resetEnd + 1 && statusAt + status.width >= resetEnd - 3 * FoamyStyle.gap
+              && preview.mapToItem(studio, 0, 0).x + preview.width <= statusAt + 1)
+            : (statusAt >= resetEnd - 1 && statusAt <= resetEnd + 3 * FoamyStyle.gap && preview.mapToItem(studio, 0, 0).x >= statusAt + status.width - 1),
+            "the warning follows Reset: reset ends " + resetEnd + ", status at " + statusAt + " (" + status.width + "), text from " + textStart)
           var args = fakeCall(fakeCalls())
           expect(fakeCalls() - before === 1 && args[0] === "foamy.lock" && args[1] === "previewLook"
             && args[2] === JSON.stringify(Draft.ordered(studio.draft)), "the call: " + json(args))

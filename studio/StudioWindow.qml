@@ -108,8 +108,10 @@ FocusScope {
   // The draft found on disk while "ask" shows it.
   property var restoreReport: null
   readonly property bool unapplied: !Draft.sameLook(draft, savedDraft)
-  // The header's message: { kind: "busy" | "ok" | "info" | "warning" |
-  // "error", text }, or null. An edit clears it.
+  // The last operation's state: { kind: "busy" | "ok" | "info" | "warning" |
+  // "error", text }, or null. An edit clears it. Only warnings and errors
+  // have words, and only they show in the header (busy and done say
+  // nothing: Apply says "Applying…" itself, and the unsaved warning goes).
   property var notice: null
   property bool quitAsked: false
   property bool quitAfterApply: false
@@ -238,7 +240,7 @@ FocusScope {
 
   function applyEntry(entry) {
     writeDraft()
-    if (lockSources.applyLook(entry)) notice = { kind: "busy", text: FoamyI18n.t("studio.applying") }
+    if (lockSources.applyLook(entry)) notice = { kind: "busy", text: "" }
   }
 
   // `studio preset save`, then (when the lock has it) Apply with the link.
@@ -247,7 +249,7 @@ FocusScope {
     var entry = Draft.carry(draft, id)
     if (!lockSources.runPreset("save", Draft.presetItem(id, name, draft))) return
     applyAfterPreset = entry
-    notice = { kind: "busy", text: FoamyI18n.t("studio.presets.saving") }
+    notice = { kind: "busy", text: "" }
   }
 
   // --- user presets: naming, rename, delete ------------------------------------
@@ -278,7 +280,7 @@ FocusScope {
     if (answer === "plain" && mode === "new") applyEntry(Draft.forSaving(draft, userPresets))
     else if (answer === "save" && mode === "rename") {
       if (lockSources.runPreset("rename", { id: nameTarget, name: name }))
-        notice = { kind: "busy", text: FoamyI18n.t("studio.presets.renaming") }
+        notice = { kind: "busy", text: "" }
     } else if (answer === "save") savePresetThenApply(Draft.presetId(Date.now(), Math.random().toString(36).slice(2, 7)), name)
     applyButton.enabled ? applyButton.forceActiveFocus(Qt.OtherFocusReason) : lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
   }
@@ -294,7 +296,7 @@ FocusScope {
     var id = deleteAsked
     deleteAsked = ""
     if (remove && id && lockSources.runPreset("delete", { id: id }))
-      notice = { kind: "busy", text: FoamyI18n.t("studio.presets.deleting") }
+      notice = { kind: "busy", text: "" }
     library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
 
@@ -305,19 +307,19 @@ FocusScope {
 
   function previewFull() {
     if (!canPreview) return
-    if (lockSources.previewLook(draft)) notice = { kind: "busy", text: FoamyI18n.t("studio.previewing") }
+    if (lockSources.previewLook(draft)) notice = { kind: "busy", text: "" }
   }
 
-  // One result in words. `action` is "apply", "preview", or a preset
-  // operation: "save", "rename" or "delete".
+  // One result in words ("" when it went well: nothing to say). `action`
+  // is "apply", "preview", "coverArt", or a preset operation: "save",
+  // "rename" or "delete".
   function resultText(report, action) {
     var preset = action === "save" || action === "rename" || action === "delete"
     // A lock from before setCoverArt.
     if (action === "coverArt" && report.result === "function-not-found") return FoamyI18n.t("studio.coverArt.older")
     switch (report.result) {
     case "ok": case "unchanged":
-      if (action === "coverArt") return FoamyI18n.t("studio.coverArt.saved")
-      return FoamyI18n.t(preset ? "studio.presets.done." + action : action === "apply" ? "studio.applied" : "studio.previewShown")
+      return ""
     case "invalid": return FoamyI18n.t("studio.result.invalid", report.reason)
     case "locked": return FoamyI18n.t("studio.result.locked." + (action === "preview" ? "preview" : "apply"))
     case "not-responding":
@@ -342,7 +344,7 @@ FocusScope {
   // Cover art: a lock screen setting, saved at once (not part of the look,
   // so not in undo); the result shows in the header.
   function setCoverArt(mode) {
-    if (lockSources.setCoverArt(mode)) notice = { kind: "busy", text: FoamyI18n.t("studio.coverArt.saving") }
+    if (lockSources.setCoverArt(mode)) notice = { kind: "busy", text: "" }
   }
 
   // --- quitting ----------------------------------------------------------------------
@@ -824,29 +826,31 @@ FocusScope {
             onClicked: studio.requestReset()
           }
 
-          // How the last Apply or Preview went (until the next edit), else
-          // a warning while the lock screen doesn't have the changes, else
-          // nothing. Two lines at most; the full text is its name.
+          // Right after Reset (the start side): a problem with the last
+          // operation (until the next edit), else a warning while the lock
+          // screen doesn't have the changes, else nothing. Busy and done
+          // say nothing. Two lines at most; the full text is its name.
           Text {
             id: statusText
             objectName: "studioStatus"
             textFormat: Text.PlainText
-            readonly property string kind: studio.notice ? studio.notice.kind : studio.unapplied ? "warning" : "ok"
+            readonly property bool problem: !!studio.notice && (studio.notice.kind === "error" || studio.notice.kind === "warning")
+              && studio.notice.text !== ""
+            readonly property bool unsaved: studio.session === "ready" && studio.unapplied
+            readonly property string kind: problem ? studio.notice.kind : unsaved ? "warning" : ""
             Layout.fillWidth: true
             Layout.leftMargin: FoamyStyle.gap
-            text: studio.notice ? studio.notice.text
-              : studio.session === "ready" && studio.unapplied ? FoamyI18n.t("studio.unsaved") : ""
-            horizontalAlignment: Text.AlignRight
+            text: problem ? studio.notice.text : unsaved ? FoamyI18n.t("studio.unsaved") : ""
+            horizontalAlignment: Text.AlignLeft
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
             maximumLineCount: 2
             elide: Text.ElideRight
-            color: kind === "error" ? FoamyPalette.error : kind === "warning" ? FoamyPalette.warning
-              : kind === "ok" && studio.notice ? FoamyPalette.success : FoamyPalette.mutedText
+            color: kind === "error" ? FoamyPalette.error : FoamyPalette.warning
             font.family: FoamyStyle.fontFamily
             font.pixelSize: FoamyStyle.font.bodySmall
-            font.weight: kind === "busy" ? Font.Normal : Font.DemiBold
-            Accessible.role: kind === "error" || kind === "warning" ? Accessible.AlertMessage : Accessible.StaticText
+            font.weight: Font.DemiBold
+            Accessible.role: kind !== "" ? Accessible.AlertMessage : Accessible.StaticText
             Accessible.name: text
           }
 

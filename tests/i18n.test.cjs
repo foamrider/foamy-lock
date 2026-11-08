@@ -42,8 +42,7 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['invalid-json', 'unsupported', 'no-entry', 'unexpected', 'not-ready', 'not-running', 'target-not-found', 'function-not-found',
     'no-omarchy-shell', 'failed', 'locked.apply', 'locked.preview', 'write-failed', 'full', 'too-large', 'unknown-preset',
     'not-responding.preset'].map(r => 'result.' + r),
-  // User preset operations (StudioWindow.resultText) and the tips (Tips.qml).
-  ...['save', 'rename', 'delete'].map(op => 'presets.done.' + op),
+  // The tips (Tips.qml).
   ...['mugshot', 'library', 'drag', 'keys', 'look', 'presets', 'keyboard', 'preview', 'shortcuts'].map(t => 'tip.' + t),
   // Each element's own keys (Inspector.qml): their values, and the status items.
   ...Layout.ELEMENT_OPTIONS.password.reveal.values.map(v => 'reveal.' + v),

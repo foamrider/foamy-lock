@@ -457,11 +457,12 @@ screen would.
   the app or a crash loses nothing. When you open the app with a draft the lock
   screen doesn't have, it asks: **Continue editing**, or **Start from saved** (which deletes
   the draft).
-- **Apply to lock screen** saves the look through the running Foamy Lock. The header
-  says how it went: applied, refused (with the reason), the screen is locked, the shell
-  isn't running or didn't answer (it is asked once more; if it still doesn't
-  answer, the look may or may not be saved). Anything but a save keeps the draft.
-  While the lock screen doesn't have your changes, the header says **Unsaved changes**.
+- **Apply to lock screen** saves the look through the running Foamy Lock. While the
+  lock screen doesn't have your changes, the header says **Unsaved changes** right
+  after Reset; a save clears it. A problem shows there instead, in a few words:
+  refused (with the reason), the screen is locked, the shell isn't running or didn't
+  answer (it is asked once more; if it still doesn't answer, the look may or may not
+  be saved). Anything but a save keeps the draft.
 - **Your presets** come first in the preset menu, then the built-in ones. Applying
   changes made on a built-in preset asks for a name (prefilled "Foamy (mine)"), saves
   your preset and applies it; **Apply without saving a preset** applies the look as it
