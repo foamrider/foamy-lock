@@ -474,11 +474,12 @@ function setPicture(draft, path) {
 
 // The background page's source choices, and the choice a source belongs to:
 // the wallpaper, a custom image, a solid colour (the older "theme" and
-// "black" too) or an animation (any of Layout.DRAWN_SOURCES).
+// "black" too) or an animation (any of Layout.DRAWN_SOURCES, the older
+// "constellation" too).
 var SOURCE_CHOICES = ["omarchy", "picture", "color", "animation"]
 
 function sourceChoice(source) {
-  if (Layout.DRAWN_SOURCES.indexOf(source) !== -1) return "animation"
+  if (Layout.drawnSource(source) !== "") return "animation"
   if (source === "color" || source === "theme" || source === "black") return "color"
   return source === "picture" ? "picture" : "omarchy"
 }

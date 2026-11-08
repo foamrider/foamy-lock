@@ -267,8 +267,18 @@ pub fn selectable_presets() -> Result<Vec<String>, String> {
     parse_presets(&layout).ok_or_else(|| "no SELECTABLE_PRESETS in Layout.js".to_string())
 }
 
+/// The animations, read from Layout.js (`var DRAWN_SOURCES = [...]`).
+pub fn drawn_sources() -> Result<Vec<String>, String> {
+    let layout = fs::read_to_string(plugin_root().join("Layout.js")).map_err(io("Layout.js"))?;
+    parse_list(&layout, "var DRAWN_SOURCES = [").ok_or_else(|| "no DRAWN_SOURCES in Layout.js".to_string())
+}
+
 fn parse_presets(layout: &str) -> Option<Vec<String>> {
-    let start = layout.find("var SELECTABLE_PRESETS = [")?;
+    parse_list(layout, "var SELECTABLE_PRESETS = [")
+}
+
+fn parse_list(layout: &str, head: &str) -> Option<Vec<String>> {
+    let start = layout.find(head)?;
     let list = &layout[start..];
     let list = &list[list.find('[')? + 1..list.find(']')?];
     let names: Vec<String> = list
@@ -319,5 +329,7 @@ mod tests {
         assert!(parse_presets("").is_none());
         let real = super::selectable_presets().unwrap();
         assert_eq!(&real[..4], ["foamy", "corner", "editorial", "zen"]);
+        let drawn = super::drawn_sources().unwrap();
+        assert_eq!(&drawn[..3], ["aurora", "rain", "stars"]);
     }
 }

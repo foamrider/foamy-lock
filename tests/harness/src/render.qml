@@ -6,6 +6,7 @@ import Quickshell
 import "fixtures" as Fixture
 import "elements" as Elements
 import "kit"
+import "Layout.js" as Layout
 ShellRoot {
   FloatingWindow {
     id: window
@@ -51,6 +52,55 @@ ShellRoot {
       function previous() { actions++ }
       function next() { actions++ }
       function togglePlaying() { actions++ }
+    }
+    // Every animation's still frame (the software renderer paints it once,
+    // with no shader): the backdrop alone, each twice (the second after
+    // switching away and back) for render.rs to compare byte for byte.
+    Timer {
+      id: stills
+      property int index: -1
+      readonly property int count: Layout.DRAWN_SOURCES.length
+      interval: 600
+      repeat: false
+      function next() {
+        index++
+        if (index >= 2 * count) {
+          console.log("PASS: every animation's still frame: " + Layout.DRAWN_SOURCES.join(", "))
+          Qt.quit()
+          return
+        }
+        view.width = 1920; view.height = 1080
+        view.rightToLeft = false
+        view.passwordText = ""
+        // The second pass comes back to each from another animation.
+        if (index >= count) view.look = Layout.parseLook({ preset: "foamy", background: { source: Layout.DRAWN_SOURCES[(index + 1) % count] } }).look
+        view.look = Layout.parseLook({ preset: "foamy", background: { source: Layout.DRAWN_SOURCES[index % count] } }).look
+        restart()
+      }
+      onTriggered: {
+        var name = Layout.DRAWN_SOURCES[index % count]
+        function findNamed(item, objectName) {
+          if (item.objectName === objectName) return item
+          for (var i = 0; i < item.children.length; i++) {
+            var found = findNamed(item.children[i], objectName)
+            if (found) return found
+          }
+          return null
+        }
+        var backdrop = findNamed(view, "backdrop")
+        var painted = findNamed(backdrop, "backdropStill")
+        var shader = findNamed(backdrop, "backdropShader")
+        if (!backdrop.visible || backdrop.source !== name || backdrop.moving || backdrop.phase !== backdrop.stillPhase
+            || !painted || painted.status !== Loader.Ready || !shader || shader.active)
+          throw new Error("The " + name + " still frame isn't painted: " + JSON.stringify([backdrop.visible, backdrop.source,
+            backdrop.moving, backdrop.phase, backdrop.stillPhase, painted && painted.status, shader && shader.active]))
+        var file = "capture-animation-" + name + (index >= count ? "-again" : "") + ".png"
+        if (!backdrop.grabToImage(function(shot) {
+          if (!shot.saveToFile(Qt.resolvedUrl(file).toString().replace("file://", "")))
+            throw new Error("Screenshot save failed")
+          stills.next()
+        })) throw new Error("Screenshot capture failed")
+      }
     }
     Timer {
       id: step
@@ -192,7 +242,8 @@ ShellRoot {
               if (!shot.saveToFile(Qt.resolvedUrl("capture-banner.png").toString().replace("file://", "")))
                 throw new Error("Screenshot save failed")
               console.log("PASS: preview banner reads " + JSON.stringify(title.text) + " " + JSON.stringify(bannerHint.text))
-              Qt.quit()
+              banner.visible = false
+              stills.next()
             })) throw new Error("Screenshot capture failed")
             return
           }

@@ -793,12 +793,13 @@ Item {
       }
     }
 
-    // The drawn sources over the theme's background colour.
+    // The drawn sources (the animations), in the theme's colours.
     Backdrop {
       anchors.fill: parent
       view: root
-      visible: Layout.DRAWN_SOURCES.indexOf(root.effectiveLook.background.source) !== -1
-      source: visible ? root.effectiveLook.background.source : "aurora"
+      readonly property string drawn: Layout.drawnSource(root.effectiveLook.background.source)
+      visible: drawn !== ""
+      source: visible ? drawn : "aurora"
     }
 
     // A scrim keeps white type legible; 0.25 (the default) preserves
