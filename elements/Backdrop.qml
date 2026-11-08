@@ -35,16 +35,37 @@ Item {
   readonly property bool shaded: api !== GraphicsInfo.Unknown && api !== GraphicsInfo.Software && !shaderFailed
   readonly property bool painted: api !== GraphicsInfo.Unknown && !shaded
 
-  readonly property color base: Commons.Color.background
+  // The picture is drawn for the lock's text, which sits on it: under light
+  // text (the lock's own white glass, which a theme changes only with a
+  // [lock] section, so on almost every theme, light ones too) it is dark,
+  // and light adds up as a glow; under dark text it is light, and light
+  // paints over. Its ground is the theme's background when that already has
+  // the right lightness; otherwise a tone of the theme's own text colour (a
+  // light theme's dark text, deepened), so it still looks like the theme.
+  readonly property color themeBase: Commons.Color.background
+  readonly property color themeText: Commons.Color.foreground
+  readonly property bool lightText: lightness(view.foreground) >= 0.5
+  readonly property bool themeDark: lightness(themeBase) < 0.5
+  readonly property color base: lightText === themeDark ? themeBase
+    : lightText ? scaled(themeText, Math.min(0.55, 0.12 / Math.max(0.01, lightness(themeText))))
+    : Qt.rgba(1 - (1 - themeText.r) * 0.25, 1 - (1 - themeText.g) * 0.25, 1 - (1 - themeText.b) * 0.25, 1)
   readonly property color accent: view.accent
   readonly property color green: FoamyPalette.success
   readonly property color cyan: FoamyPalette.info
   readonly property color warm: FoamyPalette.warning
-  // Light adds up over a dark background (a glow) and paints over a light one.
-  readonly property real glow: 0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b < 0.5 ? 1 : 0
-  // Stars, flakes and foam: the lock's foreground over a dark background,
-  // the theme's (dark) text colour over a light one.
-  readonly property color ink: glow > 0 ? view.foreground : Commons.Color.foreground
+  // Light adds up over a dark picture (a glow) and paints over a light one.
+  readonly property real glow: lightText ? 1 : 0
+  // Stars, flakes and foam: the lock's foreground over a dark picture, the
+  // theme's (dark) text colour over a light one.
+  readonly property color ink: glow > 0 ? view.foreground : themeText
+
+  function lightness(c) {
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+  }
+
+  function scaled(c, k) {
+    return Qt.rgba(c.r * k, c.g * k, c.b * k, 1)
+  }
 
   objectName: "backdrop"
   clip: true
