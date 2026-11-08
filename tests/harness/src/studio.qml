@@ -10,6 +10,7 @@ import Quickshell.Io
 import "kit"
 import "Layout.js" as Layout
 import "Draft.js" as Draft
+import "Model.js" as Model
 
 Item {
   id: test
@@ -676,6 +677,48 @@ Item {
         studio.previewState = "noMedia"
         expect(view.elementRects.media === undefined && !view.hasMedia, "no media")
         studio.previewState = "idle"
+        next()
+      } },
+    { name: "samples: never the user's own, the checker's the widest", wait: 0, run: function(next) {
+        reset()
+        // No PipeWire, Bluetooth or Hyprland connection of the view's own:
+        // sample readings, and a made-up place.
+        expect(view.liveSources === false && view.hasVolume && view.hasBluetooth && view.bluetoothEnabled
+          && view.keyboardLayout === FoamyI18n.t("studio.sample.keyboard"), "sample status readings")
+        expect(view.weather && view.weather.location === FoamyI18n.t("studio.sample.place")
+          && view.weather.condition === FoamyI18n.t("studio.sample.condition") && Model.weatherFresh(view.weather, Date.now()),
+          "sample weather: " + json(view.weather))
+        studio.commit({ preset: "foamy", layout: { status: { items: Layout.STATUS_ITEMS },
+          weather: { hidden: false, details: "full", location: true } } })
+        expect(view.elementRects.weather !== undefined && find(view, "weatherLocation").text === FoamyI18n.t("studio.sample.place"),
+          "the weather shows on the canvas, at the sample place")
+        for (var i = 0; i < 5; i++) {
+          var part = find(view, Layout.STATUS_ITEMS[i] + "Status")
+          if (Layout.STATUS_ITEMS[i] !== "battery") expect(part && part.visible, Layout.STATUS_ITEMS[i] + " shows")
+        }
+        // A hidden view (the probe) measures what the canvas draws.
+        for (var n = 0; n < 2; n++) {
+          var name = ["status", "weather"][n]
+          var zone = studio.look.elements[name].zone
+          var anchors = canvas.measureAnchors(name), drawn = view.drawnRect(name), anchor = null
+          for (var a = 0; a < anchors.length; a++) if (anchors[a].zone === zone) anchor = anchors[a]
+          expect(near(anchor.x, drawn.x, 0.5) && near(anchor.width, drawn.width, 0.5) && near(anchor.height, drawn.height, 0.5),
+            name + ": the probe " + json(anchor) + " vs the canvas " + json(drawn))
+        }
+        // The checker's views: the widest samples, every status item read.
+        var checked = 0
+        for (var c = 0; c < studio.checker.children.length; c++) {
+          var check = studio.checker.children[c]
+          if (check.widest === undefined) continue
+          checked++
+          expect(check.widest && check.weather.condition === FoamyI18n.t("studio.sample.conditionLong")
+            && check.weather.location.length === 80 && check.weather.temperature === -150, "widest weather: " + json(check.weather))
+          expect(check.systemUptime > 0 && check.memoryTotal > 0 && check.systemLoad !== "" && check.volumePercent === 100
+            && check.keyboardLayout === FoamyI18n.t("studio.sample.keyboardLong"), "widest readings")
+          var weatherWidth = check.elementRects.weather ? check.elementRects.weather.width : 0
+          if (check.width === 1920) expect(weatherWidth > view.elementRects.weather.width, "wider than the canvas's: " + weatherWidth)
+        }
+        expect(checked === studio.checker.viewCount && checked >= 2, "checker views " + checked)
         next()
       } },
     { name: "problems on every size", wait: 0, run: function(next) {

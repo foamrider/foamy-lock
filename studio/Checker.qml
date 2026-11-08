@@ -5,7 +5,8 @@ import "Draft.js" as Draft
 // The geometry check for every size the look must work on: one hidden lock
 // view per connected screen and reference size, running the lock's own
 // geometryProblem() 300 ms after the look settles (like the lock's
-// debounce). `problems` lists what is wrong where:
+// debounce). Each view has the widest samples (SampleView.widest).
+// `problems` lists what is wrong where:
 //   [{ key, label, reference, width, height, code, names }]
 // `names` are the modules to outline (Draft.problemElements).
 Item {
@@ -71,6 +72,14 @@ Item {
       previewState: "idle"
       displayAwake: false
       loadBackground: false
+      // The widest samples: full weather with a long condition and place,
+      // and every status item with a long reading (the /proc ones too:
+      // asleep, this view reads nothing).
+      widest: true
+      systemUptime: 8639999
+      systemLoad: "88.88 88.88 88.88"
+      memoryTotal: 134217728
+      memoryAvailable: 1048576
       timeFormat: checker.settings.timeFormat
       showUserInfo: checker.settings.showUserInfo
       showMedia: checker.settings.showMedia
