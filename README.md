@@ -137,32 +137,37 @@ optional; without them the lock looks exactly as in 1.2.0.
 
 | Preset | |
 | --- | --- |
-| `foamy` | The default: the date and a large clock at the top, the account and field below the middle, media bottom left, status top right. |
-| `corner` | The date and a bold clock bottom left; the account chip and an underline field bottom right. |
-| `editorial` | The date, clock, account and field stacked on the left, in the middle of the screen. |
-| `zen` | Only the field, centred, over a blurred and dimmed wallpaper. |
-| `dock` | A band along the bottom: a small clock, the field box and the short date. |
-| `island` | The time and date in a black pill at the top; the field in the middle. |
+| `foamy` | **Default.** The date and a large clock at the top, the account and field below the middle, media bottom left, status top right. |
+| `corner` | Everything in the two lower corners: your chip and an underline field in one, a heavy stacked time under the date in the other. |
+| `editorial` | A magazine page: a spaced kicker, a serif clock, your name as the byline and an underline field, inside a thin page rule; the music as a caption. |
+| `zen` | Fireflies over a dark meadow, a greeting with your first name and the field; nothing else. |
+| `dock` | A band along the bottom: the time and date, the field box and the music player. |
+| `island` | A black pill at the top with the time, the date and what plays; a glass pill field in the middle. |
 | `split` | A solid panel on the left with the date, a bold clock, your name and the field; the wallpaper on the right. |
-| `sheet` | A frosted panel on the right with the avatar, clock, date and field. |
-| `card` | A glass card in the middle: avatar, small clock, date and field. |
-| `cinema` | Black bars: the time and date in the top one, an underline field in the bottom one. |
+| `sheet` | Everything on a frosted sheet on the right: status, avatar, clock, date, field and the player. |
+| `card` | A glass card in the middle: avatar, a light clock, the date and the field. |
+| `cinema` | A film still: black bars over a moonlit sea, the date and time in the top bar, the field and the music as a subtitle in the bottom one. |
 | `poster` | Huge hours over minutes (the minutes in the accent) on the left; the field bottom left. |
-| `analog` | An analogue clock, the date and the field in the middle. |
+| `analog` | A watch face: a large analogue clock, the weekday in serif, the field. |
 | `flip` | Flip-card hours and minutes over the date and field. |
 | `ring` | The time inside a ring that fills with the minutes of the hour. |
-| `calendar` | The date, a bold clock and the field on the left; this month's calendar on the right. |
-| `terminal` | A console login on black: mono clock, your name and a `Password:` prompt. |
+| `calendar` | A planner: the week number, a bold clock and the field on the left; this month's calendar, large, on the right. |
+| `terminal` | A console login on black: the ISO date, a mono clock, your name and a `Password:` prompt, on one margin. |
 | `neon` | An outlined clock and accent edges inside a glowing accent frame, over a dark wallpaper. |
 | `system` | The clock and field beside a panel with uptime, memory, load and battery. |
-| `music` | Now playing with large artwork in the middle, the field below it. |
-| `aurora` | Northern lights swaying over a dark ridge, behind the clock and field. |
+| `music` | Now playing: large artwork with the controls in the middle over a blurred wallpaper, the field below it. |
+| `aurora` | Northern lights over a dark ridge, the date, clock and field below them. |
 | `rain` | Slanted rain at three depths behind a card with a mono clock and a terminal field. |
 | `constellation` | A twinkling star field; each typed character lights the next star of a figure. |
-| `dotmatrix` | A dot-matrix clock and dotted field inside a dark bezel. |
-| `flat` | The clock, date and field in the middle, on solid surfaces without edges. |
-| `frosted` | The same on glass over a strongly blurred wallpaper (blur needs GPU rendering). |
-| `fluent` | A bold clock and a greeting card with accent edges. |
+| `dotmatrix` | A dot-matrix clock and dotted field on a dark LED panel over digital rain in 5 × 7 glyphs, inside a bezel. |
+| `flat` | A solid accent colour with solid surfaces and no edges. |
+| `frosted` | Snow falling behind glass surfaces. |
+| `fluent` | Gradient flow behind accent-edged glass and a greeting card. |
+
+The animated presets (`zen`, `cinema`, `aurora`, `rain`, `constellation`,
+`dotmatrix`, `frosted`, `fluent`) move only with GPU rendering and hold a
+still frame otherwise. Under the lock's light text their picture stays dark,
+on a light theme too.
 
 Presets from `dock` on are inspired by the layouts of
 [Lock Designs](https://github.com/KamradSmeshnyavy/omarchy-lock-designs) (MIT),
@@ -191,9 +196,9 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 
 | Element | Styles |
 | --- | --- |
-| `date` | `long` (default), `caps`, `short` (abbreviated, "Sat 7 Nov"), `serif` (a large serif weekday over the spaced date), `numeric` (the locale's short date), `stacked` (a large day number beside the month and weekday), `week` (the ISO week number and the date) |
-| `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog`, `small` (one line, for a bar or card), `poster` (huge hours over accent minutes), `ring` (the time in a ring that fills over the hour) |
-| `account` | `avatar` (default), `chip`, `name` (the name alone) |
+| `date` | `long` (default), `caps`, `short` (abbreviated, "Sat 7 Nov"), `serif` (a large serif weekday over the spaced date), `numeric` (the locale's short date), `stacked` (a large day number beside the month and weekday), `week` (the ISO week number and the date), `iso` (the ISO date and the short weekday in the mono font, "2026-09-26  Sat") |
+| `clock` | `thin` (default), `bold`, `stacked` (hours over minutes), `mono` (the Omarchy font), `outline`, `dots` (a dot-matrix face), `flip` (two cards), `analog`, `small` (one line, for a bar or card), `poster` (huge hours over accent minutes), `ring` (the time in a ring that fills over the hour), `serif` (large, light serif numerals) |
+| `account` | `avatar` (default), `chip`, `name` (the name alone), `greeting` ("Good evening, Ada": a greeting for the time of day with the first name) |
 | `password` | `pill` (default), `underline`, `box` (an always-visible glass box with the arrow), `dots` (no surface), `terminal` (a "Password:" prompt in the mono font), `card` (a greeting above the field) |
 | `media` | `card` (default), `line`, `pill` (thumbnail, title and play/pause), `art` (large artwork with the controls below), `hero` (a large cover without a surface, the title and artist under it, no controls), `minimal` (one line of text, "♪ Title — Artist", no controls), `disc` (a round cover beside the title, artist and play/pause; it turns while the player plays, only with GPU rendering, never with reduced motion or while the display is blanked) |
 | `status` | `text` (default), `icons`, `pill` (icons and the battery level in one pill), `system` (a panel with uptime, memory, load and the battery, or the network without one) |
@@ -262,7 +267,9 @@ that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
     theme's background and `#000000` (`status` and `catalog` show them as
     `color`);
   - the animations (**Animation** in Lock Studio), drawn in the theme's
-    colours over its background:
+    colours, dark under the lock's light text (on a dark theme over its
+    background; on a light theme over a deep tone of its text colour) and
+    light only where a theme's `[lock]` text is dark:
     - `aurora` (**Northern lights**): curtains of the theme's green, accent and
       cyan swaying over a dark sky and a low ridge;
     - `rain` (**Rain**): slanted streaks in the accent at three depths;
@@ -273,7 +280,8 @@ that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
     - `snow` (**Snow**): flakes at four depths, drifting as they fall;
     - `fireflies` (**Fireflies**): glows in the theme's yellow and green
       wandering and pulsing over a dark meadow;
-    - `gradient` (**Gradient flow**): a slow, calm flow of the theme's colours;
+    - `gradient` (**Gradient flow**): a slow, calm flow of the theme's colours
+      from edge to edge, dithered so it has no contour rings;
     - `ocean` (**Ocean waves**): swells rolling under a moon.
 
   With the GPU each is a small fragment shader (`elements/shaders`, compiled
@@ -437,7 +445,7 @@ one of the three, or `custom` for hosts set by hand). Remote covers still go
 through the helper's checks below.
 
 **User presets.** `userPresets` in the `foamy.lock` entry holds your own presets,
-newest first: `[{"id": "u-…", "name": "Foamy (mine)", "look": {"preset": …,
+newest first: `[{"id": "u-…", "name": "Default (mine)", "look": {"preset": …,
 "layout": …, "background": …, "glass": …}}]`, at most 50 and 256 KiB (items past either are
 counted as skipped, not read). Each item is
 checked on its own: an invalid one is skipped (`status` and `catalog` count it in
@@ -557,7 +565,7 @@ screen would.
   answer (it is asked once more; if it still doesn't answer, the look may or may not
   be saved). Anything but a save keeps the draft.
 - **Your presets** come first in the preset menu, then the built-in ones. Applying
-  changes made on a built-in preset asks for a name (prefilled "Foamy (mine)"), saves
+  changes made on a built-in preset asks for a name (prefilled "Default (mine)"), saves
   your preset and applies it; **Apply without saving a preset** applies the look as it
   is. Applying changes on one of your presets updates it. **Save as new…**, rename and
   delete (asked first) are in the menu. They live in `shell.json` with the lock

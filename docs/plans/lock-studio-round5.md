@@ -210,3 +210,119 @@ sources, the `constellation` alias and an export block at the end.
   backdrop alone, painted without a shader, the same twice); the studio case
   checks every tile is painted without a shader and that `constellation`
   shows Stars chosen.
+
+### Presets pass (item 6)
+
+On `feat/layout-engine`, 2026-11-09; offscreen only (nothing locked; no real
+omarchy-shell, omarchy, hyprctl dispatch or desktop quickshell).
+
+- **Gradient flow first.** The contour rings came from creases, not only
+  from 8-bit steps: the warp's lattice noise and the lightness roll-off
+  (`abs`) bent the field, and a dark pool parked on the right made that side
+  look cut off. Now five pools blend by their share (a mesh gradient with
+  heavy-tailed weights, so the shares stay smooth far from every pool), the
+  space sways with sines only, the lightness is eased with `tanh` by scaling
+  (hue kept, nothing clips), and the vignette is the same on every side; the
+  colour reaches every edge. `hash.glsl`'s dither is now triangular and apart
+  per channel (about one 8-bit step), so every animation's slow gradients
+  break into grain instead of rings (all `.qsb` rebaked). The other seven,
+  checked contrast-stretched on GPU stills, had no rings.
+- **The animations on a light theme.** The lock's text is the lock's own
+  white glass on every theme without a `[lock]` section, light ones too, so
+  an animation that turned light on a light theme put white text on a pale
+  picture. `Backdrop` now draws for the text: dark (light adds up) under light
+  text, over the theme's background when that is dark, else over a deep tone
+  of the theme's own text colour; light only under dark `[lock]` text. Dark
+  themes draw exactly as before.
+- **New styles** (en and no names, Lock Studio tiles, the style sweep covers
+  them; each general, not tied to a preset):
+  - clock `serif`: large, light serif numerals (Noto Serif Display where
+    installed, the date's serif fallbacks otherwise), shrinking to fit;
+  - date `iso`: "2026-09-26  Sat" in the mono font (ISO digits in every
+    language);
+  - account `greeting`: "Good morning, Ada" / "God morgen, Ada" by the time
+    of day (morning from 5, afternoon from 12, evening from 18), the first
+    name only; the greeting alone without a name. Privacy as `name`.
+- **Default.** "Foamy" is called **Default** (en) / **Standard** (no); the id
+  stays `foamy` and it draws byte for byte as before (parity, thumbnail).
+- **Ids.** Every preset keeps its id, so saved looks and user presets load
+  unchanged; where an idea changed, the name still fits it, so no display
+  name changed besides Default's.
+- **Each preset** (dims are for a light wallpaper too: text set straight on
+  a picture gets at least 0.4):
+
+| Preset | Idea | Changes |
+| --- | --- | --- |
+| `foamy` (Default) | The 1.2.0 lock screen, the safe baseline. | Name only. |
+| `corner` | Everything in the two lower corners, the wallpaper open. | A heavy stacked time under the caps date at the end corner, the chip and underline field at the start (a narrow screen stacks the end above the start, so the time sits above the field); dim 0.4. |
+| `editorial` | A magazine page. | Kicker (caps date), serif clock ×1.1, the name as byline, underline field; the music as a `minimal` caption; a thin page rule (frame `line`, radius 0). |
+| `zen` | A summer night: only a greeting and the field. | Fireflies; account `greeting` above an underline field; nothing else. |
+| `dock` | A dock along the bottom. | The time over the short date at the start, the field box in the middle, the media `pill` at the end, all in the strip. |
+| `island` | A dynamic island. | The black pill holds the time, date and a `minimal` now-playing line, so it grows with the music; the field is a pill shown while empty too (`reveal: always`); dim 0.3. |
+| `split` | A solid panel with the sign-in. | The music as a `minimal` line in the panel; dim 0.15. |
+| `sheet` | Everything on a frosted sheet, the wallpaper free. | Status (top end) and the media `pill` (bottom end) moved into the sheet. |
+| `card` | A greeting card in the middle. | A light thin clock (×0.5) and caps date in place of the small bold clock and short date; `minimal` music. |
+| `cinema` | A film still. | Ocean waves under the moon between the bars; the date over the time as the title; the music as a subtitle under the field. |
+| `poster` | Huge hours over accent minutes. | `minimal` music; dim 0.4. |
+| `analog` | A watch face. | Analogue clock ×1.3, the weekday in serif (`serif` date); `minimal` music; dim 0.4. |
+| `flip` | A flip clock on the desk. | Flip ×1.1; blur 0.2, dim 0.4. |
+| `ring` | The hour as a ring. | Media and status as pills to match the round face; dim 0.4. |
+| `calendar` | A planner. | The `week` date over the bold clock; the month ×1.3; dim 0.4. |
+| `terminal` | A console login on black. | Everything on one margin (middle start): ISO date, mono clock, name, `Password:`; `minimal` music. |
+| `neon` | Accent edges in a glowing frame. | Outline clock ×1.2. |
+| `system` | The clock beside the machine's readings. | Dim 0.4. |
+| `music` | Now playing. | Art ×1.35 (the largest that leaves room at 1280 × 720), blur 0.6, dim 0.4. |
+| `aurora` | Northern lights. | The date, a thin clock ×0.75 and the pill moved below the ridge (bottom centre), so the lights are free; the media card went. |
+| `rain` | A terminal in the rain. | Kept: the idea already held. |
+| `constellation` | Stars that light up as you type. | Caps date and a thin clock ×0.8, so more sky shows. |
+| `dotmatrix` | An LED panel in front of digital rain. | Matrix (5 × 7 glyphs, like the clock's); a black box around the middle as the LED panel, inside the bezel; dots clock ×1.2; dim 0.2. |
+| `flat` | Flat colour. | A solid accent background (dim 0.45, legible on dark and light themes) with the solid tint, bold clock ×1.1. |
+| `frosted` | Snow behind glass. | Snow; the glass surfaces stay. |
+| `fluent` | Colour flowing behind accent glass. | Gradient flow behind the accent tint and the greeting card. |
+
+- **Weather** stays hidden in every preset; cover art online is untouched.
+- **Model:** `compose` takes an element's own keys (scale, reveal) and
+  `background` a list of shapes as well as a template name. No offsets and
+  no status `items` in any preset (the acceptance recipe has no step for
+  them).
+- **Tests:** node expectations follow the presets (corner's dim, island's
+  reveal and wrapped modules, the two presets with their own shapes, which
+  must be canonical). The layout harness compares a preset's shapes with the
+  old decorations only when they are a template (editorial's rule and
+  dotmatrix's panel have no older drawing), and still checks them on screen,
+  under every element and never straddled.
+- **Checking the designs:** a scratch preview tool (the harness's prepared
+  app, any look, size, direction, screen and theme) swept every preset at
+  1280 × 720, 1920 × 1080, 3440 × 1440, 1080 × 1920 and 800 × 1000, left to
+  right and mirrored, primary and secondary, idle and typing, in the
+  harness's dark theme and Catppuccin Latte with its own wallpaper; no
+  geometry problem and no shape advice. GPU stills: the ground (shader at the
+  still phase, wallpaper blur, frost) drawn by the scratch GL tool, the
+  lock's own layer composited over it.
+- **Thumbnails** regenerated deliberately: 24 changed; `foamy` and `rain`
+  byte-identical.
+- **Commits:** 561c153 (Gradient flow, dither), 1caa968 (animations under
+  light text), 291ba5a (serif clock), b08dad7 (ISO date), 0efed26
+  (greeting), dcc4799 (Default), 4c6edc0, 079a2db, 6648b6e, 3fa1852 (the
+  presets, a few per commit), ac93df2 (thumbnails), and this progress with
+  the README.
+- **Checks, all green:** node (175); harness parity, runtime, layout (every
+  preset, 11 states each), styles (165 cases), placement (23), render en and
+  no, video, studio en/no/ar (the acceptance run recreates all 26 presets
+  from Lock Studio's controls, 313 steps); `tests/artwork_test.py` (33);
+  kit-check; `check.sh --lint-only`; qmllint (the same warning kinds as at
+  e9e10cc; +2 `missing-property` are the new tiles' `FoamyStyle.font.*`);
+  `omarchy-plugin-validate`.
+- **Deviations:**
+  - No preset id was renamed (so no alias map was needed): each name still
+    fits its preset's idea, and only Foamy's display name changed.
+  - `rain` is unchanged.
+  - The animations' light-theme drawing changes the animations, not only
+    the presets: without it no animated preset could be legible on a light
+    theme.
+  - The harness's own unit test `runtime::tests::service_patch` fails, as it
+    already does at e9e10cc (a Service.qml line it patches has changed); the
+    runtime suite itself passes.
+  - The CPU still frame of Ocean waves shows a faint column-shaped halo
+    around the moon on a light theme (its coarse column stops); the shader
+    and the dark thumbnails are unaffected.
