@@ -1,17 +1,39 @@
 import QtQuick
+import qs.Commons
+import qs.Commons as Commons
 import "kit"
 
-// A labelled switch: `checked` is bound by the caller, `toggled()` asks for
-// the change. Space or Enter flips it.
+// A labelled switch: the label on the reading start, the switch on the
+// end. The switch is drawn as the shell's own (Ui/ToggleSwitch, which the
+// kit's FoamyToggle uses): a track filled and bordered by the theme's
+// "selected" or "normal" control state, a knob thrown to the end when on,
+// pill-shaped when Hyprland's corners are rounded, square when they're
+// sharp. The app's root has no `qs.Ui`, so it is drawn here from the same
+// Commons tokens.
+//
+// `checked` is bound by the caller, `toggled()` asks for the change. Space
+// or Enter flips it; focus draws a ring around the switch.
 Item {
   id: toggle
 
   property string text: ""
   property bool checked: false
+  // The label on the reading start (false: the switch alone).
+  property bool showLabel: true
   signal toggled()
 
+  readonly property bool mirrored: LayoutMirroring.enabled
+  readonly property color foreground: FoamyPalette.text
+  readonly property color accent: FoamyPalette.accent
+  readonly property int trackHeight: Math.max(18, Math.round(Style.spacing.controlHeight * 0.55))
+  readonly property int trackWidth: Math.round(trackHeight * 1.9)
+  readonly property int knobSize: Math.max(6, Math.round(trackHeight * 0.72))
+  readonly property int knobInset: Math.max(1, Math.round((trackHeight - knobSize) / 2))
+  readonly property var borderSpec: Commons.Border.controlSpec(checked ? "selected" : "normal", foreground, accent)
+  readonly property alias switchItem: track
+
   implicitHeight: FoamyStyle.controlHeight
-  implicitWidth: row.implicitWidth
+  implicitWidth: (showLabel ? label.implicitWidth + FoamyStyle.gap : 0) + trackWidth + 6
   activeFocusOnTab: true
 
   Accessible.role: Accessible.CheckBox
@@ -22,44 +44,63 @@ Item {
   Accessible.onToggleAction: toggled()
   Keys.onSpacePressed: toggled()
   Keys.onReturnPressed: toggled()
+  Keys.onEnterPressed: toggled()
 
-  Row {
-    id: row
+  Text {
+    id: label
+    visible: toggle.showLabel
+    anchors.left: parent.left
+    anchors.right: ring.left
+    anchors.rightMargin: FoamyStyle.gap
     anchors.verticalCenter: parent.verticalCenter
-    spacing: FoamyStyle.gap
+    text: toggle.text
+    horizontalAlignment: Text.AlignLeft
+    elide: Text.ElideRight
+    color: FoamyPalette.secondaryText
+    font.family: FoamyStyle.fontFamily
+    font.pixelSize: FoamyStyle.font.body
+  }
 
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
-      text: toggle.text
-      color: FoamyPalette.secondaryText
-      font.family: FoamyStyle.fontFamily
-      font.pixelSize: FoamyStyle.font.body
-    }
+  // Hover and focus: a ring outside the track, as the shell's cursor ring.
+  Rectangle {
+    id: ring
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    width: toggle.trackWidth + 6
+    height: toggle.trackHeight + 6
+    radius: Style.cornerRadius > 0 ? height / 2 : 0
+    color: "transparent"
+    border.width: toggle.activeFocus ? 2 : mouse.containsMouse ? 1 : 0
+    border.color: toggle.activeFocus ? toggle.accent : FoamyPalette.border
 
     Rectangle {
       id: track
-      anchors.verticalCenter: parent.verticalCenter
-      width: 30
-      height: 17
-      radius: FoamyStyle.pillRadius(height)
-      color: toggle.checked ? FoamyPalette.accent : FoamyPalette.fieldFill
-      border.width: toggle.activeFocus ? 2 : FoamyStyle.borderWidth
-      border.color: toggle.activeFocus ? FoamyPalette.accent : FoamyPalette.border
+      anchors.centerIn: parent
+      width: toggle.trackWidth
+      height: toggle.trackHeight
+      radius: Style.cornerRadius > 0 ? height / 2 : 0
+      color: toggle.checked ? Style.selectedFillFor(toggle.foreground, toggle.accent)
+        : Style.normalFillFor(toggle.foreground, toggle.accent)
+      border.width: Commons.Border.uniformWidth(toggle.borderSpec)
+      border.color: Commons.Border.color(toggle.borderSpec)
 
       Rectangle {
-        width: 13
-        height: 13
-        radius: FoamyStyle.pillRadius(height)
+        objectName: "studioToggleKnob"
+        width: toggle.knobSize
+        height: toggle.knobSize
+        radius: Style.cornerRadius > 0 ? height / 2 : 0
         anchors.verticalCenter: parent.verticalCenter
-        // The knob follows the reading direction (mirrored with the layout).
-        x: (toggle.checked !== toggle.LayoutMirroring.enabled) ? track.width - width - 2 : 2
-        color: toggle.checked ? FoamyPalette.onAccent : FoamyPalette.mutedText
+        // Thrown to the reading end when on (mirrored right to left).
+        x: toggle.checked !== toggle.mirrored ? track.width - width - toggle.knobInset : toggle.knobInset
+        color: toggle.checked ? Style.selectedStateColor(toggle.foreground, toggle.accent) : Qt.darker(toggle.foreground, 1.25)
       }
     }
   }
 
   MouseArea {
+    id: mouse
     anchors.fill: parent
+    hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
     onClicked: {
       toggle.forceActiveFocus(Qt.MouseFocusReason)
