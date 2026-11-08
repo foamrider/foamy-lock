@@ -42,7 +42,13 @@ vec3 lay(vec3 dst, vec3 c, float a) {
     return mix(dst, c, a * (1.0 - u_glow)) + c * (a * u_glow);
 }
 
-// A little noise against banding in smooth gradients.
+// Noise against banding in smooth gradients: triangular, about one 8-bit
+// step either way, and apart in each channel, so a slow gradient breaks into
+// grain the eye averages instead of contour rings.
 vec3 dither(vec3 c, vec2 px) {
-    return c + (hash(int(px.x), int(px.y), 99) - 0.5) / 255.0;
+    uint a = lowbias(uint(int(px.x)) + lowbias(uint(int(px.y)) + 0x9e3779b9u));
+    uint b = lowbias(a);
+    vec3 first = vec3(uvec3(a, a >> 8u, a >> 16u) & 255u);
+    vec3 second = vec3(uvec3(b, b >> 8u, b >> 16u) & 255u);
+    return c + (first + second - 255.0) / (255.0 * 255.0);
 }
