@@ -6,7 +6,7 @@ import "Layout.js" as LockLayout
 import "Draft.js" as Draft
 
 // The scene pages in the inspector pane (Library → Scene):
-// - "background": the source (the Omarchy wallpaper, your picture, the
+// - "background": the source (Wallpaper, Custom image, the
 //   theme colour, black or a drawn scene), the picture, the blur and the
 //   decoration (drawn tiles);
 // - "glass": the dim, and the glass's opacity and tint;

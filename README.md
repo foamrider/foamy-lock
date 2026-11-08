@@ -249,8 +249,9 @@ that shows it (`card`, `pill` or `art`) is shown.
 **Background.** These keys set what's behind the elements:
 
 - **`source`.** One of:
-  - `omarchy` (default): the current wallpaper, as before;
-  - `picture`: the file in `path`, an absolute `.png`, `.jpg` or `.webp`, or a
+  - `omarchy` (default; **Wallpaper** in Lock Studio): the current Omarchy
+    wallpaper, as before;
+  - `picture` (**Custom image** in Lock Studio): the file in `path`, an absolute `.png`, `.jpg` or `.webp`, or a
     video (`.mp4`, `.m4v`, `.mov`, `.mkv`, `.webm`; see Video below);
   - `theme`: the theme's background colour;
   - `black`;
@@ -281,7 +282,7 @@ that shows it (`card`, `pill` or `art`) is shown.
   `card` needs GPU rendering.
 - **`blur`.** From 0 to 1.
 - **`dim`.** The darkening scrim, from 0 to 0.9; the default is 0.25.
-- **Picture preparation.** Your picture is decoded, cropped to the screen and
+- **Picture preparation.** A custom image is decoded, cropped to the screen and
   blurred by the bundled helper in its sandbox while you are unlocked. The
   original file never reaches the lock screen.
 - **Blur of the Omarchy wallpaper** needs GPU rendering. With CPU rendering
