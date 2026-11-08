@@ -54,16 +54,94 @@ FocusScope {
       return known.indexOf(sources.pickError) !== -1 ? FoamyI18n.t("studio.pick." + sources.pickError)
         : FoamyI18n.t("studio.pick.failed", sources.pickError)
     }
-    if (background.source !== "picture" || !sources.pictureError) return ""
+    if (background.source !== "picture" || sources.pictureIsVideo || !sources.pictureError) return ""
     if (sources.pictureError === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
     if (sources.pictureError === "background-missing") return FoamyI18n.t("studio.picture.missing")
     return FoamyI18n.t("studio.picture.failed", sources.pictureError)
+  }
+
+  // --- the video card -----------------------------------------------------
+  // The video the canvas shows (a picture source's, or a video Omarchy
+  // wallpaper), from the helper's probe: facts, what converting makes of it,
+  // the estimate, Convert or its progress and Cancel, the clip once ready,
+  // and the motion. Nothing converts until Convert is pressed.
+  readonly property bool videoShown: !!sources && sources.clipSource !== ""
+  readonly property var probeReply: sources && sources.videoProbe && sources.videoProbeKey === sources.clipKey
+    ? sources.videoProbe.reply : null
+  readonly property var card: !sources ? null : Draft.videoCard(sources.videoProbeKey === sources.clipKey ? sources.videoProbe : null,
+    sources.converting && sources.convertKey === sources.clipKey, sources.clip)
+  readonly property string cardState: card ? card.state : "checking"
+  readonly property string motion: background.motion === "play" ? "play" : "still"
+  // Play can be chosen once there is a clip; a saved Play can always go back.
+  readonly property bool motionEnabled: cardState === "ready" || motion === "play"
+
+  function lengthText(seconds) {
+    var length = Draft.duration(seconds)
+    if (!length) return ""
+    return length.minutes > 0 ? FoamyI18n.t("studio.video.minutes", [length.minutes, length.seconds])
+      : FoamyI18n.t("studio.video.seconds", length.seconds)
+  }
+  function sizeText(bytes) {
+    var size = Draft.megabytes(bytes)
+    return FoamyI18n.t("studio.video.megabytes", FoamyI18n.number(size.value, size.decimals))
+  }
+  function rateText(fps) {
+    var value = Number(fps) || 0
+    return FoamyI18n.number(value, Math.abs(value - Math.round(value)) < 0.005 ? 0 : 2)
+  }
+  // "4 min 12 s · 3840 × 2160 · HEVC · 412 MB" (only the size over 2 GiB).
+  function factsText() {
+    var reply = probeReply
+    if (!reply) return cardState === "checking" ? FoamyI18n.t("studio.video.checking") : ""
+    if (reply.codec === null) return sizeText(reply.bytes)
+    var parts = []
+    var length = lengthText(reply.duration)
+    if (length) parts.push(length)
+    parts.push(FoamyI18n.t("studio.video.size", [reply.width, reply.height]))
+    parts.push(Draft.codecLabel(reply.codec))
+    parts.push(sizeText(reply.bytes))
+    return parts.join(" · ")
+  }
+  // What converting makes of it.
+  function planText() {
+    var output = probeReply ? probeReply.output : null
+    if (!output || cardState === "limit") return ""
+    return output.cut ? FoamyI18n.t("studio.video.planCut", [60, output.width, output.height, rateText(output.fps)])
+      : FoamyI18n.t("studio.video.plan", [output.width, output.height, rateText(output.fps)])
+  }
+  function estimateText() {
+    return probeReply && typeof probeReply.estimate === "number"
+      ? FoamyI18n.t("studio.video.estimate", lengthText(probeReply.estimate)) : ""
+  }
+  // Why it can't be converted or played, or how the last conversion ended.
+  function videoProblem() {
+    if (!sources || !card) return ""
+    var code = card.code
+    if (cardState === "limit") {
+      if (code === "unsupported-codec") return FoamyI18n.t("studio.video.limit.unsupported-codec", Draft.codecLabel(probeReply ? probeReply.codec : ""))
+      if (["input-too-large", "input-too-wide"].indexOf(code) !== -1) return FoamyI18n.t("studio.video.limit." + code)
+      return FoamyI18n.t("studio.video.problem", code)
+    }
+    if (cardState === "problem") {
+      if (code === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
+      if (["decode-failed", "unsupported-format", "video-missing", "decoder-unavailable"].indexOf(code) !== -1)
+        return FoamyI18n.t("studio.video.problem." + code)
+      return FoamyI18n.t("studio.video.problem", code)
+    }
+    var failed = sources.convertKey === sources.clipKey && !sources.converting ? sources.convertError : ""
+    if (!failed) return ""
+    if (failed === "cancelled") return FoamyI18n.t("studio.video.cancelled")
+    if (failed === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
+    if (["busy", "job-timeout", "output-too-large"].indexOf(failed) !== -1) return FoamyI18n.t("studio.video.failed." + failed)
+    return FoamyI18n.t("studio.video.failed", failed)
   }
 
   // The picture's state in words.
   function pictureStatus() {
     if (!sources) return ""
     if (sources.picking) return FoamyI18n.t("studio.picture.choosing")
+    // A video's state is on its card.
+    if (sources.pictureIsVideo) return ""
     if (background.source !== "picture") return pictureChosen ? FoamyI18n.t("studio.picture.notShown") : ""
     if (sources.preparing || (sources.pictureSource !== background.path && !sources.pictureError)) return FoamyI18n.t("studio.picture.preparing")
     return ""
@@ -183,6 +261,154 @@ FocusScope {
           Accessible.role: Accessible.AlertMessage
         }
 
+        // --- the video card -------------------------------------------------
+        Column {
+          id: videoCard
+          objectName: "studioVideoCard"
+          width: parent.width
+          spacing: FoamyStyle.gapSmall
+          visible: scene.videoShown
+
+          SectionLabel {
+            text: FoamyI18n.t("studio.video")
+            topPadding: FoamyStyle.gap
+          }
+          RowLayout {
+            width: parent.width
+            spacing: FoamyStyle.gap
+            Rectangle {
+              Layout.preferredWidth: 112
+              Layout.preferredHeight: 63
+              Layout.alignment: Qt.AlignTop
+              radius: FoamyStyle.radiusSmall
+              color: FoamyPalette.fieldFill
+              clip: true
+              Image {
+                id: videoPoster
+                objectName: "studioVideoPoster"
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                sourceSize.width: 224
+                sourceSize.height: 126
+                readonly property string path: scene.sources && scene.sources.videoProbe && scene.sources.videoProbeKey === scene.sources.clipKey
+                  ? scene.sources.videoProbe.poster : ""
+                source: path ? "file://" + path.split("/").map(encodeURIComponent).join("/") : ""
+                Accessible.role: Accessible.Graphic
+                Accessible.name: FoamyI18n.t("studio.video.poster")
+              }
+            }
+            Column {
+              Layout.fillWidth: true
+              spacing: FoamyStyle.gapTiny
+              PaneNote {
+                objectName: "studioVideoFacts"
+                width: parent.width
+                text: scene.factsText()
+              }
+              PaneNote {
+                objectName: "studioVideoPlan"
+                width: parent.width
+                color: FoamyPalette.secondaryText
+                text: scene.planText()
+              }
+            }
+          }
+          PaneNote {
+            objectName: "studioVideoProblem"
+            color: FoamyPalette.onSurface(FoamyPalette.error)
+            text: scene.videoProblem()
+            Accessible.role: Accessible.AlertMessage
+          }
+          PaneNote {
+            objectName: "studioVideoEstimate"
+            visible: scene.cardState === "convertible"
+            text: scene.estimateText() + " " + FoamyI18n.t("studio.video.why")
+          }
+          RowLayout {
+            width: parent.width
+            spacing: FoamyStyle.gap
+            FoamyButton {
+              objectName: "studioVideoConvert"
+              focusable: true
+              kind: "primary"
+              visible: ["converting", "ready"].indexOf(scene.cardState) === -1
+              text: FoamyI18n.t("studio.video.convert")
+              enabled: scene.cardState === "convertible" && !scene.sources.converting
+              onClicked: scene.sources.convertVideo()
+            }
+            FoamyButton {
+              objectName: "studioVideoCancel"
+              focusable: true
+              visible: scene.cardState === "converting"
+              text: FoamyI18n.t("studio.video.cancel")
+              onClicked: scene.sources.cancelConvert()
+            }
+            PaneNote {
+              objectName: "studioVideoReady"
+              Layout.fillWidth: true
+              visible: scene.cardState === "ready"
+              text: visible ? FoamyI18n.t("studio.video.ready", scene.sizeText(scene.sources.clipBytes)) : ""
+            }
+            PaneNote {
+              objectName: "studioVideoProgressText"
+              Layout.fillWidth: true
+              visible: scene.cardState === "converting"
+              readonly property var progress: scene.sources ? scene.sources.convertProgress : null
+              text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)])
+                : FoamyI18n.t("studio.video.starting")
+            }
+          }
+          // The frames done out of the total.
+          Rectangle {
+            id: progressTrack
+            objectName: "studioVideoProgress"
+            width: parent.width
+            height: 6
+            radius: height / 2
+            visible: scene.cardState === "converting"
+            color: FoamyPalette.fieldFill
+            readonly property real fraction: scene.sources && scene.sources.convertProgress ? scene.sources.convertProgress.fraction : 0
+            Accessible.role: Accessible.ProgressBar
+            Accessible.name: FoamyI18n.t("studio.video.progress")
+            Rectangle {
+              objectName: "studioVideoProgressFill"
+              // Start to end in either direction.
+              x: LayoutMirroring.enabled ? parent.width - width : 0
+              width: Math.round(parent.width * progressTrack.fraction)
+              height: parent.height
+              radius: parent.radius
+              color: FoamyPalette.accent
+            }
+          }
+          SectionLabel {
+            text: FoamyI18n.t("studio.motion")
+            topPadding: FoamyStyle.gapSmall
+          }
+          // Its own row: "Play (experimental)" is long in some languages.
+          Segmented {
+            objectName: "studioMotion"
+            name: FoamyI18n.t("studio.motion")
+            enabled: scene.motionEnabled
+            opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+            options: LockLayout.MOTIONS.map(function(m) { return { value: m, label: FoamyI18n.t("studio.motion." + m) } })
+            value: scene.motion
+            onPicked: function(value) { scene.commit(Draft.setBackground(scene.app.draft, "motion", value)) }
+          }
+          PaneNote {
+            objectName: "studioMotionNote"
+            text: scene.motionEnabled ? FoamyI18n.t("studio.motion.hint") : FoamyI18n.t("studio.motion.needsClip")
+          }
+          StudioToggle {
+            objectName: "studioPauseOnBattery"
+            width: parent.width
+            visible: scene.motion === "play"
+            text: FoamyI18n.t("studio.pauseOnBattery")
+            checked: scene.background.pauseOnBattery !== false
+            onToggled: scene.commit(Draft.setBackground(scene.app.draft, "pauseOnBattery", !checked))
+          }
+        }
+
         StudioSlider {
           objectName: "studioBlur"
           width: parent.width
@@ -197,7 +423,7 @@ FocusScope {
           onCommitted: function(v) { scene.commit(Draft.setBackground(scene.app.draft, "blur", v)) }
         }
         PaneNote {
-          visible: scene.background.source === "omarchy"
+          visible: scene.background.source === "omarchy" || (scene.sources !== null && scene.sources.pictureIsVideo)
           text: FoamyI18n.t("studio.blurHint")
         }
 

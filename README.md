@@ -407,6 +407,17 @@ volume, Bluetooth, keyboard layout and weather, never yours, and the problem che
 uses the widest samples. When the lock screen can't reach Foamy Weather, the
 Weather row says **Needs Foamy Weather**.
 
+**A video background.** "Choose picture or video…" offers MP4, MOV, MKV and WebM
+videos too. For a video (or an Omarchy wallpaper that is one) the background page
+shows a card: its first frame, the facts ("4 min 12 s · 3840 × 2160 · HEVC ·
+412 MB"), what converting makes of it ("Uses the first 60 s, scaled to 3440 × 1440,
+30 fps, no sound"), the estimated time and **Convert**. Nothing converts until you
+press it; a progress bar with **Cancel** follows, then "Ready · 72 MB". Over a limit
+(see Video) the card says which, and Convert is disabled. Once there is a clip,
+**Motion** can be **Play (experimental)**, with **Pause on battery** (on by default).
+The canvas shows the first frame; Preview full screen plays the clip as the lock
+screen would.
+
 | Keys | |
 | --- | --- |
 | Arrows | Move one grid step |

@@ -1143,3 +1143,90 @@ if (typeof module !== "undefined") {
   module.exports.relink = relink
   module.exports.presetsAfter = presetsAfter
 }
+
+// --- video backgrounds -------------------------------------------------------
+//
+// The background page's video card works from the helper's video-probe
+// reply (Model.videoProbeResult) and video-convert's progress. These turn
+// them into what the card shows; the words are the window's (FoamyI18n).
+
+// The video a look shows, or "": a picture source with a video path, or the
+// Omarchy wallpaper when it is a video (`wallpaperVideo`, "" otherwise).
+function videoSource(look, wallpaperVideo) {
+  var background = look && look.background
+  if (!background) return ""
+  if (background.source === "picture" && Layout.isVideoPath(background.path)) return String(background.path)
+  if (background.source === "omarchy" && wallpaperVideo) return String(wallpaperVideo)
+  return ""
+}
+
+// The codec's name as people write it.
+function codecLabel(codec) {
+  var names = { h264: "H.264", hevc: "HEVC", vp8: "VP8", vp9: "VP9", av1: "AV1" }
+  var text = String(codec || "")
+  return names.hasOwnProperty(text) ? names[text] : text.toUpperCase()
+}
+
+// Whole seconds as { minutes, seconds } (rounded), or null.
+function duration(seconds) {
+  if (typeof seconds !== "number" || !isFinite(seconds) || seconds < 0) return null
+  var total = Math.max(1, Math.round(seconds))
+  return { minutes: Math.floor(total / 60), seconds: total % 60 }
+}
+
+// Bytes as megabytes (1 000 000), at least 1 below 10 MB a decimal,
+// else whole: { value, decimals }.
+function megabytes(bytes) {
+  var value = Math.max(0, Number(bytes) || 0) / 1e6
+  if (value < 10) return { value: Math.max(0.1, Math.round(value * 10) / 10), decimals: 1 }
+  return { value: Math.round(value), decimals: 0 }
+}
+
+// The card's state from the probe (null while it runs), whether a
+// conversion runs, and the clip it found or the conversion made:
+// "checking", "problem" (the probe failed: `code`), "limit" (a limit the
+// file breaks: `code`), "converting", "ready" or "convertible".
+function videoCard(probe, converting, clip) {
+  if (converting) return { state: "converting", code: "" }
+  if (!probe) return { state: "checking", code: "" }
+  if (!probe.ok) return { state: "problem", code: probe.error || "video-helper-failed" }
+  var violations = probe.reply && Array.isArray(probe.reply.violations) ? probe.reply.violations : []
+  if (violations.length > 0) return { state: "limit", code: String(violations[0]) }
+  if (clip) return { state: "ready", code: "" }
+  return { state: "convertible", code: "" }
+}
+
+// A progress line of video-convert ({"progress": {frames, total}}) as
+// { frames, total, fraction }, or null for any other line.
+function videoProgress(line) {
+  var data = null
+  try { data = JSON.parse(String(line || "")) } catch (error) { data = null }
+  var progress = data && data.progress
+  if (!progress || typeof progress.frames !== "number" || typeof progress.total !== "number" || !(progress.total > 0)) return null
+  var frames = Math.max(0, Math.min(Math.round(progress.frames), Math.round(progress.total)))
+  return { frames: frames, total: Math.round(progress.total), fraction: frames / Math.round(progress.total) }
+}
+
+// video-convert's last line: { ok, clip, bytes, error }; a clip only inside
+// `directory` and named as the helper names it.
+function convertReport(exitCode, text, directory) {
+  var lines = String(text || "").trim().split("\n")
+  var data = null
+  try { data = JSON.parse(lines[lines.length - 1]) } catch (error) { data = null }
+  if (exitCode === 0 && data && data.ok === true && typeof data.clip === "string" && data.clip.indexOf(directory) === 0
+      && /^[0-9a-f]{64}-[1-9][0-9]{1,3}x[1-9][0-9]{1,3}\.mp4$/.test(data.clip.slice(directory.length)))
+    return { ok: true, clip: data.clip, bytes: Number(data.bytes) || 0, error: "" }
+  var code = data && typeof data.error === "string" && /^[a-z-]{1,48}$/.test(data.error) ? data.error
+    : exitCode === 126 || exitCode === 127 ? "helper-unavailable" : "video-helper-failed"
+  return { ok: false, clip: "", bytes: 0, error: code }
+}
+
+if (typeof module !== "undefined") {
+  module.exports.videoSource = videoSource
+  module.exports.codecLabel = codecLabel
+  module.exports.duration = duration
+  module.exports.megabytes = megabytes
+  module.exports.videoCard = videoCard
+  module.exports.videoProgress = videoProgress
+  module.exports.convertReport = convertReport
+}

@@ -1263,6 +1263,160 @@ Item {
           })
         })
       } },
+    // A video background: the fake helper answers video-probe and
+    // video-convert (fake/foamy-lock-helper; no ffmpeg, no user's video).
+    { name: "a video: the card from the probe", wait: 0, run: function(next) {
+        reset()
+        var sources = studio.sources
+        sources.videoHelper = fake + "/foamy-lock-helper"
+        writeFile(fake + "/video-mode", "ok\n")
+        writeFile(fake + "/convert-mode", "ok\n")
+        find(studio.library, "studioSceneBackground").clicked()
+        var page = studio.scenePage
+        expect(!find(page, "studioVideoCard").visible, "no card without a video")
+        expect(find(page, "studioChoosePicture").text === FoamyI18n.t("studio.picture.chooseButton"), "the chooser offers videos")
+        test.saved.video = "/home/you/Videos/waves.mp4"
+        sources.applyPick(0, JSON.stringify({ ok: true, path: test.saved.video }))
+        expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.saved.video } }))
+        expect(find(page, "studioVideoCard").visible, "the card shows for a video")
+        expect(find(page, "studioPictureProblem").text === "", "a video is no picture problem")
+        waitFor(function() { return sources.videoProbe !== null && sources.videoProbeKey === sources.clipKey }, "the probe", function() {
+          var request = JSON.parse(readFile(fake + "/video-requests").trim().split("\n").pop().replace(/^video-probe /, ""))
+          expect(request.path === test.saved.video && request.width === sources.videoSize[0] && request.height === sources.videoSize[1],
+            "probed at the screen's native size: " + json(request))
+          expect(page.cardState === "convertible", "convertible: " + page.cardState)
+          var facts = [FoamyI18n.t("studio.video.minutes", [4, 12]), FoamyI18n.t("studio.video.size", [3840, 2160]), "HEVC",
+            FoamyI18n.t("studio.video.megabytes", FoamyI18n.number(412, 0))].join(" · ")
+          expect(find(page, "studioVideoFacts").text === facts && facts.indexOf("%") === -1, "facts: " + find(page, "studioVideoFacts").text)
+          var size = sources.videoSize
+          expect(find(page, "studioVideoPlan").text === FoamyI18n.t("studio.video.planCut", [60, size[0], size[1], FoamyI18n.number(30, 0)]),
+            "what happens: " + find(page, "studioVideoPlan").text)
+          expect(find(page, "studioVideoEstimate").text.indexOf(FoamyI18n.t("studio.video.estimate", FoamyI18n.t("studio.video.seconds", 15))) === 0,
+            "the estimate: " + find(page, "studioVideoEstimate").text)
+          var convert = find(page, "studioVideoConvert")
+          expect(convert.visible && convert.enabled && !find(page, "studioVideoCancel").visible, "Convert, nothing running")
+          expect(!find(page, "studioMotion").enabled && find(page, "studioMotionNote").text === FoamyI18n.t("studio.motion.needsClip"),
+            "no Play before a clip")
+          expect(!find(page, "studioPauseOnBattery").visible, "pause on battery only with Play")
+          // The canvas shows the poster, unblurred so far (as the lock does).
+          expect(view.backgroundPath === sources.videoProbe.poster && !view.backgroundPrepared && find(page, "studioVideoPoster").status !== Image.Error,
+            "the poster on the canvas: " + view.backgroundPath)
+          expect(sources.pictureError === "" && studio.scenePage.pictureStatus() === "", "no picture job for a video")
+          capture("studio-video", next)
+        })
+      } },
+    { name: "a video: converting, with progress and Cancel", wait: 0, run: function(next) {
+        var sources = studio.sources
+        var page = studio.scenePage
+        writeFile(fake + "/convert-mode", "slow\n")
+        find(page, "studioVideoConvert").clicked()
+        expect(page.cardState === "converting" && find(page, "studioVideoCancel").visible && !find(page, "studioVideoConvert").visible,
+          "converting: Cancel instead of Convert")
+        waitFor(function() { return sources.convertProgress !== null && sources.convertProgress.frames === 450 }, "progress", function() {
+          var track = find(page, "studioVideoProgress")
+          var fill = find(page, "studioVideoProgressFill")
+          expect(track.visible && near(fill.width, track.width / 4), "a quarter done: " + fill.width + " of " + track.width)
+          expect(find(page, "studioVideoProgressText").text === FoamyI18n.t("studio.video.converting", [FoamyI18n.number(450, 0), FoamyI18n.number(1800, 0)]),
+            "frames done: " + find(page, "studioVideoProgressText").text)
+          // A second request while one runs is turned away by the app.
+          expect(!sources.convertVideo(), "one conversion at a time")
+          capture("studio-video-converting", function() {
+            find(page, "studioVideoCancel").clicked()
+            waitFor(function() { return !sources.converting }, "the cancel", function() {
+              expect(sources.convertError === "cancelled" && find(page, "studioVideoProblem").text === FoamyI18n.t("studio.video.cancelled"),
+                "cancelled: " + sources.convertError)
+              expect(page.cardState === "convertible" && sources.clip === "", "nothing kept")
+              next()
+            })
+          })
+        })
+      } },
+    { name: "a video: converted, then Play and Pause on battery", wait: 0, run: function(next) {
+        var sources = studio.sources
+        var page = studio.scenePage
+        writeFile(fake + "/convert-mode", "ok\n")
+        find(page, "studioVideoConvert").clicked()
+        waitFor(function() { return page.cardState === "ready" }, "the clip", function() {
+          var mb = FoamyI18n.t("studio.video.megabytes", FoamyI18n.number(72, 0))
+          expect(find(page, "studioVideoReady").text === FoamyI18n.t("studio.video.ready", mb), "ready: " + find(page, "studioVideoReady").text)
+          expect(sources.clip.indexOf(sources.videoDirectory) === 0, "the clip in the lock's cache: " + sources.clip)
+          var motion = find(page, "studioMotion")
+          expect(motion.enabled && find(page, "studioMotionNote").text === FoamyI18n.t("studio.motion.hint"), "Play can be chosen now")
+          motion.picked("play")
+          expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.saved.video, motion: "play" } }))
+          var battery = find(page, "studioPauseOnBattery")
+          expect(battery.visible && battery.checked, "pause on battery, on by default")
+          battery.toggled()
+          expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.saved.video, motion: "play", pauseOnBattery: false } }))
+          battery.toggled()
+          expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.saved.video, motion: "play" } }))
+          // The probe after the conversion found the clip too.
+          waitFor(function() { return sources.videoProbe !== null && sources.videoProbe.clip === sources.clip }, "the probe finds the clip", function() {
+            capture("studio-video-ready", function() {
+              motion.picked("still")
+              expectDraft(JSON.stringify({ preset: "foamy", background: { source: "picture", path: test.saved.video } }))
+              next()
+            })
+          })
+        })
+      } },
+    { name: "a video: limits and errors disable Convert with the reason", wait: 0, run: function(next) {
+        var sources = studio.sources
+        var page = studio.scenePage
+        var probeOf = function(mode, path, then) {
+          writeFile(fake + "/video-mode", mode + "\n")
+          sources.applyPick(0, JSON.stringify({ ok: true, path: path }))
+          waitFor(function() { return sources.videoProbe !== null && sources.videoProbeKey === sources.clipKey }, mode, then)
+        }
+        probeOf("codec", "/home/you/Videos/studio.mov", function() {
+          var convert = find(page, "studioVideoConvert")
+          expect(page.cardState === "limit" && convert.visible && !convert.enabled, "Convert disabled for a limit")
+          expect(find(page, "studioVideoProblem").text === FoamyI18n.t("studio.video.limit.unsupported-codec", "PRORES"),
+            "the codec: " + find(page, "studioVideoProblem").text)
+          expect(find(page, "studioVideoPlan").text === "" && !find(page, "studioVideoEstimate").visible, "no plan or estimate over a limit")
+          probeOf("large", "/home/you/Videos/huge.mkv", function() {
+            expect(find(page, "studioVideoProblem").text === FoamyI18n.t("studio.video.limit.input-too-large"), "too large")
+            expect(find(page, "studioVideoFacts").text === FoamyI18n.t("studio.video.megabytes", FoamyI18n.number(3000, 0)),
+              "only the size: " + find(page, "studioVideoFacts").text)
+            expect(!find(page, "studioVideoConvert").enabled, "Convert disabled")
+            probeOf("broken", "/home/you/Videos/broken.webm", function() {
+              expect(page.cardState === "problem" && find(page, "studioVideoProblem").text === FoamyI18n.t("studio.video.problem.decode-failed"),
+                "a broken video: " + find(page, "studioVideoProblem").text)
+              expect(!find(page, "studioVideoConvert").enabled && view.backgroundPath === "", "nothing to convert, the theme colour")
+              probeOf("ok", "/home/you/Videos/again.mp4", function() {
+                writeFile(fake + "/convert-mode", "fail\n")
+                find(page, "studioVideoConvert").clicked()
+                waitFor(function() { return !sources.converting }, "the failed conversion", function() {
+                  expect(find(page, "studioVideoProblem").text === FoamyI18n.t("studio.video.failed.output-too-large"),
+                    "a failed conversion: " + find(page, "studioVideoProblem").text)
+                  expect(page.cardState === "convertible", "Convert again")
+                  next()
+                })
+              })
+            })
+          })
+        })
+      } },
+    { name: "a video Omarchy wallpaper gets the same card", wait: 0, run: function(next) {
+        reset()
+        var sources = studio.sources
+        writeFile(fake + "/video-mode", "ok\n")
+        find(studio.library, "studioSceneBackground").clicked()
+        var page = studio.scenePage
+        find(page, "studioSource-omarchy").clicked()
+        var video = test.out + "/wallpaper-loop.webm"
+        sources.applyWallpaper(0, JSON.stringify({ ok: true, path: video, signature: "4:5:6" }))
+        expect(sources.clipSource === video && find(page, "studioVideoCard").visible, "the card for the wallpaper")
+        waitFor(function() { return sources.videoProbe !== null && sources.videoProbeKey === sources.clipKey && !sources.posterBusy }, "its probe", function() {
+          expect(page.cardState === "convertible" && find(page, "studioVideoConvert").enabled, "it can be converted")
+          sources.refreshWallpaper()
+          waitFor(function() { return sources.wallpaperPath.indexOf("wallpaper.png") !== -1 && !sources.wallpaperIsVideo }, "the wallpaper back", function() {
+            expect(!find(page, "studioVideoCard").visible, "no card for a picture wallpaper")
+            sources.videoHelper = ""
+            next()
+          })
+        })
+      } },
     { name: "glass and dim page", wait: 0, run: function(next) {
         reset()
         find(studio.library, "studioSceneGlass").clicked()

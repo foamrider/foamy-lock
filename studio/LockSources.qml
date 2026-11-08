@@ -7,6 +7,7 @@ import "kit"
 import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
 import "Draft.js" as Draft
+import "Layout.js" as Layout
 
 // What the canvas needs from outside the app, got the way the lock gets it:
 //
@@ -27,7 +28,15 @@ import "Draft.js" as Draft
 //   (`$XDG_CACHE_HOME/foamy-lock-studio/picture/…`, so the lock's prepared
 //   background is never evicted). Until it is ready the theme colour shows.
 // - **Choosing a picture**: `foamy-lock-helper studio pick-picture` (the
-//   desktop's file chooser through the portal); picked(path) on a choice.
+//   desktop's file chooser through the portal, with a "Pictures and videos"
+//   filter first); picked(path) on a choice.
+// - **A video** (a picture source's video, or a video Omarchy wallpaper):
+//   never decoded here either. The helper's `video-probe` (facts, limits,
+//   the poster the canvas shows, a clip already made) and, only from the
+//   card's Convert, `video-convert` (progress lines, Cancel by SIGTERM),
+//   both in the helper's sandboxes, at the largest screen's native size,
+//   into the lock's own cache (`$XDG_CACHE_HOME/omarchy/foamy.lock/video/`),
+//   where the lock looks for the clip.
 // - **The saved look**: the same foamy.lock entry (`configEntry`), read the
 //   way the lock reads it (Draft.savedEntry).
 // - **Screens' native size**: Hyprland's own report of each monitor
@@ -132,17 +141,58 @@ Item {
   property bool picturePending: false
   property bool helperUnavailable: false
   readonly property bool preparing: pictureProc.running
-  readonly property string wantedPicture: look && look.background.source === "picture" ? String(look.background.path || "") : ""
+  readonly property string wantedPicture: look && look.background.source === "picture" && !Layout.isVideoPath(look.background.path)
+    ? String(look.background.path || "") : ""
   readonly property string pictureKey: wantedPicture ? JSON.stringify({ kind: "background", path: wantedPicture,
     width: Math.max(16, Math.min(7680, screenWidth)), height: Math.max(16, Math.min(4320, screenHeight)),
     blur: look.background.blur }) : ""
 
-  // The background the canvas shows, and whether it is already blurred.
+  // The background the canvas shows, and whether it is already blurred (a
+  // video's poster is not: the canvas blurs it, as the lock does).
   readonly property string backgroundPath: !look ? ""
     : look.background.source === "omarchy" ? wallpaperPath
+    : pictureIsVideo ? (videoProbe && videoProbeKey === clipKey ? videoProbe.poster : "")
     : wantedPicture && pictureSource === wantedPicture ? picturePath : ""
-  readonly property bool backgroundPrepared: !!look && look.background.source === "picture"
+  readonly property bool backgroundPrepared: !!look && look.background.source === "picture" && !pictureIsVideo
   readonly property int backgroundVersion: wallpaperVersion
+
+  // --- video backgrounds ------------------------------------------------------
+  // The video the look shows (Draft.videoSource: a picture source's video,
+  // or the Omarchy wallpaper when it is one), never decoded here: the
+  // helper's video-probe (facts, limits, poster, a clip already made) and,
+  // only from convertVideo(), video-convert, both in the helper's sandboxes
+  // at the largest screen's native size, into the lock's own cache
+  // (`$XDG_CACHE_HOME/omarchy/foamy.lock/video/`), where the lock looks for
+  // the clip. One conversion at a time; cancelConvert() stops it (SIGTERM)
+  // and nothing is kept. `videoHelper` is the tests' stand-in for the
+  // helper ("" is the bundled one).
+  property string videoHelper: ""
+  readonly property bool pictureIsVideo: !!look && look.background.source === "picture" && Layout.isVideoPath(look.background.path)
+  readonly property string clipSource: Draft.videoSource(look, videoPath)
+  readonly property var videoSize: {
+    var natives = []
+    for (var name in nativeMonitors) natives.push(nativeMonitors[name])
+    return Model.videoScreenSize(natives, Quickshell.screens || [])
+  }
+  readonly property string clipKey: clipSource ? JSON.stringify({ path: clipSource, width: videoSize[0], height: videoSize[1] }) : ""
+  readonly property string videoDirectory: cacheHome + "/omarchy/foamy.lock/video/"
+  // Model.videoProbeResult for videoProbeKey (null while it runs).
+  property var videoProbe: null
+  property string videoProbeKey: ""
+  property bool videoProbePending: false
+  // The conversion: running, for which key, its frames, how it ended.
+  property bool converting: false
+  property string convertKey: ""
+  property var convertProgress: null
+  property string convertError: ""
+  property string convertedClip: ""
+  property real convertedBytes: 0
+  // The clip for the video on the canvas ("" without), and its size.
+  readonly property string clip: videoProbe && videoProbeKey === clipKey && videoProbe.clip ? videoProbe.clip
+    : convertKey === clipKey && convertedClip ? convertedClip : ""
+  readonly property real clipBytes: clip === "" ? 0
+    : clip === convertedClip ? convertedBytes : Number(videoProbe.reply.clipBytes) || 0
+  signal converted(var report)
 
   // Native pixels and scale per Hyprland monitor name (Draft.monitorEntries).
   readonly property bool hyprland: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== ""
@@ -184,11 +234,13 @@ Item {
   onActiveChanged: if (active) {
     refreshWallpaper()
     refreshPicture()
+    refreshVideo()
     refreshMonitors()
     checkMugshot()
     checkCatalog()
   }
   onPictureKeyChanged: pictureDebounce.restart()
+  onClipKeyChanged: videoDebounce.restart()
   Component.onCompleted: {
     refreshWallpaper()
     checkMugshot()
@@ -391,6 +443,91 @@ Item {
     }
   }
 
+  // --- video ------------------------------------------------------------------
+
+  function videoCommand(kind) {
+    return videoHelper ? [videoHelper, kind] : FoamyNative.command(pluginDir, "foamy-lock-helper", [kind])
+  }
+
+  // Probes the video on the canvas (once per file and size, while the
+  // window can be seen).
+  function refreshVideo() {
+    var key = clipKey
+    if (!key) {
+      videoProbe = null
+      videoProbeKey = ""
+      return
+    }
+    if (key === videoProbeKey || !active) return
+    if (videoProbeProc.running) {
+      videoProbePending = true
+      return
+    }
+    videoProbeKey = key
+    videoProbe = null
+    if (helperUnavailable && !videoHelper) {
+      applyVideoProbe(127, "", key)
+      return
+    }
+    videoProbeProc.request = key
+    videoProbeProc.stdinEnabled = true
+    videoProbeProc.running = true
+  }
+
+  // video-probe's answer for `request` (also a test hook).
+  function applyVideoProbe(exitCode, text, request) {
+    if (request !== videoProbeKey) return
+    if (FoamyNative.unavailable(exitCode)) {
+      if (!videoHelper) helperUnavailable = true
+      videoProbe = Model.videoProbeResult('{"ok":false,"error":"helper-unavailable"}', videoDirectory)
+    } else {
+      videoProbe = Model.videoProbeResult(exitCode === 0 ? text : "", videoDirectory)
+    }
+  }
+
+  // Converts the video on the canvas: the Convert button, never on its own.
+  function convertVideo() {
+    if (converting || !clipKey) return false
+    convertKey = clipKey
+    convertProgress = null
+    convertError = ""
+    convertedClip = ""
+    convertedBytes = 0
+    videoConvertProc.lastLine = ""
+    videoConvertProc.request = clipKey
+    videoConvertProc.stdinEnabled = true
+    converting = true
+    videoConvertProc.running = true
+    return true
+  }
+
+  // Cancel: the helper stops both stages and keeps nothing.
+  function cancelConvert() {
+    if (videoConvertProc.running) videoConvertProc.signal(15)
+  }
+
+  // One line of video-convert's output (also a test hook).
+  function applyConvertLine(line) {
+    var progress = Draft.videoProgress(line)
+    if (progress) convertProgress = progress
+  }
+
+  // video-convert's end (also a test hook): its last line.
+  function applyConvert(exitCode, text, request) {
+    converting = false
+    var report = Draft.convertReport(exitCode, text, videoDirectory)
+    if (request !== convertKey) return
+    convertError = report.ok ? "" : report.error
+    if (report.ok) {
+      convertedClip = report.clip
+      convertedBytes = report.bytes
+      // The probe finds it from now on.
+      if (videoProbeKey === request) videoProbeKey = ""
+      refreshVideo()
+    }
+    converted(report)
+  }
+
   // --- the draft on disk ------------------------------------------------------
 
   function loadDraft() { queueDraft({ op: "draft-load", request: "" }) }
@@ -562,6 +699,55 @@ Item {
     onTriggered: sources.refreshPicture()
   }
 
+  Timer {
+    id: videoDebounce
+    interval: 250
+    onTriggered: sources.refreshVideo()
+  }
+
+  Process {
+    id: videoProbeProc
+    property string request: ""
+    // The helper's own limit is 60 s.
+    command: ["timeout", "--kill-after=1s", "65s"].concat(sources.videoCommand("video-probe"))
+    clearEnvironment: true
+    environment: ({ HOME: sources.home, XDG_CACHE_HOME: sources.cacheHome, PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: videoProbeOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.applyVideoProbe(exitCode, videoProbeOutput.text, videoProbeProc.request)
+      if (sources.videoProbePending) {
+        sources.videoProbePending = false
+        sources.refreshVideo()
+      }
+    }
+  }
+
+  // The helper stops a conversion after 10 minutes; this is the backstop.
+  // SIGTERM (Cancel) reaches it through timeout and the exec.
+  Process {
+    id: videoConvertProc
+    property string request: ""
+    property string lastLine: ""
+    command: ["timeout", "--kill-after=5s", "630s"].concat(sources.videoCommand("video-convert"))
+    clearEnvironment: true
+    environment: ({ HOME: sources.home, XDG_CACHE_HOME: sources.cacheHome, PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: SplitParser {
+      onRead: function(data) {
+        videoConvertProc.lastLine = data
+        sources.applyConvertLine(data)
+      }
+    }
+    onExited: function(exitCode) { sources.applyConvert(exitCode, videoConvertProc.lastLine, videoConvertProc.request) }
+  }
+
   Process {
     id: wallpaperProc
     command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper",
@@ -615,7 +801,8 @@ Item {
   Process {
     id: pickProc
     command: FoamyNative.command(sources.pluginDir, "foamy-lock-helper",
-      ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter")])
+      ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter"),
+        FoamyI18n.t("studio.pick.media")])
     stdout: StdioCollector { id: pickOutput; waitForEnd: true }
     onExited: function(exitCode) { sources.applyPick(exitCode, pickOutput.text) }
   }

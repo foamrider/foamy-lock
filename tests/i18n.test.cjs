@@ -48,7 +48,12 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   // Each element's own keys (Inspector.qml): their values, and the status items.
   ...Layout.ELEMENT_OPTIONS.password.reveal.values.map(v => 'reveal.' + v),
   ...Layout.ELEMENT_OPTIONS.weather.details.values.map(v => 'details.' + v),
-  ...Layout.STATUS_ITEMS.map(i => 'item.' + i)];
+  ...Layout.STATUS_ITEMS.map(i => 'item.' + i),
+  // The video card (ScenePage.qml): the motions, the limits, problems and failures it names.
+  ...Layout.MOTIONS.map(m => 'motion.' + m),
+  ...['input-too-large', 'input-too-wide'].map(c => 'video.limit.' + c),
+  ...['decode-failed', 'unsupported-format', 'video-missing', 'decoder-unavailable'].map(c => 'video.problem.' + c),
+  ...['busy', 'job-timeout', 'output-too-large'].map(c => 'video.failed.' + c)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);

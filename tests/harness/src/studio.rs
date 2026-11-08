@@ -62,7 +62,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 24] = [
+const CAPTURES: [&str; 27] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -87,6 +87,9 @@ const CAPTURES: [&str; 24] = [
     "studio-date-styles",
     "studio-calendar-styles",
     "studio-weather-styles",
+    "studio-video",
+    "studio-video-converting",
+    "studio-video-ready",
 ];
 /// The lock's entry the app reads (read-only) for the canvas.
 const SHELL_JSON: &str =
@@ -145,7 +148,65 @@ esac
 /// Foamy Weather reachable (only the keys the app reads).
 const CATALOG: &str = r#"{"version":3,"weather":{"target":true,"state":"ok"}}"#;
 
-/// The fake omarchy-shell in `base/fake-shell/bin`; returns its directory.
+/// The stand-in for the helper's `video-probe` and `video-convert` (the
+/// app's `videoHelper`; never ffmpeg, never a user's video): it reads the
+/// request, logs it in `$dir/video-requests`, and answers what
+/// `$dir/video-mode` says for a probe (`ok` by default: a 4 min HEVC file,
+/// with the poster `$dir/poster.png` copied into the cache and the clip if
+/// one was made for this path and size; `codec`, `large`, `broken`) and
+/// `$dir/convert-mode` for a
+/// conversion (`ok`: progress lines 0 to 1800, then the clip in the cache;
+/// `slow`: progress, then waiting for SIGTERM, which answers cancelled;
+/// `fail`: output-too-large). The clip's name has the request's size.
+const FAKE_HELPER: &str = r#"#!/bin/bash
+dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+kind=$1
+IFS= read -r request
+printf '%s %s\n' "$kind" "$request" >> "$dir/video-requests"
+[[ $request =~ \"width\":([0-9]+),\"height\":([0-9]+) ]] || { echo '{"ok":false,"error":"invalid-size"}'; exit 0; }
+width=${BASH_REMATCH[1]} height=${BASH_REMATCH[2]}
+[[ $request =~ \"path\":\"([^\"]*)\" ]]
+path=${BASH_REMATCH[1]}
+cache="$XDG_CACHE_HOME/omarchy/foamy.lock/video"
+mkdir -p "$cache"
+hash=$(printf %s "$path" | sha256sum | cut -c1-64)
+poster="$cache/$(printf 'ef%.0s' {1..32}).png"
+clip="$cache/$hash-${width}x${height}.mp4"
+output="{\"width\":$width,\"height\":$height,\"fps\":30,\"seconds\":60,\"frames\":1800,\"cut\":true}"
+if [[ $kind == video-probe ]]; then
+  mode=$(cat "$dir/video-mode" 2>/dev/null || echo ok)
+  case $mode in
+    ok)
+      cp "$dir/poster.png" "$poster"
+      if [[ -f $clip ]]; then found="\"$clip\"" bytes=$(stat -c %s "$clip"); else found=null bytes=null; fi
+      echo "{\"ok\":true,\"bytes\":412000000,\"container\":\"mp4\",\"codec\":\"hevc\",\"width\":3840,\"height\":2160,\"fps\":59.94,\"duration\":252.1,\"violations\":[],\"output\":$output,\"threads\":16,\"estimate\":15,\"poster\":\"$poster\",\"clip\":$found,\"clipBytes\":$bytes}" ;;
+    codec) echo "{\"ok\":true,\"bytes\":9000000,\"container\":\"mov\",\"codec\":\"prores\",\"width\":1920,\"height\":1080,\"fps\":25,\"duration\":12,\"violations\":[\"unsupported-codec\"],\"output\":$output,\"threads\":16,\"estimate\":3,\"poster\":null,\"clip\":null,\"clipBytes\":null}" ;;
+    large) echo '{"ok":true,"bytes":3000000000,"container":"mp4","codec":null,"width":null,"height":null,"fps":null,"duration":null,"violations":["input-too-large"],"output":null,"threads":16,"estimate":null,"poster":null,"clip":null,"clipBytes":null}' ;;
+    broken) echo '{"ok":false,"error":"decode-failed"}' ;;
+  esac
+  exit 0
+fi
+mode=$(cat "$dir/convert-mode" 2>/dev/null || echo ok)
+trap 'echo "{\"ok\":false,\"error\":\"cancelled\"}"; exit 0' TERM
+case $mode in
+  ok)
+    for frames in 0 300 600 900 1200 1500 1800; do
+      echo "{\"progress\":{\"frames\":$frames,\"total\":1800}}"
+      sleep 0.05
+    done
+    truncate -s 72318167 "$clip"
+    echo "{\"ok\":true,\"clip\":\"$clip\",\"bytes\":72318167,\"frames\":1800,\"output\":$output}" ;;
+  slow)
+    echo '{"progress":{"frames":0,"total":1800}}'
+    echo '{"progress":{"frames":450,"total":1800}}'
+    sleep 30 & wait $!
+    echo '{"ok":false,"error":"job-timeout"}' ;;
+  fail) echo '{"ok":false,"error":"output-too-large"}' ;;
+esac
+"#;
+
+/// The fake omarchy-shell in `base/fake-shell/bin`, and the fake helper
+/// beside it; returns its directory.
 fn fake_shell(base: &Path) -> Result<PathBuf, String> {
     use std::os::unix::fs::PermissionsExt;
     let dir = base.join("fake-shell");
@@ -157,6 +218,12 @@ fn fake_shell(base: &Path) -> Result<PathBuf, String> {
         .map_err(app::io("omarchy-shell"))?;
     fs::write(dir.join("mode"), "ok\n").map_err(app::io("mode"))?;
     fs::write(dir.join("catalog"), CATALOG).map_err(app::io("catalog"))?;
+    let helper = dir.join("foamy-lock-helper");
+    fs::write(&helper, FAKE_HELPER).map_err(app::io("foamy-lock-helper"))?;
+    fs::set_permissions(&helper, fs::Permissions::from_mode(0o755))
+        .map_err(app::io("foamy-lock-helper"))?;
+    fs::write(dir.join("poster.png"), gradient(192, 108, [120, 40, 60], [30, 90, 150]))
+        .map_err(app::io("poster.png"))?;
     Ok(dir)
 }
 
