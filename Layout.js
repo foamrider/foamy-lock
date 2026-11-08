@@ -112,11 +112,15 @@ var ARTWORK_STYLES = ["card", "pill", "art", "hero", "disc"]
 var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
 // "color" is a solid colour (`color`); "theme" and "black" are its older
 // names, still read: the theme's background and #000000 (canonical looks
-// say "color"). The drawn ones (DRAWN_SOURCES) are the animations.
-var BACKGROUND_SOURCES = ["omarchy", "picture", "color", "theme", "black", "aurora", "rain", "constellation"]
+// say "color"). The drawn ones (DRAWN_SOURCES) are the animations;
+// "constellation" is the older name of "stars", still read.
+var BACKGROUND_SOURCES = ["omarchy", "picture", "color", "theme", "black", "aurora", "rain", "stars", "constellation"]
 // The animations, drawn by the view in the theme's colours (elements/
-// Backdrop.qml), in the order Lock Studio's picker lists them.
-var DRAWN_SOURCES = ["aurora", "rain", "constellation"]
+// Backdrop.qml, a shader each in elements/shaders), in the order Lock
+// Studio's picker lists them.
+var DRAWN_SOURCES = ["aurora", "rain", "stars"]
+// Older names of animations, read as the one they became.
+var DRAWN_ALIASES = { constellation: "stars" }
 var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor", "motion", "pauseOnBattery", "color"]
 // A solid colour's `color`: one of the theme's colours, by name, so it
 // follows the theme, or exactly "#rrggbb" (kept in lower case).
@@ -168,6 +172,13 @@ function solid(color, blur, dim, decor) {
 // Whether `value` is a solid colour the lock accepts.
 function isColor(value) {
   return typeof value === "string" && (THEME_COLORS.indexOf(value) !== -1 || HEX_COLOR.test(value))
+}
+
+// The animation a source draws (a DRAWN_SOURCES name, an older name read as
+// its new one), or "" when it isn't one.
+function drawnSource(source) {
+  var name = DRAWN_ALIASES.hasOwnProperty(source) ? DRAWN_ALIASES[source] : source
+  return DRAWN_SOURCES.indexOf(name) !== -1 ? name : ""
 }
 
 // The solid colour a background shows ("background", "accent", … or
@@ -625,10 +636,12 @@ function merge(presetName, layout, background, glass) {
 }
 
 // The background's motion keys and colour only where they differ from the
-// defaults; the older solid sources ("black", "theme") as "color", a hex
-// colour in lower case, and no colour at all for another source (it shows
+// defaults; the older solid sources ("black", "theme") as "color", an
+// animation's older name ("constellation") as its new one, a hex colour in
+// lower case, and no colour at all for another source (it shows
 // none, so two looks that differ only there are the same look).
 function canonicalBackground(background) {
+  if (DRAWN_ALIASES.hasOwnProperty(background.source)) background.source = DRAWN_ALIASES[background.source]
   if (background.source === "black" || background.source === "theme") {
     background.color = solidColor(background)
     background.source = "color"
@@ -1023,4 +1036,10 @@ if (typeof module !== "undefined") {
   module.exports.savingPreset = savingPreset
   module.exports.renamingPreset = renamingPreset
   module.exports.deletingPreset = deletingPreset
+}
+
+// The animations' older names.
+if (typeof module !== "undefined") {
+  module.exports.DRAWN_ALIASES = DRAWN_ALIASES
+  module.exports.drawnSource = drawnSource
 }
