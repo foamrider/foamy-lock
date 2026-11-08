@@ -18,7 +18,7 @@
 // { zone, x, y, width, height }.
 
 // Library order (the lock's ELEMENTS order is its tie-break, not a reading order).
-var DISPLAY_ORDER = ["clock", "date", "calendar", "account", "password", "media", "status"]
+var DISPLAY_ORDER = ["clock", "date", "calendar", "account", "password", "media", "status", "weather"]
 // The grid: square cells of 1/48 of the screen height.
 var GRID_DIVISIONS = 48
 // Snapping reaches this far in canvas pixels, whatever the zoom.
@@ -83,6 +83,12 @@ function elementValue(item, key) {
   case "hidden": return false
   case "offset": return { x: 0, y: 0 }
   }
+  // An element's own key (each belongs to one element): its default, but
+  // none for status.items (absent is the style's own contents).
+  for (var name in Layout.ELEMENT_OPTIONS) {
+    var spec = Layout.ELEMENT_OPTIONS[name][key]
+    if (spec && !spec.list) return spec.fallback
+  }
   return undefined
 }
 
@@ -101,8 +107,11 @@ function entry(look) {
     var preset = base.elements[element]
     if (!item) continue
     var changes = {}
-    for (var k = 0; k < Layout.ELEMENT_KEYS.length; k++) {
-      var key = Layout.ELEMENT_KEYS[k]
+    // Its own keys too (password.reveal, status.items, weather.details and
+    // location), or an edit to them would be lost.
+    var keys = Layout.elementKeys(element)
+    for (var k = 0; k < keys.length; k++) {
+      var key = keys[k]
       var value = elementValue(item, key)
       if (value === undefined) continue
       if (!same(value, elementValue(preset, key))) changes[key] = copy(value)

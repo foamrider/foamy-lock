@@ -513,7 +513,8 @@ Item {
     { name: "elements drawn", wait: 0, run: function(next) {
         for (var i = 0; i < Layout.ELEMENTS.length; i++) {
           var name = Layout.ELEMENTS[i]
-          var shown = name !== "calendar"
+          // The calendar and the weather start hidden in every preset.
+          var shown = name !== "calendar" && name !== "weather"
           var r = view.elementRects[name]
           expect(shown === (r !== undefined), name + " rect " + json(r))
           if (shown) expect(r.width > 4 && r.height > 4 && view.elementItem(name).visible, name + " is drawn: " + json(r))
@@ -834,7 +835,8 @@ Item {
       } },
     { name: "library: the drop shows it there", wait: 0, run: function(next) {
         studio.libraryDragEnd()
-        expectDraft('{"preset":"foamy","layout":{"calendar":{"zone":"top-start","hidden":false}}}')
+        // After the hidden weather, which waits in top-start.
+        expectDraft('{"preset":"foamy","layout":{"calendar":{"zone":"top-start","order":1,"hidden":false}}}')
         expect(canvas.gesture === null && studio.libraryDrag === "", "the drag is over")
         // Dropped off the canvas: nothing changes.
         studio.libraryDragStart("calendar")
@@ -842,7 +844,7 @@ Item {
         studio.libraryDragMove(scenePoint(studio.library, 40, 40), Qt.NoModifier)
         expect(canvas.gesture === null, "left the canvas")
         studio.libraryDragEnd()
-        expectDraft('{"preset":"foamy","layout":{"calendar":{"zone":"top-start","hidden":false}}}')
+        expectDraft('{"preset":"foamy","layout":{"calendar":{"zone":"top-start","order":1,"hidden":false}}}')
         next()
       } },
     { name: "library: drag from the canvas onto the library hides", wait: 0, run: function(next) {

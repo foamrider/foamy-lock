@@ -406,13 +406,13 @@ test('geometry problems name the modules to outline', () => {
 
 test('[ and ] walk the modules in library order', () => {
   assert.equal(Draft.neighbourModule('clock', 1), 'date')
-  assert.equal(Draft.neighbourModule('clock', -1), 'status')
-  assert.equal(Draft.neighbourModule('status', 1), 'clock')
+  assert.equal(Draft.neighbourModule('clock', -1), 'weather')
+  assert.equal(Draft.neighbourModule('status', 1), 'weather')
+  assert.equal(Draft.neighbourModule('weather', 1), 'clock')
   assert.equal(Draft.neighbourModule('nope', 1), 'clock')
-  // The weather joins the library with its availability row (round 2, step
-  // R2-4, app side); until then the library leaves it out.
-  assert.deepEqual([...Draft.DISPLAY_ORDER].filter(n => n !== 'weather').sort(),
-    Layout.ELEMENTS.filter(n => n !== 'weather').sort())
+  // Every module is in the library, the weather last.
+  assert.deepEqual([...Draft.DISPLAY_ORDER].sort(), [...Layout.ELEMENTS].sort())
+  assert.equal(Draft.DISPLAY_ORDER[Draft.DISPLAY_ORDER.length - 1], 'weather')
 })
 
 test('screens show their native size from Hyprland, then the reference sizes', () => {
