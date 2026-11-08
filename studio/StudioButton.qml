@@ -4,7 +4,7 @@ import "kit"
 // A form button in the foamy look (DESIGN.md "Buttons"): secondary (field
 // fill and border) or primary (accent fill, one per form). `checked` marks
 // a selected entry in a list of buttons. Enter or Space activates it; the
-// focus ring always shows.
+// focus ring always shows (outside a primary button).
 Rectangle {
   id: button
 
@@ -23,7 +23,7 @@ Rectangle {
   color: primary ? FoamyPalette.accent
     : checked ? FoamyPalette.selectedFill
     : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
-  border.width: activeFocus ? 2 : primary ? 0 : FoamyStyle.borderWidth
+  border.width: primary ? 0 : activeFocus ? 2 : FoamyStyle.borderWidth
   border.color: activeFocus || checked ? FoamyPalette.accent : FoamyPalette.border
   opacity: enabled ? 1 : FoamyStyle.disabledOpacity
   activeFocusOnTab: enabled
@@ -31,12 +31,26 @@ Rectangle {
   Accessible.role: Accessible.Button
   Accessible.name: text
   Accessible.description: detail
-  Accessible.checkable: checked
+  // A list row or page chosen; a checkable one (a radio button) says
+  // checked instead.
+  Accessible.selected: checked && !Accessible.checkable
   Accessible.checked: checked
   Accessible.onPressAction: if (enabled) clicked()
   Keys.onReturnPressed: if (enabled) clicked()
   Keys.onEnterPressed: if (enabled) clicked()
   Keys.onSpacePressed: if (enabled) clicked()
+
+  // The accent fill would hide a ring on it: a primary button's focus ring
+  // sits just outside.
+  Rectangle {
+    visible: button.primary && button.activeFocus
+    anchors.fill: parent
+    anchors.margins: -3
+    radius: button.radius + 3
+    color: "transparent"
+    border.width: 2
+    border.color: FoamyPalette.accent
+  }
 
   Row {
     id: row

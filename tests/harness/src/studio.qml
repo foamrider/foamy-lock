@@ -756,6 +756,34 @@ Item {
         canvas.forceActiveFocus()
         next()
       } },
+    { name: "accessibility: the tab order", wait: 0, run: function(next) {
+        reset()
+        canvas.forceActiveFocus()
+        // Tab from the canvas all the way round: every stop has a name and a
+        // role, and the order reaches every pane.
+        var item = canvas, stops = []
+        for (var i = 0; i < 300; i++) {
+          item = item.nextItemInFocusChain(true)
+          if (!item || item === canvas) break
+          stops.push(item)
+        }
+        expect(item === canvas, "Tab comes back to the canvas after " + stops.length + " stops")
+        var names = []
+        for (var s = 0; s < stops.length; s++) {
+          var stop = stops[s]
+          var name = String(stop.Accessible.name || "")
+          expect(name !== "" && stop.Accessible.role !== Accessible.NoRole, "a stop without a name or role: " + stop + " " + stop.objectName)
+          expect(stop.visible && stop.enabled, "a hidden or disabled stop: " + stop)
+          names.push(stop.objectName || name)
+        }
+        var wanted = ["studioPresetButton", "studioPreview", "studioLibrary-clock", "studioSceneBackground", "studioZonesSwitch",
+          "studioSnapSwitch", "studioPresetStrip"]
+        for (var w = 0; w < wanted.length; w++) expect(names.indexOf(wanted[w]) !== -1, "Tab reaches " + wanted[w] + ": " + json(names))
+        // Disabled buttons are skipped (nothing to apply, nothing to undo).
+        expect(names.indexOf("studioApply") === -1 && names.indexOf("studioUndo") === -1, "disabled buttons are skipped")
+        ok(stops.length + " tab stops, all named")
+        next()
+      } },
     // --- saving ---------------------------------------------------------------
     { name: "the fake omarchy-shell comes first", wait: 0, run: function(next) {
         expect(test.fake !== "", "FOAMY_LOCK_STUDIO_FAKE is set")

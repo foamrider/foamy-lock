@@ -124,6 +124,7 @@ FocusScope {
       text: FoamyI18n.t("studio.background")
       detail: FoamyI18n.t("studio.source." + library.app.look.background.source)
       checked: library.app.page === "background"
+      Accessible.role: Accessible.PageTab
       onClicked: library.app.page = "background"
     }
     StudioButton {
@@ -134,6 +135,7 @@ FocusScope {
       text: FoamyI18n.t("studio.glassDim")
       detail: FoamyI18n.t("studio.percent", Math.round(library.app.look.background.dim * 100))
       checked: library.app.page === "glass"
+      Accessible.role: Accessible.PageTab
       onClicked: library.app.page = "glass"
     }
 
