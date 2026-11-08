@@ -195,7 +195,7 @@ Item {
   signal converted(var report)
 
   // Native pixels and scale per Hyprland monitor name (Draft.monitorEntries).
-  readonly property bool hyprland: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== ""
+  readonly property bool hyprland: !!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
   readonly property var nativeMonitors: {
     var out = {}
     var monitors = hyprland ? Hyprland.monitors.values : []
