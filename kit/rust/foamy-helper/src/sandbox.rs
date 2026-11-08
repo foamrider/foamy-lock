@@ -1,4 +1,4 @@
-// foamy-kit 0.6.0 972c25a4d4060b5bbf1187f44fd095dedd60870590dd65d3db272c2400ad86c5 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.6.0 0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6 — do not edit; change foamy-kit and run sync
 //! Sandboxing for child processes (cargo feature `sandbox`): seccomp-BPF
 //! filters ([`BpfFilter`], generated with `seccompiler`), a Landlock
 //! restriction of what a child may execute ([`ExecOnly`], applied between
@@ -68,13 +68,24 @@ const X32_SYSCALL_BIT: u32 = 0x4000_0000;
 
 /// Syscalls an image decoder must not make: no new processes (`clone`,
 /// `clone3`, `fork`, `vfork`), namespaces (`unshare`, `setns`), mounts,
-/// `ptrace` or `bpf`. `artwork.py`'s list, per architecture.
+/// `ptrace` or `bpf` (`artwork.py`'s list), and since 0.6.0 no kernel
+/// attack surface a decoder never needs: io_uring (`io_uring_setup`,
+/// `io_uring_enter`, `io_uring_register`), the key store (`add_key`,
+/// `request_key`, `keyctl`) and `userfaultfd`. Per architecture, ascending.
 pub fn decoder_denied(arch: &str) -> Option<&'static [i64]> {
     match arch {
-        // clone, fork, vfork, ptrace, mount, unshare, setns, bpf, clone3
-        "x86_64" => Some(&[56, 57, 58, 101, 165, 272, 308, 321, 435]),
-        // mount, unshare, ptrace, clone, setns, bpf, clone3
-        "aarch64" => Some(&[40, 97, 117, 220, 268, 280, 435]),
+        // clone, fork, vfork, ptrace, mount, add_key, request_key, keyctl,
+        // unshare, setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+        // io_uring_register, clone3
+        "x86_64" => Some(&[
+            56, 57, 58, 101, 165, 248, 249, 250, 272, 308, 321, 323, 425, 426, 427, 435,
+        ]),
+        // mount, unshare, ptrace, add_key, request_key, keyctl, clone,
+        // setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+        // io_uring_register, clone3
+        "aarch64" => Some(&[
+            40, 97, 117, 217, 218, 219, 220, 268, 280, 282, 425, 426, 427, 435,
+        ]),
         _ => None,
     }
 }
@@ -84,10 +95,16 @@ pub fn decoder_denied(arch: &str) -> Option<&'static [i64]> {
 /// `clone3` (answered with `ENOSYS`).
 pub fn threaded_decoder_denied(arch: &str) -> Option<&'static [i64]> {
     match arch {
-        // fork, vfork, ptrace, mount, unshare, setns, bpf
-        "x86_64" => Some(&[57, 58, 101, 165, 272, 308, 321]),
-        // mount, unshare, ptrace, setns, bpf (no fork or vfork: clone)
-        "aarch64" => Some(&[40, 97, 117, 268, 280]),
+        // fork, vfork, ptrace, mount, add_key, request_key, keyctl,
+        // unshare, setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+        // io_uring_register
+        "x86_64" => Some(&[
+            57, 58, 101, 165, 248, 249, 250, 272, 308, 321, 323, 425, 426, 427,
+        ]),
+        // mount, unshare, ptrace, add_key, request_key, keyctl, setns, bpf,
+        // userfaultfd, io_uring_setup, io_uring_enter, io_uring_register (no
+        // fork or vfork: clone)
+        "aarch64" => Some(&[40, 97, 117, 217, 218, 219, 268, 280, 282, 425, 426, 427]),
         _ => None,
     }
 }
@@ -136,7 +153,8 @@ impl BpfFilter {
         BpfFilter::deny_for(std::env::consts::ARCH, syscalls, errno)
     }
 
-    /// `artwork.py`'s `decoder_filter()`: [`decoder_denied`] with `EPERM`.
+    /// `artwork.py`'s `decoder_filter()`, hardened in 0.6.0 (io_uring, the
+    /// key store and `userfaultfd` too): [`decoder_denied`] with `EPERM`.
     /// `Unsupported` on other architectures
     /// (`sandbox-architecture-unsupported`).
     pub fn decoder() -> io::Result<BpfFilter> {

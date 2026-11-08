@@ -1,4 +1,4 @@
-// foamy-kit 0.6.0 8f4c8155c94bf3e74bd5b62c4646d49c85441fc4f5fa996f6043080423cf760e — do not edit; change foamy-kit and run sync
+// foamy-kit 0.6.0 142ab84d9c2b5e899e60da9b94881e08196e4722af86835cf8388d6d95dffe88 — do not edit; change foamy-kit and run sync
 use super::*;
 use std::time::Duration;
 
@@ -8,12 +8,38 @@ const KILL: u32 = SECCOMP_RET_KILL_PROCESS;
 const AUDIT_X86_64: u32 = 0xc000_003e;
 const AUDIT_AARCH64: u32 = 0xc000_00b7;
 
-/// artwork.py's `decoder_filter()`, instruction for instruction.
-fn python_reference(arch: &str) -> Vec<sock_filter> {
-    let (audit, denied): (u32, &[u32]) = match arch {
-        "x86_64" => (AUDIT_X86_64, &[56, 57, 58, 101, 165, 272, 308, 321, 435]),
-        _ => (AUDIT_AARCH64, &[40, 97, 117, 220, 268, 280, 435]),
+/// io_uring_setup, io_uring_enter and io_uring_register: the same numbers on
+/// both architectures.
+const IO_URING: [u32; 3] = [425, 426, 427];
+
+/// The syscalls 0.6.0 added to both decoder profiles, by name: io_uring,
+/// the key store and userfaultfd (the numbers are from the kernel's
+/// `unistd_64.h` and `asm-generic/unistd.h`, written out independently of
+/// the lists in `sandbox.rs`).
+fn hardening(arch: &str) -> [(&'static str, u32); 7] {
+    let (add_key, request_key, keyctl, userfaultfd) = match arch {
+        "x86_64" => (248, 249, 250, 323),
+        _ => (217, 218, 219, 282),
     };
+    [
+        ("io_uring_setup", IO_URING[0]),
+        ("io_uring_enter", IO_URING[1]),
+        ("io_uring_register", IO_URING[2]),
+        ("add_key", add_key),
+        ("request_key", request_key),
+        ("keyctl", keyctl),
+        ("userfaultfd", userfaultfd),
+    ]
+}
+
+/// artwork.py's `decoder_filter()`, instruction for instruction, with 0.6.0's
+/// [`hardening`] denied the same way.
+fn python_reference(arch: &str) -> Vec<sock_filter> {
+    let (audit, mut denied): (u32, Vec<u32>) = match arch {
+        "x86_64" => (AUDIT_X86_64, vec![56, 57, 58, 101, 165, 272, 308, 321, 435]),
+        _ => (AUDIT_AARCH64, vec![40, 97, 117, 220, 268, 280, 435]),
+    };
+    denied.extend(hardening(arch).map(|(_, nr)| nr));
     let insn = |code, jt, jf, k| sock_filter { code, jt, jf, k };
     let mut program = vec![
         insn(0x20, 0, 0, 4),
@@ -24,7 +50,7 @@ fn python_reference(arch: &str) -> Vec<sock_filter> {
     if arch == "x86_64" {
         program.extend([insn(0x45, 0, 1, X32_SYSCALL_BIT), insn(0x06, 0, 0, KILL)]);
     }
-    for &nr in denied {
+    for nr in denied {
         program.extend([insn(0x15, 0, 1, nr), insn(0x06, 0, 0, EPERM)]);
     }
     program.push(insn(0x06, 0, 0, ALLOW));
@@ -427,26 +453,90 @@ fn bwrap_runs_with_the_seccomp_filter_and_inherited_fds() {
 }
 
 #[test]
-fn decoder_filter_bytes_are_unchanged() {
-    // Stronger than the behaviour check above: the program foamy-kit 0.5.2
-    // built (sha256 of `to_bytes`, little endian), so adding the threaded
-    // profile changed nothing in this one.
-    for (arch, len, sha) in [
+fn decoder_filter_bytes_are_pinned() {
+    // Stronger than the behaviour check above: the exact program (sha256 of
+    // `to_bytes`, little endian). 0.6.0 changed it on purpose, adding
+    // io_uring, the key store and userfaultfd to the list; any other change
+    // to the program fails here. The 0.5.2 list still compiles to 0.5.2's
+    // bytes, so the list is the only thing that changed.
+    let old: [(&str, &[i64], usize, &str); 2] = [
         (
             "x86_64",
+            &[56, 57, 58, 101, 165, 272, 308, 321, 435],
             53,
             "51ff45ad40eae4ee29d21e5e4222def2b1afd52b7449b45a7ea1dc5ada05eb42",
         ),
         (
             "aarch64",
+            &[40, 97, 117, 220, 268, 280, 435],
             40,
             "fa16f62d166db44e9253ac0d0df1b5145499aad79667e55f7237fe73e21dfd75",
+        ),
+    ];
+    for (arch, list, len, sha) in old {
+        let ours = BpfFilter::deny_for(arch, list, libc::EPERM as u32).unwrap();
+        assert_eq!(ours.len(), len, "0.5.2 {arch}");
+        assert_eq!(
+            crate::hash::sha256_hex(&ours.to_bytes()),
+            sha,
+            "0.5.2 {arch}"
+        );
+    }
+    for (arch, len, sha) in [
+        (
+            "x86_64",
+            88,
+            "afd31ef87c26c1c5dc92221566855b582e84cb3c92bad6bafc8d95f61336d3bc",
+        ),
+        (
+            "aarch64",
+            75,
+            "93ea834601264952e9a11761b44b4fec91324592720cd7f8e497c40d6a3c7446",
         ),
     ] {
         let ours =
             BpfFilter::deny_for(arch, decoder_denied(arch).unwrap(), libc::EPERM as u32).unwrap();
         assert_eq!(ours.len(), len, "{arch}");
         assert_eq!(crate::hash::sha256_hex(&ours.to_bytes()), sha, "{arch}");
+    }
+}
+
+#[test]
+fn decoder_profiles_deny_io_uring_keys_and_userfaultfd() {
+    for (arch, audit) in [("x86_64", AUDIT_X86_64), ("aarch64", AUDIT_AARCH64)] {
+        let decoder = BpfFilter::deny_for(arch, decoder_denied(arch).unwrap(), libc::EPERM as u32)
+            .unwrap()
+            .program;
+        let threaded = BpfFilter::threaded_decoder_for(arch).unwrap().program;
+        for (name, nr) in hardening(arch) {
+            for arg0 in [0, 1, u64::MAX] {
+                assert_eq!(
+                    evaluate_with(&decoder, audit, nr, arg0),
+                    EPERM,
+                    "decoder {arch} {name}"
+                );
+                assert_eq!(
+                    evaluate_with(&threaded, audit, nr, arg0),
+                    EPERM,
+                    "threaded {arch} {name}"
+                );
+            }
+            assert!(decoder_denied(arch).unwrap().contains(&i64::from(nr)));
+            assert!(
+                threaded_decoder_denied(arch)
+                    .unwrap()
+                    .contains(&i64::from(nr))
+            );
+        }
+        // The lists grew by exactly these (0.5.2's lists plus seven).
+        let (decoder_len, threaded_len) = if arch == "x86_64" { (16, 14) } else { (14, 12) };
+        assert_eq!(decoder_denied(arch).unwrap().len(), decoder_len, "{arch}");
+        assert_eq!(
+            threaded_decoder_denied(arch).unwrap().len(),
+            threaded_len,
+            "{arch}"
+        );
+        assert_eq!(evaluate(&decoder, audit, 0), ALLOW, "{arch} read/io_setup");
     }
 }
 
@@ -468,7 +558,7 @@ fn threaded_reference(arch: &str, audit: u32, nr: u32, flags: u64) -> u32 {
     if nr == 435 {
         return ENOSYS;
     }
-    if denied.contains(&nr) {
+    if denied.contains(&nr) || hardening(arch).iter().any(|&(_, h)| h == nr) {
         return EPERM;
     }
     // CLONE_NEWNS, NEWCGROUP, NEWUTS, NEWIPC, NEWUSER, NEWPID, NEWNET; only
@@ -568,8 +658,63 @@ fn seccomp_probe_child() {
         }
         rc
     };
+    // 0.6.0's hardening, with arguments the kernel refuses before it would
+    // do anything (bad fds, null pointers, an unknown operation or flag), so
+    // only the filter answers EPERM.
+    let hardening_calls = || {
+        // SAFETY: raw syscalls with null pointers and invalid fds; the
+        // kernel validates them and fails without side effects.
+        unsafe {
+            vec![
+                (
+                    "io_uring_setup",
+                    result(libc::syscall(libc::SYS_io_uring_setup, 0, 0)),
+                ),
+                (
+                    "io_uring_enter",
+                    result(libc::syscall(libc::SYS_io_uring_enter, -1, 0, 0, 0, 0, 0)),
+                ),
+                (
+                    "io_uring_register",
+                    result(libc::syscall(libc::SYS_io_uring_register, -1, 0, 0, 0)),
+                ),
+                (
+                    "add_key",
+                    result(libc::syscall(libc::SYS_add_key, 0, 0, 0, 0, 0)),
+                ),
+                (
+                    "request_key",
+                    result(libc::syscall(libc::SYS_request_key, 0, 0, 0, 0)),
+                ),
+                (
+                    "keyctl",
+                    result(libc::syscall(libc::SYS_keyctl, -1, 0, 0, 0, 0)),
+                ),
+                // UFFD_USER_MODE_ONLY (allowed without privileges) with an
+                // unknown flag: EINVAL.
+                (
+                    "userfaultfd",
+                    result(libc::syscall(libc::SYS_userfaultfd, 1 | 4)),
+                ),
+            ]
+        }
+    };
     let mut lines = Vec::new();
-    if mode == "x32" {
+    if mode == "decoder-self" {
+        // The single-threaded profile can't run the test harness (it
+        // starts a thread), so the probe installs it on its own thread,
+        // just before the calls.
+        install(&BpfFilter::decoder().unwrap().program).unwrap();
+        lines.push((
+            "thread",
+            match std::thread::Builder::new().spawn(|| 7) {
+                Ok(_) => "ok".to_string(),
+                Err(error) if error.raw_os_error() == Some(libc::EPERM) => "EPERM".to_string(),
+                Err(error) => format!("{error}"),
+            },
+        ));
+        lines.extend(hardening_calls());
+    } else if mode == "x32" {
         // getpid through the x32 ABI: the filter kills the process.
         // SAFETY: a raw syscall without pointer arguments.
         let rc = unsafe { libc::syscall(39 | X32_SYSCALL_BIT as libc::c_long) };
@@ -624,6 +769,7 @@ fn seccomp_probe_child() {
             "bpf",
             result(unsafe { libc::syscall(libc::SYS_bpf, -1, 0, 0) }),
         ));
+        lines.extend(hardening_calls());
         #[cfg(target_arch = "x86_64")]
         {
             // SAFETY: the fork syscall; a started child exits at once.
@@ -731,4 +877,61 @@ fn decoder_filter_in_a_child_refuses_threads() {
             && stderr.contains("Operation not permitted"),
         "{output:?}"
     );
+}
+
+/// The names [`hardening`] probes (`seccomp_probe_child`'s line names).
+const HARDENING_NAMES: [&str; 7] = [
+    "io_uring_setup",
+    "io_uring_enter",
+    "io_uring_register",
+    "add_key",
+    "request_key",
+    "keyctl",
+    "userfaultfd",
+];
+
+#[test]
+fn decoder_profiles_in_a_child_refuse_io_uring_keys_and_userfaultfd() {
+    // Threaded profile: installed by Bounded before exec, as in a job.
+    let threaded = BpfFilter::threaded_decoder().unwrap();
+    let (got, output) = probe(Some(&threaded), "calls");
+    assert!(output.success(), "{output:?}");
+    for name in HARDENING_NAMES {
+        assert_eq!(
+            got.get(name).map(String::as_str),
+            Some("EPERM"),
+            "threaded {name}: {got:?}"
+        );
+    }
+    // Image decoder profile: installed by the probe on its own thread (the
+    // test harness needs a thread first), the same program.
+    let (got, output) = probe(None, "decoder-self");
+    assert!(output.success(), "{output:?}");
+    assert_eq!(
+        got.get("thread").map(String::as_str),
+        Some("EPERM"),
+        "{got:?}"
+    );
+    for name in HARDENING_NAMES {
+        assert_eq!(
+            got.get(name).map(String::as_str),
+            Some("EPERM"),
+            "decoder {name}: {got:?}"
+        );
+    }
+    // Unfiltered, the kernel answers each call otherwise (EBADF, EFAULT,
+    // EINVAL, EOPNOTSUPP), so those EPERMs came from the filters. Where an
+    // administrator disabled io_uring, io_uring_setup is EPERM anyway.
+    let (free, output) = probe(None, "calls");
+    assert!(output.success(), "{output:?}");
+    let io_uring_disabled = std::fs::read_to_string("/proc/sys/kernel/io_uring_disabled")
+        .is_ok_and(|value| value.trim() != "0");
+    for name in HARDENING_NAMES {
+        let value = free.get(name).map(String::as_str);
+        assert!(value.is_some(), "{name}: {free:?}");
+        if name == "io_uring_setup" && io_uring_disabled {
+            continue;
+        }
+        assert_ne!(value, Some("EPERM"), "{name} unfiltered: {free:?}");
+    }
 }

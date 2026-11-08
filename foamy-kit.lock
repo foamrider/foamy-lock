@@ -2,7 +2,7 @@
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
 version 0.6.0
-source 971d3126991e
+source 89659cbc1a9b
 components FoamyButton,FoamyDropdown,FoamyI18n,FoamyIcon,FoamyIpc,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyStyle,FoamyWallClock,SafeTextField
 574d30ef6a5837ee493cea7a7195ca0563b456298d7ecb83f683d3380ab18760  kit/FoamyButton.qml
 b717a528267202710c196f4a67600467b292db64f643a502ea1eebb92df75095  kit/FoamyDropdown.qml
@@ -38,8 +38,8 @@ d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b  kit/rust/foamy
 b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy-helper/src/lock.rs
 6e036b32a765a1adf8110629db1fca3c7d476d4f85f8ed7d3d44735222e2daab  kit/rust/foamy-helper/src/net.rs
 0db730b49aa8ea779d896f40d055549a3090ec7c5d7915f1c48d101542d7eb46  kit/rust/foamy-helper/src/process.rs
-972c25a4d4060b5bbf1187f44fd095dedd60870590dd65d3db272c2400ad86c5  kit/rust/foamy-helper/src/sandbox.rs
-8f4c8155c94bf3e74bd5b62c4646d49c85441fc4f5fa996f6043080423cf760e  kit/rust/foamy-helper/src/sandbox/tests.rs
+0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6  kit/rust/foamy-helper/src/sandbox.rs
+142ab84d9c2b5e899e60da9b94881e08196e4722af86835cf8388d6d95dffe88  kit/rust/foamy-helper/src/sandbox/tests.rs
 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
