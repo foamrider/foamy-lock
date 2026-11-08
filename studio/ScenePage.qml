@@ -127,6 +127,7 @@ FocusScope {
         PaneNote {
           text: LockLayout.DRAWN_SOURCES.indexOf(scene.background.source) !== -1 ? FoamyI18n.t("studio.drawnHint")
             : scene.background.source === "omarchy" && scene.sources && scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo")
+            : scene.background.source === "omarchy" && scene.sources && scene.sources.wallpaperIsVideo ? FoamyI18n.t("studio.wallpaperStill")
             : scene.background.source === "omarchy" && scene.sources && scene.sources.wallpaperError !== "" ? FoamyI18n.t("studio.wallpaperMissing")
             : ""
         }

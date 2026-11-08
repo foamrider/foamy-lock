@@ -734,6 +734,30 @@ Item {
         expect(view.backgroundPath === "", "the theme colour shows")
         next()
       } },
+    { name: "a video wallpaper shows its still frame", wait: 0, run: function(next) {
+        reset()
+        var sources = studio.sources
+        var video = test.out + "/missing-wallpaper.mp4"
+        // Omarchy's poster.sh runs for real; a video it can't read leaves the
+        // theme colour.
+        sources.applyWallpaper(0, JSON.stringify({ ok: true, path: video, signature: "1:2:3" }))
+        expect(sources.wallpaperIsVideo && sources.wallpaperPath === "" && view.backgroundPath === "", "until the frame is made, the theme colour")
+        waitFor(function() { return !sources.posterBusy }, "poster.sh", function() {
+          expect(sources.wallpaperError === "video" && sources.wallpaperPath === "", "no frame: " + sources.wallpaperError)
+          // A frame for another wallpaper is never shown.
+          sources.applyPoster(0, test.picture + "\n", "/elsewhere.mp4", "1:2:3")
+          waitFor(function() { return !sources.posterBusy }, "poster.sh again", function() {
+            expect(sources.wallpaperPath === "", "a stale frame: " + sources.wallpaperPath)
+            sources.applyPoster(0, test.picture + "\n", video, "1:2:3")
+            expect(sources.wallpaperError === "" && sources.wallpaperPath === test.picture && view.backgroundPath === test.picture,
+              "the still frame shows: " + sources.wallpaperPath)
+            // Back to the picture wallpaper.
+            sources.refreshWallpaper()
+            waitFor(function() { return sources.wallpaperPath.indexOf("wallpaper.png") !== -1 && !sources.wallpaperIsVideo },
+              "the wallpaper back", next)
+          })
+        })
+      } },
     { name: "glass and dim page", wait: 0, run: function(next) {
         reset()
         find(studio.library, "studioSceneGlass").clicked()

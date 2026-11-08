@@ -226,7 +226,7 @@
   "studio.pick.failed": "Choosing a picture failed (%1).",
   "studio.helperUnavailable": "This plugin's helper isn't available for this CPU.",
   "studio.drawnHint": "Drawn in the theme's colours; it moves only while the lock screen shows.",
-  "studio.wallpaperVideo": "A video wallpaper: the canvas shows the theme colour (the lock shows a still frame).",
+  "studio.wallpaperVideo": "A video wallpaper without a still frame: the canvas shows the theme colour, as the lock does.",
   "studio.wallpaperMissing": "No Omarchy wallpaper found: the canvas shows the theme colour.",
   "studio.blur": "Blur",
   "studio.blurHint": "The wallpaper blurs only with GPU rendering.",
@@ -299,5 +299,6 @@
   "studio.quit.body": "The lock doesn't have your changes yet. Discard deletes them, and the draft too.",
   "studio.quit.apply": "Apply and quit",
   "studio.quit.discard": "Discard",
-  "studio.quit.discardHint": "Quits without applying and deletes the draft."
+  "studio.quit.discardHint": "Quits without applying and deletes the draft.",
+  "studio.wallpaperStill": "A video wallpaper: the canvas shows its still frame, as the lock does."
 }

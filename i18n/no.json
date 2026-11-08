@@ -226,7 +226,7 @@
   "studio.pick.failed": "Det gikk ikke å velge et bilde (%1).",
   "studio.helperUnavailable": "Denne utvidelsens hjelper er ikke tilgjengelig for denne prosessoren.",
   "studio.drawnHint": "Tegnes i temaets farger og beveger seg bare mens låseskjermen vises.",
-  "studio.wallpaperVideo": "Et videobakgrunnsbilde: lerretet viser temafargen (låsen viser et stillbilde).",
+  "studio.wallpaperVideo": "Et videobakgrunnsbilde uten stillbilde: lerretet viser temafargen, slik låsen gjør.",
   "studio.wallpaperMissing": "Fant ikke noe Omarchy-bakgrunnsbilde: lerretet viser temafargen.",
   "studio.blur": "Uskarphet",
   "studio.blurHint": "Bakgrunnsbildet gjøres uskarpt bare med GPU-gjengivelse.",
@@ -299,5 +299,6 @@
   "studio.quit.body": "Låsen har ikke endringene dine ennå. Forkast sletter dem, og utkastet også.",
   "studio.quit.apply": "Ta i bruk og avslutt",
   "studio.quit.discard": "Forkast",
-  "studio.quit.discardHint": "Avslutter uten å ta i bruk og sletter utkastet."
+  "studio.quit.discardHint": "Avslutter uten å ta i bruk og sletter utkastet.",
+  "studio.wallpaperStill": "Et videobakgrunnsbilde: lerretet viser stillbildet fra det, slik låsen gjør."
 }

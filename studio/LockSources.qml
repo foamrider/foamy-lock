@@ -12,8 +12,10 @@ import "Draft.js" as Draft
 // - **The Omarchy wallpaper** (source "omarchy"): the helper's `wallpaper`
 //   probe resolves `~/.local/state/omarchy/current/background`, as Service
 //   does; the view then loads that file itself, as the lock does. A video
-//   wallpaper shows the theme colour (the lock's poster frame isn't made
-//   here).
+//   wallpaper shows its still frame, made the way the lock makes it: by
+//   Omarchy's own `shell/plugins/lock/poster.sh` (one cached frame per
+//   video, shared with the lock). Without one (Omarchy 4.0, no
+//   ffmpegthumbnailer) the theme colour shows.
 // - **The lock's settings** (time format, user info, media): read from the
 //   foamy.lock entry in `~/.config/omarchy/shell.json`, read-only (a
 //   FileView that is never written), parsed with the lock's own
@@ -63,6 +65,12 @@ Item {
   property int wallpaperVersion: 0
   property string wallpaperError: ""
   property bool wallpaperPending: false
+  // A video wallpaper (the probe's path and signature): its still frame
+  // becomes wallpaperPath.
+  property string videoPath: ""
+  property string videoSignature: ""
+  readonly property bool wallpaperIsVideo: videoPath !== ""
+  property bool posterBusy: false
 
   // The lock's settings (Model.defaults() until shell.json says otherwise).
   property var settings: Model.defaults()
@@ -146,15 +154,52 @@ Item {
       return
     }
     if (Model.isVideoPath(data.path)) {
-      wallpaperPath = ""
+      // Its still frame, made as the lock makes it (until then, the theme
+      // colour). "video" while there is none.
       wallpaperError = "video"
+      if (data.path !== videoPath || data.signature !== videoSignature) {
+        videoPath = data.path
+        videoSignature = data.signature
+        wallpaperPath = ""
+        refreshPoster()
+      }
       return
     }
+    videoPath = ""
+    videoSignature = ""
     wallpaperError = ""
     if (data.path !== wallpaperPath || data.signature !== wallpaperSignature) {
       wallpaperPath = data.path
       wallpaperSignature = data.signature
       wallpaperVersion += 1
+    }
+  }
+
+  function refreshPoster() {
+    if (!videoPath || posterBusy) return
+    posterBusy = true
+    posterProc.sourcePath = videoPath
+    posterProc.sourceSignature = videoSignature
+    posterProc.running = true
+  }
+
+  // poster.sh's answer for the video at `path` with `signature` (also a test
+  // hook): a still image's path, else the theme colour stays.
+  function applyPoster(exitCode, text, path, signature) {
+    // The wallpaper changed meanwhile: never show the previous one's frame.
+    if (path !== videoPath || signature !== videoSignature) {
+      refreshPoster()
+      return
+    }
+    var poster = String(text || "").trim()
+    if (exitCode === 0 && poster[0] === "/" && poster.indexOf("\n") === -1 && !Model.isVideoPath(poster)) {
+      wallpaperError = ""
+      wallpaperPath = poster
+      wallpaperSignature = signature
+      wallpaperVersion += 1
+    } else {
+      wallpaperPath = ""
+      wallpaperError = "video"
     }
   }
 
@@ -361,6 +406,22 @@ Item {
     onExited: function(exitCode) {
       sources.applyWallpaper(exitCode, wallpaperOutput.text)
       if (sources.wallpaperPending) sources.refreshWallpaper()
+    }
+  }
+
+  // Omarchy's own still-frame maker, as Service runs it for the lock (4.5;
+  // 4.0 has none, exit 69). Its cache is the lock's: one frame per video.
+  Process {
+    id: posterProc
+    property string sourcePath: ""
+    property string sourceSignature: ""
+    command: ["timeout", "--kill-after=1s", "16s", "bash", "-c",
+      '[[ -f $1 ]] || exit 69; exec bash "$1" "$2"', "foamy-lock-poster",
+      (Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/shell/plugins/lock/poster.sh", sourcePath]
+    stdout: StdioCollector { id: posterOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.posterBusy = false
+      sources.applyPoster(exitCode, posterOutput.text, posterProc.sourcePath, posterProc.sourceSignature)
     }
   }
 
