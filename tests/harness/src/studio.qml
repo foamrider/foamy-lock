@@ -811,9 +811,10 @@ Item {
         expect(glass.visible && glass.value === 1, "the media card's glass, from the look: " + glass.value)
         glass.committed(0.4)
         expectDraft('{"preset":"foamy","layout":{"media":{"glass":0.4}}}')
-        var own = find(studio.inspector, "studioGlassReset")
-        expect(own.visible, "the look's glass can come back")
-        own.clicked()
+        // No per-part reset (round 4): undo brings the look's glass back.
+        expect(find(studio.inspector, "studioGlassReset") === null && find(studio.inspector, "studioResetPosition") === null
+          && find(studio.inspector, "studioItemsReset") === null, "no per-part reset buttons")
+        studio.undo()
         expectDraft('{"preset":"foamy"}')
         var zones = find(studio.inspector, "studioZones")
         zones.picked("bottom-end")
@@ -825,11 +826,9 @@ Item {
         expectDraft('{"preset":"foamy","layout":{"media":{"zone":"bottom-end","offset":{"x":-0.023437,"y":-0.02037}}}}')
         expect(x.value === -2 && x.detail === FoamyI18n.t("studio.px", FoamyI18n.number(-45, 0)), "X shows " + x.value + " (" + x.detail + ")")
         expect(near(view.drawnRect("media").y, view.reservedRect("media").y - 22, 0.5), "moved up 22 px")
-        var resetButton = find(studio.inspector, "studioResetPosition")
-        expect(resetButton.enabled, "an offset can be reset")
-        resetButton.clicked()
+        studio.undo()
+        studio.undo()
         expectDraft('{"preset":"foamy","layout":{"media":{"zone":"bottom-end"}}}')
-        expect(!resetButton.enabled, "nothing to reset")
         find(studio.inspector, "studioScreens").picked("primary")
         expect(studio.look.elements.media.screens === "primary", "screens " + json(studio.draft))
         // The field: never into the top row, and the fields keep it below the top third.
@@ -855,7 +854,7 @@ Item {
     { name: "inspector: every edit is one undo step", wait: 0, run: function(next) {
         var undos = 0
         while (Draft.canUndo(studio.history)) { studio.undo(); undos++ }
-        expect(undos === 9, "undo steps " + undos)
+        expect(undos === 4, "undo steps " + undos)
         expectDraft('{"preset":"foamy"}')
         next()
       } },
@@ -961,11 +960,8 @@ Item {
           for (var i = 0; i < 4; i++) list.toggle(0)
           expectDraft('{"preset":"foamy","layout":{"status":{"items":["battery"]}}}')
           expect(find(list, "studioItem-battery").last && !find(find(list, "studioItem-battery"), "studioItemGrip").visible, "the last item stays")
-          var reset = find(studio.inspector, "studioItemsReset")
-          expect(reset.visible, "back to the style's own")
-          reset.clicked()
+          studio.commit(Draft.clearItems(studio.draft))
           expectDraft('{"preset":"foamy"}')
-          expect(!reset.visible, "nothing to reset")
           // A new style starts from its own contents.
           list.toggle(4)
           find(studio.inspector, "studioStyles").picked("pill")

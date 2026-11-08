@@ -172,20 +172,10 @@ FocusScope {
         app: inspector.app
         title: FoamyI18n.t("studio.shows")
       }
-      RowLayout {
+      PaneNote {
         width: parent.width
         visible: inspector.name === "status"
-        PaneNote {
-          Layout.fillWidth: true
-          text: FoamyI18n.t("studio.items.hint")
-        }
-        FoamyButton {
-          objectName: "studioItemsReset"
-          focusable: true
-          visible: inspector.item !== null && inspector.item.items !== undefined
-          text: FoamyI18n.t("studio.items.reset")
-          onClicked: inspector.commit(Draft.clearItems(inspector.app.draft))
-        }
+        text: FoamyI18n.t("studio.items.hint")
       }
 
       // weather.details and weather.location (off unless chosen: anyone
@@ -272,20 +262,10 @@ FocusScope {
         onMoved: function(v) { inspector.preview(Draft.setGlass(inspector.app.draft, inspector.name, v)) }
         onCommitted: function(v) { inspector.commit(Draft.setGlass(inspector.app.draft, inspector.name, v)) }
       }
-      RowLayout {
+      PaneNote {
         width: parent.width
         visible: Draft.hasGlass(inspector.look, inspector.name)
-        PaneNote {
-          Layout.fillWidth: true
-          text: inspector.item && inspector.item.glass !== undefined ? FoamyI18n.t("studio.glassOwn") : FoamyI18n.t("studio.glassLook")
-        }
-        FoamyButton {
-          objectName: "studioGlassReset"
-          focusable: true
-          visible: inspector.item !== null && inspector.item.glass !== undefined
-          text: FoamyI18n.t("studio.glassReset")
-          onClicked: inspector.commit(Draft.setGlass(inspector.app.draft, inspector.name, null))
-        }
+        text: inspector.item && inspector.item.glass !== undefined ? FoamyI18n.t("studio.glassOwn") : FoamyI18n.t("studio.glassLook")
       }
 
       SectionLabel {
@@ -336,13 +316,6 @@ FocusScope {
       PaneNote {
         text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone))
           + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(Draft.gridStep(inspector.screenHeight), 1)) : ""
-      }
-      FoamyButton {
-        objectName: "studioResetPosition"
-        focusable: true
-        text: FoamyI18n.t("studio.resetPosition")
-        enabled: inspector.item !== null && LockLayout.isOffset(inspector.item)
-        onClicked: inspector.commit(Draft.resetOffset(inspector.app.draft, inspector.name))
       }
 
       RowLayout {
