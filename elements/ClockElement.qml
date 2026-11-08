@@ -373,6 +373,9 @@ Item {
       var center = faceSize / 2
       var unit = clock.uiScale * faceSize / diameter
       var radius = center - 1
+      // Before the face has a size there is nothing to draw, and a
+      // negative radius only makes the canvas warn.
+      if (radius <= 0) return
       context.fillStyle = clock.view.glass
       context.strokeStyle = clock.view.glassBorder
       context.lineWidth = 1
@@ -502,6 +505,7 @@ Item {
         var center = ring.size / 2
         var line = Math.max(3, 9 * ring.unit)
         var radius = center - line / 2 - 1
+        if (radius - line / 2 <= 0) return
         context.fillStyle = clock.view.glass
         context.beginPath()
         context.arc(center, center, radius - line / 2, 0, Math.PI * 2)
