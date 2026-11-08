@@ -94,7 +94,11 @@ Item {
     width: clock.width
     textFormat: Text.PlainText
     text: clock.view.userLocale.toString(clock.view.now, clock.twelveHour ? "h:mm AP" : "HH:mm")
-    fontSizeMode: Text.Fit
+    // Shrink to fit only when it doesn't fit at full size (measured once
+    // per text and font). Text.Fit lays the line out again on every resize,
+    // and with Arabic's AM/PM (a fallback font, right to left) that cost
+    // about 20 ms per relayout. Within a pixel of the edge it fits as before.
+    fontSizeMode: labelMetrics.advanceWidth > width - 1 ? Text.Fit : Text.FixedSize
     minimumPixelSize: Math.round((clock.small ? 18 : 48) * clock.uiScale)
     color: clock.view.foreground
     font.family: clock.mono ? FoamyStyle.monoFamily : clock.bold || clock.small ? clock.view.textFontFamily : clock.view.displayFontFamily
@@ -102,6 +106,12 @@ Item {
     font.weight: clock.bold ? Font.Bold : clock.mono ? Font.Medium : clock.small ? Font.DemiBold : Font.Normal
     font.letterSpacing: clock.bold ? Math.round(-4 * clock.uiScale) : clock.mono ? Math.round(-6 * clock.uiScale) : 0
     horizontalAlignment: clock.textAlignment
+
+    TextMetrics {
+      id: labelMetrics
+      text: label.visible ? label.text : ""
+      font: label.font
+    }
   }
 
   // "stacked": hours over minutes, heavy, the lines pulled together.
