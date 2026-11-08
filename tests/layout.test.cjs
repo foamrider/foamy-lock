@@ -490,7 +490,7 @@ test('a video background: its path, motion and pauseOnBattery', () => {
   for (const background of [{motion: 'loop'}, {motion: true}, {pauseOnBattery: 'no'}, {pauseOnBattery: 1}, {pauseOnBattery: null}])
     assert.equal(Layout.parseLook({background}).valid, false, JSON.stringify(background))
   assert.deepEqual(Layout.MOTIONS, ['still', 'play'])
-  assert.deepEqual(Layout.BACKGROUND_DEFAULTS, {motion: 'still', pauseOnBattery: true})
+  assert.deepEqual(Layout.BACKGROUND_DEFAULTS, {motion: 'still', pauseOnBattery: true, color: 'background'})
   // No built-in preset plays.
   for (const name of Layout.SELECTABLE_PRESETS) assert.ok(!Layout.playsVideo(Layout.preset(name).background), name)
 })
@@ -506,4 +506,46 @@ test('media.artwork hides the cover in a look, and only there', () => {
     assert.equal(Layout.parseLook({layout: {media: {style, artwork: false}}}).look.elements.media.artwork, false, style)
   assert.deepEqual(Layout.ARTWORK_STYLES, ['card', 'pill', 'art', 'hero', 'disc'])
   for (const style of Layout.ARTWORK_STYLES) assert.ok(Layout.STYLES.media.includes(style), style)
+})
+
+test('a solid colour: theme colours by name or #rrggbb, and the older black and theme', () => {
+  for (const color of [...Layout.THEME_COLORS, '#000000', '#1a1b26', '#ABCDEF']) {
+    const parsed = Layout.parseLook({background: {source: 'color', color}})
+    assert.ok(parsed.valid, color + ': ' + parsed.error)
+    assert.equal(Layout.solidColor(parsed.look.background), color.toLowerCase())
+  }
+  // Strict: six hex digits with "#", or a theme colour's name; nothing else.
+  for (const color of ['#abc', '#abcdeg', '1a1b26', '#1a1b2600', ' #1a1b26', 'red', 'foreground', 'url(x)', '', 0, null, ['#000000'], {}])
+    assert.equal(Layout.parseLook({background: {source: 'color', color}}).valid, false, JSON.stringify(color))
+  // The default colour is the theme's background, left out of the look.
+  assert.deepEqual(Layout.parseLook({background: {source: 'color'}}).look.background,
+    {source: 'color', path: '', blur: 0, dim: 0.25, decor: 'none'})
+  assert.equal(Layout.parseLook({background: {source: 'color', color: 'background'}}).look.background.color, undefined)
+  assert.equal(Layout.parseLook({background: {source: 'color', color: '#ABCDEF'}}).look.background.color, '#abcdef')
+  // Older looks: black is #000000, theme the theme's background; both read
+  // as "color" (canonical), so they compare equal to the new spelling.
+  const black = Layout.parseLook({background: {source: 'black', blur: 0, dim: 0}})
+  assert.ok(black.valid)
+  assert.deepEqual(black.look.background, Layout.parseLook({background: {source: 'color', color: '#000000', blur: 0, dim: 0}}).look.background)
+  assert.equal(Layout.solidColor({source: 'black'}), '#000000')
+  assert.equal(Layout.solidColor({source: 'black', color: 'accent'}), '#000000')
+  assert.equal(Layout.solidColor({source: 'theme'}), 'background')
+  assert.deepEqual(Layout.parseLook({background: {source: 'theme'}}).look.background, Layout.parseLook({background: {source: 'color'}}).look.background)
+  for (const source of ['omarchy', 'picture', ...Layout.DRAWN_SOURCES]) assert.equal(Layout.solidColor({source, color: '#ffffff'}), '', source)
+  // The presets that were black and theme keep their colours.
+  assert.equal(Layout.solidColor(Layout.preset('terminal').background), '#000000')
+  assert.equal(Layout.solidColor(Layout.preset('field-only').background), 'background')
+  for (const name of Layout.SELECTABLE_PRESETS) {
+    const source = Layout.preset(name).background.source
+    assert.ok(!['black', 'theme'].includes(source), name + ' says ' + source)
+  }
+})
+
+test('a colour stays only with a solid colour source', () => {
+  const look = Layout.parseLook({background: {source: 'omarchy', color: '#123456'}})
+  assert.ok(look.valid)
+  assert.equal(look.look.background.color, undefined)
+  // The terminal preset's black goes with its source.
+  assert.equal(Layout.parseLook({preset: 'terminal', background: {source: 'aurora'}}).look.background.color, undefined)
+  assert.equal(Layout.parseLook({preset: 'terminal', background: {source: 'color'}}).look.background.color, '#000000')
 })

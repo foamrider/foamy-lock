@@ -110,10 +110,20 @@ var GLASS_STYLES = {
 var ARTWORK_STYLES = ["card", "pill", "art", "hero", "disc"]
 // The defaults of the optional keys, left out of a canonical look.
 var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
-// The last three are drawn by the view in the theme's colours.
-var BACKGROUND_SOURCES = ["omarchy", "picture", "theme", "black", "aurora", "rain", "constellation"]
+// "color" is a solid colour (`color`); "theme" and "black" are its older
+// names, still read: the theme's background and #000000 (canonical looks
+// say "color"). The drawn ones (DRAWN_SOURCES) are the animations.
+var BACKGROUND_SOURCES = ["omarchy", "picture", "color", "theme", "black", "aurora", "rain", "constellation"]
+// The animations, drawn by the view in the theme's colours (elements/
+// Backdrop.qml), in the order Lock Studio's picker lists them.
 var DRAWN_SOURCES = ["aurora", "rain", "constellation"]
-var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor", "motion", "pauseOnBattery"]
+var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor", "motion", "pauseOnBattery", "color"]
+// A solid colour's `color`: one of the theme's colours, by name, so it
+// follows the theme, or exactly "#rrggbb" (kept in lower case).
+var THEME_COLORS = ["background", "accent", "muted", "urgent"]
+var HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+// The older "black" source's colour, as stored in a look.
+var BLACK = "#000000" // foamy-lint: allow hex-colour — a stored look value (the older "black" source), not a UI colour
 // A video background (1.3.0): source "picture" with a video `path`, or an
 // Omarchy wallpaper that is a video. `motion` is "still" (the default: its
 // first frame, and the lock never decodes video) or "play" (the clip Lock
@@ -121,7 +131,7 @@ var BACKGROUND_KEYS = ["source", "path", "blur", "dim", "decor", "motion", "paus
 // GPU rendering only). `pauseOnBattery` (default true) holds the frame
 // while on battery. Both are left out of a look when they are the default.
 var MOTIONS = ["still", "play"]
-var BACKGROUND_DEFAULTS = { motion: "still", pauseOnBattery: true }
+var BACKGROUND_DEFAULTS = { motion: "still", pauseOnBattery: true, color: "background" }
 // Shapes drawn over the background, behind the elements, fitted to the zones
 // they belong to (see LockView and elements/Decoration.qml).
 var DECORATIONS = ["none", "split", "sheet", "cinema", "strip", "island", "frame", "card"]
@@ -146,6 +156,28 @@ function element(zone, style, order, hidden) {
 
 function background(source, blur, dim, decor) {
   return { source: source, path: "", blur: blur, dim: dim, decor: decor || "none" }
+}
+
+// A solid colour background (`color`: a THEME_COLORS name or "#rrggbb").
+function solid(color, blur, dim, decor) {
+  var result = background("color", blur, dim, decor)
+  if (color !== BACKGROUND_DEFAULTS.color) result.color = color
+  return result
+}
+
+// Whether `value` is a solid colour the lock accepts.
+function isColor(value) {
+  return typeof value === "string" && (THEME_COLORS.indexOf(value) !== -1 || HEX_COLOR.test(value))
+}
+
+// The solid colour a background shows ("background", "accent", … or
+// "#rrggbb"), or "" when it isn't one. The older "theme" and "black" too.
+function solidColor(background) {
+  if (!background) return ""
+  if (background.source === "black") return BLACK
+  if (background.source === "theme") return "background"
+  if (background.source !== "color") return ""
+  return isColor(background.color) ? String(background.color).toLowerCase() : BACKGROUND_DEFAULTS.color
 }
 
 // The calendar is new in 1.3.0; the older presets keep it hidden.
@@ -270,7 +302,7 @@ var PRESETS = {
   background("omarchy", 0, 0.3)),
   // A console login on black.
   "terminal": compose({ date: ["top-start", "caps"], clock: ["top-start", "mono", 1], account: ["middle-start", "name"],
-    password: ["middle-start", "terminal", 1], status: ["top-end", "icons"] }, background("black", 0, 0)),
+    password: ["middle-start", "terminal", 1], status: ["top-end", "icons"] }, solid(BLACK, 0, 0)),
   // Accent edges and a glowing frame over a dark wallpaper.
   "neon": compose({ date: ["middle-center", "caps"], clock: ["middle-center", "outline", 1], password: ["middle-center", "box", 2],
     status: ["top-end", "icons"] }, background("omarchy", 0, 0.7, "frame"), { opacity: 1, tint: "accent" }),
@@ -308,7 +340,7 @@ var PRESETS = {
       calendar: noCalendar(),
       weather: noWeather()
     },
-    background: background("theme", 0, 0.25)
+    background: solid("background", 0, 0.25)
   }
 }
 var SELECTABLE_PRESETS = ["foamy", "corner", "editorial", "zen", "dock", "island", "split", "sheet", "card", "cinema",
@@ -559,6 +591,8 @@ function backgroundError(value) {
     return "background.motion must be one of " + MOTIONS.join(", ")
   if (value.pauseOnBattery !== undefined && typeof value.pauseOnBattery !== "boolean")
     return "background.pauseOnBattery must be true or false"
+  if (value.color !== undefined && !isColor(value.color))
+    return "background.color must be one of " + THEME_COLORS.join(", ") + " or a colour like #1a1b26"
   return ""
 }
 
@@ -590,8 +624,17 @@ function merge(presetName, layout, background, glass) {
   return result
 }
 
-// The background's motion keys only where they differ from the defaults.
+// The background's motion keys and colour only where they differ from the
+// defaults; the older solid sources ("black", "theme") as "color", a hex
+// colour in lower case, and no colour at all for another source (it shows
+// none, so two looks that differ only there are the same look).
 function canonicalBackground(background) {
+  if (background.source === "black" || background.source === "theme") {
+    background.color = solidColor(background)
+    background.source = "color"
+  }
+  if (background.source !== "color") delete background.color
+  else if (typeof background.color === "string" && HEX_COLOR.test(background.color)) background.color = background.color.toLowerCase()
   for (var key in BACKGROUND_DEFAULTS) {
     if (background[key] === BACKGROUND_DEFAULTS[key]) delete background[key]
   }
@@ -749,6 +792,7 @@ if (typeof module !== "undefined") module.exports = {
   ELEMENTS: ELEMENTS, ZONES: ZONES, STYLES: STYLES, PASSWORD_ZONES: PASSWORD_ZONES, PRESETS: PRESETS,
   SELECTABLE_PRESETS: SELECTABLE_PRESETS, BACKGROUND_SOURCES: BACKGROUND_SOURCES, DRAWN_SOURCES: DRAWN_SOURCES,
   BACKGROUND_KEYS: BACKGROUND_KEYS, MOTIONS: MOTIONS, BACKGROUND_DEFAULTS: BACKGROUND_DEFAULTS,
+  THEME_COLORS: THEME_COLORS, BLACK: BLACK, isColor: isColor, solidColor: solidColor,
   isVideoPath: isVideoPath, playsVideo: playsVideo, pausesOnBattery: pausesOnBattery, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
   ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
   STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,

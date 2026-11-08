@@ -668,13 +668,19 @@ Item {
     anchors.fill: parent
     color: Commons.Color.background
 
-    // The theme's background colour (above) shows for source "theme", and
-    // while no image is available.
+    // The theme's background colour (above) shows while no image is
+    // available. A solid colour source paints its colour over it: a theme
+    // colour by name (it follows the theme) or a "#rrggbb" Layout checked.
     Rectangle {
-      objectName: "blackBackground"
+      objectName: "solidBackground"
       anchors.fill: parent
-      visible: root.effectiveLook.background.source === "black"
-      color: Qt.rgba(0, 0, 0, 1)
+      readonly property string spec: Layout.solidColor(root.effectiveLook.background)
+      visible: spec !== ""
+      color: spec === "background" ? Commons.Color.background
+        : spec === "accent" ? Commons.Color.accent
+        : spec === "muted" ? Commons.Color.muted
+        : spec === "urgent" ? Commons.Color.urgent
+        : spec !== "" ? spec : "transparent"
     }
 
     Image {

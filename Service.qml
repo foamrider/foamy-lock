@@ -1900,7 +1900,8 @@ Item {
         weather: { target: IpcResolver.handlersFor(root, "foamy.weather").length > 0, state: root.weatherState },
         elementLimits: Layout.elementLimits(), screens: Layout.SCREENS,
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
-        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
+        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundAnimations: Layout.DRAWN_SOURCES,
+        backgroundColors: Layout.THEME_COLORS, backgroundDecor: Layout.DECORATIONS,
         glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
         // Cover art (additive): the settings' mode (Model.coverArtMode:
         // off, player, spotify or custom) and what setCoverArt takes.

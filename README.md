@@ -254,16 +254,24 @@ that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
     wallpaper, as before;
   - `picture` (**Custom image** in Lock Studio): the file in `path`, an absolute `.png`, `.jpg` or `.webp`, or a
     video (`.mp4`, `.m4v`, `.mov`, `.mkv`, `.webm`; see Video below);
-  - `theme`: the theme's background colour;
-  - `black`;
+  - `color` (**Solid colour** in Lock Studio): the colour in `color`, either
+    one of the theme's colours by name (`background`, the default, `accent`,
+    `muted`, `urgent`; it follows the theme) or exactly `#rrggbb` (six hex
+    digits; anything else is a mistake, see below);
+  - `theme` and `black`, the older names of a solid colour, still read: the
+    theme's background and `#000000` (`status` and `catalog` show them as
+    `color`);
   - `aurora`: soft bands of the theme accent, green and cyan drifting slowly;
   - `rain`: thin accent streaks falling at different speeds;
   - `constellation`: stars and one figure whose stars light up as you type.
 
-  The last three are drawn in the theme's colours over its background. They
-  move only while the lock screen is shown, the display is on, Omarchy's
-  animations are on and the GPU renders; otherwise (reduced motion, CPU
-  rendering, a blanked display) they hold a still frame.
+  The last three are the animations (**Animation** in Lock Studio), drawn in
+  the theme's colours over its background. They move only while the lock
+  screen is shown, the display is on, Omarchy's animations are on and the GPU
+  renders; otherwise (reduced motion, CPU rendering, a blanked display) they
+  hold a still frame.
+- **`color`.** The solid colour (above); ignored, and left out of the look,
+  with any other source.
 - **`decor`.** A shape over the background and behind the elements, fitted to
   the zones it belongs to (it follows them to narrow screens and mirrors in
   right-to-left languages). It is background: it never covers an element.
@@ -348,7 +356,7 @@ the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
 Editors use three more calls on the same target: `catalog` (version 3) lists the elements, zones,
-styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources, decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
+styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), decorations, glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
