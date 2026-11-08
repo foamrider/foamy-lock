@@ -1273,7 +1273,15 @@ Item {
           var still = tile ? find(tile, "backdrop") : null
           expect(still && still.source === Layout.DRAWN_SOURCES[a] && !still.moving && still.phase === still.stillPhaseOf(still.source)
             && tile.Accessible.name === FoamyI18n.t("studio.source." + Layout.DRAWN_SOURCES[a]), "a still drawing of " + Layout.DRAWN_SOURCES[a])
+          // The software renderer paints the still frame; no shader loads.
+          var painted = still ? find(still, "backdropStill") : null
+          var shader = still ? find(still, "backdropShader") : null
+          expect(painted && painted.status === Loader.Ready && shader && !shader.active, "the still frame painted for " + Layout.DRAWN_SOURCES[a])
         }
+        // An older look's "constellation" is Stars, chosen in the picker.
+        studio.commit({ preset: "foamy", background: { source: "constellation" } })
+        expect(find(page, "studioSource-animation").checked && animations.value === "stars"
+          && find(animations, "studioTile-constellation") === null, "the older constellation shows as Stars: " + animations.value)
         animations.picked("rain")
         expectDraft('{"preset":"foamy","background":{"source":"rain"}}')
         find(page, "studioSource-animation").clicked()
