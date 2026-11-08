@@ -438,6 +438,9 @@ Item {
     } else if (exitCode === 0 && data && data.ok === true && typeof data.path === "string") {
       pickError = ""
       picked(data.path)
+    } else if (exitCode === 124 || exitCode === 137) {
+      // pickProc's timeout stopped a helper that outlived its own limit.
+      pickError = "PORTAL_FAILED"
     } else {
       pickError = data && typeof data.code === "string" && /^[A-Z_]{1,40}$/.test(data.code) ? data.code : "FAILED"
     }
@@ -800,9 +803,12 @@ Item {
 
   Process {
     id: pickProc
-    command: FoamyNative.command(sources.pluginDir, "foamy-lock-helper",
+    // The helper waits up to 30 minutes for the choice (the dialog waits on
+    // the user) and then answers PORTAL_FAILED; this is the backstop.
+    objectName: "studioPickProcess"
+    command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper",
       ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter"),
-        FoamyI18n.t("studio.pick.media")])
+        FoamyI18n.t("studio.pick.media")]))
     stdout: StdioCollector { id: pickOutput; waitForEnd: true }
     onExited: function(exitCode) { sources.applyPick(exitCode, pickOutput.text) }
   }

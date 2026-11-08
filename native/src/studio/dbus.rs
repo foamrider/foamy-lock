@@ -114,31 +114,111 @@ impl Writer {
     }
 }
 
-/// The first complete type of `signature`, and the rest.
+/// The basic types (a dict entry's key is one of these).
+fn is_basic(code: u8) -> bool {
+    matches!(
+        code,
+        b'y' | b'b' | b'n' | b'q' | b'i' | b'u' | b'x' | b't' | b'd' | b'h' | b's' | b'o' | b'g'
+    )
+}
+
+/// An open struct or dict entry in [`split_type`], with its fields so far.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Open {
+    Struct(usize),
+    Entry(usize),
+}
+
+/// The first complete type of `signature`, and the rest. Brackets are
+/// checked on a stack, as the spec has them: each `)` closes a `(` and each
+/// `}` a `{`; a struct has at least one field; a dict entry comes only
+/// directly after `a` and has exactly two fields, the first a basic type;
+/// an `a` is followed by a complete type; containers nest at most
+/// `MAX_DEPTH` deep.
 pub fn split_type(signature: &str) -> Result<(&str, &str), Error> {
     let bytes = signature.as_bytes();
-    let mut depth = 0usize;
+    let bad = |why: &str| protocol(format!("{why} in signature {signature:?}"));
+    // The open containers, each with the `a`s that were waiting before it
+    // (they complete when it does).
+    let mut stack: Vec<(Open, usize)> = Vec::new();
+    // `a`s waiting for their element type, and the nesting around them.
+    let mut arrays = 0usize;
+    let mut outer = 0usize;
     let mut end = 0;
     loop {
         let Some(&c) = bytes.get(end) else {
             return protocol(format!("incomplete signature {signature:?}"));
         };
         end += 1;
+        // A type starts here (not inside an `a…` already begun): a dict
+        // entry's first field must be basic.
+        if arrays == 0
+            && matches!(stack.last(), Some((Open::Entry(0), _)))
+            && !is_basic(c)
+            && !matches!(c, b')' | b'}')
+        {
+            return bad("a dict entry with a key that isn't a basic type");
+        }
         match c {
-            b'a' => continue,
-            b'(' | b'{' => depth += 1,
-            b')' | b'}' => {
-                if depth == 0 {
-                    return protocol(format!("unbalanced signature {signature:?}"));
+            b'a' => {
+                arrays += 1;
+                if outer + arrays > MAX_DEPTH {
+                    return bad("containers nested too deeply");
                 }
-                depth -= 1;
+                continue;
             }
-            b'y' | b'b' | b'n' | b'q' | b'i' | b'u' | b'x' | b't' | b'd' | b'h' | b's' | b'o'
-            | b'g' | b'v' => {}
+            b'(' | b'{' => {
+                // `{` only directly after `a` (any `a` still waiting is the
+                // character just before it).
+                if c == b'{' && arrays == 0 {
+                    return bad("a dict entry outside an array");
+                }
+                let open = if c == b'(' {
+                    Open::Struct(0)
+                } else {
+                    Open::Entry(0)
+                };
+                stack.push((open, arrays));
+                outer += arrays + 1;
+                arrays = 0;
+                if outer > MAX_DEPTH {
+                    return bad("containers nested too deeply");
+                }
+                continue;
+            }
+            b')' | b'}' => {
+                if arrays != 0 {
+                    return bad("an array without an element type");
+                }
+                let Some((open, before)) = stack.pop() else {
+                    return bad("unbalanced brackets");
+                };
+                outer -= before + 1;
+                match (c, open) {
+                    (b')', Open::Struct(fields)) if fields > 0 => {}
+                    (b')', Open::Struct(_)) => return bad("an empty struct"),
+                    (b'}', Open::Entry(2)) => {}
+                    (b'}', Open::Entry(_)) => {
+                        return bad("a dict entry without exactly two fields");
+                    }
+                    _ => return bad("mismatched brackets"),
+                }
+            }
+            c if is_basic(c) || c == b'v' => {}
             _ => return protocol(format!("unknown type in signature {signature:?}")),
         }
-        if depth == 0 {
-            return Ok((&signature[..end], &signature[end..]));
+        // One complete type ended at `end` (with any `a`s before it): it is
+        // a field of the container around it, or the answer.
+        arrays = 0;
+        match stack.last_mut().map(|(open, _)| open) {
+            Some(Open::Struct(fields)) => *fields += 1,
+            Some(Open::Entry(fields)) => {
+                *fields += 1;
+                if *fields > 2 {
+                    return bad("a dict entry without exactly two fields");
+                }
+            }
+            None => return Ok((&signature[..end], &signature[end..])),
         }
     }
 }
@@ -201,7 +281,10 @@ impl<'a> Reader<'a> {
     }
 
     fn text(&mut self, length: usize) -> Result<&'a str, Error> {
-        let bytes = self.take(length + 1)?;
+        let Some(with_nul) = length.checked_add(1) else {
+            return protocol("a string is too long");
+        };
+        let bytes = self.take(with_nul)?;
         if bytes[length] != 0 {
             return protocol("a string isn't NUL-terminated");
         }
@@ -235,7 +318,13 @@ impl<'a> Reader<'a> {
             return protocol("an array runs past the message");
         };
         while self.pos < end {
+            let before = self.pos;
             element(self)?;
+            // Every element takes at least one byte, or a hostile length
+            // would loop here forever.
+            if self.pos == before {
+                return protocol("an array element is empty");
+            }
         }
         if self.pos != end {
             return protocol("an array element runs past its array");
@@ -429,8 +518,8 @@ impl Message {
                 5 | 9 => "u",
                 8 => "g",
                 _ => {
-                    let (single, _) = split_type(signature)?;
-                    return r.skip(single);
+                    // One complete type, as for any variant.
+                    return r.skip(signature);
                 }
             };
             if signature != expected {
@@ -441,7 +530,16 @@ impl Message {
                 9 => {
                     r.u32()?;
                 }
-                8 => message.signature = r.signature()?.to_string(),
+                8 => {
+                    // A sequence of complete types, or the message is refused
+                    // here rather than by whoever reads the body.
+                    let signature = r.signature()?;
+                    let mut rest = signature;
+                    while !rest.is_empty() {
+                        rest = split_type(rest)?.1;
+                    }
+                    message.signature = signature.to_string();
+                }
                 _ => {
                     let value = Some(r.string()?.to_string());
                     match code {
@@ -600,6 +698,7 @@ impl Wire {
     /// One authentication line, without its `\r\n`.
     pub fn read_line(&mut self) -> Result<String, Error> {
         loop {
+            self.left()?;
             if let Some(end) = self.buf.windows(2).position(|pair| pair == b"\r\n") {
                 let line: Vec<u8> = self.buf.drain(..end + 2).take(end).collect();
                 return String::from_utf8(line).or_else(|_| protocol("an auth line isn't UTF-8"));
@@ -611,7 +710,12 @@ impl Wire {
         }
     }
 
+    /// The next message. The deadline is checked first, also when a whole
+    /// message is already buffered, so a loop that reads messages until the
+    /// one it wants (a peer sending a stream of others) stops at the
+    /// deadline too.
     pub fn read_message(&mut self) -> Result<Message, Error> {
+        self.left()?;
         while self.buf.len() < 16 {
             self.fill()?;
         }
@@ -698,9 +802,60 @@ pub mod tests {
         assert_eq!(split_type("a{sv}").unwrap(), ("a{sv}", ""));
         assert_eq!(split_type("a(sa(us))u").unwrap(), ("a(sa(us))", "u"));
         assert_eq!(split_type("aay").unwrap(), ("aay", ""));
-        for bad in ["", "a", "(s", ")", "z", "a{sv"] {
+        assert_eq!(split_type("a{s(ii)}x").unwrap(), ("a{s(ii)}", "x"));
+        assert_eq!(split_type("aa{oa{sv}}").unwrap(), ("aa{oa{sv}}", ""));
+        assert_eq!(split_type("(a(y)v)g").unwrap(), ("(a(y)v)", "g"));
+        assert_eq!(split_type("a(ss)").unwrap(), ("a(ss)", ""));
+        for bad in [
+            "",
+            "a",
+            "(s",
+            ")",
+            "z",
+            "a{sv",
+            // Mismatched or crossed brackets.
+            "(s}",
+            "a{s)",
+            "a{s(v})",
+            "(a{sv)}",
+            // Empty containers, an array without an element.
+            "()",
+            "a()",
+            "(a)",
+            "a{}",
+            "(()s)",
+            // Dict entries: only right after `a`, two fields, basic key.
+            "{sv}",
+            "({sv})",
+            "a{s}",
+            "a{svs}",
+            "a{vs}",
+            "a{(s)v}",
+            "a{asv}",
+            "a{a{ss}s}",
+            "aa{}",
+        ] {
             assert!(split_type(bad).is_err(), "{bad:?}");
         }
+        // The reviewer's fuzz signatures (whole body and header signatures).
+        let every = |mut rest: &str| -> Result<(), Error> {
+            while !rest.is_empty() {
+                rest = split_type(rest)?.1;
+            }
+            Ok(())
+        };
+        for bad in ["ua{)v}", "ia{u}", "a{iaa{}}", "(a{}o)", "ura()is"] {
+            assert!(every(bad).is_err(), "{bad:?}");
+        }
+        every("ua{sv}sa(sa(us))").unwrap();
+        // Nesting: 32 containers are fine, 33 aren't.
+        let deep = |n: usize| format!("{}y{}", "(".repeat(n), ")".repeat(n));
+        assert!(split_type(&deep(32)).is_ok());
+        assert!(split_type(&deep(33)).is_err());
+        assert!(split_type(&format!("{}y", "a".repeat(32))).is_ok());
+        assert!(split_type(&format!("{}y", "a".repeat(33))).is_err());
+        assert!(split_type(&format!("{}(y)", "a".repeat(31))).is_ok());
+        assert!(split_type(&format!("{}(y)", "a".repeat(32))).is_err());
     }
 
     #[test]
@@ -854,5 +1009,157 @@ pub mod tests {
         ] {
             assert_eq!(parse_address(bad), None, "{bad:?}");
         }
+    }
+
+    fn from_hex(text: &str) -> Vec<u8> {
+        let text: String = text.split_whitespace().collect();
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// What the security review's fuzz driver did with a message: decode
+    /// it, read it as a portal Response, and skip its body type by type.
+    fn exercise_message(input: &[u8]) {
+        if input.len() >= 16
+            && let Ok(total) = message_length(&input[..16])
+        {
+            let mut data = input.to_vec();
+            data.resize(total, 0);
+            if let Ok(message) = Message::decode(&data) {
+                let _ = message.first_string();
+                let _ = crate::studio::portal::parse_response(&message);
+                let _ = message.reader().skip(&message.signature);
+                let mut rest = message.signature.as_str();
+                let mut r = message.reader();
+                while let Ok((single, tail)) = split_type(rest) {
+                    if r.skip(single).is_err() || tail.is_empty() {
+                        break;
+                    }
+                    rest = tail;
+                }
+            }
+        }
+        let _ = Message::decode(input);
+    }
+
+    /// The driver's skip target: a signature length, the signature, an
+    /// endianness byte and a body.
+    fn exercise_skip(input: &[u8]) {
+        let Some(&len) = input.first() else { return };
+        let len = len as usize;
+        if input.len() < 2 + len {
+            return;
+        }
+        let Ok(signature) = std::str::from_utf8(&input[1..1 + len]) else {
+            return;
+        };
+        let big = input[1 + len] & 1 == 1;
+        let body = input[2 + len..].to_vec();
+        let _ = Reader::new(&body, big).skip(signature);
+        let _ = split_type(signature);
+    }
+
+    /// Runs `body` on another thread and fails if it takes over 5 s (a
+    /// regression would spin forever; the test must fail, not hang).
+    fn finishes(name: &str, input: Vec<u8>, body: fn(&[u8])) {
+        let (done, wait) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            body(&input);
+            let _ = done.send(());
+        });
+        assert!(
+            wait.recv_timeout(std::time::Duration::from_secs(5)).is_ok(),
+            "{name} hangs"
+        );
+    }
+
+    #[test]
+    fn the_security_reviews_hang_inputs_finish() {
+        // fuzz/out and fuzz/out-raw of the 2026-11-08 review: empty structs
+        // and dict entries as array elements that never advanced (`a()`,
+        // `a{}`) and brackets of the wrong kind (`{)`).
+        let decode = [
+            "6c0300011800000003000000c800000001016f003a0000002f6f72672f667265
+             656465736b746f702f706f7274616c2f6465736b746f702f726571756573742f
+             315f352f666f616d795f6c6f636b5f616263000000000000020173001e000000
+             6f72672e667265656465736b746f702e706f7274616c2e526571756573740000
+             0301730008000000526573706f6e73650000000000000000060173001e000000
+             6f72672e667265656465736b746f702e706f7274616c2e4465736b746f700000
+             080167000675617b29767d000000000005017500020000002500000010000000
+             0000000000017400e7c48e9ccb3bedc2",
+            "6c0300010c00000003000000f800000001016f003a0000002f6f72672f667265
+             656465736b746f702f706f7274616c2f6465736b746f702f726571756573742f
+             315f352f666f616d795f6c67636b5f616263000000000000020173001e000000
+             6f72672e667265656465736b746f702e706f7274616c2e526571756573740000
+             0301730008000000526573706f6e73650000000000000000060173001e000000
+             6f72672e667265656465736b746f702e706f7274616c2e4465736b746f700000
+             07017300040000003a312e3900000000080167000569617b757d000000000000
+             0a08617b6961617b7d7d00001800000060000000000000003d00000008000000
+             08000000004300009200000004000000cf000000",
+        ];
+        let skip = [
+            "1228792875617b29712979617b617561647d7d29712900bb0000000000000028
+             000000100000796c000000000000009f00000000000000a97f",
+            "0628617b7d6f290002000000a3decf9d007572612829697300",
+        ];
+        for (n, hex) in decode.iter().enumerate() {
+            let input = from_hex(hex);
+            finishes(&format!("dbus_decode {n}"), input.clone(), exercise_message);
+            // Refused outright: none of them is a valid message.
+            let mut data = input.clone();
+            if let Ok(total) = message_length(&data[..16]) {
+                data.resize(total, 0);
+            }
+            assert!(Message::decode(&data).is_err(), "dbus_decode {n}");
+        }
+        for (n, hex) in skip.iter().enumerate() {
+            let input = from_hex(hex);
+            finishes(&format!("dbus_skip {n}"), input.clone(), exercise_skip);
+            let len = input[0] as usize;
+            let signature = std::str::from_utf8(&input[1..1 + len]).unwrap();
+            assert!(
+                Reader::new(&input[2 + len..], false)
+                    .skip(signature)
+                    .is_err(),
+                "dbus_skip {n}: {signature:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn array_elements_must_advance() {
+        // An array of 16 bytes whose element reader reads nothing: an error,
+        // not an endless loop.
+        let mut w = Writer::new();
+        w.array(1, |w| w.buf.extend_from_slice(&[0; 16]));
+        let mut r = Reader::new(&w.buf, false);
+        assert!(r.array(1, |_| Ok(())).is_err());
+        // Lengths near usize::MAX are refused without overflowing.
+        let mut r = Reader::new(&[0, 0], false);
+        assert!(r.text(usize::MAX).is_err());
+    }
+
+    #[test]
+    fn reading_messages_stops_at_the_deadline() {
+        // A peer that has already sent many messages: a loop reading them
+        // one by one still stops at the deadline.
+        let (ours, theirs) = UnixStream::pair().unwrap();
+        let mut signal = Message {
+            kind: SIGNAL,
+            serial: 1,
+            path: Some("/x".into()),
+            ..Message::default()
+        }
+        .encode();
+        let one = signal.len();
+        signal.extend_from_within(..one);
+        let mut peer = Wire::new(theirs, Instant::now() + std::time::Duration::from_secs(5));
+        peer.write(&signal.repeat(64)).unwrap();
+        let mut wire = Wire::new(ours, Instant::now() + std::time::Duration::from_millis(50));
+        wire.read_message().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        assert!(matches!(wire.read_message(), Err(Error::Timeout)));
     }
 }

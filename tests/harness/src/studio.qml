@@ -1198,6 +1198,14 @@ Item {
         expect(find(page, "studioPictureProblem").text === FoamyI18n.t("studio.pick.PORTAL_UNAVAILABLE"), "portal error: " + find(page, "studioPictureProblem").text)
         studio.sources.applyPick(127, "")
         expect(find(page, "studioPictureProblem").text === FoamyI18n.t("studio.helperUnavailable"), "no helper")
+        // The picker runs under a generous timeout (the helper's own limit
+        // is 30 minutes); a helper it had to stop is a failed chooser.
+        var pickProcess = null
+        for (var p = 0; p < studio.sources.data.length; p++) if (studio.sources.data[p].objectName === "studioPickProcess") pickProcess = studio.sources.data[p]
+        expect(pickProcess && pickProcess.command[0] === "timeout" && pickProcess.command.indexOf("1830s") === 2
+          && pickProcess.command.indexOf("pick-picture") > 3, "pick-picture under timeout: " + (pickProcess ? JSON.stringify(pickProcess.command) : "missing"))
+        studio.sources.applyPick(124, "")
+        expect(find(page, "studioPictureProblem").text === FoamyI18n.t("studio.pick.PORTAL_FAILED"), "timed out: " + find(page, "studioPictureProblem").text)
         studio.sources.applyPick(0, '{"ok":true,"cancelled":true}')
         expect(studio.sources.pickError === "", "cancelled is no error")
         studio.sources.applyPick(0, '{"ok":true,"path":"/home/you/clip.gif"}')

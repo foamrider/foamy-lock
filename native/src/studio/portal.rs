@@ -217,10 +217,21 @@ pub fn pick_on(
             .with_body("ssa{sv}", open_file_body(title, filter, media, &token)),
         )
         .map_err(failed)?;
+    // The portal's unique name, from its reply to the call: only a Response
+    // it sent counts (any client can emit a signal on any path). Responses
+    // that come before the reply wait for it (a few at most).
+    let mut portal: Option<String> = None;
+    let mut early: Vec<Message> = Vec::new();
     loop {
         let message = bus.read().map_err(failed)?;
         match message.kind {
             dbus::METHOD_RETURN if message.reply_serial == Some(call) => {
+                let Some(name) = message.sender.clone().filter(|name| name.starts_with(':')) else {
+                    return Err(Failure::coded(
+                        "PORTAL_FAILED",
+                        "the portal's reply has no unique sender",
+                    ));
+                };
                 // An older portal may pick its own path: follow that one too.
                 if let Ok(handle) = message.reader().string()
                     && !handles.iter().any(|known| known == handle)
@@ -229,6 +240,12 @@ pub fn pick_on(
                     add_match(&mut bus, &handle).map_err(failed)?;
                     handles.push(handle);
                 }
+                for response in std::mem::take(&mut early) {
+                    if is_response(&response, &handles, &name) {
+                        return answer(&response);
+                    }
+                }
+                portal = Some(name);
             }
             dbus::ERROR if message.reply_serial == Some(call) => {
                 let name = message.error_name.clone().unwrap_or_default();
@@ -240,34 +257,52 @@ pub fn pick_on(
                 };
                 return Err(Failure::coded(code, format!("{name}: {text}")));
             }
-            dbus::SIGNAL
-                if message.interface.as_deref() == Some(REQUEST)
-                    && message.member.as_deref() == Some("Response")
-                    && message
-                        .path
-                        .as_ref()
-                        .is_some_and(|path| handles.contains(path)) =>
-            {
-                let (code, uris) = parse_response(&message).map_err(failed)?;
-                return match code {
-                    0 => {
-                        let uri = uris.first().ok_or_else(|| {
-                            Failure::coded("PORTAL_FAILED", "the portal chose nothing")
-                        })?;
-                        let path = uri_path(uri).ok_or_else(|| {
-                            Failure::coded("PORTAL_FAILED", format!("not a local file: {uri}"))
-                        })?;
-                        Ok(json!({"ok": true, "path": path}))
-                    }
-                    1 | 2 => Ok(json!({"ok": true, "cancelled": true})),
-                    other => Err(Failure::coded(
-                        "PORTAL_FAILED",
-                        format!("the portal answered {other}"),
-                    )),
-                };
-            }
+            dbus::SIGNAL => match &portal {
+                Some(name) if is_response(&message, &handles, name) => return answer(&message),
+                None if is_response(&message, &handles, "") && early.len() < MAX_EARLY => {
+                    early.push(message);
+                }
+                _ => {}
+            },
             _ => {}
         }
+    }
+}
+
+/// Responses kept until the portal's reply says who the portal is.
+const MAX_EARLY: usize = 8;
+
+/// A `Response` on one of `handles`, from `portal` (any sender when
+/// `portal` is empty: not known yet).
+fn is_response(message: &Message, handles: &[String], portal: &str) -> bool {
+    message.kind == dbus::SIGNAL
+        && message.interface.as_deref() == Some(REQUEST)
+        && message.member.as_deref() == Some("Response")
+        && message
+            .path
+            .as_ref()
+            .is_some_and(|path| handles.contains(path))
+        && (portal.is_empty() || message.sender.as_deref() == Some(portal))
+}
+
+/// The reply for the portal's `Response`.
+fn answer(message: &Message) -> Result<Value, Failure> {
+    let (code, uris) = parse_response(message).map_err(failed)?;
+    match code {
+        0 => {
+            let uri = uris
+                .first()
+                .ok_or_else(|| Failure::coded("PORTAL_FAILED", "the portal chose nothing"))?;
+            let path = uri_path(uri).ok_or_else(|| {
+                Failure::coded("PORTAL_FAILED", format!("not a local file: {uri}"))
+            })?;
+            Ok(json!({"ok": true, "path": path}))
+        }
+        1 | 2 => Ok(json!({"ok": true, "cancelled": true})),
+        other => Err(Failure::coded(
+            "PORTAL_FAILED",
+            format!("the portal answered {other}"),
+        )),
     }
 }
 
@@ -403,6 +438,7 @@ mod tests {
         Choose,
         Cancel,
         OwnPath,
+        Early,
         Missing,
     }
 
@@ -499,40 +535,54 @@ mod tests {
                             }
                             _ => format!("/org/freedesktop/portal/desktop/request/1_42/{token}"),
                         };
+                        let response_with = |uri: &str, sender: &str| {
+                            let mut body = Writer::new();
+                            body.u32(if let Portal::Cancel = portal { 1 } else { 0 });
+                            body.array(8, |w| {
+                                w.entry("choices", "a(ss)", |w| w.array(8, |_| {}));
+                                w.entry("uris", "as", |w| w.array(4, |w| w.string(uri)));
+                                w.entry("writable", "b", |w| w.boolean(false));
+                            });
+                            Message {
+                                kind: dbus::SIGNAL,
+                                path: Some(path.clone()),
+                                interface: Some(REQUEST.into()),
+                                member: Some("Response".into()),
+                                sender: Some(sender.into()),
+                                ..Message::default()
+                            }
+                            .with_body("ua{sv}", body.buf)
+                        };
+                        let response =
+                            response_with("file:///home/me/Pictures/Fjord%20lys.png", ":1.7");
+                        // Another client's Response on the same path, sent
+                        // first: not the portal's, so ignored.
+                        let forged = response_with("file:///tmp/forged.png", ":1.66");
                         let mut body = Writer::new();
                         body.string(&path);
-                        send(
-                            &mut wire,
-                            reply_to(&call, dbus::METHOD_RETURN).with_body("o", body.buf),
-                        );
+                        // The portal (":1.7") answers the call.
+                        let mut reply =
+                            reply_to(&call, dbus::METHOD_RETURN).with_body("o", body.buf);
+                        reply.sender = Some(":1.7".into());
+                        if let Portal::Early = portal {
+                            // Its Response before its reply (and a forged one).
+                            send(&mut wire, forged);
+                            send(&mut wire, response);
+                            send(&mut wire, reply);
+                            return (title, token, matches);
+                        }
+                        send(&mut wire, reply);
                         if let Portal::OwnPath = portal {
                             // Wait for the client to subscribe to it.
                             let call = wire.read_message().unwrap();
                             matches.push(call.reader().string().unwrap().to_string());
                             send(&mut wire, reply_to(&call, dbus::METHOD_RETURN));
                         }
-                        let mut body = Writer::new();
-                        body.u32(if let Portal::Cancel = portal { 1 } else { 0 });
-                        body.array(8, |w| {
-                            w.entry("choices", "a(ss)", |w| w.array(8, |_| {}));
-                            w.entry("uris", "as", |w| {
-                                w.array(4, |w| w.string("file:///home/me/Pictures/Fjord%20lys.png"))
-                            });
-                            w.entry("writable", "b", |w| w.boolean(false));
-                        });
-                        let response = Message {
-                            kind: dbus::SIGNAL,
-                            path: Some(path),
-                            interface: Some(REQUEST.into()),
-                            member: Some("Response".into()),
-                            sender: Some(":1.7".into()),
-                            ..Message::default()
-                        }
-                        .with_body("ua{sv}", body.buf);
                         // A Response for someone else's request first: ignored.
                         let mut stray = response.clone();
                         stray.path = Some("/org/freedesktop/portal/desktop/request/1_9/x".into());
                         send(&mut wire, stray);
+                        send(&mut wire, forged);
                         send(&mut wire, response);
                         return (title, token, matches);
                     }
@@ -577,6 +627,19 @@ mod tests {
             [format!(
                 "type='signal',interface='org.freedesktop.portal.Request',member='Response',path='/org/freedesktop/portal/desktop/request/1_42/{token}'"
             )]
+        );
+    }
+
+    #[test]
+    fn only_the_portals_response_counts_even_before_its_reply() {
+        // Every fake run sends a forged Response (another sender, the right
+        // path, file:///tmp/forged.png) before the portal's: Choose and
+        // OwnPath above get the real path. Here both come before the reply
+        // that names the portal, and wait for it.
+        let (result, _) = fake_bus("early", Portal::Early, DEFAULT_TITLE);
+        assert_eq!(
+            result.unwrap(),
+            json!({"ok": true, "path": "/home/me/Pictures/Fjord lys.png"})
         );
     }
 
