@@ -29,6 +29,9 @@ disagrees with D1–D7, it wins. Follows [lock-studio-app.md](lock-studio-app.md
 12. **Deselect** by clicking outside the lock image.
 13. **Tips**, pinned to the bottom edge of the left sidebar, including one
    about setting the profile picture and name with Mugshot.
+14. **Animated wallpapers** (MP4, for example) if possible: see D8.
+15. **Round 3: a security review** by a subagent, focused on memory handling
+   and safe handling of input data such as images.
 
 ## Decisions (proposed defaults)
 
@@ -298,6 +301,98 @@ one or more commits on `feat/layout-engine`.
     and a version bump, in its own repo and branch.
   - Lock: the weather element, polling, icons and harness fixtures.
   - App: the availability row.
+
+- **R2-5. Animated wallpapers** (D8, below). It starts with a spike and
+  is dropped cleanly if the spike fails.
+
+## D8. Animated wallpapers (user, 2026-11-08: "if we can")
+
+- **What's there today:**
+  - **Video wallpapers:** Omarchy already supports them, and its stock
+    lock shows a still poster (`plugins/lock/poster.sh`, ffmpeg). Foamy
+    lock does the same (`Service.videoPosterPath`).
+  - **Playback:** `qt6-multimedia` with the ffmpeg backend is installed,
+    so `QtMultimedia`'s `Video` is available to Quickshell.
+- **Proposal:** a background setting `motion: "still" | "play"`, default
+  `still`.
+  - **Sources:** `play` applies to source `omarchy` when the wallpaper is
+    a video, and to source `picture` when the chosen file is MP4 or WebM.
+    The picture source accepts video only with `play`.
+- **Safety first: the lock never plays the user's file directly.**
+  - **The rule:** decoding untrusted media in the lock process is what the
+    picture pipeline already avoids.
+  - **The helper's `background` kind prepares a clip in its bwrap and
+    seccomp sandbox with ffmpeg:**
+    - re-encoded to one constrained format: H.264, yuv420p, no audio, no
+      metadata or subtitle streams;
+    - at most the largest screen's size and 30 fps;
+    - at most 60 s, looped;
+    - capped bitrate and file size;
+    - plus a poster frame.
+  - **Playback:** the lock plays only that output, from the helper's
+    cache.
+  - **Failures:** a source that doesn't prepare falls back to the poster,
+    then to the theme colour.
+- **When it plays:**
+  - Only with GPU rendering (Software rendering shows the poster).
+  - Paused while the display is blanked, while `Style.reduceMotion` is on,
+    and while the view isn't visible.
+  - Optionally paused on battery (`pauseOnBattery`, default true).
+  - The poster is shown until the first frame, so unlocking never waits
+    on video.
+- **Lock Studio:** the canvas plays the same prepared clip (through the
+  same helper kind). The inspector shows Still or Play plus "Pause on
+  battery", and explains when the source isn't a video.
+- **Spike (first):**
+  - `Video` on a `WlSessionLockSurface`-like layer in Quickshell 0.3.2,
+    using the preview overlay, never a real lock.
+  - CPU and GPU cost on DP-2.
+  - That the ffmpeg re-encode works inside the existing sandbox profile
+    (seccomp allow-list, time and memory limits).
+- **If the spike fails** (crashes, high cost, the sandbox can't host
+  ffmpeg): keep the poster, record why, and drop D8.
+
+## Round 3: security review
+
+After round 2, an independent subagent runs a security review of foamy-lock
+(lock, Lock Studio, the Rust helper), and its findings are fixed. The focus
+is memory handling and safe handling of input data:
+- **Rust helper:**
+  - Every `unsafe` block, libc and rustix call, and buffer and length
+    arithmetic.
+  - The hand-written D-Bus client (`native/src/studio/dbus.rs`): message
+    parsing bounds, alignment, signature and array-length checks, and what
+    happens with a hostile bus peer.
+  - JSON request size limits.
+  - The sandbox profile (bwrap mounts, the seccomp allow-list, resource
+    limits) for images and, after D8, video.
+  - Child processes: environment, argv, kill on timeout, zombies.
+- **Images and video:**
+  - Can any user-supplied file reach a decoder outside the sandbox (Qt
+    image providers, `Image.source`, thumbnails, the canvas)?
+  - Path handling: symlinks, `..`, races between check and use, and
+    oversized files.
+  - The cache: naming, permissions, eviction.
+- **IPC inputs** (any local process can call `omarchy-shell`):
+  - `saveLook`, `previewLook`, `previewPreset` and the new preset
+    operations: size limits, strict parsing, no unlock path.
+  - Peer weather replies: validated and rendered as plain text.
+- **Files:**
+  - The studio root in `~/.cache` (symlink attacks).
+  - The `.desktop` entry (`Exec` quoting and injection through paths).
+  - The draft and state files (permissions, atomic writes).
+  - `shell.json` writes through Omarchy (the symlink kept, never a
+    temporary file in the wrong place).
+- **The lock's safety properties:**
+  - The fallback chain.
+  - A live, focused input on every surface.
+  - No way for a look, preset or IPC call to hide the field or block
+    unlocking.
+- **Method:**
+  - A read-only review report with severities and evidence.
+  - Fuzzing where it pays: `cargo fuzz` targets for the D-Bus parser and
+    the JSON request parser, run for a bounded time.
+  - Fixes on a branch with tests for each finding.
 
 ## Risks
 
