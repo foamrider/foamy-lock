@@ -1798,7 +1798,9 @@ Item {
         expect(count.text === FoamyI18n.t("studio.tip.count", [FoamyI18n.number(1, 0), FoamyI18n.number(tips.ids.length, 0)]), "count " + count.text)
         var height = tips.height
         find(tips, "studioTipNext").clicked()
-        expect(tips.current === "library" && find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.library"), "next: " + tips.current)
+        // The essentials only: the account picture, dragging, zones.
+        expect(JSON.stringify(tips.ids) === '["mugshot","drag","keys"]', "the tips: " + JSON.stringify(tips.ids))
+        expect(tips.current === "drag" && find(tips, "studioTipText").text === FoamyI18n.t("studio.tip.drag"), "next: " + tips.current)
         expect(tips.height === height, "the card keeps its height")
         // Previous and next sit under the tip, small and without a surface.
         var previous = find(tips, "studioTipPrevious"), text = find(tips, "studioTipText")
@@ -1809,11 +1811,8 @@ Item {
         expect(tips.current === tips.ids[tips.ids.length - 1], "previous wraps to the last: " + tips.current)
         find(tips, "studioTipNext").clicked()
         find(tips, "studioTipNext").clicked()
-        find(tips, "studioTipNext").clicked()
         expect(tips.current === "drag", "next wraps to the start: " + tips.current)
         for (var i = 0; i < tips.ids.length; i++) expect(tips.tipText(tips.ids[i]) !== "" && tips.tipText(tips.ids[i]).indexOf("studio.") !== 0, "words for " + tips.ids[i])
-        // The keyboard layout tip came with the status items (R2-3).
-        expect(tips.ids.indexOf("keyboard") !== -1 && tips.tipText("keyboard") === FoamyI18n.t("studio.tip.keyboard"), "the keyboard layout tip")
         waitFor(function() { return readFile(sources.statePath).indexOf('"tip":"drag"') !== -1 }, "the state file", function() {
           expect(JSON.parse(readFile(sources.statePath)).version === 1, "versioned")
           // Read back on the next start (the file's text, as loaded).
@@ -1989,12 +1988,12 @@ Item {
         reset()
         setMode("ok")
         unappliedEdit(0.45)
-        var status = find(studio, "studioStatus")
         var before = fakeCalls()
+        var status = find(studio, "studioStatus")
+        studio.previewFull()
         // Opening says nothing; the unsaved warning stays.
         expect(studio.notice && studio.notice.kind === "busy" && status.text === FoamyI18n.t("studio.unsaved"),
           "opening: " + json(studio.notice) + " " + status.text)
-        studio.previewFull()
         waitFor(function() { return !studio.sources.previewing && studio.notice && studio.notice.kind !== "busy" }, "the preview", function() {
           // Shown: no words about it in the header, only the unsaved warning,
           // on the start side right after Reset.

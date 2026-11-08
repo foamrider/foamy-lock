@@ -480,7 +480,9 @@ screen would.
 avatar or what is playing. The clock, network and battery are real. The full-screen
 preview is the lock screen's own and shows your real account and media. Your picture
 and name on the lock screen come from your account; the first tip in the app says to
-set them with Mugshot (and how to install it). The app remembers the last tip you saw in
+set them with Mugshot (and how to install it). The tips keep to what isn't obvious:
+that, Shift and Alt while dragging, and Ctrl+arrows between zones. The app remembers
+the last tip you saw in
 `~/.local/state/foamy-lock/studio-state.json`.
 
 Screenshots of the app will follow.

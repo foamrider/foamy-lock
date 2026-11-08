@@ -16,7 +16,8 @@ Rectangle {
 
   // LockSources: tip, setTip(), mugshotAvailable.
   property var sources: null
-  readonly property var ids: ["mugshot", "library", "drag", "keys", "look", "presets", "keyboard", "preview", "shortcuts"]
+  // Only what isn't obvious from the app itself.
+  readonly property var ids: ["mugshot", "drag", "keys"]
   readonly property string current: sources && ids.indexOf(sources.tip) !== -1 ? sources.tip : ids[0]
   readonly property int index: Math.max(0, ids.indexOf(current))
   readonly property string text: tipText(current)
