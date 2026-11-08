@@ -21,6 +21,8 @@
 //! - `studio draft-load` / `studio draft-save` / `studio draft-clear`: see
 //!   [`draft`].
 //! - `studio apply`: see [`apply`].
+//! - `studio preset save` / `preset rename` / `preset delete`: see
+//!   [`preset`].
 //! - `studio pick-picture [title [filter name]]`: see [`portal`].
 //!
 //! Codes: `INVALID_ARGUMENT` (unknown subcommand or arguments),
@@ -54,14 +56,18 @@ mod dbus;
 pub mod desktop;
 pub mod draft;
 pub mod portal;
+pub mod preset;
 pub mod root;
 
 /// Test override of the plugin directory.
 pub const PLUGIN_DIR_VAR: &str = "FOAMY_LOCK_PLUGIN_DIR";
 /// The app id: window class, `.desktop` name, icon name, cache folder.
 pub const APP_ID: &str = "foamy-lock-studio";
-/// The look keys of the `foamy.lock` entry, the only ones `saveLook` takes.
+/// The look keys of the `foamy.lock` entry.
 pub const LOOK_KEYS: [&str; 4] = ["preset", "layout", "background", "glass"];
+/// The look's link to the user preset it came from: `saveLook`'s fifth
+/// key, kept in the draft too (never in a user preset's own look).
+pub const LINK_KEY: &str = "userPreset";
 /// Where Omarchy lives when `$OMARCHY_PATH` doesn't say.
 pub const SYSTEM_OMARCHY: &str = "/usr/share/omarchy";
 
@@ -233,13 +239,18 @@ fn current_plugin_dir() -> Result<PathBuf, Failure> {
     plugin_dir(std::env::var_os(PLUGIN_DIR_VAR), std::env::current_exe())
 }
 
-/// Checks the shape of a look: an object with only the four look keys,
-/// `preset` a string and the others objects. The lock checks the rest.
+/// Checks the shape of a look: an object with only the four look keys and
+/// `userPreset`, `preset` a string, `userPreset` a user preset's id (see
+/// [`check_preset_id`]) and the others objects. The lock checks the rest.
 pub fn check_look(look: &Value) -> Result<(), String> {
     let Value::Object(look) = look else {
         return Err("a look must be an object".into());
     };
     for (key, value) in look {
+        if key == LINK_KEY {
+            check_preset_id(value).map_err(|reason| format!("{LINK_KEY}: {reason}"))?;
+            continue;
+        }
         if !LOOK_KEYS.contains(&key.as_str()) {
             return Err(format!("unknown look key {key}"));
         }
@@ -251,6 +262,26 @@ pub fn check_look(look: &Value) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// A user preset's id, as the lock takes it: 1 to 40 lowercase ASCII
+/// letters, digits and dashes, not starting with a dash.
+pub fn check_preset_id(id: &Value) -> Result<(), String> {
+    let valid = id.as_str().is_some_and(|id| {
+        (1..=40).contains(&id.len())
+            && !id.starts_with('-')
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    });
+    if valid {
+        Ok(())
+    } else {
+        Err(
+            "an id is 1 to 40 lowercase letters, digits and dashes, not starting with a dash"
+                .into(),
+        )
+    }
 }
 
 /// `text` (valid JSON) without the whitespace between tokens; key order,
@@ -340,7 +371,7 @@ pub fn iso8601(time: SystemTime) -> String {
     )
 }
 
-const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | pick-picture [title [filter name]]]";
+const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name]]]";
 
 /// `foamy-lock-helper studio <args>`.
 pub fn main(args: &[OsString]) -> Result<Value, Failure> {
@@ -357,6 +388,12 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
         ["apply"] => apply::apply(
             &env,
             &read_stdin(apply::MAX_REQUEST)?,
+            &apply::Options::default(),
+        ),
+        ["preset", op @ ("save" | "rename" | "delete")] => preset::run(
+            &env,
+            op,
+            &read_stdin(preset::MAX_REQUEST)?,
             &apply::Options::default(),
         ),
         ["pick-picture"] => portal::pick(&env, portal::DEFAULT_TITLE, portal::DEFAULT_FILTER),
@@ -580,6 +617,21 @@ pub mod tests {
             check_look(&json!({"id": "x"})),
             Err("unknown look key id".into())
         );
+        // The link to a user preset: an id, and only that.
+        assert_eq!(
+            check_look(&json!({"preset": "zen", "userPreset": "mine-1"})),
+            Ok(())
+        );
+        for id in [
+            json!("Mine"),
+            json!(""),
+            json!("-a"),
+            json!(1),
+            json!("a".repeat(41)),
+            json!("a/b"),
+        ] {
+            assert!(check_look(&json!({"userPreset": id})).is_err(), "{id}");
+        }
     }
 
     #[test]
@@ -618,7 +670,14 @@ pub mod tests {
 
     #[test]
     fn unknown_subcommands_are_refused() {
-        for args in [vec!["nope"], vec!["open", "extra"], vec!["apply", "x"]] {
+        for args in [
+            vec!["nope"],
+            vec!["open", "extra"],
+            vec!["apply", "x"],
+            vec!["preset"],
+            vec!["preset", "move"],
+            vec!["preset", "save", "x"],
+        ] {
             let args: Vec<OsString> = args.into_iter().map(OsString::from).collect();
             assert_eq!(main(&args).unwrap_err().code, "INVALID_ARGUMENT");
         }

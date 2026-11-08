@@ -5,9 +5,10 @@
 //! created 0700; file 0600, written atomically), one JSON line:
 //! `{"version": 1, "savedAt": "<ISO 8601 UTC>", "look": <look>, "history":
 //! [<look>, …]}`. A look is an object with only `preset` (string),
-//! `layout`, `background` and `glass` (objects), each one at most 64 KiB as
-//! compact JSON; the lock checks the rest when it's applied. `history` is
-//! the undo history, oldest first, at most 100 looks.
+//! `layout`, `background` and `glass` (objects) and `userPreset` (the user
+//! preset it is based on, an id), each one at most 64 KiB as compact JSON;
+//! the lock checks the rest when it's applied. `history` is the undo
+//! history, oldest first, at most 100 looks.
 //!
 //! - **draft-save**: stdin (at most 2 MiB) `{"look": <look>, "history":
 //!   [<look>, …]}` (`history` optional). A longer history keeps its newest
@@ -235,6 +236,11 @@ mod tests {
         // No history is an empty one.
         save_json(&env, json!({"look": {}})).unwrap();
         assert_eq!(load(&env).unwrap()["draft"]["history"], json!([]));
+        // The link to the user preset the draft is based on is kept.
+        let linked = json!({"preset": "zen", "userPreset": "mine-1"});
+        save_json(&env, json!({"look": linked, "history": [linked]})).unwrap();
+        assert_eq!(load(&env).unwrap()["draft"]["look"], linked);
+        assert!(save_json(&env, json!({"look": {"userPreset": "Mine"}})).is_err());
         assert_eq!(clear(&env).unwrap(), json!({"ok": true, "removed": true}));
         assert_eq!(clear(&env).unwrap(), json!({"ok": true, "removed": false}));
         assert_eq!(load(&env).unwrap()["status"], "none");

@@ -1,9 +1,10 @@
 //! `studio apply`: save a look through the running lock.
 //!
 //! **stdin** (at most 256 KiB): the look, a JSON object with only `preset`,
-//! `layout`, `background` and `glass` (see `draft`); at most 64 KiB once
-//! compacted (one command-line argument). Anything else is
-//! `INVALID_REQUEST` (exit 1) and nothing is called.
+//! `layout`, `background`, `glass` and `userPreset` (the user preset it
+//! came from; see `check_look`); at most 64 KiB once compacted (one
+//! command-line argument). Anything else is `INVALID_REQUEST` (exit 1) and
+//! nothing is called.
 //!
 //! **The call**: `omarchy-shell foamy.lock saveLook <look>`, the look
 //! compacted with its key order and numbers exactly as sent. `omarchy-shell`
@@ -24,14 +25,18 @@
 //! certainly wasn't (a refusal from the lock, or a failure that comes
 //! before anything runs). After a retry only `ok`, `unchanged` and the
 //! lock's deterministic refusals (`invalid-json`, `invalid`, `unsupported`,
-//! `no-entry`) confirm.
+//! `no-entry`, and for the preset operations `full`, `too-large` and
+//! `unknown-preset`) confirm.
 //!
 //! Results, from the lock: `ok`, `unchanged`, `invalid-json`, `invalid`
 //! (`reason` is the lock's text after `invalid:`), `locked`, `unsupported`,
-//! `no-entry`, `unexpected` (any other answer); from `omarchy-shell`:
-//! `not-responding`, `not-ready`, `not-running`, `target-not-found` (Foamy
-//! Lock isn't loaded), `function-not-found` (a lock without `saveLook`),
-//! `no-omarchy-shell`, `failed` (any other failure).
+//! `no-entry`, `write-failed` (Omarchy can't read shell.json, so it writes
+//! nothing), `full`, `too-large`, `unknown-preset` (the last three from the
+//! preset operations, see `preset`), `unexpected` (any other answer); from
+//! `omarchy-shell`: `not-responding`, `not-ready`, `not-running`,
+//! `target-not-found` (Foamy Lock isn't loaded), `function-not-found` (a
+//! lock without the call), `no-omarchy-shell`, `failed` (any other
+//! failure).
 
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -72,6 +77,10 @@ pub enum Answer {
     Locked,
     Unsupported,
     NoEntry,
+    WriteFailed,
+    Full,
+    TooLarge,
+    UnknownPreset,
     Unexpected(String),
     NotResponding,
     NotReady,
@@ -92,6 +101,10 @@ impl Answer {
             Answer::Locked => "locked",
             Answer::Unsupported => "unsupported",
             Answer::NoEntry => "no-entry",
+            Answer::WriteFailed => "write-failed",
+            Answer::Full => "full",
+            Answer::TooLarge => "too-large",
+            Answer::UnknownPreset => "unknown-preset",
             Answer::Unexpected(_) => "unexpected",
             Answer::NotResponding => "not-responding",
             Answer::NotReady => "not-ready",
@@ -112,6 +125,12 @@ impl Answer {
             Answer::Locked => "The screen is locked, so the look wasn't saved.".into(),
             Answer::Unsupported => "This Omarchy can't save plugin settings.".into(),
             Answer::NoEntry => "Foamy Lock has no entry in shell.json.".into(),
+            Answer::WriteFailed => {
+                "Omarchy can't read shell.json, so nothing was written; fix the file first.".into()
+            }
+            Answer::Full => "There are 50 user presets already; delete one first.".into(),
+            Answer::TooLarge => "The user presets would be larger than 256 KiB.".into(),
+            Answer::UnknownPreset => "That user preset isn't in shell.json.".into(),
             Answer::Unexpected(text) => format!("The lock gave an unexpected answer: {text}"),
             Answer::NotResponding => {
                 "The shell didn't answer in time; the look may not have been saved.".into()
@@ -120,7 +139,7 @@ impl Answer {
             Answer::NotRunning => "The shell isn't running.".into(),
             Answer::TargetNotFound => "Foamy Lock isn't loaded in the shell.".into(),
             Answer::FunctionNotFound => {
-                "The running Foamy Lock can't save looks; update it or restart the shell.".into()
+                "The running Foamy Lock can't do this; update it or restart the shell.".into()
             }
             Answer::Missing => "omarchy-shell isn't installed.".into(),
             Answer::Failed(text) => format!("omarchy-shell failed: {text}"),
@@ -132,11 +151,19 @@ impl Answer {
     }
 
     /// The same request would get the same refusal: the first call can't
-    /// have saved anything either.
+    /// have saved anything either. (A first call that landed makes a
+    /// retried savePreset or renamePreset `unchanged`, never `full`,
+    /// `too-large` or `unknown-preset`.)
     fn deterministic(&self) -> bool {
         matches!(
             self,
-            Answer::InvalidJson | Answer::Invalid(_) | Answer::Unsupported | Answer::NoEntry
+            Answer::InvalidJson
+                | Answer::Invalid(_)
+                | Answer::Unsupported
+                | Answer::NoEntry
+                | Answer::Full
+                | Answer::TooLarge
+                | Answer::UnknownPreset
         )
     }
 
@@ -193,6 +220,10 @@ pub fn classify(output: &Output) -> Answer {
         "locked" => Answer::Locked,
         "unsupported" => Answer::Unsupported,
         "no-entry" => Answer::NoEntry,
+        "write-failed" => Answer::WriteFailed,
+        "full" => Answer::Full,
+        "too-large" => Answer::TooLarge,
+        "unknown-preset" => Answer::UnknownPreset,
         text => match text.strip_prefix("invalid:") {
             Some(reason) => Answer::Invalid(reason.trim().to_string()),
             None => Answer::Unexpected(text.to_string()),
@@ -208,9 +239,10 @@ fn omarchy_shell(env: &Env) -> Option<PathBuf> {
     env.find("omarchy-shell", &fallbacks)
 }
 
-fn call(env: &Env, program: &Path, look: &str, options: &Options) -> Answer {
+fn call(env: &Env, program: &Path, args: &[&str], options: &Options) -> Answer {
     let mut command = Bounded::new(program)
-        .args(["foamy.lock", "saveLook", look])
+        .arg("foamy.lock")
+        .args(args)
         .env("PATH", &env.path)
         .timeout(options.timeout)
         .max_output(64 * 1024);
@@ -243,18 +275,26 @@ pub fn look_argument(request: &[u8]) -> Result<String, Failure> {
 /// `studio apply`.
 pub fn apply(env: &Env, request: &[u8], options: &Options) -> Result<Value, Failure> {
     let look = look_argument(request)?;
+    Ok(run(env, &["saveLook", &look], options))
+}
+
+/// `omarchy-shell foamy.lock <args>`, retried once when the answer is
+/// unclear, as the reply line. Every call on the lock's target that is
+/// idempotent (the same request again answers `unchanged` once it landed)
+/// goes through here.
+pub fn run(env: &Env, args: &[&str], options: &Options) -> Value {
     let Some(program) = omarchy_shell(env) else {
-        return Ok(reply(&Answer::Missing, true, 0));
+        return reply(&Answer::Missing, true, 0);
     };
-    let first = call(env, &program, &look, options);
+    let first = call(env, &program, args, options);
     if first != Answer::NotResponding {
         let certain = first.certain();
-        return Ok(reply(&first, certain, 1));
+        return reply(&first, certain, 1);
     }
     thread::sleep(options.retry_wait);
-    let second = call(env, &program, &look, options);
+    let second = call(env, &program, args, options);
     let confirmed = second.saved() || second.deterministic();
-    Ok(reply(&second, confirmed, 2))
+    reply(&second, confirmed, 2)
 }
 
 fn reply(answer: &Answer, confirmed: bool, attempts: u32) -> Value {
@@ -327,6 +367,7 @@ mod tests {
             ("echo locked", "locked", false),
             ("echo unsupported", "unsupported", false),
             ("echo no-entry", "no-entry", false),
+            ("echo write-failed", "write-failed", false),
         ] {
             let (reply, scratch) = run(&[step]);
             assert_eq!(
@@ -518,5 +559,11 @@ mod tests {
         );
         assert!(!scratch.path("count").exists());
         assert_eq!(look_argument(b"{}\n").unwrap(), "{}");
+        // The fifth key, the link to a user preset, goes as sent.
+        assert_eq!(
+            look_argument(b"{\"preset\": \"zen\", \"userPreset\": \"mine-1\"}").unwrap(),
+            "{\"preset\":\"zen\",\"userPreset\":\"mine-1\"}"
+        );
+        assert!(look_argument(b"{\"userPreset\": \"Mine\"}").is_err());
     }
 }

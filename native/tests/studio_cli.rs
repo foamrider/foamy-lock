@@ -170,3 +170,34 @@ fn install_and_open_use_the_plugin_dir() {
         (Some("QUICKSHELL_MISSING"), 1)
     );
 }
+
+#[test]
+fn preset_operations_exit_0_with_the_result() {
+    let home = Home::new("preset");
+    home.script(
+        "bin/omarchy-shell",
+        "case $2 in savePreset) echo ok ;; renamePreset) echo unknown-preset ;; *) echo unchanged ;; esac",
+    );
+    let (reply, code) = home.run(
+        &["studio", "preset", "save"],
+        "{\"id\": \"mine\", \"name\": \"Mine\", \"look\": {\"preset\": \"zen\"}}",
+    );
+    assert_eq!((reply["result"].as_str(), code), (Some("ok"), 0));
+    let (reply, code) = home.run(
+        &["studio", "preset", "rename"],
+        "{\"id\": \"gone\", \"name\": \"X\"}",
+    );
+    assert_eq!(
+        (reply["ok"].as_bool(), reply["result"].as_str(), code),
+        (Some(false), Some("unknown-preset"), 0)
+    );
+    let (reply, code) = home.run(&["studio", "preset", "delete"], "{\"id\": \"mine\"}");
+    assert_eq!((reply["result"].as_str(), code), (Some("unchanged"), 0));
+    let (reply, code) = home.run(&["studio", "preset", "delete"], "{\"id\": \"Mine\"}");
+    assert_eq!((reply["code"].as_str(), code), (Some("INVALID_REQUEST"), 1));
+    let (reply, code) = home.run(&["studio", "preset", "move"], "{}");
+    assert_eq!(
+        (reply["code"].as_str(), code),
+        (Some("INVALID_ARGUMENT"), 1)
+    );
+}
