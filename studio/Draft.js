@@ -454,10 +454,12 @@ function isNumber(value) {
   return value !== null && value !== "" && typeof value !== "boolean" && isFinite(Number(value))
 }
 
-// One background key: source, blur, dim or decor. The picture source needs
-// a path, so it is refused here without one (see setPicture).
+// One background key: source, blur, dim, motion, pauseOnBattery. The
+// picture source needs a path, so it is refused here without one (see
+// setPicture); shapes have their own edits (addShape, setShape, …), and
+// the older decor is never written.
 function setBackground(draft, key, value) {
-  if (Layout.BACKGROUND_KEYS.indexOf(key) === -1 || key === "path") return draft
+  if (Layout.BACKGROUND_KEYS.indexOf(key) === -1 || ["path", "decor", "shapes"].indexOf(key) !== -1) return draft
   if ((key === "blur" || key === "dim") && !isNumber(value)) return draft
   return editLook(draft, function(look) { look.background[key] = cleanScene(key, value) })
 }

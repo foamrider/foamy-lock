@@ -24,6 +24,9 @@ Rectangle {
   // The opacity of its glass surface (the look's, or its own `glass`).
   required property real glassOpacity
   readonly property color glassFill: view.glassAt(glassOpacity)
+  // False while a shape is this element's background (absorb): its own
+  // surface (fill and border) isn't drawn; the content stays where it is.
+  property bool surfaceShown: true
   property string styleName: "card"
   readonly property bool line: styleName === "line"
   readonly property bool cardStyle: styleName === "card"
@@ -84,9 +87,11 @@ Rectangle {
     : Math.round((line || minimal ? 30 : 92) * uiScale)
   // The line, minimal, hero and disc have no surface.
   readonly property bool surface: cardStyle || pill || art
+  // Its surface's corner radius (a shape's "auto" radius), -1 without one.
+  readonly property real surfaceRadius: surface ? radius : -1
   radius: pill ? height / 2 : Math.round(22 * uiScale)
-  color: surface ? glassFill : "transparent"
-  border.width: surface ? 1 : 0
+  color: surface && surfaceShown ? glassFill : "transparent"
+  border.width: surface && surfaceShown ? 1 : 0
   border.color: view.glassBorder
 
   Row {

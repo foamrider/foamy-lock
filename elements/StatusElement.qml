@@ -22,6 +22,11 @@ Flow {
   // The opacity of its glass surface (the look's, or its own `glass`).
   required property real glassOpacity
   readonly property color glassFill: view.glassAt(glassOpacity)
+  // False while a shape is this element's background (absorb): its own
+  // surface (fill and border) isn't drawn; the content stays where it is.
+  property bool surfaceShown: true
+  // Its surface's corner radius (a shape's "auto" radius), -1 without one.
+  readonly property real surfaceRadius: pill ? Math.min(height, lineHeight) / 2 : system ? Math.round(20 * uiScale) : -1
   // "text" (icons and labels), "icons" (icons only), "pill" or "system".
   property string styleName: "text"
   // The look's `items`, or null for the style's own contents.
@@ -185,7 +190,7 @@ Flow {
       // so the Row doesn't place it, and spans the whole status from there.
       Rectangle {
         objectName: "statusPill"
-        visible: status.pill && lineItem.index === status.firstShown
+        visible: status.pill && lineItem.index === status.firstShown && status.surfaceShown
         x: status.view.rightToLeft ? lineItem.width - status.width : 0
         width: status.width
         height: status.height
@@ -266,8 +271,8 @@ Flow {
     width: Math.round(320 * unit)
     height: rows.length > 0 ? 2 * padding + rows.length * rowHeight + (rows.length - 1) * rowGap : 0
     radius: Math.round(20 * unit)
-    color: status.glassFill
-    border.width: 1
+    color: status.surfaceShown ? status.glassFill : "transparent"
+    border.width: status.surfaceShown ? 1 : 0
     border.color: status.view.glassBorder
 
     Repeater {

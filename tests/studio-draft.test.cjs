@@ -527,8 +527,9 @@ test('background and glass edits stay within the lock\'s ranges', () => {
   assert.deepEqual(plain(Draft.setBackground(base, 'dim', 0.95)), { preset: 'foamy', background: { dim: 0.9 } })
   assert.deepEqual(plain(Draft.setBackground(base, 'dim', 0.25)), base, 'the preset value is no change')
   assert.equal(Draft.setBackground(base, 'dim', ''), base)
-  assert.deepEqual(plain(Draft.setBackground(base, 'decor', 'frame')), { preset: 'foamy', background: { decor: 'frame' } })
-  assert.equal(Draft.setBackground(base, 'decor', 'stars'), base)
+  // Shapes have their own edits; the older decor is never written.
+  assert.equal(Draft.setBackground(base, 'decor', 'frame'), base)
+  assert.equal(Draft.setBackground(base, 'shapes', []), base)
   const picture = Draft.setPicture(base, '/home/you/Pictures/lake.jpg')
   assert.deepEqual(plain(picture), { preset: 'foamy', background: { source: 'picture', path: '/home/you/Pictures/lake.jpg' } })
   assert.equal(Draft.setPicture(base, 'lake.jpg'), base, 'a relative path is refused')

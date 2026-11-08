@@ -1885,7 +1885,10 @@ Item {
     // (elementKeysFor; their values and defaults in elementLimits.*.options),
     // statusItems, and weather: whether Foamy Weather answers here
     // (`target`: a foamy.weather target is registered; `state`: the last
-    // answer's, see weatherState).
+    // answer's, see weatherState). Version 4 added shapes (background.shapes):
+    // shapeKinds, shapeLimits (Layout.shapeCatalog: keys, limits, defaults
+    // and the values each key takes) and templates (each template's shapes);
+    // backgroundDecor stays for older clients (a look may still say decor).
     function catalog(): string {
       var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
       var presets = []
@@ -1895,13 +1898,14 @@ Item {
       }
       var keysFor = {}
       for (var e = 0; e < Layout.ELEMENTS.length; e++) keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
-      return JSON.stringify({ version: 3, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+      return JSON.stringify({ version: 4, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
         elementKeysFor: keysFor, statusItems: Layout.STATUS_ITEMS,
         weather: { target: IpcResolver.handlersFor(root, "foamy.weather").length > 0, state: root.weatherState },
         elementLimits: Layout.elementLimits(), screens: Layout.SCREENS,
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
         presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundAnimations: Layout.DRAWN_SOURCES,
         backgroundColors: Layout.THEME_COLORS, backgroundDecor: Layout.DECORATIONS,
+        shapeKinds: Layout.SHAPE_KINDS, shapeLimits: Layout.shapeCatalog(), templates: Layout.templates(),
         glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
         // Cover art (additive): the settings' mode (Model.coverArtMode:
         // off, player, spotify or custom) and what setCoverArt takes.

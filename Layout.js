@@ -154,8 +154,9 @@ function element(zone, style, order, hidden) {
   return { zone: zone, style: style, order: order, hidden: !!hidden }
 }
 
+// A preset's background; `decor` names its shapes' template (see template()).
 function background(source, blur, dim, decor) {
-  return { source: source, path: "", blur: blur, dim: dim, decor: decor || "none" }
+  return { source: source, path: "", blur: blur, dim: dim, shapes: template(decor || "none") }
 }
 
 // A solid colour background (`color`: a THEME_COLORS name or "#rrggbb").
@@ -587,6 +588,8 @@ function backgroundError(value) {
     return "background.dim must be a number from 0 to 0.9"
   if (value.decor !== undefined && DECORATIONS.indexOf(value.decor) === -1)
     return "background.decor must be one of " + DECORATIONS.join(", ")
+  var shapeProblem = backgroundShapesError(value)
+  if (shapeProblem) return shapeProblem
   if (value.motion !== undefined && MOTIONS.indexOf(value.motion) === -1)
     return "background.motion must be one of " + MOTIONS.join(", ")
   if (value.pauseOnBattery !== undefined && typeof value.pauseOnBattery !== "boolean")
@@ -618,9 +621,11 @@ function merge(presetName, layout, background, glass) {
     for (var key in layout[name]) result.elements[name][key] = layout[name][key]
     canonicalElement(result.elements[name])
   }
+  // The glass first: an older `decor` follows the tint (canonicalShapes).
+  for (var g in glass || {}) result.glass[g] = glass[g]
   for (var b in background || {}) result.background[b] = background[b]
   canonicalBackground(result.background)
-  for (var g in glass || {}) result.glass[g] = glass[g]
+  canonicalShapes(result.background, result.glass)
   return result
 }
 
@@ -657,7 +662,10 @@ function pausesOnBattery(background) {
 function canonical(look) {
   var result = copy(look)
   for (var name in (result && result.elements) || {}) canonicalElement(result.elements[name])
-  if (result && isPlainObject(result.background)) canonicalBackground(result.background)
+  if (result && isPlainObject(result.background)) {
+    canonicalBackground(result.background)
+    canonicalShapes(result.background, result.glass)
+  }
   return result
 }
 
@@ -1023,4 +1031,565 @@ if (typeof module !== "undefined") {
   module.exports.savingPreset = savingPreset
   module.exports.renamingPreset = renamingPreset
   module.exports.deletingPreset = deletingPreset
+}
+
+// --- shapes: the decorations (round 5, docs/plans/lock-decorations.md) ---------
+//
+// `background.shapes`: 0 to 4 shapes, drawn over the background (wallpaper,
+// video, drawn source and scrim) and under every element: the frosted ones
+// first, then the others in list order. Plain data, nothing loaded. Kinds:
+// - "box": a rounded rectangle around what it wraps, plus `pad`; with
+//   `stretch: "across"` it spans the screen's width less `inset`.
+// - "panel": a rectangle along one screen `edge` (logical start or end, top
+//   or bottom), as thick as what it wraps needs (plus `pad`), within `size`.
+// - "frame": a border inset from the screen's edges, in a `style`.
+// `wrap` is { zones } (the shown elements there, where the zone puts them:
+// offsets never drag a zone shape along; on narrow screens a zone stacked
+// with another wraps both) or { modules } (the named elements where they
+// are drawn: offset, scale and late content included). Lengths are whole
+// pixels at 1080p, scaled by the view like every other length. Colours:
+// - fill "auto" (the default) follows the glass tint: dark (black) over the
+//   plain glass, the look's glass under the accent and solid tints, as the
+//   island always did; "glass" is the look's glass, "surface" exactly what
+//   the wrapped modules' own surfaces draw, "black" black at `opacity`.
+// - frame "auto" follows the tint too: a glow in the accent with the accent
+//   tint, a dark bezel otherwise; "bezel", "glow" and "line" are fixed.
+// `absorb` makes the shape the wrapped modules' only background (their own
+// surfaces aren't drawn; ABSORB_STYLES), never the password field's. Shapes
+// never take part in the geometry check and never cause a fallback.
+var SHAPE_KINDS = ["box", "panel", "frame"]
+var SHAPE_EDGES = ["start", "end", "top", "bottom"]
+var SHAPE_STRETCHES = ["none", "across"]
+var SHAPE_FILLS = ["auto", "glass", "surface", "black"]
+var SHAPE_BORDERS = ["glass", "accent"]
+var SHAPE_SIDES = ["all", "inner"]
+var FRAME_STYLES = ["auto", "bezel", "glow", "line"]
+// A shape's keys in canonical order, and the ones each kind takes.
+var SHAPE_KEY_ORDER = ["kind", "edge", "wrap", "pad", "stretch", "inset", "size", "radius", "fill", "border", "absorb", "style"]
+var SHAPE_KEYS = {
+  box: ["kind", "wrap", "pad", "stretch", "inset", "radius", "fill", "border", "absorb"],
+  panel: ["kind", "edge", "wrap", "pad", "inset", "size", "radius", "fill", "border", "absorb"],
+  frame: ["kind", "inset", "radius", "style"]
+}
+var SHAPE_LIMITS = {
+  count: 4, frosted: 2, zones: 9, modules: 8,
+  pad: { box: { min: 0, max: 120 }, panel: { min: 0, max: 200 } },
+  inset: { box: { min: 0, max: 64 }, panel: { min: 0, max: 64 }, frame: { min: 0, max: 24 } },
+  radius: { box: { min: 0, max: 200 }, panel: { min: 0, max: 200 }, frame: { min: 0, max: 64 } },
+  size: { screen: { min: 0.05, max: 1 }, px: { min: 0, max: 4000 } },
+  opacity: { min: 0, max: 1 },
+  border: { min: 0, max: 4 }
+}
+var SHAPE_FILL_DEFAULTS = { color: "auto", opacity: 0.6, frost: false }
+var SHAPE_BORDER_DEFAULTS = { color: "glass", width: 1, sides: "all" }
+var SHAPE_DEFAULTS = {
+  box: { pad: { x: 24, y: 16 }, stretch: "none", inset: 16, radius: 24, fill: SHAPE_FILL_DEFAULTS,
+    border: SHAPE_BORDER_DEFAULTS, absorb: false },
+  panel: { pad: 32, inset: 0, radius: 0, fill: SHAPE_FILL_DEFAULTS, border: SHAPE_BORDER_DEFAULTS, absorb: false },
+  frame: { inset: 12, radius: 22, style: "auto" }
+}
+// The surfaces `absorb` takes over (the panel-like ones; never the password
+// field's, nor the analog and ring clock faces, which are the clock itself).
+var ABSORB_STYLES = {
+  media: ["card", "pill", "art"],
+  status: ["pill", "system"],
+  calendar: ["card", "week"],
+  weather: ["pill", "detailed", "card"],
+  account: ["chip"]
+}
+// The templates (the older decorations, by name), as Lock Studio offers them.
+var SHAPE_TEMPLATES = ["island", "card", "split", "sheet", "strip", "cinema", "frame"]
+BACKGROUND_KEYS.push("shapes")
+
+// The shapes of a template, an older `decor` name ("none" and unknown: []).
+// Called while PRESETS is built, so it uses nothing defined below it.
+function template(name) {
+  var row = function(r) { return [r + "-start", r + "-center", r + "-end"] }
+  switch (name) {
+  case "island":
+    return [{ kind: "box", wrap: { zones: ["top-center"] }, pad: { x: 34, y: 12 }, radius: 40, fill: { opacity: 0.82 } }]
+  case "card":
+    return [{ kind: "box", wrap: { zones: ["middle-center"] }, pad: { x: 36, y: 36 }, radius: 30,
+      fill: { color: "glass", opacity: 0.5, frost: true } }]
+  case "strip":
+    return [{ kind: "box", wrap: { zones: row("bottom") }, pad: { x: 0, y: 14 }, stretch: "across", radius: 20,
+      fill: { color: "glass", opacity: 0.72 } }]
+  case "split":
+    return [{ kind: "panel", edge: "start", wrap: { zones: ["top-start", "middle-start", "bottom-start"] }, pad: 56,
+      size: { min: { screen: 0.38 }, fillPast: { screen: 0.62 } }, fill: { color: "glass", opacity: 0.9 },
+      border: { color: "accent", width: 3, sides: "inner" } }]
+  case "sheet":
+    return [{ kind: "panel", edge: "end", wrap: { zones: ["top-end", "middle-end", "bottom-end"] }, pad: 44, inset: 24,
+      size: { min: { px: 420 } }, radius: 28, fill: { color: "glass", opacity: 0.55, frost: true } }]
+  case "cinema":
+    return ["top", "bottom"].map(function(edge) {
+      return { kind: "panel", edge: edge, wrap: { zones: row(edge) }, pad: 26, size: { min: { screen: 0.12 }, max: { screen: 0.4 } },
+        fill: { color: "black", opacity: 1 }, border: { width: 0 } }
+    })
+  case "frame":
+    return [{ kind: "frame" }]
+  }
+  return []
+}
+
+// An older look's `decor` as shapes, drawn exactly as before: the island
+// took the glass at 0.86 under the accent and solid tints.
+function legacyShapes(name, tint) {
+  var shapes = template(name)
+  if (name === "island" && tint && tint !== "none") shapes[0].fill.opacity = 0.86
+  return shapes
+}
+
+function isInteger(value) {
+  return typeof value === "number" && isFinite(value) && Math.floor(value) === value
+}
+
+function integerError(path, value, range) {
+  return isInteger(value) && value >= range.min && value <= range.max ? ""
+    : path + " must be an integer from " + range.min + " to " + range.max
+}
+
+function choiceError(path, value, list) {
+  return list.indexOf(value) !== -1 ? "" : path + " must be one of " + list.join(", ")
+}
+
+// { zones } or { modules }: exactly one key, distinct names. "" when valid.
+function wrapError(path, wrap) {
+  if (!isPlainObject(wrap) || Object.keys(wrap).length !== 1 || (wrap.zones === undefined && wrap.modules === undefined))
+    return path + " must be { \"zones\": [...] } or { \"modules\": [...] }"
+  var key = wrap.zones !== undefined ? "zones" : "modules"
+  var names = key === "zones" ? ZONES : ELEMENTS
+  var list = wrap[key]
+  var most = SHAPE_LIMITS[key]
+  if (!Array.isArray(list) || list.length === 0 || list.length > most)
+    return path + "." + key + " must be a list of 1 to " + most + " of " + names.join(", ")
+  for (var i = 0; i < list.length; i++) {
+    if (names.indexOf(list[i]) === -1) return path + "." + key + " must only name " + names.join(", ")
+    if (list.indexOf(list[i]) !== i) return path + "." + key + " names " + list[i] + " twice"
+  }
+  return ""
+}
+
+// A size: { screen: 0.05–1 } (of the screen across the panel) or { px }.
+function lengthError(path, value) {
+  var units = isPlainObject(value) ? Object.keys(value) : []
+  if (units.length !== 1 || (units[0] !== "screen" && units[0] !== "px"))
+    return path + " must be { \"screen\": fraction } or { \"px\": length }"
+  if (units[0] === "px") return integerError(path + ".px", value.px, SHAPE_LIMITS.size.px)
+  var range = SHAPE_LIMITS.size.screen
+  return inRange(value.screen, range) ? "" : path + ".screen must be a number from " + range.min + " to " + range.max
+}
+
+// One shape: "" when valid, else the problem with its path.
+function shapeError(shape, index) {
+  var path = "background.shapes[" + index + "]"
+  if (!isPlainObject(shape)) return path + " must be an object"
+  if (SHAPE_KINDS.indexOf(shape.kind) === -1) return path + ".kind must be one of " + SHAPE_KINDS.join(", ")
+  var kind = shape.kind
+  for (var key in shape) {
+    if (SHAPE_KEY_ORDER.indexOf(key) === -1) return path + " has an unknown key: " + key
+    if (SHAPE_KEYS[kind].indexOf(key) === -1) return path + "." + key + " isn't taken by a " + kind
+  }
+  var problem = ""
+  if (kind === "box" && shape.wrap === undefined) return path + ".wrap is required for a box"
+  if (shape.wrap !== undefined && (problem = wrapError(path + ".wrap", shape.wrap))) return problem
+  if (kind === "panel" && shape.edge === undefined) return path + ".edge is required for a panel"
+  if (shape.edge !== undefined && (problem = choiceError(path + ".edge", shape.edge, SHAPE_EDGES))) return problem
+  if (shape.pad !== undefined) {
+    if (kind === "box") {
+      var pad = shape.pad
+      if (!isPlainObject(pad) || pad.x === undefined || pad.y === undefined)
+        return path + ".pad must be an object with both x and y"
+      for (var axis in pad) {
+        if (axis !== "x" && axis !== "y") return path + ".pad has an unknown key: " + axis
+        if ((problem = integerError(path + ".pad." + axis, pad[axis], SHAPE_LIMITS.pad.box))) return problem
+      }
+    } else if ((problem = integerError(path + ".pad", shape.pad, SHAPE_LIMITS.pad.panel))) return problem
+  }
+  if (shape.stretch !== undefined && (problem = choiceError(path + ".stretch", shape.stretch, SHAPE_STRETCHES))) return problem
+  if (shape.inset !== undefined) {
+    if (kind === "box" && shape.stretch !== "across") return path + ".inset needs stretch \"across\" on a box"
+    if ((problem = integerError(path + ".inset", shape.inset, SHAPE_LIMITS.inset[kind]))) return problem
+  }
+  if (shape.size !== undefined) {
+    var size = shape.size
+    if (!isPlainObject(size)) return path + ".size must be an object with min, max or fillPast"
+    for (var part in size) {
+      if (["min", "max", "fillPast"].indexOf(part) === -1) return path + ".size has an unknown key: " + part
+      if ((problem = lengthError(path + ".size." + part, size[part]))) return problem
+    }
+    if (size.min && size.max && Object.keys(size.min)[0] === Object.keys(size.max)[0]
+        && size.min[Object.keys(size.min)[0]] > size.max[Object.keys(size.max)[0]])
+      return path + ".size.min must not be more than size.max"
+  }
+  if (shape.radius !== undefined && !(kind === "box" && shape.radius === "auto")
+      && (problem = integerError(path + ".radius", shape.radius, SHAPE_LIMITS.radius[kind])))
+    return kind === "box" ? problem + ", or \"auto\"" : problem
+  if (shape.fill !== undefined) {
+    var fill = shape.fill
+    if (!isPlainObject(fill)) return path + ".fill must be an object with color, opacity or frost"
+    for (var f in fill) if (["color", "opacity", "frost"].indexOf(f) === -1) return path + ".fill has an unknown key: " + f
+    if (fill.color !== undefined && (problem = choiceError(path + ".fill.color", fill.color, SHAPE_FILLS))) return problem
+    if (fill.opacity !== undefined && !inRange(fill.opacity, SHAPE_LIMITS.opacity))
+      return path + ".fill.opacity must be a number from 0 to 1"
+    if (fill.frost !== undefined && typeof fill.frost !== "boolean") return path + ".fill.frost must be true or false"
+  }
+  if (shape.border !== undefined) {
+    var border = shape.border
+    if (!isPlainObject(border)) return path + ".border must be an object with color, width or sides"
+    for (var b in border) if (["color", "width", "sides"].indexOf(b) === -1) return path + ".border has an unknown key: " + b
+    if (border.color !== undefined && (problem = choiceError(path + ".border.color", border.color, SHAPE_BORDERS))) return problem
+    if (border.width !== undefined && (problem = integerError(path + ".border.width", border.width, SHAPE_LIMITS.border))) return problem
+    if (border.sides !== undefined && (problem = choiceError(path + ".border.sides", border.sides, SHAPE_SIDES))) return problem
+    if (border.sides === "inner" && kind !== "panel") return path + ".border.sides \"inner\" is for a panel"
+  }
+  if (shape.absorb !== undefined && typeof shape.absorb !== "boolean") return path + ".absorb must be true or false"
+  if (shape.style !== undefined && (problem = choiceError(path + ".style", shape.style, FRAME_STYLES))) return problem
+  return ""
+}
+
+function isFrosted(shape) {
+  return isPlainObject(shape) && isPlainObject(shape.fill) && shape.fill.frost === true
+}
+
+// The background's shapes (and their older spelling, `decor`): "" when valid.
+function backgroundShapesError(value) {
+  if (value.shapes === undefined) return ""
+  if (value.decor !== undefined) return "background can't have both decor and shapes"
+  var shapes = value.shapes
+  if (!Array.isArray(shapes)) return "background.shapes must be a list of up to " + SHAPE_LIMITS.count + " shapes"
+  if (shapes.length > SHAPE_LIMITS.count) return "background.shapes has more than " + SHAPE_LIMITS.count + " shapes"
+  for (var i = 0; i < shapes.length; i++) {
+    var problem = shapeError(shapes[i], i)
+    if (problem) return problem
+  }
+  if (shapes.filter(isFrosted).length > SHAPE_LIMITS.frosted)
+    return "background.shapes has more than " + SHAPE_LIMITS.frosted + " frosted shapes"
+  return ""
+}
+
+function sameValue(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+// One shape in canonical form: keys in SHAPE_KEY_ORDER, the kind's defaults
+// left out (inside fill and border too; an empty fill or border goes),
+// `wrap` lists in ZONES or ELEMENTS order. A valid shape stays valid.
+function canonicalShape(shape) {
+  var kind = shape.kind
+  var defaults = SHAPE_DEFAULTS[kind] || {}
+  var out = { kind: kind }
+  for (var i = 1; i < SHAPE_KEY_ORDER.length; i++) {
+    var key = SHAPE_KEY_ORDER[i]
+    if (shape[key] === undefined) continue
+    var value = copy(shape[key])
+    if (key === "wrap") {
+      var listKey = value.zones !== undefined ? "zones" : "modules"
+      var order = listKey === "zones" ? ZONES : ELEMENTS
+      var sorted = {}
+      sorted[listKey] = value[listKey].slice().sort(function(a, b) { return order.indexOf(a) - order.indexOf(b) })
+      value = sorted
+    } else if (key === "pad" && kind === "box") value = { x: value.x, y: value.y }
+    else if (key === "size") {
+      var size = {}
+      var parts = ["min", "max", "fillPast"]
+      for (var p = 0; p < parts.length; p++) if (value[parts[p]] !== undefined) size[parts[p]] = value[parts[p]]
+      value = size
+    } else if (key === "fill" || key === "border") {
+      var own = {}
+      var subDefaults = defaults[key]
+      for (var sub in subDefaults) if (value[sub] !== undefined && value[sub] !== subDefaults[sub]) own[sub] = value[sub]
+      if (Object.keys(own).length === 0) continue
+      value = own
+    }
+    // A box's inset belongs to "across" (its default is kept out with it).
+    if (key === "inset" && kind === "box" && shape.stretch !== "across") continue
+    if (defaults[key] !== undefined && sameValue(value, defaults[key])) continue
+    out[key] = value
+  }
+  return out
+}
+
+// The background's shapes in canonical form: an older `decor` becomes its
+// shapes (in the look's tint) and goes. The effective look always has a
+// list (every preset has one), never `decor`.
+function canonicalShapes(background, glass) {
+  if (background.decor !== undefined) {
+    background.shapes = legacyShapes(background.decor, glass ? glass.tint : "none")
+    delete background.decor
+  }
+  if (Array.isArray(background.shapes)) background.shapes = background.shapes.map(canonicalShape)
+  return background
+}
+
+// Whether the shapes hold the bottom row in a band along the bottom edge
+// (the bottom-center stack then drops into it). From the data alone, never
+// from geometry: a bottom panel, or a box across the screen, that wraps the
+// bottom-center zone. A module wrap never moves anything.
+function bottomBand(shapes) {
+  for (var i = 0; i < (shapes || []).length; i++) {
+    var shape = shapes[i]
+    var zones = shape.wrap && shape.wrap.zones
+    if (!zones || zones.indexOf("bottom-center") === -1) continue
+    if ((shape.kind === "panel" && shape.edge === "bottom") || (shape.kind === "box" && shape.stretch === "across")) return true
+  }
+  return false
+}
+
+// The zones a zone wrap covers on this screen: narrow screens stack the
+// bottom corners together, and middle-end under middle-start when both are
+// used, so a shape around one of such a pair wraps both.
+function wrappedZones(zones, compact, middleStacked) {
+  var out = zones.slice()
+  var pairs = []
+  if (compact) pairs.push(["bottom-start", "bottom-end"])
+  if (middleStacked) pairs.push(["middle-start", "middle-end"])
+  for (var i = 0; i < pairs.length; i++) {
+    if (out.indexOf(pairs[i][0]) === -1 && out.indexOf(pairs[i][1]) === -1) continue
+    for (var j = 0; j < 2; j++) if (out.indexOf(pairs[i][j]) === -1) out.push(pairs[i][j])
+  }
+  return out
+}
+
+// The shown elements a shape wraps, in ELEMENTS order. `shown` maps names
+// to { zone } (only the shown ones); `frame` has compact and middleStacked.
+function wrappedNames(shape, shown, frame) {
+  var wrap = shape.wrap
+  if (!wrap) return []
+  var zones = wrap.zones ? wrappedZones(wrap.zones, frame.compact, frame.middleStacked) : null
+  var out = []
+  for (var i = 0; i < ELEMENTS.length; i++) {
+    var name = ELEMENTS[i]
+    var item = shown[name]
+    if (!item) continue
+    if (zones ? zones.indexOf(item.zone) !== -1 : wrap.modules.indexOf(name) !== -1) out.push(name)
+  }
+  return out
+}
+
+// Whether `name`'s style has a surface `absorb` takes over.
+function absorbable(name, style) {
+  return !!ABSORB_STYLES[name] && ABSORB_STYLES[name].indexOf(style) !== -1
+}
+
+// The modules whose own surface a shape replaces: { name: true }. From the
+// data and what is shown only (never the shapes' geometry), so elements may
+// read it. `shown` as in wrappedNames, with each element's style.
+function absorbedModules(shapes, shown, frame) {
+  var out = {}
+  for (var i = 0; i < (shapes || []).length; i++) {
+    if (shapes[i].absorb !== true) continue
+    var names = wrappedNames(shapes[i], shown, frame)
+    for (var j = 0; j < names.length; j++) if (absorbable(names[j], shown[names[j]].style)) out[names[j]] = true
+  }
+  return out
+}
+
+function unionRect(rects) {
+  if (rects.length === 0) return null
+  var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i]
+    left = Math.min(left, r.x); top = Math.min(top, r.y)
+    right = Math.max(right, r.x + r.width); bottom = Math.max(bottom, r.y + r.height)
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+// A size bound in pixels across a panel's `span`, or null.
+function sizeBound(length, span, unit, rounded) {
+  if (!length) return null
+  if (length.px !== undefined) return Math.round(length.px * unit)
+  return rounded ? Math.round(length.screen * span) : length.screen * span
+}
+
+// The shapes' geometry, in drawing order (frosted first, then list order):
+// [{ index, kind, x, y, width, height, radius, fill, opacity, glass, frost,
+//   border: { color, width, sides }, edge, filled, line, style, inset,
+//   wraps, modules }]. A shape with nothing to draw is left out. `frame`:
+//   { width, height, uiScale, rightToLeft, compact, middleStacked, tint,
+//     glass (the look's opacity), elements: { name: { zone, style, drawn,
+//     reserved, radius (its surface's, or -1), glass } } } (shown only).
+// Pure: node tests it, LockView binds it. Zone wraps fit the reserved
+// rectangles, rounded out to whole pixels; module wraps the drawn ones,
+// exactly, so a zero-padding box draws the module's own surface.
+function shapeRects(shapes, frame) {
+  var W = frame.width, H = frame.height, u = frame.uiScale
+  var rtl = !!frame.rightToLeft
+  var px = function(n) { return Math.round(n * u) }
+  var elements = frame.elements || {}
+  var out = []
+  var list = shapes || []
+  var order = []
+  for (var f = 0; f < list.length; f++) if (isFrosted(list[f])) order.push(f)
+  for (var g = 0; g < list.length; g++) if (!isFrosted(list[g])) order.push(g)
+  for (var o = 0; o < order.length; o++) {
+    var index = order[o]
+    var shape = list[index]
+    var kind = shape.kind
+    var defaults = SHAPE_DEFAULTS[kind]
+    var value = function(key) { return shape[key] !== undefined ? shape[key] : defaults[key] }
+    var result = { index: index, kind: kind }
+    if (kind === "frame") {
+      var frameInset = px(value("inset"))
+      var style = value("style")
+      if (style === "auto") style = frame.tint === "accent" ? "glow" : "bezel"
+      result.x = frameInset; result.y = frameInset
+      result.width = W - 2 * frameInset; result.height = H - 2 * frameInset
+      result.inset = frameInset
+      result.radius = px(value("radius"))
+      result.style = style
+      result.wraps = []
+      out.push(result)
+      continue
+    }
+    var names = wrappedNames(shape, elements, frame)
+    var modules = !!(shape.wrap && shape.wrap.modules)
+    var R = unionRect(names.map(function(name) { return modules ? elements[name].drawn : elements[name].reserved }))
+    var inset = px(value("inset"))
+    var rect = null
+    var filled = false
+    if (kind === "box") {
+      if (!R) continue
+      var padX = px(value("pad").x), padY = px(value("pad").y)
+      var down = modules ? function(n) { return n } : Math.floor
+      var up = modules ? function(n) { return n } : Math.ceil
+      if (value("stretch") === "across") {
+        var top = Math.max(inset, down(R.y - padY))
+        var bottom = Math.min(H - inset, up(R.y + R.height + padY))
+        rect = { x: inset, y: top, width: W - 2 * inset, height: bottom - top }
+      } else {
+        rect = { x: down(R.x - padX), y: down(R.y - padY), width: up(R.width + 2 * padX), height: up(R.height + 2 * padY) }
+      }
+      var radius = value("radius")
+      if (radius === "auto") {
+        var only = names.length === 1 ? elements[names[0]] : null
+        radius = only && only.radius >= 0 ? only.radius + Math.min(padX, padY) : px(defaults.radius)
+      } else radius = px(radius)
+      result.radius = Math.max(0, Math.min(radius, rect.width / 2, rect.height / 2))
+    } else {
+      var edge = shape.edge
+      var across = edge === "start" || edge === "end"
+      var span = across ? W : H
+      var onLeft = (edge === "start") !== rtl
+      var size = shape.size || {}
+      var least = sizeBound(size.min, span, u, true)
+      var most = sizeBound(size.max, span, u, true)
+      var past = sizeBound(size.fillPast, span, u, false)
+      var thick = least || 0
+      if (R) {
+        var reach = edge === "top" ? R.y + R.height : edge === "bottom" ? H - R.y : onLeft ? R.x + R.width : W - R.x
+        thick = Math.ceil(reach - inset + px(value("pad")))
+        if (least !== null) thick = Math.max(thick, least)
+      }
+      if (most !== null) thick = Math.min(thick, most)
+      var room = span - 2 * inset
+      if (past !== null && thick > past) thick = room
+      thick = Math.min(thick, room)
+      if (!(thick > 0)) continue
+      filled = thick >= room
+      if (across) rect = { x: onLeft ? inset : W - inset - thick, y: inset, width: thick, height: H - 2 * inset }
+      else rect = { x: inset, y: edge === "top" ? inset : H - inset - thick, width: W - 2 * inset, height: thick }
+      result.edge = edge
+      result.filled = filled
+      result.radius = Math.max(0, Math.min(px(value("radius")), rect.width / 2, rect.height / 2))
+    }
+    result.x = rect.x; result.y = rect.y; result.width = rect.width; result.height = rect.height
+    var fill = shape.fill || {}
+    var color = fill.color !== undefined ? fill.color : SHAPE_FILL_DEFAULTS.color
+    if (color === "auto") color = frame.tint === "none" || !frame.tint ? "black" : "glass"
+    result.fill = color
+    result.opacity = fill.opacity !== undefined ? fill.opacity : SHAPE_FILL_DEFAULTS.opacity
+    result.frost = fill.frost === true
+    // "surface": the module's own glass when it wraps exactly one, else the look's.
+    result.glass = names.length === 1 && elements[names[0]].glass !== undefined ? elements[names[0]].glass : frame.glass
+    var border = shape.border || {}
+    var width = border.width !== undefined ? border.width : SHAPE_BORDER_DEFAULTS.width
+    var sides = border.sides !== undefined ? border.sides : SHAPE_BORDER_DEFAULTS.sides
+    result.border = { color: border.color !== undefined ? border.color : SHAPE_BORDER_DEFAULTS.color,
+      width: width > 0 ? Math.max(1, Math.round(width * u)) : 0, sides: sides }
+    // The inner edge of a panel (not drawn when it fills the screen).
+    result.line = null
+    if (kind === "panel" && sides === "inner" && result.border.width > 0 && !filled) {
+      var bw = result.border.width
+      result.line = result.edge === "top" ? { x: rect.x, y: rect.y + rect.height - bw, width: rect.width, height: bw }
+        : result.edge === "bottom" ? { x: rect.x, y: rect.y, width: rect.width, height: bw }
+        : { x: onLeft ? rect.x + rect.width - bw : rect.x, y: rect.y, width: bw, height: rect.height }
+    }
+    result.wraps = names
+    result.modules = modules
+    out.push(result)
+  }
+  return out
+}
+
+function containsRect(outer, inner) {
+  return inner.x >= outer.x - 1 && inner.y >= outer.y - 1 && inner.x + inner.width <= outer.x + outer.width + 1
+    && inner.y + inner.height <= outer.y + outer.height + 1
+}
+
+// Advice for an editor, never a fallback (the lock ignores it): for the
+// shapes drawn (`geometry`, from shapeRects) over the shown elements'
+// drawn `rects`, a list of { code, index, names }:
+// - "shape-straddles": a module (the field above all) across a shape's edge;
+// - "shape-outside-frame": a module outside a frame;
+// - "frost-overlap": two frosted shapes overlapping;
+// - "shape-empty": a shape that wraps nothing on this screen.
+function shapeAdvice(look, rects, geometry) {
+  var shapes = (look && look.background && look.background.shapes) || []
+  var out = []
+  var drawn = {}
+  for (var g = 0; g < geometry.length; g++) drawn[geometry[g].index] = geometry[g]
+  for (var i = 0; i < shapes.length; i++) {
+    var shape = shapes[i]
+    var at = drawn[i]
+    if (shape.kind !== "frame" && shape.wrap && (!at || at.wraps.length === 0)) out.push({ code: "shape-empty", index: i, names: [] })
+    if (!at) continue
+    var outside = [], straddling = []
+    for (var n = 0; n < ELEMENTS.length; n++) {
+      var name = ELEMENTS[n]
+      var r = rects[name]
+      if (!r) continue
+      var inside = containsRect(at, r)
+      if (shape.kind === "frame") { if (!inside) outside.push(name) }
+      else if (!inside && intersects(at, r, 1)) straddling.push(name)
+    }
+    if (outside.length > 0) out.push({ code: "shape-outside-frame", index: i, names: outside })
+    if (straddling.length > 0) out.push({ code: "shape-straddles", index: i, names: straddling })
+  }
+  for (var a = 0; a < geometry.length; a++) {
+    for (var b = a + 1; b < geometry.length; b++) {
+      if (geometry[a].frost && geometry[b].frost && intersects(geometry[a], geometry[b], 0))
+        out.push({ code: "frost-overlap", index: Math.max(geometry[a].index, geometry[b].index), names: [] })
+    }
+  }
+  return out
+}
+
+// What an editor may offer for shapes (the catalog's shapeLimits).
+function shapeCatalog() {
+  return { kinds: SHAPE_KINDS.slice(), keys: copy(SHAPE_KEYS), limits: copy(SHAPE_LIMITS), defaults: copy(SHAPE_DEFAULTS),
+    edges: SHAPE_EDGES.slice(), stretches: SHAPE_STRETCHES.slice(), fills: SHAPE_FILLS.slice(),
+    borders: SHAPE_BORDERS.slice(), sides: SHAPE_SIDES.slice(), frameStyles: FRAME_STYLES.slice(),
+    absorbStyles: copy(ABSORB_STYLES) }
+}
+
+// Each template's shapes, by name.
+function templates() {
+  var out = {}
+  for (var i = 0; i < SHAPE_TEMPLATES.length; i++) out[SHAPE_TEMPLATES[i]] = template(SHAPE_TEMPLATES[i])
+  return out
+}
+
+if (typeof module !== "undefined") {
+  var shapeExports = { SHAPE_KINDS: SHAPE_KINDS, SHAPE_EDGES: SHAPE_EDGES, SHAPE_STRETCHES: SHAPE_STRETCHES,
+    SHAPE_FILLS: SHAPE_FILLS, SHAPE_BORDERS: SHAPE_BORDERS, SHAPE_SIDES: SHAPE_SIDES, FRAME_STYLES: FRAME_STYLES,
+    SHAPE_KEY_ORDER: SHAPE_KEY_ORDER, SHAPE_KEYS: SHAPE_KEYS, SHAPE_LIMITS: SHAPE_LIMITS, SHAPE_DEFAULTS: SHAPE_DEFAULTS,
+    SHAPE_FILL_DEFAULTS: SHAPE_FILL_DEFAULTS, SHAPE_BORDER_DEFAULTS: SHAPE_BORDER_DEFAULTS, ABSORB_STYLES: ABSORB_STYLES,
+    SHAPE_TEMPLATES: SHAPE_TEMPLATES, template: template, legacyShapes: legacyShapes, shapeError: shapeError,
+    backgroundShapesError: backgroundShapesError, canonicalShape: canonicalShape, canonicalShapes: canonicalShapes,
+    bottomBand: bottomBand, wrappedZones: wrappedZones, wrappedNames: wrappedNames, absorbable: absorbable,
+    absorbedModules: absorbedModules, shapeRects: shapeRects, shapeAdvice: shapeAdvice, shapeCatalog: shapeCatalog,
+    templates: templates, isFrosted: isFrosted }
+  for (var shapeKey in shapeExports) module.exports[shapeKey] = shapeExports[shapeKey]
 }

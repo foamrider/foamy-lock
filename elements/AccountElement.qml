@@ -13,6 +13,11 @@ Item {
   // The opacity of its glass surface (the look's, or its own `glass`).
   required property real glassOpacity
   readonly property color glassFill: view.glassAt(glassOpacity)
+  // False while a shape is this element's background (absorb): its own
+  // surface (fill and border) isn't drawn; the content stays where it is.
+  property bool surfaceShown: true
+  // Its surface's corner radius (a shape's "auto" radius), -1 without one.
+  readonly property real surfaceRadius: chip ? height / 2 : -1
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "avatar"
@@ -36,7 +41,7 @@ Item {
   Rectangle {
     objectName: "accountChip"
     anchors.fill: parent
-    visible: account.chip
+    visible: account.chip && account.surfaceShown
     radius: height / 2
     color: account.glassFill
     border.width: 1

@@ -134,6 +134,8 @@ Item {
   readonly property bool motionAllowed: visible && loadBackground && displayAwake && !reduceMotion
     && GraphicsInfo.api !== GraphicsInfo.Software
   readonly property Item wallpaperItem: wallpaper
+  // The background is a picture (the Omarchy wallpaper or a chosen one).
+  readonly property bool pictureBackground: ["omarchy", "picture"].indexOf(effectiveLook.background.source) !== -1
 
   // The status element's readings beyond network and battery. Each source
   // runs only while the status shows an item that needs it (status.items,
@@ -403,7 +405,7 @@ Item {
       var first = Math.round((height - above - 2 * zoneGap - stackHeight("middle-end", own === "end" ? name : undefined)) / 2)
       top = own === "start" ? first : first + above + 2 * zoneGap
     } else if (row === "middle") top = Math.round((height - total) / 2)
-    else if (center && Layout.BAND_DECORATIONS.indexOf(effectiveLook.background.decor) !== -1)
+    else if (center && bottomBand)
       top = height - total - (compactLayout ? bottomReserve() : edgeMargin(row))
     else if (center) top = Math.min(height * 0.65, height - total - bottomReserve())
     else if (!compactLayout || Layout.zoneColumn(zone) === "start") top = height - edgeMargin(row) - total
@@ -439,8 +441,7 @@ Item {
   }
 
   // The union of the shown elements' reserved (un-offset) rectangles in
-  // `zones`, or null (the decorations fit themselves to it, so an offset
-  // element never drags a surface along).
+  // `zones`, or null (what a zone shape wraps; see shapeGeometry).
   function zonesRect(zones) {
     var shown = shownMap()
     var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
@@ -527,6 +528,49 @@ Item {
     return rects
   }
   readonly property var elementRects: shownRects()
+
+  // --- shapes (Layout.js "shapes"; drawn by elements/Decoration.qml) -------
+  // The bottom-center stack drops into a bottom band: from the look's data
+  // alone, never from the shapes' geometry.
+  readonly property bool bottomBand: Layout.bottomBand(effectiveLook.background.shapes)
+  // Each shown element for the shapes: its zone and style, where it is
+  // drawn (elementRects) and where its zone puts it (reserved: without the
+  // offset), its surface's corner radius (-1 without one) and its glass.
+  function shapeFrame() {
+    var elements = {}
+    var rects = elementRects
+    for (var name in rects) {
+      var r = rects[name]
+      var item = elementItem(name)
+      var dx = offsetX(name), dy = offsetY(name)
+      elements[name] = { zone: placed[name].zone, style: placed[name].style, drawn: r,
+        reserved: { x: r.x - dx, y: r.y - dy, width: r.width, height: r.height },
+        radius: item.surfaceRadius !== undefined ? item.surfaceRadius : -1, glass: elementGlass(name) }
+    }
+    return { width: width, height: height, uiScale: uiScale, rightToLeft: rightToLeft, compact: compactLayout,
+      middleStacked: middleStacked(), tint: glassTint, glass: effectiveLook.glass.opacity, elements: elements }
+  }
+  // The shapes' geometry (Layout.shapeRects): one binding over the element
+  // rectangles, so a shape around modules follows an offset, a scale and
+  // content that arrives late, in the same frame. Elements never read it.
+  readonly property var shapeGeometry: width > 0 && height > 0
+    ? Layout.shapeRects(effectiveLook.background.shapes, shapeFrame()) : []
+  // The modules a shape is the background of (`absorb`): from the data and
+  // what is shown, so their own surface goes without reading geometry.
+  readonly property var absorbed: {
+    var shown = {}
+    var map = shownMap()
+    for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+      var name = Layout.ELEMENTS[i]
+      if (map[name]) shown[name] = { zone: placed[name].zone, style: placed[name].style }
+    }
+    return Layout.absorbedModules(effectiveLook.background.shapes, shown,
+      { compact: compactLayout, middleStacked: middleStacked() })
+  }
+  // Whether an element draws its own surface (false under an absorbing shape).
+  function surfaceShown(name) {
+    return absorbed[name] !== true
+  }
 
   // What is wrong with the geometry shown: "" or a code. The field must be
   // on screen, below the top third and uncovered; every element on screen;
@@ -687,7 +731,7 @@ Item {
       id: wallpaper
       objectName: "lockWallpaper"
       anchors.fill: parent
-      readonly property bool wanted: ["omarchy", "picture"].indexOf(root.effectiveLook.background.source) !== -1
+      readonly property bool wanted: root.pictureBackground
       source: wanted && root.loadBackground && width > 0 && height > 0 ? root.fileUrl(root.backgroundPath, root.backgroundVersion) : ""
       // Under a playing clip, once its first frame is there.
       visible: !root.videoShown
@@ -781,12 +825,11 @@ Item {
       id: lockClock
     }
 
-    // Panels, bars and frames behind the elements (background, never checked
-    // against the field, never above it).
+    // The look's shapes behind the elements (background: never checked
+    // against the field, never above it, no input).
     Decoration {
       anchors.fill: parent
       view: root
-      kind: root.effectiveLook.background.decor || "none"
     }
 
     DateElement {
@@ -821,6 +864,7 @@ Item {
     AccountElement {
       id: identityBlock
       view: root
+      surfaceShown: root.surfaceShown("account")
       uiScale: root.elementScale("account")
       opacity: root.elementOpacity("account")
       glassOpacity: root.elementGlass("account")
@@ -850,6 +894,7 @@ Item {
     MediaElement {
       id: mediaRow
       view: root
+      surfaceShown: root.surfaceShown("media")
       uiScale: root.elementScale("media")
       opacity: root.elementOpacity("media")
       glassOpacity: root.elementGlass("media")
@@ -863,6 +908,7 @@ Item {
     CalendarElement {
       id: calendarBlock
       view: root
+      surfaceShown: root.surfaceShown("calendar")
       uiScale: root.elementScale("calendar")
       opacity: root.elementOpacity("calendar")
       glassOpacity: root.elementGlass("calendar")
@@ -876,6 +922,7 @@ Item {
     StatusElement {
       id: statusFooter
       view: root
+      surfaceShown: root.surfaceShown("status")
       uiScale: root.elementScale("status")
       opacity: root.elementOpacity("status")
       glassOpacity: root.elementGlass("status")
@@ -889,6 +936,7 @@ Item {
     WeatherElement {
       id: weatherBlock
       view: root
+      surfaceShown: root.surfaceShown("weather")
       uiScale: root.elementScale("weather")
       opacity: root.elementOpacity("weather")
       glassOpacity: root.elementGlass("weather")

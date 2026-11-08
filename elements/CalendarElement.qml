@@ -18,6 +18,11 @@ Item {
   // The opacity of its glass surface (the look's, or its own `glass`).
   required property real glassOpacity
   readonly property color glassFill: view.glassAt(glassOpacity)
+  // False while a shape is this element's background (absorb): its own
+  // surface (fill and border) isn't drawn; the content stays where it is.
+  property bool surfaceShown: true
+  // Its surface's corner radius (a shape's "auto" radius), -1 without one.
+  readonly property real surfaceRadius: card || week ? Math.round((week ? 18 : 22) * unit) : -1
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "card"
@@ -63,8 +68,8 @@ Item {
   Rectangle {
     objectName: "calendarCard"
     anchors.fill: parent
-    visible: calendar.card || calendar.week
-    radius: Math.round((calendar.week ? 18 : 22) * calendar.unit)
+    visible: (calendar.card || calendar.week) && calendar.surfaceShown
+    radius: calendar.surfaceRadius
     color: calendar.glassFill
     border.width: 1
     border.color: calendar.view.glassBorder

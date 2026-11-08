@@ -833,9 +833,32 @@ fn look(test: &Test) -> R {
                 .all(|p| p["look"]["elements"]["weather"]["hidden"] == true)),
         "{catalog}"
     );
+    // Version 4: shapes, their limits and the templates; every preset's
+    // look has a list of shapes and never the older decor.
+    ensure!(
+        at(&catalog, "shapeKinds")?
+            .as_array()
+            .is_some_and(|k| k.len() == 3 && k.iter().any(|k| k == "panel"))
+            && num(&catalog, "shapeLimits.limits.count")? == 4.0
+            && num(&catalog, "shapeLimits.limits.frosted")? == 2.0
+            && num(&catalog, "shapeLimits.defaults.box.radius")? == 24.0
+            && at(&catalog, "templates.cinema")?
+                .as_array()
+                .is_some_and(|t| t.len() == 2)
+            && at(&catalog, "templates.island")?
+                .as_array()
+                .is_some_and(|t| t.len() == 1 && t[0]["wrap"]["zones"] == json!(["top-center"]))
+            && at(&catalog, "presets")?.as_array().is_some_and(|p| {
+                p.iter().all(|p| {
+                    p["look"]["background"]["shapes"].is_array()
+                        && p["look"]["background"].get("decor").is_none()
+                })
+            }),
+        "{catalog}"
+    );
     // Version 2: the placement keys and their limits, per element.
     ensure!(
-        num(&catalog, "version")? == 3.0
+        num(&catalog, "version")? == 4.0
             && at(&catalog, "elementKeys")?.as_array().is_some_and(|k| {
                 ["scale", "opacity", "offset", "glass", "screens"]
                     .iter()

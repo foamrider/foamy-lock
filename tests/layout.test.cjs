@@ -20,7 +20,7 @@ test('the default look is the 1.2.0 lock screen', () => {
   assert.deepEqual(Layout.stack(look.elements, 'bottom-center'), ['account', 'password'])
   assert.deepEqual(Layout.stack(look.elements, 'bottom-start'), ['media'])
   assert.deepEqual(Layout.stack(look.elements, 'top-end'), ['status'])
-  assert.deepEqual(look.background, {source: 'omarchy', path: '', blur: 0, dim: 0.25, decor: 'none'})
+  assert.deepEqual(look.background, {source: 'omarchy', path: '', blur: 0, dim: 0.25, shapes: []})
   assert.deepEqual(look.glass, {opacity: 1, tint: 'none'})
   assert.equal(look.elements.calendar.hidden, true)
   assert.deepEqual(Layout.parseLook({}), {valid: true, look, error: ''})
@@ -153,10 +153,11 @@ test('every style is accepted on its own element and only there', () => {
 test('every new background key, decoration and tint is accepted', () => {
   for (const source of Layout.BACKGROUND_SOURCES.filter(s => s !== 'picture'))
     assert.ok(Layout.parseLook({background: {source}}).valid, source)
+  // An older look's decoration still reads, as its shapes (tests/shapes.test.cjs).
   for (const decor of Layout.DECORATIONS) {
     const result = Layout.parseLook({background: {decor}})
     assert.ok(result.valid, decor)
-    assert.equal(result.look.background.decor, decor)
+    assert.deepEqual(result.look.background.shapes, Layout.template(decor), decor)
   }
   for (const tint of Layout.GLASS_TINTS) assert.equal(Layout.parseLook({glass: {tint}}).look.glass.tint, tint)
   // A preset's own glass merges under the user's.
@@ -173,7 +174,7 @@ test('every selectable preset is valid, distinct and keeps the field in reach', 
     const {elements, background, glass} = parsed.look
     assert.equal(elements.password.hidden, false, name)
     assert.ok(Layout.PASSWORD_ZONES.includes(elements.password.zone), name)
-    assert.ok(Layout.DECORATIONS.includes(background.decor), name)
+    assert.equal(Layout.backgroundShapesError(background), '', name)
     assert.ok(Layout.GLASS_TINTS.includes(glass.tint), name)
     assert.equal(background.path, '', name)
     const key = JSON.stringify({elements, background, glass})
@@ -477,7 +478,7 @@ test('a video background: its path, motion and pauseOnBattery', () => {
   assert.ok(!Layout.isVideoPath('/v/a.png') && !Layout.isVideoPath('/v/a.avi') && !Layout.isVideoPath(''))
   // The defaults are left out, so absent and default compare equal.
   const play = Layout.parseLook({background: {source: 'picture', path: '/v/a.mp4', motion: 'play', pauseOnBattery: false}})
-  assert.deepEqual(play.look.background, {source: 'picture', path: '/v/a.mp4', blur: 0, dim: 0.25, decor: 'none',
+  assert.deepEqual(play.look.background, {source: 'picture', path: '/v/a.mp4', blur: 0, dim: 0.25, shapes: [],
     motion: 'play', pauseOnBattery: false})
   assert.ok(Layout.playsVideo(play.look.background))
   assert.ok(!Layout.pausesOnBattery(play.look.background))
@@ -519,7 +520,7 @@ test('a solid colour: theme colours by name or #rrggbb, and the older black and 
     assert.equal(Layout.parseLook({background: {source: 'color', color}}).valid, false, JSON.stringify(color))
   // The default colour is the theme's background, left out of the look.
   assert.deepEqual(Layout.parseLook({background: {source: 'color'}}).look.background,
-    {source: 'color', path: '', blur: 0, dim: 0.25, decor: 'none'})
+    {source: 'color', path: '', blur: 0, dim: 0.25, shapes: []})
   assert.equal(Layout.parseLook({background: {source: 'color', color: 'background'}}).look.background.color, undefined)
   assert.equal(Layout.parseLook({background: {source: 'color', color: '#ABCDEF'}}).look.background.color, '#abcdef')
   // Older looks: black is #000000, theme the theme's background; both read
