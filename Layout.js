@@ -2,7 +2,8 @@
 // settings group (preset, layout, background, glass) and the rules the view
 // relies on. Pure functions over plain data; the view does the geometry.
 //
-// A layout maps each element to { zone, style, order, hidden }. Zones are a
+// A layout maps each element to { zone, style, order, hidden } and the
+// optional scale, opacity, offset, glass and screens (see ELEMENT_KEYS). Zones are a
 // 3×3 grid named by row (top, middle, bottom) and column (start, center,
 // end); start and end mean left and right in left-to-right languages and
 // mirror in right-to-left ones. Elements in one zone stack by `order`.
@@ -28,7 +29,47 @@ var STYLES = {
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]
-var ELEMENT_KEYS = ["zone", "style", "order", "hidden"]
+var ELEMENT_KEYS = ["zone", "style", "order", "hidden", "scale", "opacity", "offset", "glass", "screens"]
+// Free placement and finish (1.3.0), every key optional; absent means the
+// default, which draws exactly as before:
+// - scale: the element's size, a multiple of 0.05 (default 1).
+// - opacity: the whole element's opacity (default 1).
+// - offset: { x, y }, both required: a move from the zone position, as a
+//   fraction of the screen's width and height; x mirrors in right-to-left
+//   languages, like start and end. It never moves the rest of the stack.
+// - glass: the opacity of the element's own glass surface, in place of the
+//   look's glass.opacity (absent: the look's applies). Only GLASS_STYLES
+//   draw one; other styles of the element ignore it, and the date (which
+//   has none) rejects the key.
+// - screens: "all", or "primary" (only the screen that gets the keys).
+// The password field has tighter limits, so it stays legible and in reach.
+var LIMITS = {
+  scale: { min: 0.5, max: 2, step: 0.05 },
+  opacity: { min: 0.3, max: 1 },
+  offset: { min: -0.5, max: 0.5 },
+  glass: { min: 0, max: 1 }
+}
+var PASSWORD_LIMITS = {
+  scale: { min: 0.85, max: 1.5, step: 0.05 },
+  opacity: { min: 0.7, max: 1 },
+  offset: { min: -0.5, max: 0.5 },
+  glass: { min: 0.08, max: 1 }
+}
+var SCREENS = ["all", "primary"]
+// The account and the field already follow the primary screen (see
+// isPrimary); they take no `screens`.
+var SCREENS_ELEMENTS = ["date", "clock", "media", "status", "calendar"]
+// The styles that draw a glass surface, per element.
+var GLASS_STYLES = {
+  clock: ["analog", "ring"],
+  account: ["chip"],
+  password: ["pill", "box", "card"],
+  media: ["card", "pill", "art"],
+  status: ["pill", "system"],
+  calendar: ["card"]
+}
+// The defaults of the optional keys, left out of a canonical look.
+var ELEMENT_DEFAULTS = { scale: 1, opacity: 1, screens: "all" }
 // The last three are drawn by the view in the theme's colours.
 var BACKGROUND_SOURCES = ["omarchy", "picture", "theme", "black", "aurora", "rain", "constellation"]
 var DRAWN_SOURCES = ["aurora", "rain", "constellation"]
@@ -244,7 +285,84 @@ function elementError(name, value) {
     return "layout." + name + ".order must be an integer from -99 to 99"
   if (value.hidden !== undefined && typeof value.hidden !== "boolean")
     return "layout." + name + ".hidden must be true or false"
+  var limits = limitsFor(name)
+  if (value.scale !== undefined && !(inRange(value.scale, limits.scale) && onStep(value.scale, limits.scale.step)))
+    return "layout." + name + ".scale must be a number from " + limits.scale.min + " to " + limits.scale.max
+      + " in steps of " + limits.scale.step
+  if (value.opacity !== undefined && !inRange(value.opacity, limits.opacity))
+    return "layout." + name + ".opacity must be a number from " + limits.opacity.min + " to " + limits.opacity.max
+  if (value.offset !== undefined) {
+    var offset = value.offset
+    if (!isPlainObject(offset) || offset.x === undefined || offset.y === undefined)
+      return "layout." + name + ".offset must be an object with both x and y"
+    for (var axis in offset) {
+      if (axis !== "x" && axis !== "y") return "layout." + name + ".offset has an unknown key: " + axis
+      if (!inRange(offset[axis], limits.offset))
+        return "layout." + name + ".offset." + axis + " must be a number from " + limits.offset.min + " to "
+          + limits.offset.max + " (a fraction of the screen's " + (axis === "x" ? "width" : "height") + ")"
+    }
+  }
+  if (value.glass !== undefined) {
+    if (!GLASS_STYLES[name]) return "layout." + name + ".glass isn't supported: the " + label(name) + " has no glass surface"
+    if (!inRange(value.glass, limits.glass))
+      return "layout." + name + ".glass must be a number from " + limits.glass.min + " to " + limits.glass.max
+  }
+  if (value.screens !== undefined) {
+    if (SCREENS_ELEMENTS.indexOf(name) === -1)
+      return "layout." + name + ".screens isn't supported: the " + label(name) + " always follows the screen that gets the keys"
+    if (SCREENS.indexOf(value.screens) === -1) return "layout." + name + ".screens must be one of " + SCREENS.join(", ")
+  }
   return ""
+}
+
+// An element's name in a message.
+function label(name) {
+  return name === "password" ? "password field" : name
+}
+
+// The ranges of an element's numeric keys (the password's are tighter).
+function limitsFor(name) {
+  return name === "password" ? PASSWORD_LIMITS : LIMITS
+}
+
+function inRange(value, range) {
+  return typeof value === "number" && value >= range.min && value <= range.max
+}
+
+// A multiple of `step`, allowing for binary fractions (1.15 / 0.05 is 22.999…).
+function onStep(value, step) {
+  var steps = value / step
+  return Math.abs(steps - Math.round(steps)) < 1e-9
+}
+
+// What an editor may offer for each element: the numeric ranges, the
+// styles that draw glass (null: the element takes no `glass`) and the
+// `screens` values (null: it takes none).
+function elementLimits() {
+  var out = {}
+  for (var i = 0; i < ELEMENTS.length; i++) {
+    var name = ELEMENTS[i]
+    var limits = copy(limitsFor(name))
+    out[name] = { scale: limits.scale, opacity: limits.opacity, offset: limits.offset,
+      glass: GLASS_STYLES[name] ? { min: limits.glass.min, max: limits.glass.max, styles: GLASS_STYLES[name].slice() } : null,
+      screens: SCREENS_ELEMENTS.indexOf(name) !== -1 ? SCREENS.slice() : null }
+  }
+  return out
+}
+
+// One element in canonical form: the optional keys only where they differ
+// from their defaults (a zero offset is no offset; glass stays once set),
+// and the scale exactly on its step. Absent and default then compare equal.
+function canonicalElement(item) {
+  if (item.scale !== undefined) item.scale = Math.round(item.scale * 20) / 20
+  for (var key in ELEMENT_DEFAULTS) {
+    if (item[key] === ELEMENT_DEFAULTS[key]) delete item[key]
+  }
+  if (item.offset !== undefined) {
+    if (item.offset.x === 0 && item.offset.y === 0) delete item.offset
+    else item.offset = { x: item.offset.x, y: item.offset.y }
+  }
+  return item
 }
 
 // The rules every effective layout must meet, built in or merged. "" when
@@ -304,6 +422,7 @@ function merge(presetName, layout, background, glass) {
   for (var p in preset.glass || {}) result.glass[p] = preset.glass[p]
   for (var name in layout || {}) {
     for (var key in layout[name]) result.elements[name][key] = layout[name][key]
+    canonicalElement(result.elements[name])
   }
   for (var b in background || {}) result.background[b] = background[b]
   for (var g in glass || {}) result.glass[g] = glass[g]
@@ -405,8 +524,9 @@ if (typeof module !== "undefined") module.exports = {
   ELEMENTS: ELEMENTS, ZONES: ZONES, STYLES: STYLES, PASSWORD_ZONES: PASSWORD_ZONES, PRESETS: PRESETS,
   SELECTABLE_PRESETS: SELECTABLE_PRESETS, BACKGROUND_SOURCES: BACKGROUND_SOURCES, DRAWN_SOURCES: DRAWN_SOURCES,
   BACKGROUND_KEYS: BACKGROUND_KEYS, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
-  ELEMENT_KEYS: ELEMENT_KEYS, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
+  ELEMENT_KEYS: ELEMENT_KEYS, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
+  SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
-  merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
+  elementError: elementError, elementLimits: elementLimits, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError
 }

@@ -698,11 +698,71 @@ fn look(test: &Test) -> R {
             && text(&catalog, "defaultPreset")? == "foamy",
         "{catalog}"
     );
+    // Version 2: the placement keys and their limits, per element.
+    ensure!(
+        num(&catalog, "version")? == 2.0
+            && at(&catalog, "elementKeys")?.as_array().is_some_and(|k| {
+                ["scale", "opacity", "offset", "glass", "screens"]
+                    .iter()
+                    .all(|key| k.iter().any(|k| k == key))
+                    && !k.iter().any(|k| k == "options")
+            })
+            && num(&catalog, "elementLimits.clock.scale.min")? == 0.5
+            && num(&catalog, "elementLimits.clock.scale.max")? == 2.0
+            && num(&catalog, "elementLimits.clock.scale.step")? == 0.05
+            && num(&catalog, "elementLimits.password.scale.min")? == 0.85
+            && num(&catalog, "elementLimits.password.opacity.min")? == 0.7
+            && num(&catalog, "elementLimits.password.glass.min")? == 0.08
+            && num(&catalog, "elementLimits.media.offset.max")? == 0.5
+            && at(&catalog, "elementLimits.date.glass")?.is_null()
+            && at(&catalog, "elementLimits.account.screens")?.is_null()
+            && at(&catalog, "elementLimits.calendar.screens")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "primary")),
+        "{catalog}"
+    );
     let custom =
         json!({"preset": "corner", "layout": {"media": {"zone": "bottom-center"}}}).to_string();
     ensure!(test.ipc("foamy.lock", "previewLook", &[&custom])? == "ok");
     ensure!(text(&test.status()?, "previewPreset")? == "corner");
     ensure!(test.lock("hidePreview")? == "ok");
+    // The placement keys preview, and their limits hold over IPC.
+    let placed = json!({"layout": {"clock": {"scale": 1.25, "opacity": 0.8,
+        "offset": {"x": 0.05, "y": -0.02}, "screens": "primary"}, "media": {"glass": 0.4}}})
+    .to_string();
+    ensure!(test.ipc("foamy.lock", "previewLook", &[&placed])? == "ok");
+    ensure!(test.lock("hidePreview")? == "ok");
+    for (look, error) in [
+        (
+            json!({"layout": {"password": {"scale": 2}}}),
+            "layout.password.scale must be",
+        ),
+        (
+            json!({"layout": {"clock": {"offset": {"x": 0.1}}}}),
+            "layout.clock.offset must be",
+        ),
+        (
+            json!({"layout": {"account": {"screens": "primary"}}}),
+            "layout.account.screens isn't",
+        ),
+        (
+            json!({"layout": {"date": {"glass": 0.5}}}),
+            "layout.date.glass isn't",
+        ),
+        (
+            json!({"layout": {"clock": {"options": {"seconds": true}}}}),
+            "layout.clock has an unknown key: options",
+        ),
+    ] {
+        let look = look.to_string();
+        for function in ["previewLook", "saveLook"] {
+            let reply = test.ipc("foamy.lock", function, &[&look])?;
+            ensure!(
+                reply.starts_with(&format!("invalid: {error}")),
+                "{function} {look}: {reply}"
+            );
+        }
+    }
     // saveLook writes the look keys through Omarchy's updateEntryInline and
     // keeps every other key of the entry.
     test.write_config(
@@ -723,6 +783,19 @@ fn look(test: &Test) -> R {
         "{saved}"
     );
     ensure!(test.ipc("foamy.lock", "saveLook", &[&save])? == "unchanged");
+    // The placement keys are saved as given, the other keys kept.
+    let moved = json!({"preset": "editorial", "layout": {"clock": {"hidden": true},
+        "date": {"scale": 1.5, "offset": {"x": 0.1, "y": 0}, "screens": "primary"}}})
+    .to_string();
+    ensure!(test.ipc("foamy.lock", "saveLook", &[&moved])? == "ok");
+    let saved = parse(&test.test("savedEntry")?)?;
+    ensure!(
+        num(&saved, "entry.layout.date.scale")? == 1.5
+            && num(&saved, "entry.layout.date.offset.x")? == 0.1
+            && text(&saved, "entry.layout.date.screens")? == "primary"
+            && *at(&saved, "entry.timeFormat")? == "12h",
+        "{saved}"
+    );
     let extra = json!({"preset": "zen", "timeFormat": "24h"}).to_string();
     ensure!(
         test.ipc("foamy.lock", "saveLook", &[&extra])?

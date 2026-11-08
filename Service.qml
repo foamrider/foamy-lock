@@ -1457,8 +1457,10 @@ Item {
     // Nothing is saved; `lock preview` and hidePreview go back to the look.
     // Like the rest of IPC, nothing here can unlock.
     // Everything an editor needs to offer choices without hard-coding them:
-    // elements, zones, styles, presets (with their looks and thumbnails),
-    // background sources and the saved look. Read-only.
+    // elements, zones, styles, the element keys and their limits, presets (with
+    // their looks and thumbnails), background sources and the saved look.
+    // Read-only. Version 2 added elementLimits (scale, opacity, offset, glass,
+    // screens; see Layout.elementLimits).
     function catalog(): string {
       var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
       var presets = []
@@ -1466,7 +1468,8 @@ Item {
         var name = Layout.SELECTABLE_PRESETS[i]
         presets.push({ name: name, look: Layout.preset(name), thumbnail: dir + "/previews/presets/" + name + ".png" })
       }
-      return JSON.stringify({ version: 1, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+      return JSON.stringify({ version: 2, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+        elementLimits: Layout.elementLimits(), screens: Layout.SCREENS,
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
         presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
         glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,

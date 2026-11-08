@@ -186,3 +186,125 @@ test('every selectable preset is valid, distinct and keeps the field in reach', 
   assert.deepEqual(Layout.SELECTABLE_PRESETS.slice(0, 4), ['foamy', 'corner', 'editorial', 'zen'])
   for (const name of ['foamy', 'corner', 'editorial', 'zen']) assert.equal(Layout.preset(name).elements.calendar.hidden, true)
 })
+
+// The placement and finish keys (1.3.0): scale, opacity, offset, glass, screens.
+const errorOf = (name, value) => Layout.parseLook({layout: {[name]: value}}).error
+
+test('scale takes 0.05 steps from 0.5 to 2, and 0.85 to 1.5 for the field', () => {
+  for (const scale of [0.5, 0.55, 0.85, 1, 1.15, 1.3, 1.45, 1.95, 2])
+    assert.equal(errorOf('clock', {scale}), '', `clock ${scale}`)
+  for (const scale of [0.85, 1.1, 1.5]) assert.equal(errorOf('password', {scale}), '', `password ${scale}`)
+  const message = 'layout.clock.scale must be a number from 0.5 to 2 in steps of 0.05'
+  for (const scale of [0.45, 2.05, 1.03, 1.149, 0, -1, NaN, Infinity, '1', null, true, [1]])
+    assert.equal(errorOf('clock', {scale}), message, `clock ${scale}`)
+  for (const scale of [0.8, 1.55, 0.5, 2, 1.12])
+    assert.equal(errorOf('password', {scale}), 'layout.password.scale must be a number from 0.85 to 1.5 in steps of 0.05',
+      `password ${scale}`)
+  // Floating point: what an editor computes on the step is on the step, and
+  // the look keeps the exact step value.
+  assert.equal(errorOf('date', {scale: 0.1 * 11.5}), '')
+  assert.equal(Layout.parseLook({layout: {date: {scale: 0.1 * 11.5}}}).look.elements.date.scale, 1.15)
+  assert.equal(errorOf('date', {scale: 1.15 + 1e-12}), '')
+  assert.notEqual(errorOf('date', {scale: 1.15 + 1e-6}), '')
+})
+
+test('opacity runs from 0.3 to 1, and from 0.7 for the field', () => {
+  for (const opacity of [0.3, 0.55, 1]) assert.equal(errorOf('media', {opacity}), '', `media ${opacity}`)
+  for (const opacity of [0.29, 1.01, 0, -0.5, '0.5', NaN, null])
+    assert.equal(errorOf('media', {opacity}), 'layout.media.opacity must be a number from 0.3 to 1', `media ${opacity}`)
+  for (const opacity of [0.7, 0.85, 1]) assert.equal(errorOf('password', {opacity}), '', `password ${opacity}`)
+  for (const opacity of [0.69, 0.3, 1.1])
+    assert.equal(errorOf('password', {opacity}), 'layout.password.opacity must be a number from 0.7 to 1', `password ${opacity}`)
+})
+
+test('an offset is whole: x and y, each a fraction of the screen from -0.5 to 0.5', () => {
+  for (const offset of [{x: 0, y: 0}, {x: -0.5, y: 0.5}, {x: 0.5, y: -0.5}, {x: 0.125, y: -0.03}])
+    assert.equal(errorOf('status', {offset}), '', JSON.stringify(offset))
+  assert.equal(errorOf('password', {offset: {x: 0.1, y: -0.2}}), '')
+  const whole = 'layout.status.offset must be an object with both x and y'
+  for (const offset of [{x: 0.1}, {y: 0.1}, {}, [0.1, 0.2], 0.1, null, 'x', {x: undefined, y: 0}])
+    assert.equal(errorOf('status', {offset}), whole, JSON.stringify(offset))
+  assert.equal(errorOf('status', {offset: {x: 0, y: 0, z: 0}}), 'layout.status.offset has an unknown key: z')
+  for (const x of [0.51, -0.51, '0.1', NaN, null, Infinity])
+    assert.equal(errorOf('status', {offset: {x, y: 0}}),
+      "layout.status.offset.x must be a number from -0.5 to 0.5 (a fraction of the screen's width)", String(x))
+  assert.equal(errorOf('status', {offset: {x: 0, y: 0.6}}),
+    "layout.status.offset.y must be a number from -0.5 to 0.5 (a fraction of the screen's height)")
+})
+
+test('glass is per element, only where a style draws glass, with a floor for the field', () => {
+  assert.deepEqual(Object.keys(Layout.GLASS_STYLES).sort(), ['account', 'calendar', 'clock', 'media', 'password', 'status'])
+  for (const [name, styles] of Object.entries(Layout.GLASS_STYLES))
+    for (const style of styles) assert.ok(Layout.STYLES[name].includes(style), `${name} ${style}`)
+  for (const name of Object.keys(Layout.GLASS_STYLES)) {
+    assert.equal(errorOf(name, {glass: 1}), '', name)
+    assert.equal(errorOf(name, {glass: 1.01}), `layout.${name}.glass must be a number from ${name === 'password' ? 0.08 : 0} to 1`)
+  }
+  for (const glass of [0, 0.5]) assert.equal(errorOf('media', {glass}), '', `media ${glass}`)
+  for (const glass of [-0.01, '0.5', null]) assert.equal(errorOf('media', {glass}), 'layout.media.glass must be a number from 0 to 1')
+  assert.equal(errorOf('password', {glass: 0.08}), '')
+  for (const glass of [0, 0.07]) assert.equal(errorOf('password', {glass}), 'layout.password.glass must be a number from 0.08 to 1')
+  assert.equal(errorOf('date', {glass: 0.5}), "layout.date.glass isn't supported: the date has no glass surface")
+  // Absent unless set, and kept when set (even at the look's own value).
+  assert.equal('glass' in Layout.defaults().elements.media, false)
+  assert.equal(Layout.parseLook({layout: {media: {glass: 1}}}).look.elements.media.glass, 1)
+  // A style without a surface accepts and ignores it, so switching style keeps the look valid.
+  assert.ok(Layout.parseLook({layout: {media: {style: 'line', glass: 0.4}}}).valid)
+})
+
+test('screens is "all" or "primary", and only for the elements that show everywhere', () => {
+  assert.deepEqual(Layout.SCREENS, ['all', 'primary'])
+  for (const name of ['date', 'clock', 'media', 'status', 'calendar'])
+    for (const screens of Layout.SCREENS) assert.equal(errorOf(name, {screens}), '', `${name} ${screens}`)
+  for (const screens of ['Primary', 'secondary', '', true, null])
+    assert.equal(errorOf('clock', {screens}), 'layout.clock.screens must be one of all, primary', String(screens))
+  assert.equal(errorOf('account', {screens: 'primary'}),
+    "layout.account.screens isn't supported: the account always follows the screen that gets the keys")
+  assert.equal(errorOf('password', {screens: 'all'}),
+    "layout.password.screens isn't supported: the password field always follows the screen that gets the keys")
+})
+
+test('absent keys and their defaults are the same look', () => {
+  const explicit = {}
+  for (const name of Layout.ELEMENTS) {
+    explicit[name] = {scale: 1, opacity: 1, offset: {x: 0, y: 0}}
+    if (Layout.SCREENS_ELEMENTS.includes(name)) explicit[name].screens = 'all'
+  }
+  const parsed = Layout.parseLook({layout: explicit})
+  assert.ok(parsed.valid, parsed.error)
+  assert.equal(JSON.stringify(parsed.look), JSON.stringify(Layout.defaults()), 'plain foamy, key for key')
+  const changed = Layout.parseLook({layout: {clock: {scale: 1.5, opacity: 0.6, offset: {y: 0.1, x: -0.2}, screens: 'primary', glass: 0.3}}})
+  assert.deepEqual(changed.look.elements.clock,
+    {...Layout.PRESETS.foamy.elements.clock, scale: 1.5, opacity: 0.6, offset: {x: -0.2, y: 0.1}, screens: 'primary', glass: 0.3})
+  assert.deepEqual(Object.keys(changed.look.elements.clock.offset), ['x', 'y'])
+  // The user's entry is never changed by the merge.
+  const entry = {layout: {date: {offset: {x: 0, y: 0}, scale: 1}}}
+  Layout.parseLook(entry)
+  assert.deepEqual(entry, {layout: {date: {offset: {x: 0, y: 0}, scale: 1}}})
+})
+
+test('the limits an editor offers match what the parser accepts', () => {
+  const limits = Layout.elementLimits()
+  assert.deepEqual(Object.keys(limits), Layout.ELEMENTS)
+  assert.deepEqual(limits.clock.scale, {min: 0.5, max: 2, step: 0.05})
+  assert.deepEqual(limits.password.scale, {min: 0.85, max: 1.5, step: 0.05})
+  assert.deepEqual(limits.password.opacity, {min: 0.7, max: 1})
+  assert.deepEqual(limits.media.offset, {min: -0.5, max: 0.5})
+  assert.deepEqual(limits.password.glass, {min: 0.08, max: 1, styles: ['pill', 'box', 'card']})
+  assert.equal(limits.date.glass, null)
+  assert.equal(limits.account.screens, null)
+  assert.deepEqual(limits.calendar.screens, ['all', 'primary'])
+  for (const name of Layout.ELEMENTS) {
+    const l = limits[name]
+    for (const key of ['scale', 'opacity']) {
+      assert.equal(errorOf(name, {[key]: l[key].min}), '', `${name} ${key} min`)
+      assert.equal(errorOf(name, {[key]: l[key].max}), '', `${name} ${key} max`)
+      assert.notEqual(errorOf(name, {[key]: l[key].min - 0.01}), '', `${name} ${key} below`)
+      assert.notEqual(errorOf(name, {[key]: l[key].max + 0.01}), '', `${name} ${key} above`)
+    }
+    // Editing the limits returned never changes the parser's.
+    l.scale.min = 0
+  }
+  assert.equal(Layout.LIMITS.scale.min, 0.5)
+  assert.equal(Layout.PASSWORD_LIMITS.scale.min, 0.85)
+})
