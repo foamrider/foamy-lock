@@ -9,7 +9,9 @@
 //!
 //! - **argv**: `foamy-lock-helper artwork` (below) or `foamy-lock-helper
 //!   wallpaper <link>` (see `wallpaper`). Anything else replies
-//!   `invalid-request`.
+//!   `invalid-request`. `foamy-lock-helper studio …` is Lock
+//!   Studio's, with its own contract and replies (see `studio`); it never
+//!   runs the image sandbox.
 //! - **wallpaper**: `<link>` is an absolute path, normally
 //!   `~/.local/state/omarchy/current/background`. It is resolved like
 //!   `readlink -f` and must end at a regular file. No stdin, environment or
