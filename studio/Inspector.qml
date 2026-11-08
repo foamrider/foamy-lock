@@ -30,7 +30,7 @@ FocusScope {
   readonly property var options: LockLayout.elementLimits()
   readonly property bool revealApplies: !!look.elements.password
     && options.password.options.reveal.styles.indexOf(look.elements.password.style) !== -1
-  readonly property alias checklist: checklist
+  readonly property alias checklist: itemChecklist
 
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.inspector")
@@ -43,7 +43,7 @@ FocusScope {
   function reveal(target) {
     if (!target || !visible) return
     var inside = false
-    for (var p = target; p; p = p.parent) if (p === column) inside = true
+    for (let p = target; p; p = p.parent) if (p === column) inside = true
     if (!inside) return
     var top = target.mapToItem(column, 0, 0).y
     if (top < flick.contentY) flick.contentY = Math.max(0, top - FoamyStyle.gap)
@@ -163,7 +163,7 @@ FocusScope {
 
       // status.items: an ordered checklist.
       ItemChecklist {
-        id: checklist
+        id: itemChecklist
         objectName: "studioItems"
         width: parent.width
         visible: inspector.name === "status"
