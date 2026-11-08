@@ -4,7 +4,7 @@ import "kit"
 import "Layout.js" as Layout
 import "Draft.js" as Draft
 
-// The library (mockup A, left pane): first the preset ("Preset: Foamy ▾",
+// The library (mockup A, left pane): first the preset ("Preset: Default ▾",
 // which opens the preset menu), then the modules, each with its zone or
 // "Hidden", and the scene pages (background, glass and dim, shapes). The list
 // scrolls (wheel, and the keyboard keeps the row it is on in view) when the
