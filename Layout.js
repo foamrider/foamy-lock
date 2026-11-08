@@ -55,9 +55,13 @@ var STATUS_DEFAULT_ITEMS = {
 //   condition and today's high and low).
 // - weather.location: true shows the place name (default false: a lock
 //   screen is seen by anyone).
+// - media.artwork: false shows the music icon in place of the player's
+//   cover in this look, and no artwork is prepared for it (default true;
+//   the showArtwork setting still decides whether there is any).
 var ELEMENT_OPTIONS = {
   password: { reveal: { values: ["always", "typing"], fallback: "always", styleDefaults: { pill: "typing", dots: "typing" } } },
   status: { items: { list: STATUS_ITEMS } },
+  media: { artwork: { values: [true, false], fallback: true } },
   weather: { details: { values: ["temperature", "full"], fallback: "temperature" },
     location: { values: [false, true], fallback: false } }
 }

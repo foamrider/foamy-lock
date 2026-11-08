@@ -68,6 +68,11 @@ import "Layout.js" as Layout
 // - **Preview full screen**: previewLook(entry) runs the lock's
 //   `foamy.lock previewLook` through omarchy-shell itself (the helper has no
 //   subcommand for it); previewed(report).
+// - **Cover art** (a lock screen setting, not part of the look):
+//   setCoverArt(mode) runs the lock's `foamy.lock setCoverArt <mode>`
+//   through omarchy-shell itself, as Preview does, with one of
+//   Model.COVER_ART_MODES and nothing else; coverArtDone(report, mode). The
+//   setting comes back through shell.json (`settings`).
 // - **User presets**: runPreset(op, request) runs `studio preset save`,
 //   `rename` or `delete` (the lock's savePreset, renamePreset and
 //   deletePreset, one retry when it doesn't answer), one at a time;
@@ -597,6 +602,24 @@ Item {
     previewed(Draft.previewReport(exitCode, stdout, stderr))
   }
 
+  // --- cover art -----------------------------------------------------------------
+
+  property bool coverArtBusy: false
+  signal coverArtDone(var report, string mode)
+
+  function setCoverArt(mode) {
+    if (coverArtBusy || Model.COVER_ART_MODES.indexOf(mode) === -1) return false
+    coverArtProc.mode = mode
+    coverArtBusy = true
+    coverArtProc.running = true
+    return true
+  }
+
+  // omarchy-shell's answer (also a test hook).
+  function applyCoverArt(exitCode, stdout, stderr, mode) {
+    coverArtDone(Draft.settingReport(exitCode, stdout, stderr), mode)
+  }
+
   // --- user presets ------------------------------------------------------------
 
   // `op` is "save" ({ id, name, look }), "rename" ({ id, name }) or
@@ -686,6 +709,21 @@ Item {
     onExited: function(exitCode) {
       sources.previewing = false
       sources.applyPreview(exitCode, previewOutput.text, previewErrors.text)
+    }
+  }
+
+  // The same omarchy-shell as Preview; `mode` is one of the three names.
+  Process {
+    id: coverArtProc
+    property string mode: "player"
+    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c",
+      'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock setCoverArt "$1"',
+      "foamy-lock-studio-cover-art", mode]
+    stdout: StdioCollector { id: coverArtOutput; waitForEnd: true }
+    stderr: StdioCollector { id: coverArtErrors; waitForEnd: true }
+    onExited: function(exitCode) {
+      sources.coverArtBusy = false
+      sources.applyCoverArt(exitCode, coverArtOutput.text, coverArtErrors.text, coverArtProc.mode)
     }
   }
 

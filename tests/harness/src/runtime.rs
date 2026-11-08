@@ -537,6 +537,7 @@ fn scenarios(test: &Test) -> R {
     look(test)?;
     video(test)?;
     user_presets(test)?;
+    cover_art(test)?;
     weather(test)?;
     wallpaper(test)?;
     settings_and_password(test)?;
@@ -798,7 +799,12 @@ fn look(test: &Test) -> R {
                 .is_some_and(|s| s.iter().any(|s| s == "mini"))
             && at(&catalog, "styles.weather")?
                 .as_array()
-                .is_some_and(|s| s.len() == 3)
+                .is_some_and(|s| s.len() == 6)
+            && at(&catalog, "styles.media")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "disc"))
+            && text(&catalog, "elementLimits.password.options.reveal.defaults.pill")? == "typing"
+            && at(&catalog, "elementLimits.media.options.artwork.default")? == &json!(true)
             && at(&catalog, "statusItems")?
                 .as_array()
                 .is_some_and(|s| s.len() == 8)
@@ -1385,6 +1391,97 @@ fn user_presets(test: &Test) -> R {
     })?;
     println!(
         "PASS: user presets read item by item (a bad list never touches the look or settings), listed, previewed as user:<id>, saved, renamed and deleted one at a time with the caps, the link as saveLook's fifth key, two quick writes kept, write-failed and no-entry"
+    );
+    Ok(())
+}
+
+/// Lock Studio's cover art choice: `setCoverArt` writes one of three fixed
+/// pairs of showArtwork and artworkHosts (Spotify's host exactly) through
+/// updateEntryInline (the fake records each write), keeps every other key,
+/// takes no other argument, keeps the entry it wrote as the one a second
+/// write merges into, and refuses while locked.
+fn cover_art(test: &Test) -> R {
+    let saved = |test: &Test| -> R<Value> {
+        let saved = parse(&test.test("savedEntry")?)?;
+        ensure!(text(&saved, "module")? == "foamy.lock", "{saved}");
+        Ok(saved["entry"].clone())
+    };
+    test.write_config(
+        STOCK_OFF,
+        json!({"preset": "zen", "timeFormat": "12h", "artworkFileRoots": ["/tmp/covers"]}),
+    )?;
+    test.wait_for(|s| Ok(text(s, "preset")? == "zen"))?;
+    let catalog = parse(&test.ipc("foamy.lock", "catalog", &[])?)?;
+    ensure!(
+        text(&catalog, "coverArt")? == "player"
+            && *at(&catalog, "coverArtModes")? == json!(["off", "player", "spotify"]),
+        "{catalog}"
+    );
+    ensure!(test.ipc("foamy.lock", "setCoverArt", &["spotify"])? == "ok");
+    let written = saved(test)?;
+    ensure!(
+        written["showArtwork"] == json!(true)
+            && written["artworkHosts"] == json!(["i.scdn.co"])
+            && written["artworkFileRoots"] == json!(["/tmp/covers"])
+            && written["timeFormat"] == "12h"
+            && written["preset"] == "zen"
+            && written.get("id").is_none(),
+        "{written}"
+    );
+    ensure!(test.ipc("foamy.lock", "setCoverArt", &["spotify"])? == "unchanged");
+    // A look saved at once merges over the entry just written (before the
+    // file watch would report it).
+    ensure!(test.ipc("foamy.lock", "saveLook", &[r#"{"preset":"corner"}"#])? == "ok");
+    let written = saved(test)?;
+    ensure!(
+        written["artworkHosts"] == json!(["i.scdn.co"]) && written["preset"] == "corner",
+        "{written}"
+    );
+    for (mode, show) in [("off", false), ("player", true)] {
+        ensure!(test.ipc("foamy.lock", "setCoverArt", &[mode])? == "ok", "{mode}");
+        let written = saved(test)?;
+        ensure!(
+            written["showArtwork"] == json!(show)
+                && written["artworkHosts"] == json!([])
+                && written["artworkFileRoots"] == json!(["/tmp/covers"])
+                && written["preset"] == "corner",
+            "{mode}: {written}"
+        );
+    }
+    // Only the three names: never a host, a list or another case.
+    for bad in ["", "Spotify", "online", "i.scdn.co", "custom", "spotify ", "[\"i.scdn.co\"]"] {
+        let answer = test.ipc("foamy.lock", "setCoverArt", &[bad])?;
+        ensure!(
+            answer == "invalid: mode must be one of off, player, spotify",
+            "{bad:?}: {answer}"
+        );
+    }
+    ensure!(saved(test)?["artworkHosts"] == json!([]));
+    // The catalog reads the mode back from the settings; hand-set hosts
+    // are custom.
+    for (settings, mode) in [
+        (json!({"artworkHosts": ["i.scdn.co"]}), "spotify"),
+        (json!({"showArtwork": false, "artworkHosts": ["i.scdn.co"]}), "off"),
+        (json!({"artworkHosts": ["images.example.com", "i.scdn.co"]}), "custom"),
+    ] {
+        test.write_config(STOCK_OFF, settings.clone())?;
+        test.wait_for(|s| Ok(at(s, "settings.artworkHosts")? == &settings["artworkHosts"]
+            && on(s, "settings.showArtwork")? == settings.get("showArtwork").is_none()))?;
+        let catalog = parse(&test.ipc("foamy.lock", "catalog", &[])?)?;
+        ensure!(text(&catalog, "coverArt")? == mode, "{mode}: {}", catalog["coverArt"]);
+    }
+    // Refused while locked (the harness's stand-in session lock).
+    let before = saved(test)?;
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|s| Ok(on(s, "locked")?))?;
+    ensure!(test.ipc("foamy.lock", "setCoverArt", &["spotify"])? == "locked");
+    test.submit("test-password")?;
+    test.wait_for(|s| Ok(!on(s, "locked")?))?;
+    ensure!(saved(test)? == before, "written while locked");
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(text(s, "preset")? == "foamy" && *at(s, "settings.artworkHosts")? == json!([])))?;
+    println!(
+        "PASS: setCoverArt writes off, player and spotify (i.scdn.co only) keeping every other key, merges with a write right after, refuses any other argument and while locked; the catalog names the mode, custom for hand-set hosts"
     );
     Ok(())
 }

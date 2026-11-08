@@ -986,8 +986,18 @@ function previewReport(exitCode, stdout, stderr) {
   return { result: "unexpected", reason: "" }
 }
 
+// omarchy-shell's answer to a settings write (setCoverArt): the preview's
+// readings, plus the replies only a write has.
+function settingReport(exitCode, stdout, stderr) {
+  var report = previewReport(exitCode, stdout, stderr)
+  var out = String(stdout || "").trim().split("\n")[0].trim()
+  if (report.result === "unexpected" && ["unchanged", "unsupported", "no-entry", "write-failed"].indexOf(out) !== -1)
+    return { result: out, reason: "" }
+  return report
+}
+
 if (typeof module !== "undefined") module.exports = {
-  LOOK_KEYS: LOOK_KEYS, APPLY_RESULTS: APPLY_RESULTS, savedEntry: savedEntry, sameLook: sameLook, diskDraft: diskDraft,
+  LOOK_KEYS: LOOK_KEYS, settingReport: settingReport, APPLY_RESULTS: APPLY_RESULTS, savedEntry: savedEntry, sameLook: sameLook, diskDraft: diskDraft,
   restore: restore, replyOf: replyOf, loadReport: loadReport, draftError: draftError, applyReport: applyReport,
   previewReport: previewReport,
   DISPLAY_ORDER: DISPLAY_ORDER, GRID_DIVISIONS: GRID_DIVISIONS, SNAP_RADIUS: SNAP_RADIUS, HISTORY_LIMIT: HISTORY_LIMIT,

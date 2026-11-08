@@ -312,8 +312,11 @@ FocusScope {
   // operation: "save", "rename" or "delete".
   function resultText(report, action) {
     var preset = action === "save" || action === "rename" || action === "delete"
+    // A lock from before setCoverArt.
+    if (action === "coverArt" && report.result === "function-not-found") return FoamyI18n.t("studio.coverArt.older")
     switch (report.result) {
     case "ok": case "unchanged":
+      if (action === "coverArt") return FoamyI18n.t("studio.coverArt.saved")
       return FoamyI18n.t(preset ? "studio.presets.done." + action : action === "apply" ? "studio.applied" : "studio.previewShown")
     case "invalid": return FoamyI18n.t("studio.result.invalid", report.reason)
     case "locked": return FoamyI18n.t("studio.result.locked." + (action === "preview" ? "preview" : "apply"))
@@ -334,6 +337,12 @@ FocusScope {
     if (report.saved || report.result === "ok") return "ok"
     if (report.result === "not-responding" || report.result === "not-ready" || report.result === "locked") return "warning"
     return "error"
+  }
+
+  // Cover art: a lock screen setting, saved at once (not part of the look,
+  // so not in undo); the result shows in the header.
+  function setCoverArt(mode) {
+    if (lockSources.setCoverArt(mode)) notice = { kind: "busy", text: FoamyI18n.t("studio.coverArt.saving") }
   }
 
   // --- quitting ----------------------------------------------------------------------
@@ -444,6 +453,9 @@ FocusScope {
     }
     function onPreviewed(report) {
       studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "preview") }
+    }
+    function onCoverArtDone(report, mode) {
+      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "coverArt") }
     }
     // A save that Apply waits for goes on to Apply (the draft is then based
     // on that preset); a refusal stops there, and the draft stays.

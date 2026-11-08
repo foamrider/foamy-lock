@@ -14,6 +14,33 @@ function defaults() {
     blankAfterSec: 30, showArtwork: true, artworkHosts: [], artworkFileRoots: [] }
 }
 
+// Cover art, as Lock Studio offers it (setCoverArt): three fixed pairs of
+// showArtwork and artworkHosts. "player": the player's local file:// art
+// (under artworkFileRoots) only; "spotify": also Spotify's cover host,
+// exactly the host its MPRIS mpris:artUrl names (https://i.scdn.co/image/…).
+// No other host ever comes from here.
+var COVER_ART_MODES = ["off", "player", "spotify"]
+var SPOTIFY_ART_HOST = "i.scdn.co"
+
+function coverArtSettings(mode) {
+  switch (mode) {
+  case "off": return { showArtwork: false, artworkHosts: [] }
+  case "player": return { showArtwork: true, artworkHosts: [] }
+  case "spotify": return { showArtwork: true, artworkHosts: [SPOTIFY_ART_HOST] }
+  }
+  return null
+}
+
+// The mode of a parsed settings object: one of COVER_ART_MODES, or
+// "custom" when artworkHosts names other hosts.
+function coverArtMode(settings) {
+  if (!settings || settings.showArtwork === false) return "off"
+  var hosts = Array.isArray(settings.artworkHosts) ? settings.artworkHosts : []
+  if (hosts.length === 0) return "player"
+  if (hosts.length === 1 && hosts[0] === SPOTIFY_ART_HOST) return "spotify"
+  return "custom"
+}
+
 // Omarchy loads a first-party plugin unless it is listed in disabledPlugins,
 // so a foamy.lock entry without that line runs two lock services at once.
 function stockLockEnabled(config) {
@@ -400,5 +427,6 @@ if (typeof module !== "undefined") module.exports = {
   stockLockEnabled: stockLockEnabled, normalizeRoot: normalizeRoot, isoWeek: isoWeek,
   parseWeather: parseWeather, weatherFresh: weatherFresh, weatherGroup: weatherGroup,
   WEATHER_MAX_AGE_MS: WEATHER_MAX_AGE_MS, keyboardLayout: keyboardLayout, eventKeyboardName: eventKeyboardName,
-  keyboardShort: keyboardShort, isTypedKeyboard: isTypedKeyboard
+  keyboardShort: keyboardShort, isTypedKeyboard: isTypedKeyboard,
+  COVER_ART_MODES: COVER_ART_MODES, SPOTIFY_ART_HOST: SPOTIFY_ART_HOST, coverArtSettings: coverArtSettings, coverArtMode: coverArtMode
 }

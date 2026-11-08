@@ -62,7 +62,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 27] = [
+const CAPTURES: [&str; 28] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -87,6 +87,7 @@ const CAPTURES: [&str; 27] = [
     "studio-date-styles",
     "studio-calendar-styles",
     "studio-weather-styles",
+    "studio-media",
     "studio-video",
     "studio-video-converting",
     "studio-video-ready",
@@ -101,11 +102,12 @@ const SHELL_JSON: &str =
 /// "unchanged") and records each call's arguments in `$dir/call-<n>`, the
 /// number of calls in `$dir/count`. The user preset operations (savePreset,
 /// renamePreset, deletePreset) answer what `$dir/preset-mode` says instead
+/// (ok by default), and `setCoverArt` what `$dir/cover-mode` says
 /// (ok by default). `foamy.lock catalog` (no argument) prints `$dir/catalog`
 /// (Foamy Weather reachable by default; "fail" fails like a lock that isn't
 /// running) and counts in `$dir/catalog-count` instead, so it never shifts
 /// the other calls' numbers. Anything but `foamy.lock saveLook`,
-/// `previewLook`, `savePreset` or `deletePreset` with one argument, or
+/// `previewLook`, `savePreset`, `deletePreset` or `setCoverArt` with one argument, or
 /// `renamePreset` with two, is refused.
 const FAKE_SHELL: &str = r#"#!/bin/bash
 dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -123,6 +125,7 @@ case $1:$2:$# in
   foamy.lock:saveLook:3|foamy.lock:previewLook:3) mode=$(cat "$dir/mode" 2>/dev/null || echo ok) ;;
   foamy.lock:savePreset:3|foamy.lock:deletePreset:3|foamy.lock:renamePreset:4)
     mode=$(cat "$dir/preset-mode" 2>/dev/null || echo ok) ;;
+  foamy.lock:setCoverArt:3) mode=$(cat "$dir/cover-mode" 2>/dev/null || echo ok) ;;
   *) echo "fake omarchy-shell: unexpected call" >&2; exit 2 ;;
 esac
 not_responding() { echo 'omarchy-shell is not responding' >&2; exit 1; }

@@ -90,7 +90,7 @@ shows the defaults; merge it into your existing file instead of replacing it:
 | `showMedia` | `true` | Show available MPRIS media and transport controls. Set `false` to hide them. |
 | `showBrowserMedia` | `false` | Also show media from web browsers (Firefox, Chromium, Chrome, Brave, Zen and others). Browsers report the page or tab title as the track title, so it stays off the lock screen unless you set `true`. |
 | `showArtwork` | `true` | Prepare permitted artwork while unlocked. Set `false` to always show the music icon; titles and controls remain available. |
-| `artworkHosts` | `[]` | Opt in to HTTPS artwork from at most 32 exact lowercase DNS hostnames, such as `images.example.com`. No wildcards, URL schemes, IP literals, or ports. Empty disables all remote artwork. |
+| `artworkHosts` | `[]` | Opt in to HTTPS artwork from at most 32 exact lowercase DNS hostnames, such as `images.example.com`. No wildcards, URL schemes, IP literals, or ports. Empty disables all remote artwork. Lock Studio's **Cover art** sets this and `showArtwork` together (see Cover art below). |
 | `artworkFileRoots` | `[]` | Additional permitted local artwork directories, up to 14 absolute paths. `$XDG_CACHE_HOME` (or `~/.cache`) and `$XDG_RUNTIME_DIR` are included automatically. Values must be actual absolute paths, without `..`; `~` and environment variables are not expanded. |
 | `blankAfterSec` | `30` | Integer from 1 to 2147483 seconds of lock-screen inactivity before blanking the display and keyboard backlight. `null` disables this timer. This does not unlock or suspend the computer. |
 
@@ -208,6 +208,7 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 | `status.items` | An ordered list of `network`, `battery`, `volume`, `bluetooth`, `keyboard`, `uptime`, `load`, `memory`, each at most once | the style's own (network and battery; the `system` panel's four rows) | What the status shows, in that order, in any style. An item whose source has nothing (no battery, no PipeWire sink, no Bluetooth adapter) is left out. The volume (the default sink, PipeWire), Bluetooth (on or off and connected devices) and keyboard layout (Hyprland's active layout, read with `hyprctl -j devices`; nothing is switched) are read only while their item shows. A line wider than the centre column wraps. |
 | `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low (the `line` and `large` styles show the condition anyway; the `card` always shows everything). |
 | `weather.location` | `true`, `false` | `false` | Shows the forecast's place name. Off by default: anyone can see a lock screen. |
+| `media.artwork` | `true`, `false` | `true` | `false` shows the music icon in place of the player's cover in this look, and prepares no artwork for it; the `showArtwork` setting still decides whether there is any. |
 
 **Weather.** While the lock or the preview shows a look with the weather, the
 lock asks Foamy Weather (`foamy.weather current`, in-process on Omarchy 4.5)
@@ -356,6 +357,16 @@ Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
 written: the answer is then `write-failed`. A JSON argument (`previewLook`, `saveLook`,
 `savePreset`) over 64 KiB is refused before it is parsed: `invalid: argument over 65536 bytes`.
 
+**Cover art.** `omarchy-shell foamy.lock setCoverArt off|player|spotify` sets
+`showArtwork` and `artworkHosts` to one of three fixed pairs and keeps every other
+key: `off` is `false` and `[]`; `player` is `true` and `[]` (the player's own
+`file://` art under `artworkFileRoots`, the default); `spotify` is `true` and
+`["i.scdn.co"]`, exactly the host Spotify's `mpris:artUrl` names. It takes no
+other argument (a host never comes from the call) and answers like `saveLook`;
+while locked it answers `locked`. `catalog` names the current mode (`coverArt`:
+one of the three, or `custom` for hosts set by hand). Remote covers still go
+through the helper's checks below.
+
 **User presets.** `userPresets` in the `foamy.lock` entry holds your own presets,
 newest first: `[{"id": "u-…", "name": "Foamy (mine)", "look": {"preset": …,
 "layout": …, "background": …, "glass": …}}]`, at most 50 and 256 KiB (items past either are
@@ -405,7 +416,10 @@ a warning.
 password field's **Show the field** (Always, or While typing; each style starts
 from its own), the status's items (a checklist: tick what it shows, reorder by
 the grip or with Alt+Up and Alt+Down; a new style starts from its own contents),
-and the weather's details and place name (off by default). The canvas shows sample
+the weather's details and place name (off by default), and the media's
+**Cover art** (Off, From the player, Also online (Spotify): a lock screen setting
+saved at once through `setCoverArt`, not part of the look or undo) with **Show the
+cover in this look** (`media.artwork`). The canvas shows sample
 volume, Bluetooth, keyboard layout and weather, never yours, and the problem check
 uses the widest samples. When the lock screen can't reach Foamy Weather, the
 Weather row says **Needs Foamy Weather**.

@@ -266,3 +266,25 @@ test('video backgrounds: the screen size and the probe reply', () => {
   assert.equal(Model.videoProbeResult('nonsense', dir).error, 'video-helper-failed')
   assert.equal(Model.videoProbeResult('{"ok":false,"error":"Bad Code"}', dir).error, 'video-helper-failed')
 })
+
+test('cover art is three fixed pairs of settings, Spotify\'s host exactly', () => {
+  assert.deepEqual(Model.COVER_ART_MODES, ['off', 'player', 'spotify'])
+  assert.deepEqual(Model.coverArtSettings('off'), {showArtwork: false, artworkHosts: []})
+  assert.deepEqual(Model.coverArtSettings('player'), {showArtwork: true, artworkHosts: []})
+  assert.deepEqual(Model.coverArtSettings('spotify'), {showArtwork: true, artworkHosts: ['i.scdn.co']})
+  for (const mode of ['', 'Spotify', 'online', 'i.scdn.co', 'custom', null, undefined, 'spotify ']) assert.equal(Model.coverArtSettings(mode), null, String(mode))
+  // Each pair is the one the lock reads back, and passes its own checks.
+  for (const mode of Model.COVER_ART_MODES) {
+    const parsed = Model.parseConfig(config(Model.coverArtSettings(mode)))
+    assert.ok(parsed.valid, mode)
+    assert.equal(Model.coverArtMode(parsed.settings), mode)
+  }
+  assert.equal(Model.coverArtMode(Model.defaults()), 'player', 'the default is the player\'s own art')
+  assert.equal(Model.coverArtMode({showArtwork: false, artworkHosts: ['i.scdn.co']}), 'off')
+  assert.equal(Model.coverArtMode({showArtwork: true, artworkHosts: ['images.example.com']}), 'custom')
+  assert.equal(Model.coverArtMode({showArtwork: true, artworkHosts: ['i.scdn.co', 'images.example.com']}), 'custom')
+  // Spotify's covers pass the helper's precheck only with it.
+  assert.equal(Model.artworkPrecheck('https://i.scdn.co/image/ab67616d0000b273', Model.coverArtSettings('spotify').artworkHosts, []), '')
+  assert.equal(Model.artworkPrecheck('https://i.scdn.co/image/ab67616d0000b273', Model.coverArtSettings('player').artworkHosts, []), 'host-not-allowed')
+  assert.equal(Model.artworkPrecheck('https://misc.scdn.co/x.jpg', Model.coverArtSettings('spotify').artworkHosts, []), 'host-not-allowed')
+})

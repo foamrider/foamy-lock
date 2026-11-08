@@ -49,6 +49,8 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...Layout.ELEMENT_OPTIONS.password.reveal.values.map(v => 'reveal.' + v),
   ...Layout.ELEMENT_OPTIONS.weather.details.values.map(v => 'details.' + v),
   ...Layout.STATUS_ITEMS.map(i => 'item.' + i),
+  // Cover art (Inspector.qml): each mode's name and note.
+  ...[...require('../Model.js').COVER_ART_MODES, 'custom'].flatMap(m => ['coverArt.' + m, 'coverArt.note.' + m]),
   // The video card (ScenePage.qml): the motions, the limits, problems and failures it names.
   ...Layout.MOTIONS.map(m => 'motion.' + m),
   ...['input-too-large', 'input-too-wide'].map(c => 'video.limit.' + c),

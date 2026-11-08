@@ -883,6 +883,67 @@ Item {
           })
         })
       } },
+    // Cover art: the lock screen's setting through the lock's setCoverArt
+    // (the fake omarchy-shell records it; the setting comes back through
+    // shell.json), and the look's own media.artwork.
+    { name: "inspector: the media's cover", wait: 0, run: function(next) {
+        reset()
+        studio.selectModule("media")
+        var cover = find(studio.inspector, "studioCoverArt"), note = find(studio.inspector, "studioCoverArtNote")
+        expect(cover.visible && cover.value === "player" && cover.options.length === 3
+          && cover.options.map(function(o) { return o.value }).join() === "off,player,spotify"
+          && cover.options[2].label === FoamyI18n.t("studio.coverArt.spotify"), "the cover art choice: " + json(cover.options) + " " + cover.value)
+        expect(note.text === FoamyI18n.t("studio.coverArt.note.player") + " " + FoamyI18n.t("studio.coverArt.setting"), "the note: " + note.text)
+        var calls = fakeCalls()
+        cover.changed("spotify")
+        expect(studio.notice && studio.notice.kind === "busy", "saving")
+        waitFor(savingDone, "setCoverArt", function() {
+          expect(fakeCalls() === calls + 1 && fakeCall(calls + 1).join(" ") === "foamy.lock setCoverArt spotify", "the call: " + fakeCall(calls + 1))
+          expect(studio.notice.kind === "ok" && studio.notice.text === FoamyI18n.t("studio.coverArt.saved"), "saved: " + json(studio.notice))
+          expect(Draft.same(studio.draft, { preset: "foamy" }) && !Draft.canUndo(studio.history), "a setting, not the look")
+          // The lock writes shell.json; the app reads it back.
+          writeEntry({ artworkHosts: ["i.scdn.co"] })
+          waitFor(function() { return cover.value === "spotify" }, "spotify read back", function() {
+            expect(note.text.indexOf("i.scdn.co") !== -1, "the privacy note: " + note.text)
+            writeEntry({ artworkHosts: ["images.example.com"] })
+            waitFor(function() { return cover.value === "custom" }, "custom hosts", function() {
+              expect(cover.options.length === 4 && cover.options[3].label === FoamyI18n.t("studio.coverArt.custom"), "custom listed")
+              calls = fakeCalls()
+              cover.changed("custom")
+              expect(fakeCalls() === calls && !studio.sources.coverArtBusy, "custom writes nothing")
+              writeFile(fake + "/cover-mode", "locked\n")
+              cover.changed("off")
+              waitFor(savingDone, "setCoverArt locked", function() {
+                expect(fakeCall(calls + 1).join(" ") === "foamy.lock setCoverArt off", "the call: " + fakeCall(calls + 1))
+                expect(studio.notice.kind === "warning" && studio.notice.text === FoamyI18n.t("studio.result.locked.apply"), "locked: " + json(studio.notice))
+                writeFile(fake + "/cover-mode", "function-not-found\n")
+                cover.changed("off")
+                waitFor(savingDone, "an older lock", function() {
+                  expect(studio.notice.kind === "error" && studio.notice.text === FoamyI18n.t("studio.coverArt.older"), "older: " + json(studio.notice))
+                  writeFile(fake + "/cover-mode", "ok\n")
+                  writeEntry({})
+                  waitFor(function() { return cover.value === "player" }, "back to the player", function() {
+                    // The look's own switch.
+                    var art = find(studio.inspector, "studioArtwork")
+                    expect(art.visible && art.enabled && art.checked, "the cover shows in the card")
+                    art.toggled()
+                    expectDraft('{"preset":"foamy","layout":{"media":{"artwork":false}}}')
+                    expect(view.elementItem("media").artwork === false, "the canvas drops the cover")
+                    art.toggled()
+                    expectDraft('{"preset":"foamy"}')
+                    find(studio.inspector, "studioStyles").picked("minimal")
+                    expect(!art.enabled && find(studio.inspector, "studioArtworkNote").text
+                      === FoamyI18n.t("studio.artwork.noCover", FoamyI18n.t("studio.style.minimal")), "minimal has no cover")
+                    find(studio.inspector, "studioStyles").picked("disc")
+                    expect(art.enabled, "the disc has one")
+                    capture("studio-media", next)
+                  })
+                })
+              })
+            })
+          })
+        })
+      } },
     { name: "inspector: the password field's reveal", wait: 0, run: function(next) {
         reset()
         studio.selectModule("password")

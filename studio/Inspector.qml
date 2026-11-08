@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import "kit"
 import "Layout.js" as LockLayout
 import "Draft.js" as Draft
+import "Model.js" as Model
 
 // The inspector for the selected module (mockup A, right pane): whether it
 // shows, its style (drawn tiles), size, opacity and glass, its zone,
@@ -29,6 +30,10 @@ FocusScope {
   // What each element takes (its own keys' values and defaults).
   readonly property var options: LockLayout.elementLimits()
   readonly property alias checklist: itemChecklist
+  // The lock screen's cover art setting (Model.coverArtMode: off, player,
+  // spotify or custom), from shell.json as the app reads it.
+  readonly property string coverArt: app ? Model.coverArtMode(app.lockSettings) : "player"
+  readonly property bool coverStyle: !!item && name === "media" && LockLayout.ARTWORK_STYLES.indexOf(item.style) !== -1
 
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.inspector")
@@ -124,9 +129,45 @@ FocusScope {
 
       // The element's own keys (Layout.elementLimits()[name].options).
       SectionLabel {
-        visible: inspector.name === "password" || inspector.name === "status" || inspector.name === "weather"
-        text: FoamyI18n.t(inspector.name === "password" ? "studio.field" : "studio.shows")
+        visible: inspector.name === "password" || inspector.name === "status" || inspector.name === "weather" || inspector.name === "media"
+        text: FoamyI18n.t(inspector.name === "password" ? "studio.field" : inspector.name === "media" ? "studio.cover" : "studio.shows")
         topPadding: FoamyStyle.gap
+      }
+
+      // The media's cover: the lock screen's setting (saved at once, for
+      // every look; never a host typed here) and this look's media.artwork.
+      FoamyDropdown {
+        objectName: "studioCoverArt"
+        width: parent.width
+        visible: inspector.name === "media"
+        label: FoamyI18n.t("studio.coverArt")
+        value: inspector.coverArt
+        enabled: !inspector.app || !inspector.app.sources.coverArtBusy
+        options: Model.COVER_ART_MODES.concat(inspector.coverArt === "custom" ? ["custom"] : [])
+          .map(function(mode) { return { value: mode, label: FoamyI18n.t("studio.coverArt." + mode) } })
+        onChanged: function(mode) { if (mode !== "custom" && mode !== inspector.coverArt) inspector.app.setCoverArt(mode) }
+        Accessible.name: FoamyI18n.t("studio.coverArt")
+      }
+      PaneNote {
+        objectName: "studioCoverArtNote"
+        visible: inspector.name === "media"
+        text: FoamyI18n.t("studio.coverArt.note." + inspector.coverArt) + " " + FoamyI18n.t("studio.coverArt.setting")
+      }
+      StudioToggle {
+        objectName: "studioArtwork"
+        width: parent.width
+        visible: inspector.name === "media"
+        enabled: inspector.coverStyle
+        opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+        text: FoamyI18n.t("studio.artwork")
+        checked: Draft.optionOf(inspector.look, "media", "artwork") === true
+        onToggled: if (enabled) inspector.commit(Draft.setOption(inspector.app.draft, "media", "artwork", !checked))
+      }
+      PaneNote {
+        objectName: "studioArtworkNote"
+        visible: inspector.name === "media"
+        text: !inspector.coverStyle && inspector.item ? FoamyI18n.t("studio.artwork.noCover", inspector.app ? inspector.app.styleLabel(inspector.item.style) : "")
+          : FoamyI18n.t("studio.artwork.hint")
       }
 
       // password.reveal, for every field style; absent, the style's own

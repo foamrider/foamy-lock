@@ -462,7 +462,8 @@ test('an editor is offered each element-only key with its values and defaults', 
   assert.deepEqual(Object.keys(limits.status.options.items.defaults), Layout.STYLES.status)
   assert.deepEqual(limits.weather.options, {details: {values: ['temperature', 'full'], default: 'temperature'},
     location: {values: [false, true], default: false}})
-  for (const name of ['date', 'clock', 'account', 'media', 'calendar']) assert.deepEqual(limits[name].options, {}, name)
+  assert.deepEqual(limits.media.options, {artwork: {values: [true, false], default: true}})
+  for (const name of ['date', 'clock', 'account', 'calendar']) assert.deepEqual(limits[name].options, {}, name)
   for (const [style, items] of Object.entries(Layout.STATUS_DEFAULT_ITEMS))
     assert.equal(errorOf('status', {style, items}), '', style)
 })
@@ -492,4 +493,17 @@ test('a video background: its path, motion and pauseOnBattery', () => {
   assert.deepEqual(Layout.BACKGROUND_DEFAULTS, {motion: 'still', pauseOnBattery: true})
   // No built-in preset plays.
   for (const name of Layout.SELECTABLE_PRESETS) assert.ok(!Layout.playsVideo(Layout.preset(name).background), name)
+})
+
+test('media.artwork hides the cover in a look, and only there', () => {
+  assert.deepEqual(Layout.elementKeys('media'), [...Layout.ELEMENT_KEYS, 'artwork'])
+  assert.equal(Layout.elementError('media', {artwork: false}), '')
+  assert.equal(Layout.elementError('media', {artwork: 'no'}), 'layout.media.artwork must be true or false')
+  assert.equal(Layout.elementError('clock', {artwork: false}), 'layout.clock has an unknown key: artwork')
+  // The default is no change; false stays, with every style.
+  assert.equal(JSON.stringify(Layout.parseLook({layout: {media: {artwork: true}}}).look), JSON.stringify(Layout.defaults()))
+  for (const style of Layout.STYLES.media)
+    assert.equal(Layout.parseLook({layout: {media: {style, artwork: false}}}).look.elements.media.artwork, false, style)
+  assert.deepEqual(Layout.ARTWORK_STYLES, ['card', 'pill', 'art', 'hero', 'disc'])
+  for (const style of Layout.ARTWORK_STYLES) assert.ok(Layout.STYLES.media.includes(style), style)
 })

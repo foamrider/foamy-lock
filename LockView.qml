@@ -848,6 +848,7 @@ Item {
       opacity: root.elementOpacity("media")
       glassOpacity: root.elementGlass("media")
       styleName: root.placed.media.style
+      artwork: root.placed.media.artwork !== false
       visible: root.elementShown("media")
       x: root.placeX("media", width)
       y: root.placeY("media")

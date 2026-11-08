@@ -202,9 +202,11 @@ Item {
     id: artwork
     player: root.activePlayer
     // Only the styles with a cover show artwork (Layout.ARTWORK_STYLES): a
-    // hidden or one-line player prepares none.
+    // hidden or one-line player, or a look without the cover
+    // (media.artwork false), prepares none.
     allowed: root.settings.showMedia && root.settings.showArtwork
       && !root.look.elements.media.hidden && Layout.ARTWORK_STYLES.indexOf(root.look.elements.media.style) !== -1
+      && root.look.elements.media.artwork !== false
     locked: root.locked
     hosts: root.settings.artworkHosts
     fileRoots: root.settings.artworkFileRoots
@@ -1939,6 +1941,9 @@ Item {
         zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
         presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundDecor: Layout.DECORATIONS,
         glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
+        // Cover art (additive): the settings' mode (Model.coverArtMode:
+        // off, player, spotify or custom) and what setCoverArt takes.
+        coverArt: Model.coverArtMode(root.settings), coverArtModes: Model.COVER_ART_MODES,
         // Video backgrounds: background.motion and its defaults (additive).
         backgroundMotions: Layout.MOTIONS, backgroundDefaults: Layout.BACKGROUND_DEFAULTS,
         look: root.look, lookError: root.lookError,
@@ -2054,6 +2059,26 @@ Item {
       if (typeof base === "string") return base
       var change = Layout.renamingPreset(base, presetId, name)
       return change.error || root.writeEntry(change.entry)
+    }
+
+    // Cover art (Lock Studio's choice): `mode` is "off", "player" or
+    // "spotify" (Model.coverArtSettings), and nothing else; it sets the
+    // entry's showArtwork and artworkHosts to that fixed pair (a host never
+    // comes from the caller) and keeps every other key. The replies are
+    // saveLook's. Downloads stay in the helper, with its checks. Nothing
+    // here can unlock.
+    function setCoverArt(mode: string): string {
+      var change = Model.coverArtSettings(String(mode))
+      if (!change || String(mode) !== mode) return "invalid: mode must be one of " + Model.COVER_ART_MODES.join(", ")
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var next = {}
+      for (var key in base)
+        if (key !== "id") next[key] = base[key]
+      next.showArtwork = change.showArtwork
+      next.artworkHosts = change.artworkHosts.slice()
+      return root.writeEntry(next)
     }
 
     // An id that isn't there answers "unchanged"; the saved look keeps
