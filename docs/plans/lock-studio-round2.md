@@ -22,13 +22,13 @@ disagrees with D1–D7, it wins. Follows [lock-studio-app.md](lock-studio-app.md
    header.
 10. **No presets strip** at the bottom (it can't be scrolled and repeats the
    menu). The preset picker moves to the **top of the left sidebar**.
-12. **Deselect** by clicking outside the lock image.
-13. **Tips** at the bottom of the left sidebar, including one about setting
-   the profile picture and name with Mugshot.
 11. **User presets:**
    - Saving changes made on top of a preset asks for a **name** and
      creates a user preset.
    - User presets are always **at the top** of the list.
+12. **Deselect** by clicking outside the lock image.
+13. **Tips**, pinned to the bottom edge of the left sidebar, including one
+   about setting the profile picture and name with Mugshot.
 
 ## Decisions (proposed defaults)
 
@@ -134,8 +134,10 @@ disagrees with D1–D7, it wins. Follows [lock-studio-app.md](lock-studio-app.md
     in a "Your presets" section first, then "Built-in").
   - **Preview states:** the group gets a caption "Preview" inside it,
     before Idle, Typing and the rest.
-  - **Tips:** a card at the bottom of the left sidebar, replacing today's
-    help text. It shows one tip at a time, with previous and next buttons
+  - **Tips:** a card pinned to the bottom edge of the left sidebar
+    (anchored there whatever the list above holds, not placed after the last
+    row), replacing today's help text. The module list scrolls above it
+    when space runs short. It shows one tip at a time, with previous and next buttons
     and an action button where there is one.
     - **First tip:** "Your picture and name on the lock screen come from
       your account. Set them with Mugshot." With an "Open Mugshot" button
