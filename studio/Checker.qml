@@ -15,6 +15,8 @@ Item {
   // [{ key, label, reference, width, height }]
   property var sizes: []
   property bool active: true
+  // The lock's settings (time format, user info, media), as on the lock.
+  property var settings: ({ timeFormat: "24h", showUserInfo: true, showMedia: true })
   property var problems: []
   // How long the last check took, for the cost note (ms).
   property real lastCheckMs: 0
@@ -25,6 +27,7 @@ Item {
   onLookChanged: debounce.restart()
   onSizesChanged: debounce.restart()
   onActiveChanged: debounce.restart()
+  onSettingsChanged: debounce.restart()
 
   function check() {
     var started = Date.now()
@@ -60,6 +63,9 @@ Item {
       previewState: "idle"
       displayAwake: false
       loadBackground: false
+      timeFormat: checker.settings.timeFormat
+      showUserInfo: checker.settings.showUserInfo
+      showMedia: checker.settings.showMedia
       // Late geometry (a font or image settling) re-runs the check.
       onGeometryProblemCodeChanged: debounce.restart()
     }

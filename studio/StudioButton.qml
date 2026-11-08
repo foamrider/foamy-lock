@@ -13,6 +13,8 @@ Rectangle {
   property bool primary: false
   property bool checked: false
   property int horizontalAlignment: Text.AlignHCenter
+  // Room before the label on the reading start (a list row's grip).
+  property real leading: 0
   signal clicked()
 
   implicitHeight: FoamyStyle.controlHeight
@@ -39,8 +41,9 @@ Rectangle {
   Row {
     id: row
     anchors.verticalCenter: parent.verticalCenter
-    x: button.horizontalAlignment === Text.AlignHCenter ? (button.width - width) / 2 : FoamyStyle.controlPaddingX
-    width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth : button.width - 2 * FoamyStyle.controlPaddingX
+    x: button.horizontalAlignment === Text.AlignHCenter ? (button.width - width) / 2
+      : FoamyStyle.controlPaddingX + (button.LayoutMirroring.enabled ? 0 : button.leading)
+    width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth : button.width - 2 * FoamyStyle.controlPaddingX - button.leading
     spacing: FoamyStyle.gap
 
     Text {

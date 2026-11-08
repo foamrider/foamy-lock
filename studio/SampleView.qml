@@ -11,6 +11,8 @@ LockView {
 
   // "idle", "typing", "wrong" or "noMedia".
   property string previewState: "idle"
+  // The lock's "show media" setting: off, the player never shows.
+  property bool showMedia: true
 
   enabled: false
   inputEnabled: false
@@ -18,7 +20,7 @@ LockView {
   primary: true
   userName: "sample"
   userDisplayName: FoamyI18n.t("studio.sample.user")
-  activePlayer: previewState === "noMedia" ? null : samplePlayer
+  activePlayer: previewState === "noMedia" || !showMedia ? null : samplePlayer
   passwordText: previewState === "typing" ? "sample-password" : ""
   // The lock's own message for a refused password (PasswordElement shows
   // "Authentication failed (1)").

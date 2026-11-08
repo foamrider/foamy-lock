@@ -8,13 +8,15 @@ import "." as Studio
 import "Draft.js" as Draft
 
 // Lock Studio's window content (mockup A, "Canvas"): a header (preset,
-// screen, undo and redo, preview, apply), the module library and scene on
-// the reading start, the live canvas in the middle with its preview states,
-// toggles, problems and presets, and the inspector on the reading end.
+// screen, undo and redo, preview, apply), the library (modules and scene)
+// on the reading start, the live canvas in the middle with its preview
+// states, switches, problems and presets, and the inspector (or a scene
+// page) on the reading end.
 //
 // It owns the draft: `history` (Draft.history) holds the entry being edited
-// and its undo steps; every edit goes through commit(). Keys that work
-// everywhere are in appKey(); the canvas handles its own (see Canvas).
+// and its undo steps; every edit goes through commit(). A slider drag shows
+// through preview() and commits once. Keys that work everywhere are in
+// appKey(); the canvas, the library and the controls handle their own.
 FocusScope {
   id: studio
 
@@ -25,7 +27,11 @@ FocusScope {
   property var history: Draft.history({ preset: LockLayout.DEFAULT_PRESET })
   readonly property var draft: history.present
   readonly property var look: Draft.lookOf(draft)
+  // A slider's value while it is dragged (shown, not yet committed).
+  property var previewDraft: null
   property string selected: "clock"
+  // The inspector pane: "module" (the selection), "background" or "glass".
+  property string page: "module"
   property string monitorKey: ""
   readonly property var monitors: monitorList(Quickshell.screens)
   readonly property var monitor: monitorFor(monitorKey)
@@ -33,13 +39,22 @@ FocusScope {
   property bool showZones: true
   property bool snapping: true
   property bool shortcutsOpen: false
+  // A module dragged from the library ("" otherwise), and where the
+  // pointer is in the window.
+  property string libraryDrag: ""
+  property point libraryDragPoint: Qt.point(0, 0)
   readonly property bool rightToLeft: FoamyI18n.rightToLeft
   readonly property alias canvas: lockCanvas
   readonly property alias checker: lockChecker
+  readonly property alias sources: lockSources
+  readonly property alias library: library
+  readonly property alias inspector: inspectorPage
+  readonly property alias scenePage: scenePage
+  readonly property var lockSettings: lockSources.settings
   readonly property var problems: lockChecker.problems
   readonly property bool applyBlocked: problems.some(function(problem) { return !problem.reference })
   readonly property int changes: Draft.changeCount(draft)
-  readonly property var panes: [library, canvasPane, inspector, header]
+  readonly property var panes: [library, canvasPane, inspectorPane, header]
 
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
@@ -47,10 +62,56 @@ FocusScope {
   Keys.onPressed: function(event) { if (studio.appKey(event.key, event.modifiers, event.text)) event.accepted = true }
 
   function commit(next) {
+    previewDraft = null
     history = Draft.push(history, next)
   }
-  function undo() { history = Draft.undo(history) }
-  function redo() { history = Draft.redo(history) }
+  function preview(next) { previewDraft = Draft.same(next, draft) ? null : next }
+  function undo() {
+    previewDraft = null
+    history = Draft.undo(history)
+  }
+  function redo() {
+    previewDraft = null
+    history = Draft.redo(history)
+  }
+
+  function selectModule(name) {
+    if (!name) return
+    selected = name
+    page = "module"
+  }
+
+  // A preset picked in the strip: the draft starts over from it.
+  function requestPreset(name) {
+    commit(Draft.setPreset(draft, name))
+  }
+
+  // --- dragging from the library onto the canvas ---------------------------
+
+  function libraryDragStart(name) {
+    selectModule(name)
+    libraryDrag = name
+  }
+
+  // The pointer is at `scene` (window pixels): over the canvas the module
+  // follows it with snapping; elsewhere the canvas shows nothing new.
+  function libraryDragMove(scene, modifiers) {
+    if (!libraryDrag) return
+    libraryDragPoint = scene
+    var p = lockCanvas.view.mapFromItem(null, scene.x, scene.y)
+    var inside = p.x >= 0 && p.y >= 0 && p.x <= lockCanvas.screenWidth && p.y <= lockCanvas.screenHeight
+    var g = lockCanvas.gesture
+    if (inside && !(g && g.insert)) lockCanvas.beginInsert(libraryDrag, p)
+    else if (inside) lockCanvas.moveInsert(p, modifiers)
+    else if (g && g.insert) lockCanvas.cancelGesture()
+  }
+
+  // Released: over the canvas the module is shown (or moved) there.
+  function libraryDragEnd() {
+    var g = lockCanvas.gesture
+    if (g && g.insert) lockCanvas.finishGesture()
+    libraryDrag = ""
+  }
 
   // The connected screens (logical size), then the reference sizes.
   function monitorList(screens) {
@@ -154,13 +215,24 @@ FocusScope {
       return true
     }
     if (key === Qt.Key_BracketLeft || key === Qt.Key_BracketRight) {
-      selected = Draft.neighbourModule(selected, key === Qt.Key_BracketLeft ? -1 : 1)
+      selectModule(Draft.neighbourModule(selected, key === Qt.Key_BracketLeft ? -1 : 1))
       return true
     }
     return false
   }
 
   Component.onCompleted: lockCanvas.forceActiveFocus()
+
+  // A chosen picture becomes the background in one step; a file the lock
+  // can't use is reported.
+  Connections {
+    target: lockSources
+    function onPicked(path) {
+      var next = Draft.setPicture(studio.draft, path)
+      if (Draft.same(next, studio.draft) && studio.look.background.path !== path) lockSources.pickError = "UNSUPPORTED"
+      else studio.commit(next)
+    }
+  }
 
   ColumnLayout {
     anchors.fill: parent
@@ -196,6 +268,8 @@ FocusScope {
           }
 
           StudioButton {
+            id: presetButton
+            objectName: "studioPresetButton"
             focus: true
             text: studio.presetLabel(studio.draft.preset)
             detail: studio.changes > 0 ? FoamyI18n.t("studio.edited") : ""
@@ -261,62 +335,17 @@ FocusScope {
 
       // The library: modules and scene.
       Rectangle {
+        id: libraryPane
         Layout.preferredWidth: 224
         Layout.fillHeight: true
         color: FoamyPalette.menuFill
 
-        FocusScope {
+        Studio.Library {
           id: library
           anchors.fill: parent
           anchors.margins: FoamyStyle.gapLarge
-          Accessible.role: Accessible.List
-          Accessible.name: FoamyI18n.t("studio.modules")
-
-          Column {
-            width: parent.width
-            spacing: FoamyStyle.gapSmall
-
-            SectionLabel { text: FoamyI18n.t("studio.modules") }
-
-            Repeater {
-              model: Draft.DISPLAY_ORDER
-              StudioButton {
-                required property var modelData
-                required property int index
-                readonly property var item: studio.look.elements[modelData]
-                focus: index === 0
-                width: parent.width
-                height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
-                horizontalAlignment: Text.AlignLeft
-                text: studio.moduleLabel(modelData)
-                detail: item.hidden && modelData !== "password" ? FoamyI18n.t("studio.hidden") : studio.zoneLabel(item.zone)
-                checked: studio.selected === modelData
-                Accessible.role: Accessible.ListItem
-                onClicked: studio.selected = modelData
-              }
-            }
-
-            SectionLabel {
-              text: FoamyI18n.t("studio.scene")
-              topPadding: FoamyStyle.sectionGap
-            }
-
-            // The scene pages come with the inspector.
-            StudioButton {
-              width: parent.width
-              height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
-              horizontalAlignment: Text.AlignLeft
-              text: FoamyI18n.t("studio.background")
-              detail: FoamyI18n.t("studio.source." + studio.look.background.source)
-            }
-            StudioButton {
-              width: parent.width
-              height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
-              horizontalAlignment: Text.AlignLeft
-              text: FoamyI18n.t("studio.glassDim")
-              detail: studio.percent(studio.look.background.dim)
-            }
-          }
+          app: studio
+          dropTarget: lockCanvas.hiding
         }
 
         Rectangle {
@@ -356,11 +385,13 @@ FocusScope {
             }
             Item { Layout.fillWidth: true }
             StudioToggle {
+              objectName: "studioZonesSwitch"
               text: FoamyI18n.t("studio.zones")
               checked: studio.showZones
               onToggled: studio.showZones = !studio.showZones
             }
             StudioToggle {
+              objectName: "studioSnapSwitch"
               text: FoamyI18n.t("studio.snap")
               checked: studio.snapping
               onToggled: studio.snapping = !studio.snapping
@@ -373,7 +404,7 @@ FocusScope {
             Layout.fillWidth: true
             Layout.fillHeight: true
             focus: true
-            draft: studio.draft
+            draft: studio.previewDraft || studio.draft
             selected: studio.selected
             screenWidth: studio.monitor.width
             screenHeight: studio.monitor.height
@@ -383,8 +414,13 @@ FocusScope {
             awake: studio.awake
             problemNames: studio.problemNamesFor(studio.monitor.key)
             selectionText: studio.selectionText(studio.selected)
+            backgroundPath: lockSources.backgroundPath
+            backgroundPrepared: lockSources.backgroundPrepared
+            backgroundVersion: lockSources.backgroundVersion
+            lockSettings: studio.lockSettings
+            hideArea: libraryPane
             onEdited: function(next) { studio.commit(next) }
-            onSelectRequested: function(name) { if (name) studio.selected = name }
+            onSelectRequested: function(name) { studio.selectModule(name) }
           }
 
           RowLayout {
@@ -392,6 +428,7 @@ FocusScope {
             Text {
               Layout.fillWidth: true
               text: FoamyI18n.t("studio.shownAt", [studio.monitor.width, studio.monitor.height, Math.round(lockCanvas.zoom * 100)])
+              horizontalAlignment: Text.AlignLeft
               color: FoamyPalette.mutedText
               font.family: FoamyStyle.fontFamily
               font.pixelSize: FoamyStyle.font.bodySmall
@@ -434,6 +471,7 @@ FocusScope {
                   required property var modelData
                   width: problemColumn.width
                   text: studio.problemText(modelData)
+                  horizontalAlignment: Text.AlignLeft
                   wrapMode: Text.Wrap
                   color: modelData.reference ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
                   font.family: FoamyStyle.fontFamily
@@ -442,6 +480,8 @@ FocusScope {
               }
               Text {
                 visible: problemColumn.sorted.length > 3
+                width: problemColumn.width
+                horizontalAlignment: Text.AlignLeft
                 text: FoamyI18n.tn("studio.problem.more", problemColumn.sorted.length - 3)
                 color: FoamyPalette.mutedText
                 font.family: FoamyStyle.fontFamily
@@ -453,6 +493,7 @@ FocusScope {
           // Presets (thumbnails from previews/presets).
           ListView {
             id: presetStrip
+            objectName: "studioPresetStrip"
             Layout.fillWidth: true
             Layout.preferredHeight: 78
             orientation: ListView.Horizontal
@@ -464,8 +505,8 @@ FocusScope {
             currentIndex: Math.max(0, LockLayout.SELECTABLE_PRESETS.indexOf(studio.draft.preset))
             Accessible.role: Accessible.List
             Accessible.name: FoamyI18n.t("studio.presets")
-            Keys.onReturnPressed: studio.commit(Draft.setPreset(studio.draft, LockLayout.SELECTABLE_PRESETS[currentIndex]))
-            Keys.onSpacePressed: studio.commit(Draft.setPreset(studio.draft, LockLayout.SELECTABLE_PRESETS[currentIndex]))
+            Keys.onReturnPressed: studio.requestPreset(LockLayout.SELECTABLE_PRESETS[currentIndex])
+            Keys.onSpacePressed: studio.requestPreset(LockLayout.SELECTABLE_PRESETS[currentIndex])
 
             delegate: Rectangle {
               id: presetTile
@@ -511,7 +552,7 @@ FocusScope {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                   presetStrip.currentIndex = presetTile.index
-                  studio.commit(Draft.setPreset(studio.draft, presetTile.modelData))
+                  studio.requestPreset(presetTile.modelData)
                 }
               }
             }
@@ -519,8 +560,7 @@ FocusScope {
         }
       }
 
-      // The inspector (its controls come in a later step; this shows the
-      // selection's values).
+      // The inspector, or the scene page chosen in the library.
       Rectangle {
         Layout.preferredWidth: 276
         Layout.fillHeight: true
@@ -534,81 +574,24 @@ FocusScope {
         }
 
         FocusScope {
-          id: inspector
-          readonly property string name: studio.selected
-          readonly property var item: studio.look.elements[name] || null
+          id: inspectorPane
           anchors.fill: parent
           anchors.margins: FoamyStyle.gapLarge
-          Accessible.role: Accessible.Pane
-          Accessible.name: FoamyI18n.t("studio.inspector")
 
-          Column {
-            width: parent.width
-            spacing: FoamyStyle.gap
-            visible: inspector.item !== null
-
-            RowLayout {
-              width: parent.width
-              Text {
-                Layout.fillWidth: true
-                text: studio.moduleLabel(inspector.name)
-                color: FoamyPalette.text
-                font.family: FoamyStyle.fontFamily
-                font.pixelSize: FoamyStyle.font.heading
-                font.weight: Font.DemiBold
-                elide: Text.ElideRight
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-              }
-              StudioToggle {
-                focus: true
-                text: FoamyI18n.t("studio.shown")
-                visible: inspector.name !== "password"
-                checked: inspector.item ? !inspector.item.hidden : false
-                onToggled: studio.commit(Draft.setHidden(studio.draft, inspector.name, !inspector.item.hidden))
-              }
-            }
-
-            Text {
-              visible: inspector.name === "password"
-              width: parent.width
-              text: FoamyI18n.t("studio.passwordAlways")
-              wrapMode: Text.Wrap
-              color: FoamyPalette.mutedText
-              font.family: FoamyStyle.fontFamily
-              font.pixelSize: FoamyStyle.font.bodySmall
-            }
-
-            SectionLabel {
-              text: FoamyI18n.t("studio.adjust")
-              topPadding: FoamyStyle.gap
-            }
-            ValueRow { label: FoamyI18n.t("studio.style"); value: inspector.item ? studio.styleLabel(inspector.item.style) : "" }
-            ValueRow {
-              label: FoamyI18n.t("studio.size")
-              value: inspector.item ? studio.percent(Draft.elementValue(inspector.item, "scale")) : ""
-            }
-            ValueRow {
-              label: FoamyI18n.t("studio.opacity")
-              value: inspector.item ? studio.percent(Draft.elementValue(inspector.item, "opacity")) : ""
-            }
-
-            SectionLabel {
-              text: FoamyI18n.t("studio.placement")
-              topPadding: FoamyStyle.gap
-            }
-            ValueRow { label: FoamyI18n.t("studio.zone"); value: inspector.item ? studio.zoneLabel(inspector.item.zone) : "" }
-            ValueRow {
-              readonly property var offset: inspector.item ? Draft.elementValue(inspector.item, "offset") : null
-              label: FoamyI18n.t("studio.offset")
-              value: offset ? FoamyI18n.t("studio.offsetValue", [Math.round(offset.x * studio.monitor.width),
-                Math.round(offset.y * studio.monitor.height)]) : ""
-            }
-            ValueRow {
-              visible: LockLayout.SCREENS_ELEMENTS.indexOf(inspector.name) !== -1
-              label: FoamyI18n.t("studio.screens")
-              value: inspector.item ? FoamyI18n.t("studio.screens." + Draft.elementValue(inspector.item, "screens")) : ""
-            }
+          Studio.Inspector {
+            id: inspectorPage
+            anchors.fill: parent
+            visible: studio.page === "module"
+            focus: visible
+            app: studio
+          }
+          Studio.ScenePage {
+            id: scenePage
+            anchors.fill: parent
+            visible: studio.page !== "module"
+            focus: visible
+            app: studio
+            page: studio.page === "glass" ? "glass" : "background"
           }
         }
       }
@@ -620,6 +603,38 @@ FocusScope {
     id: lockChecker
     look: studio.look
     sizes: studio.monitors
+    settings: studio.lockSettings
+  }
+
+  // The wallpaper, the lock's settings and the picture (never shown).
+  LockSources {
+    id: lockSources
+    look: studio.look
+    screenWidth: studio.monitor.width
+    screenHeight: studio.monitor.height
+    active: studio.awake
+  }
+
+  // The module being dragged from the library, until it is over the canvas.
+  Rectangle {
+    objectName: "studioDragGhost"
+    visible: studio.libraryDrag !== "" && !(lockCanvas.gesture && lockCanvas.gesture.insert)
+    x: studio.libraryDragPoint.x + 12
+    y: studio.libraryDragPoint.y + 8
+    z: 15
+    width: ghostLabel.implicitWidth + 2 * FoamyStyle.gap
+    height: ghostLabel.implicitHeight + FoamyStyle.gapSmall * 2
+    radius: FoamyStyle.radiusSmall
+    color: FoamyPalette.accent
+    Text {
+      id: ghostLabel
+      anchors.centerIn: parent
+      text: studio.libraryDrag ? studio.moduleLabel(studio.libraryDrag) : ""
+      color: FoamyPalette.onAccent
+      font.family: FoamyStyle.fontFamily
+      font.pixelSize: FoamyStyle.font.caption
+      font.weight: Font.DemiBold
+    }
   }
 
   // "?" lists the shortcuts.
@@ -655,6 +670,8 @@ FocusScope {
         spacing: FoamyStyle.gapSmall
 
         Text {
+          width: parent.width
+          horizontalAlignment: Text.AlignLeft
           text: FoamyI18n.t("studio.shortcuts")
           color: FoamyPalette.text
           font.family: FoamyStyle.fontFamily
@@ -663,12 +680,13 @@ FocusScope {
           bottomPadding: FoamyStyle.gap
         }
         Repeater {
-          model: ["move", "nudge", "zone", "scale", "hide", "select", "free", "axis", "undo", "redo", "panes", "help", "quit"]
+          model: ["move", "nudge", "zone", "scale", "hide", "show", "select", "free", "axis", "undo", "redo", "panes", "help", "quit"]
           RowLayout {
             required property var modelData
             width: shortcutColumn.width
             Text {
               Layout.fillWidth: true
+              horizontalAlignment: Text.AlignLeft
               text: FoamyI18n.t("studio.key." + parent.modelData)
               color: FoamyPalette.secondaryText
               font.family: FoamyStyle.fontFamily
@@ -683,39 +701,6 @@ FocusScope {
           }
         }
       }
-    }
-  }
-
-  component SectionLabel: Text {
-    color: FoamyPalette.mutedText
-    font.family: FoamyStyle.fontFamily
-    font.pixelSize: FoamyStyle.font.caption
-    font.weight: Font.DemiBold
-    font.capitalization: Font.AllUppercase
-    font.letterSpacing: 0.6
-    bottomPadding: FoamyStyle.gapTiny
-    Accessible.role: Accessible.Heading
-    Accessible.name: text
-  }
-
-  component ValueRow: RowLayout {
-    property string label: ""
-    property string value: ""
-    width: parent ? parent.width : 0
-    Text {
-      Layout.fillWidth: true
-      text: parent.label
-      color: FoamyPalette.secondaryText
-      font.family: FoamyStyle.fontFamily
-      font.pixelSize: FoamyStyle.font.body
-    }
-    Text {
-      text: parent.value
-      color: FoamyPalette.text
-      font.family: FoamyStyle.fontFamily
-      font.pixelSize: FoamyStyle.font.body
-      Accessible.role: Accessible.StaticText
-      Accessible.name: parent.label + ": " + parent.value
     }
   }
 }

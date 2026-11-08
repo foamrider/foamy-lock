@@ -34,8 +34,10 @@ const Layout = require('../Layout.js');
 const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z => 'zone.' + z),
   ...[...new Set(Object.values(Layout.STYLES).flat())].map(s => 'style.' + s), ...Layout.SELECTABLE_PRESETS.map(p => 'preset.' + p),
   ...Layout.BACKGROUND_SOURCES.map(s => 'source.' + s), ...Layout.SCREENS.map(s => 'screens.' + s),
-  ...['move', 'nudge', 'zone', 'scale', 'hide', 'select', 'free', 'axis', 'undo', 'redo', 'panes', 'help', 'quit'].flatMap(k => ['key.' + k, 'key.' + k + '.keys']),
-  ...['password-overlap', 'password-covered', 'password-offscreen', 'password-high', 'password-missing', 'element-offscreen', 'element-overlap'].map(c => 'problem.' + c)];
+  ...['move', 'nudge', 'zone', 'scale', 'hide', 'show', 'select', 'free', 'axis', 'undo', 'redo', 'panes', 'help', 'quit'].flatMap(k => ['key.' + k, 'key.' + k + '.keys']),
+  ...['password-overlap', 'password-covered', 'password-offscreen', 'password-high', 'password-missing', 'element-offscreen', 'element-overlap'].map(c => 'problem.' + c),
+  ...Layout.DECORATIONS.map(d => 'decor.' + d), ...Layout.GLASS_TINTS.map(t => 'tint.' + t),
+  ...['NO_SESSION_BUS', 'PORTAL_UNAVAILABLE', 'PORTAL_FAILED', 'UNSUPPORTED'].map(c => 'pick.' + c)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);

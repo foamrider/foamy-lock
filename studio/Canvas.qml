@@ -32,6 +32,13 @@ FocusScope {
   property var problemNames: []
   // Accessible description of the selection (the window words it).
   property string selectionText: ""
+  // The background the view shows (LockSources), and the lock's settings.
+  property string backgroundPath: ""
+  property bool backgroundPrepared: false
+  property int backgroundVersion: 0
+  property var lockSettings: ({ timeFormat: "24h", showUserInfo: true, showMedia: true })
+  // Dropping a module from the canvas on this item (the library) hides it.
+  property Item hideArea: null
 
   signal edited(var draft)
   signal selectRequested(string name)
@@ -48,6 +55,8 @@ FocusScope {
   readonly property alias view: view
   readonly property var rects: view.elementRects
   readonly property var selectedRect: selected && rects[selected] ? rects[selected] : null
+  // A module dragged from the canvas is over the library: a drop hides it.
+  readonly property bool hiding: gesture !== null && gesture.overHide === true
 
   activeFocusOnTab: true
   Accessible.role: Accessible.Graphic
@@ -117,6 +126,54 @@ FocusScope {
     return true
   }
 
+  // Start placing `name` from the library (shown or not) with the pointer
+  // at `point` (view pixels): it follows the pointer with the canvas's
+  // snapping, and the drop shows it there (finishGesture).
+  function beginInsert(name, point) {
+    if (!look.elements[name]) return false
+    cancelGesture()
+    selectRequested(name)
+    var anchors = measureAnchors(name)
+    var zone = look.elements[name].zone
+    var current = null
+    for (var i = 0; i < anchors.length; i++) if (anchors[i].zone === zone) current = anchors[i]
+    if (!current) current = anchors[0]
+    if (!current) return false
+    var others = []
+    for (var other in rects) if (other !== name) others.push(rects[other])
+    var start = { x: current.x, y: current.y, width: current.width, height: current.height }
+    gesture = { mode: "move", insert: true, name: name, base: Draft.probeLook(look, name, current.zone), start: start,
+      origin: { x: start.x + start.width / 2, y: start.y + start.height / 2 }, anchors: anchors, current: current,
+      others: others, axis: "", delta: { x: 0, y: 0 }, result: null }
+    moveInsert(point)
+    return true
+  }
+
+  // The pointer, dragging from the library, is at `point` (view pixels).
+  function moveInsert(point, modifiers) {
+    if (!gesture || !gesture.insert) return
+    moveGesture((point.x - gesture.origin.x) * zoom, (point.y - gesture.origin.y) * zoom, modifiers)
+  }
+
+  // The draft with `name` at `pixels`, its offset in whole pixels (x
+  // towards the reading end): the inspector's fields. Shown, it stays on
+  // screen (the field below the top third) as the arrow keys keep it.
+  function offsetTo(name, pixels) {
+    var item = look.elements[name]
+    if (!item) return draft
+    if (!rects[name]) return Draft.setOffset(draft, name, { x: pixels.x / screenWidth, y: pixels.y / screenHeight })
+    var current = Draft.offsetPixels(Draft.elementValue(item, "offset"), screenWidth, screenHeight)
+    return Draft.nudge(draft, name, (pixels.x - current.x) * (rightToLeft ? -1 : 1), pixels.y - current.y,
+      view.drawnRect(name), view.reservedRect(name), geometry())
+  }
+
+  // Whether the window point `scene` is over the library (hideArea).
+  function overHideArea(scene) {
+    if (!hideArea || !hideArea.visible) return false
+    var p = hideArea.mapFromItem(null, scene.x, scene.y)
+    return p.x >= 0 && p.y >= 0 && p.x <= hideArea.width && p.y <= hideArea.height
+  }
+
   // Start scaling the selection from a corner (`handle` { x, y }: -1 or 1).
   function beginResize(handle) {
     if (!selectedRect) return false
@@ -128,8 +185,9 @@ FocusScope {
   }
 
   // The pointer moved by (dx, dy) canvas pixels since the gesture began.
-  // `modifiers` (when known) are the pointer's.
-  function moveGesture(dx, dy, modifiers) {
+  // `modifiers` (when known) are the pointer's; `scene` (when known) is
+  // where it is in the window, to find the library under it.
+  function moveGesture(dx, dy, modifiers, scene) {
     if (!gesture) return
     if (modifiers !== undefined) {
       shiftHeld = (modifiers & Qt.ShiftModifier) !== 0
@@ -137,6 +195,7 @@ FocusScope {
     }
     var g = Object.assign({}, gesture)
     g.delta = { x: dx / zoom, y: dy / zoom }
+    if (scene !== undefined && g.mode === "move" && !g.insert) g.overHide = g.name !== "password" && overHideArea(scene)
     // The axis the drag started along, for Alt (two view pixels decide it).
     if (!g.axis && Math.max(Math.abs(g.delta.x), Math.abs(g.delta.y)) >= 2) g.axis = Draft.dragAxis(g.delta.x, g.delta.y)
     gesture = g
@@ -150,7 +209,7 @@ FocusScope {
     var g = Object.assign({}, gesture)
     if (g.mode === "move") {
       g.result = Draft.snap(snapInput(g))
-      liveLook = Draft.draggedLook(look, g.name, g.result.rect, g.current, geometry())
+      liveLook = Draft.draggedLook(g.base || look, g.name, g.result.rect, g.current, geometry())
     } else {
       g.scale = Draft.resizeScale(g.name, g.startScale, g.start, g.handle, g.delta, shiftHeld)
       liveLook = Draft.scaledLook(look, g.name, g.scale)
@@ -164,9 +223,11 @@ FocusScope {
     if (!g) return
     gesture = null
     var next = draft
-    if (g.mode === "move" && g.result) {
+    if (g.mode === "move" && g.overHide) {
+      next = Draft.setHidden(draft, g.name, true)
+    } else if (g.mode === "move" && g.result) {
       var placed = Draft.drop(g.result.rect, snapInput(g))
-      if (placed) next = Draft.place(draft, g.name, placed.zone, placed.offset)
+      if (placed) next = Draft.place(draft, g.name, placed.zone, placed.offset, g.insert === true)
     } else if (g.mode === "resize" && g.scale !== undefined) {
       next = Draft.setScale(draft, g.name, g.scale)
     }
@@ -273,6 +334,12 @@ FocusScope {
         displayAwake: canvas.awake
         loadBackground: canvas.awake
         rightToLeft: FoamyI18n.rightToLeft
+        backgroundPath: canvas.backgroundPath
+        backgroundPrepared: canvas.backgroundPrepared
+        backgroundVersion: canvas.backgroundVersion
+        timeFormat: canvas.lockSettings.timeFormat
+        showUserInfo: canvas.lockSettings.showUserInfo
+        showMedia: canvas.lockSettings.showMedia
       }
 
       Item {
@@ -297,7 +364,7 @@ FocusScope {
           id: targetZone
           readonly property string zone: canvas.gesture && canvas.gesture.mode === "move" && canvas.gesture.result ? canvas.gesture.result.zone : ""
           readonly property var cell: zone ? canvas.zoneCell(zone) : null
-          visible: zone !== "" && canvas.showZones
+          visible: zone !== "" && canvas.showZones && !canvas.hiding
           x: cell ? Math.round(overlay.width * cell.column / 3) : 0
           y: cell ? Math.round(overlay.height * cell.row / 3) : 0
           width: Math.round(overlay.width / 3)
@@ -424,7 +491,7 @@ FocusScope {
               if (name) canvas.beginMove(name)
             } else canvas.finishGesture()
           }
-          onActiveTranslationChanged: if (active) canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers)
+          onActiveTranslationChanged: if (active) canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers, centroid.scenePosition)
         }
       }
     }
@@ -452,6 +519,9 @@ FocusScope {
     displayAwake: false
     loadBackground: false
     rightToLeft: FoamyI18n.rightToLeft
+    timeFormat: canvas.lockSettings.timeFormat
+    showUserInfo: canvas.lockSettings.showUserInfo
+    showMedia: canvas.lockSettings.showMedia
   }
 
   component Tag: Rectangle {
