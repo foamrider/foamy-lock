@@ -634,3 +634,80 @@ var gradient = {
 }
 
 animation("gradient", 30, gradient, null)
+
+// ---- ocean (ocean.frag) -----------------------------------------------------
+
+var OCEAN_BANDS = 8, OCEAN_HORIZON = 0.6, OCEAN_MOON = [0.74, 0.2]
+
+function oceanCrest(i, x, turn) {
+  var depth = Math.pow((i + 1) / OCEAN_BANDS, 1.5)
+  var y = OCEAN_HORIZON + (1 - OCEAN_HORIZON) * depth - 0.02
+  var amp = 0.004 + 0.022 * depth
+  var k = 9 / (0.35 + depth)
+  var w1 = Math.sin(x * k + turn * Math.floor(2 + 3 * hash(i, 0, 600)) + TAU * hash(i, 0, 601))
+  var w2 = Math.sin(x * k * 2.3 - turn * Math.floor(3 + 3 * hash(i, 0, 602)) + TAU * hash(i, 0, 603))
+  return y - amp * (0.65 * w1 + 0.35 * w2)
+}
+
+var ocean = {
+  fraction: 0.35,
+  prepare: function(s) {
+    var aspect = s.w / Math.max(s.h, 1)
+    var tint = mix3(s.accent, s.cyan, 0.4)
+    var moonGlow = mix3(s.ink, tint, 0.4), path = mix3(s.ink, tint, 0.3)
+    var mx = OCEAN_MOON[0] * aspect, my = OCEAN_MOON[1]
+    var crests = [], x = 0
+    var water = [0, 0, 0]
+    return {
+      column: function(ux) {
+        x = ux * aspect
+        var extra = []
+        for (var i = 0; i < OCEAN_BANDS; i++) {
+          var c = oceanCrest(i, x, s.turn)
+          crests[i] = c
+          var px = 1 / s.h
+          extra.push(c - px, c, c + 2 * px, c + 5 * px, c + 12 * px, c + 0.03)
+        }
+        var dx = x - mx
+        // The moon's rim (smoothstep(0.031, 0.027, r)) where this column crosses it.
+        for (var rim = 0.027; rim < 0.032; rim += 0.004) {
+          if (Math.abs(dx) < rim) {
+            var half = Math.sqrt(rim * rim - dx * dx)
+            extra.push(my - half, my + half)
+          }
+        }
+        return heightsWith(24, extra)
+      },
+      shade: function(y, out) {
+        sky(s, Math.min(1, y / OCEAN_HORIZON), 0.6, 1, out)
+        lay(out, tint, 0.08 * smoothstep(OCEAN_HORIZON - 0.3, OCEAN_HORIZON, y), s.glow)
+        var dx = x - mx, dy = y - my
+        var r = Math.sqrt(dx * dx + dy * dy)
+        lay(out, moonGlow, 0.1 * Math.exp(-r * 10), s.glow)
+        lay(out, s.ink, 0.7 * smoothstep(0.031, 0.027, r), s.glow)
+        if (y <= OCEAN_HORIZON - 0.03) return
+        var band = -1, top = 0
+        for (var i = 0; i < OCEAN_BANDS; i++) if (y >= crests[i]) { band = i; top = crests[i] }
+        if (band < 0) return
+        var depth = (band + 1) / OCEAN_BANDS
+        var light = mix(0.5, 1, s.glow)
+        for (var k = 0; k < 3; k++) {
+          var w = mix(mix(s.base[k], tint[k], 0.3), s.base[k] * 0.55, depth)
+          water[k] = mix(s.base[k], w, light)
+        }
+        var below = smoothstep(0, 1, (y - top) / (0.02 + 0.05 * depth))
+        out[0] = mix(water[0], water[0] * 0.8, below)
+        out[1] = mix(water[1], water[1] * 0.8, below)
+        out[2] = mix(water[2], water[2] * 0.8, below)
+        var foam = Math.exp(-(y - top) * s.h / ((1 + 2 * depth) * s.unit))
+        lay(out, s.ink, 0.16 * foam * (0.5 + 0.5 * depth), s.glow)
+        var spread = 0.03 + 0.18 * (y - OCEAN_HORIZON)
+        var p = (x - mx) / spread
+        var glint = Math.min(1, Math.exp(-(y - top) * s.h / (2.5 * s.unit)) + 0.25 * foam)
+        lay(out, path, 0.5 * Math.exp(-p * p) * glint, s.glow)
+      }
+    }
+  }
+}
+
+animation("ocean", 18, ocean, null)
