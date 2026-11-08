@@ -149,6 +149,7 @@ Item {
     case "account:avatar": return accountAvatar
     case "account:chip": return accountChip
     case "account:name": return accountName
+    case "account:greeting": return accountGreeting
     case "password:pill": return passwordPill
     case "password:underline": return passwordUnderline
     case "password:box": return passwordBox
@@ -678,6 +679,8 @@ Item {
     }
   }
   Component { id: accountName; Item { Bar { anchors.centerIn: parent; width: root.u * 40; height: root.u * 5 } } }
+  // A greeting for the time of day.
+  Component { id: accountGreeting; Item { Fit { text: FoamyI18n.t("studio.art.greeting"); font.pixelSize: FoamyStyle.font.title; font.weight: Font.Light } } }
 
   // ---- password field
   Component {

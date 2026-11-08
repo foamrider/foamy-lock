@@ -121,7 +121,7 @@ test('every element offers its shipped styles, defaults first', () => {
   assert.deepEqual(Layout.STYLES, {
     date: ['long', 'caps', 'short', 'serif', 'numeric', 'stacked', 'week', 'iso'],
     clock: ['thin', 'bold', 'stacked', 'mono', 'outline', 'dots', 'flip', 'analog', 'small', 'poster', 'ring', 'serif'],
-    account: ['avatar', 'chip', 'name'],
+    account: ['avatar', 'chip', 'name', 'greeting'],
     password: ['pill', 'underline', 'box', 'dots', 'terminal', 'card'],
     media: ['card', 'line', 'pill', 'art', 'hero', 'minimal', 'disc'],
     status: ['text', 'icons', 'pill', 'system'],
