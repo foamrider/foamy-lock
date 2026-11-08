@@ -23,10 +23,11 @@ ShellRoot {
   property var leftToRight: null
   property int cycleAt: -1
   property var reference: null
-  readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter", "calendarBlock"]
-  readonly property var elementNames: ["dateLabel", "clockLabel", "identityBlock", "inputField", "mediaRow", "statusFooter", "calendarBlock"]
+  readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter", "calendarBlock", "weatherBlock"]
+  readonly property var elementNames: ["dateLabel", "clockLabel", "identityBlock", "inputField", "mediaRow", "statusFooter", "calendarBlock",
+    "weatherBlock"]
   readonly property var modelNames: ({ dateLabel: "date", clockLabel: "clock", identityBlock: "account", inputField: "password",
-    mediaRow: "media", statusFooter: "status", calendarBlock: "calendar" })
+    mediaRow: "media", statusFooter: "status", calendarBlock: "calendar", weatherBlock: "weather" })
 
   function geometry() {
     var out = {}
@@ -66,6 +67,10 @@ ShellRoot {
       fingerprintConfigured: true
       // Start on foamy and switch at the first state, as previewPreset does.
       look: Layout.defaults()
+      // The widest weather, for any preset that would show it (none does).
+      weather: ({ temperature: -12, unit: "C", code: "heavyrainandthunder", high: -3, low: -18,
+        condition: "Heavy rain and thunder with strong gusts along the coast tonight",
+        location: "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru", updatedAtMs: 1 })
       avatarPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
       onPasswordTextEdited: function(value) { passwordText = value }
       onLayoutFellBack: function(error, preset) { shellRoot.fellBack++; shellRoot.fellBackTo.push(preset + ":" + error) }
@@ -303,7 +308,8 @@ ShellRoot {
     if (!state[4] && !state[3] && hint.visible) return fail("field chrome shows on a secondary screen while nothing is typed")
     checkBackground()
     // Whatever else is on screen stays inside it.
-    var names = ["dateLabel", "clockLabel", "identityBlock", "mediaRow", "statusFooter", "calendarBlock"]
+    var names = ["dateLabel", "clockLabel", "identityBlock", "mediaRow", "statusFooter", "calendarBlock", "weatherBlock"]
+    if (findNamed(view, "weatherBlock").visible) return fail("a built-in preset shows the weather")
     for (var i = 0; i < names.length; i++) {
       var item = findNamed(view, names[i])
       if (!item.visible) continue

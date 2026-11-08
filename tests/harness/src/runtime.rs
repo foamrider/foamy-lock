@@ -33,7 +33,13 @@ const PROBE_ERROR: &str = "D-Bus activation failed\n";
 
 /// Every command that could affect the desktop, replaced; identity probes
 /// also answer with test data. (name, script body after `#!/bin/sh`.)
-const COMMANDS: [(&str, &str); 8] = [
+const COMMANDS: [(&str, &str); 9] = [
+    // FoamyPeerIpc's fallback for a target IpcRegistry can't run: recorded,
+    // and answered as omarchy-shell answers a missing function.
+    (
+        "omarchy-shell",
+        r#"printf "%s\n" "$*" >> "$HOME/omarchy-shell-calls"; echo "Function not found.""#,
+    ),
     (
         "getent",
         r#"printf "fixture:x:1000:1000:Foamy User:%s:/bin/sh\n" "$HOME""#,
@@ -113,6 +119,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testRetry: fingerprintRetryTimer
   property alias testProbeRetry: fingerprintRecheckTimer
   property alias testResume: fingerprintResumeTimer
+  property alias testWeatherRetry: weatherRetryTimer
   property bool testStaleLocked: false";
     let replacements = [
         ("import Quickshell.Wayland", "import \"mocks\" as Mock"),
@@ -133,6 +140,15 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
         (
             "var screens = Quickshell.screens || []",
             "var screens = [{ name: \"fixture\", width: 1920, height: 1080 }]",
+        ),
+        // The weather polls every 2.5 s and retries a pending reply after 0.2 s.
+        (
+            "readonly property int weatherPollMs: 900000",
+            "readonly property int weatherPollMs: 2500",
+        ),
+        (
+            "readonly property int weatherRetryMs: 10000",
+            "readonly property int weatherRetryMs: 200",
         ),
         // Both PAM services are fixtures; enrollment must not depend on host setup.
         ("/etc/pam.d/omarchy-lock-password", &pam),
@@ -497,6 +513,7 @@ fn scenarios(test: &Test) -> R {
     identity_conflict_registry(test)?;
     preview(test)?;
     look(test)?;
+    weather(test)?;
     wallpaper(test)?;
     settings_and_password(test)?;
     fingerprint(test)?;
@@ -698,9 +715,49 @@ fn look(test: &Test) -> R {
             && text(&catalog, "defaultPreset")? == "foamy",
         "{catalog}"
     );
+    // Version 3: the weather, the new styles and each element's own keys.
+    ensure!(
+        at(&catalog, "elements")?
+            .as_array()
+            .is_some_and(|e| e.last() == Some(&json!("weather")))
+            && at(&catalog, "styles.date")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "week"))
+            && at(&catalog, "styles.calendar")?
+                .as_array()
+                .is_some_and(|s| s.iter().any(|s| s == "mini"))
+            && at(&catalog, "styles.weather")?
+                .as_array()
+                .is_some_and(|s| s.len() == 3)
+            && at(&catalog, "statusItems")?
+                .as_array()
+                .is_some_and(|s| s.len() == 8)
+            && at(&catalog, "elementKeysFor.password")?
+                .as_array()
+                .is_some_and(|k| k.iter().any(|k| k == "reveal"))
+            && at(&catalog, "elementKeysFor.weather")?
+                .as_array()
+                .is_some_and(|k| k.iter().any(|k| k == "location"))
+            && at(&catalog, "elementKeysFor.clock")?
+                .as_array()
+                .is_some_and(|k| !k.iter().any(|k| k == "reveal"))
+            && text(&catalog, "elementLimits.password.options.reveal.default")? == "always"
+            && at(&catalog, "elementLimits.weather.options.location.default")? == &json!(false)
+            && at(
+                &catalog,
+                "elementLimits.status.options.items.defaults.system"
+            )?
+            .as_array()
+            .is_some_and(|d| d.len() == 4)
+            && at(&catalog, "weather.target")?.is_boolean()
+            && at(&catalog, "presets")?.as_array().is_some_and(|p| p
+                .iter()
+                .all(|p| p["look"]["elements"]["weather"]["hidden"] == true)),
+        "{catalog}"
+    );
     // Version 2: the placement keys and their limits, per element.
     ensure!(
-        num(&catalog, "version")? == 2.0
+        num(&catalog, "version")? == 3.0
             && at(&catalog, "elementKeys")?.as_array().is_some_and(|k| {
                 ["scale", "opacity", "offset", "glass", "screens"]
                     .iter()
@@ -866,6 +923,212 @@ fn look(test: &Test) -> R {
     })?;
     println!(
         "PASS: look presets and overrides reload live, look and settings mistakes stay apart, previewPreset shows without saving, sandboxed picture background and missing picture"
+    );
+    Ok(())
+}
+
+/// Poll the test's weather state until `predicate` holds, for up to 5 s.
+#[track_caller]
+fn wait_weather(test: &Test, mut predicate: impl FnMut(&Value) -> R<bool>) -> R<Value> {
+    let caller = Location::caller().line();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut last = String::new();
+    while Instant::now() < deadline {
+        match test.test_json("weather") {
+            Ok(state) => match predicate(&state) {
+                Ok(true) => return Ok(state),
+                Ok(false) => last = state.to_string(),
+                Err(error) => last = error,
+            },
+            Err(error) => last = error,
+        }
+        ms(50);
+    }
+    Err(format!(
+        "runtime.rs:{caller}: Timed out waiting for the weather; last: {last}"
+    ))
+}
+
+/// The weather element's data: fetched from Foamy Weather's `current()`
+/// only while a shown look has the weather, checked, and hidden when the
+/// target is missing, pending, stale, invalid or not ok. A fake
+/// foamy.weather target in IpcRegistry stands in (4.5); omarchy-shell is a
+/// stand-in that records calls.
+fn weather(test: &Test) -> R {
+    let shell_calls = test.path("omarchy-shell-calls");
+    let shown = json!({"layout": {"weather": {"hidden": false, "details": "full"}}}).to_string();
+    let reply = |value: Value| value.to_string();
+    let good = json!({"ok": true, "temperature": 6, "unit": "C", "code": "lightrain_day",
+        "condition": "Light rain", "high": 10, "low": 2, "location": "Bergen", "updatedAt": "__UPDATED__"});
+    let peer = |reply: &str, age: i64, current: bool| -> R {
+        let age = age.to_string();
+        let current = current.to_string();
+        test.ipc("test", "weatherPeer", &[reply, &age, &current])
+            .map(drop)
+    };
+    let preview = |look: &str| -> R {
+        ensure!(test.ipc("foamy.lock", "previewLook", &[look])? == "ok");
+        Ok(())
+    };
+    let hide = || -> R {
+        ensure!(test.lock("hidePreview")? == "ok");
+        Ok(())
+    };
+    // No foamy.weather target: nothing is called, nothing shows.
+    peer("none", 0, true)?;
+    preview(&shown)?;
+    let state = wait_weather(test, |w| Ok(text(w, "state")? == "absent"))?;
+    ensure!(
+        num(&state, "polls")? == 0.0 && at(&state, "shown")?.is_null(),
+        "{state}"
+    );
+    hide()?;
+    ensure!(
+        !shell_calls.exists(),
+        "an absent Foamy Weather starts no process"
+    );
+    if !test.has_registry {
+        println!("SKIP: weather peer (no IpcRegistry on this host)");
+        return Ok(());
+    }
+    // A look without the weather never asks.
+    peer(&reply(good.clone()), 60, true)?;
+    ensure!(test.ipc("foamy.lock", "previewPreset", &["corner"])? == "ok");
+    ms(400);
+    let state = test.test_json("weather")?;
+    ensure!(
+        num(&state, "calls")? == 0.0 && !on(&state, "wanted")?,
+        "{state}"
+    );
+    hide()?;
+    // Opening the preview asks at once; the report is checked and shown.
+    preview(&shown)?;
+    let state = wait_weather(test, |w| Ok(text(w, "state")? == "ok"))?;
+    ensure!(
+        num(&state, "shown.temperature")? == 6.0
+            && text(&state, "shown.unit")? == "C"
+            && text(&state, "shown.code")? == "lightrain_day"
+            && text(&state, "shown.group")? == "rain"
+            && text(&state, "shown.condition")? == "Light rain"
+            && num(&state, "shown.high")? == 10.0
+            && text(&state, "shown.location")? == "Bergen",
+        "{state}"
+    );
+    let status = test.status()?;
+    ensure!(
+        text(&status, "weather.state")? == "ok"
+            && on(&status, "weather.shown")?
+            && !status.to_string().contains("Bergen"),
+        "status never names the place: {status}"
+    );
+    // And again every poll interval while it shows.
+    let polls = num(&state, "polls")?;
+    wait_weather(test, |w| Ok(num(w, "polls")? > polls))?;
+    hide()?;
+    // Hidden again, it stops asking.
+    let calls = num(&test.test_json("weather")?, "calls")?;
+    ms(3000);
+    ensure!(
+        num(&test.test_json("weather")?, "calls")? == calls,
+        "no polls without a shown weather"
+    );
+    // A cold service: "pending", asked again three times, then left until
+    // the next poll; the old report stays meanwhile.
+    peer(&reply(json!({"ok": false, "reason": "pending"})), 0, true)?;
+    preview(&shown)?;
+    let state = wait_weather(test, |w| {
+        Ok(text(w, "state")? == "pending" && num(w, "pendingLeft")? == 0.0 && !on(w, "retrying")?)
+    })?;
+    ensure!(
+        num(&state, "calls")? == 4.0 && num(&state, "shown.temperature")? == 6.0,
+        "one call and three retries: {state}"
+    );
+    hide()?;
+    // A pending service that becomes ready within the retries shows at once.
+    peer(&reply(json!({"ok": false, "reason": "pending"})), 0, true)?;
+    preview(&shown)?;
+    wait_weather(test, |w| Ok(num(w, "calls")? >= 1.0))?;
+    peer(&reply(good.clone()), 120, true)?;
+    let state = wait_weather(test, |w| Ok(text(w, "state")? == "ok"))?;
+    ensure!(num(&state, "shown.temperature")? == 6.0, "{state}");
+    hide()?;
+    // Too old (over three hours), not ok, or invalid: hidden.
+    let mut long = good.clone();
+    long["condition"] = json!("x".repeat(65));
+    let mut typed = good.clone();
+    typed["temperature"] = json!("6");
+    let mut controls = good.clone();
+    controls["location"] = json!("Ber\u{202e}gen");
+    for (reply, age, expected) in [
+        (good.to_string(), 3 * 3600 + 60, "stale"),
+        (
+            json!({"ok": false, "reason": "offline"}).to_string(),
+            0,
+            "unavailable",
+        ),
+        (
+            json!({"ok": false, "reason": "no-location"}).to_string(),
+            0,
+            "unavailable",
+        ),
+        (long.to_string(), 60, "invalid"),
+        (typed.to_string(), 60, "invalid"),
+        (controls.to_string(), 60, "invalid"),
+        ("<html>".to_string(), 0, "invalid"),
+        ("x".repeat(5000), 0, "invalid"),
+    ] {
+        // Shown first, so each case has something to hide.
+        peer(&good.to_string(), 60, true)?;
+        preview(&shown)?;
+        wait_weather(test, |w| Ok(text(w, "state")? == "ok"))?;
+        hide()?;
+        peer(&reply, age, true)?;
+        preview(&shown)?;
+        let state = wait_weather(test, |w| Ok(text(w, "state")? == expected))?;
+        ensure!(
+            at(&state, "shown")?.is_null() && at(&state, "report")?.is_null(),
+            "{expected}: {state}"
+        );
+        hide()?;
+    }
+    // An older Foamy Weather without current(): IpcRegistry can't run it,
+    // FoamyPeerIpc asks omarchy-shell (the stand-in), and nothing shows.
+    peer("", 0, false)?;
+    preview(&shown)?;
+    let state = wait_weather(test, |w| Ok(text(w, "state")? == "unavailable"))?;
+    ensure!(at(&state, "shown")?.is_null(), "{state}");
+    hide()?;
+    ensure!(
+        read(&shell_calls)?
+            .lines()
+            .all(|line| line == "foamy.weather current"),
+        "only the weather call reaches omarchy-shell"
+    );
+    // The lock asks when it opens, and not while the display is blanked.
+    peer(&good.to_string(), 60, true)?;
+    test.write_config(STOCK_OFF, json!({"layout": {"weather": {"hidden": false}}}))?;
+    test.wait_for(|s| Ok(!on(s, "look.elements.weather.hidden")?))?;
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|s| on(s, "secure"))?;
+    let state = wait_weather(test, |w| Ok(text(w, "state")? == "ok" && on(w, "wanted")?))?;
+    ensure!(num(&state, "calls")? >= 1.0, "{state}");
+    test.test("blank")?;
+    let state = wait_weather(test, |w| Ok(!on(w, "wanted")?))?;
+    let calls = num(&state, "calls")?;
+    ms(3000);
+    ensure!(
+        num(&test.test_json("weather")?, "calls")? == calls,
+        "no polls while the display is blanked"
+    );
+    test.test("wake")?;
+    wait_weather(test, |w| on(w, "wanted"))?;
+    test.submit("test-password")?;
+    test.wait_for(|s| Ok(!on(s, "locked")?))?;
+    peer("none", 0, true)?;
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| on(s, "look.elements.weather.hidden"))?;
+    println!(
+        "PASS: weather from a foamy.weather peer only for a shown weather (absent target, preview, lock, polls, blanking), pending retries, stale, not ok, invalid and older peers hidden"
     );
     Ok(())
 }
@@ -1331,6 +1594,8 @@ Item {
     LockView { }
   }
   function screens() { var screens = Quickshell.screens || [] }
+  readonly property int weatherPollMs: 900000
+  readonly property int weatherRetryMs: 10000
 }
 ";
 
@@ -1340,6 +1605,7 @@ Item {
         assert!(patched.starts_with("import \"mocks\" as Mock\n"));
         assert!(patched.contains("property alias testResume: fingerprintResumeTimer\n"));
         assert!(patched.contains("locked: testStaleLocked || lockRequested"));
+        assert!(patched.contains("weatherPollMs: 2500") && patched.contains("weatherRetryMs: 200"));
         assert_eq!(
             patched
                 .matches("Mock.PamContext { config: \"/tmp/pam\" }")

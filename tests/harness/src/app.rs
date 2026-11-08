@@ -12,6 +12,22 @@ use crate::host;
 
 const NETWORKING: &str = include_str!("../fixtures/Networking.qml");
 const POWER: &str = include_str!("../fixtures/Power.qml");
+/// PipeWire, Bluetooth and the keyboard layout, for the status items.
+const SOURCES: &str = include_str!("../fixtures/Sources.qml");
+const SOURCE_FILES: [(&str, &str); 3] = [
+    (
+        "VolumeSource.qml",
+        include_str!("../fixtures/sources/VolumeSource.qml"),
+    ),
+    (
+        "BluetoothSource.qml",
+        include_str!("../fixtures/sources/BluetoothSource.qml"),
+    ),
+    (
+        "KeyboardSource.qml",
+        include_str!("../fixtures/sources/KeyboardSource.qml"),
+    ),
+];
 const WALLPAPER: &str = include_str!("../fixtures/wallpaper.svg");
 const ARTWORK: &str = include_str!("../fixtures/artwork.svg");
 /// Fixed readings for the "system" status style in place of /proc.
@@ -45,21 +61,23 @@ pub fn temp_dir(prefix: &str) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Point a LockView source at the fixtures instead of Networking, UPower and
-/// the wall clock. LockView owns those data sources; elements/ don't touch
-/// them, so only this file needs patching.
+/// Point a LockView source at the fixtures instead of Networking, UPower,
+/// PipeWire, Bluetooth, Hyprland and the wall clock. LockView owns those data
+/// sources (the last three in elements/sources, which it loads by path);
+/// elements/ don't touch them, so only this file needs patching.
 pub fn patch_view(view: &str) -> String {
-    view.replace(
-        "import Quickshell.Networking",
-        "import \"fixtures\" as Fixture",
-    )
-    .replace("import Quickshell.Services.UPower\n", "")
-    .replace("Networking.", "Fixture.Networking.")
-    .replace("NetworkConnectivity.", "Fixture.Networking.")
-    .replace("DeviceType.", "Fixture.Networking.")
-    .replace("UPower.", "Fixture.Power.")
-    .replace("UPowerDeviceState.", "Fixture.Power.")
-    .replace("lockClock.date", FIXED_DATE)
+    view.replace("\"elements/sources/", "\"fixtures/sources/")
+        .replace(
+            "import Quickshell.Networking",
+            "import \"fixtures\" as Fixture",
+        )
+        .replace("import Quickshell.Services.UPower\n", "")
+        .replace("Networking.", "Fixture.Networking.")
+        .replace("NetworkConnectivity.", "Fixture.Networking.")
+        .replace("DeviceType.", "Fixture.Networking.")
+        .replace("UPower.", "Fixture.Power.")
+        .replace("UPowerDeviceState.", "Fixture.Power.")
+        .replace("lockClock.date", FIXED_DATE)
 }
 
 /// Fill `app` with the plugin's current view, its kit, catalogs and
@@ -90,10 +108,15 @@ pub fn prepare(app: &Path, host_shell: &Path) -> Result<(), String> {
     write(app.join("LockView.qml"), &view)?;
     write(
         app.join("fixtures/qmldir"),
-        "module Fixture\nsingleton Networking 1.0 Networking.qml\nsingleton Power 1.0 Power.qml\n",
+        "module Fixture\nsingleton Networking 1.0 Networking.qml\nsingleton Power 1.0 Power.qml\nsingleton Sources 1.0 Sources.qml\n",
     )?;
     write(app.join("fixtures/Networking.qml"), NETWORKING)?;
     write(app.join("fixtures/Power.qml"), POWER)?;
+    write(app.join("fixtures/Sources.qml"), SOURCES)?;
+    fs::create_dir_all(app.join("fixtures/sources")).map_err(io("fixtures/sources"))?;
+    for (name, text) in SOURCE_FILES {
+        write(app.join("fixtures/sources").join(name), text)?;
+    }
     write(app.join("wallpaper.svg"), WALLPAPER)?;
     write(app.join("artwork.svg"), ARTWORK)
 }

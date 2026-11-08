@@ -1,10 +1,12 @@
 // Placement shell: the free-placement keys (scale, opacity, offset, glass,
 // screens) on one view, case by case: what the geometry check reports, that
 // decorations keep fitting the un-offset zones, that offsets mirror and that
-// `latchFallback: false` only reports. Written into a temporary app by the
-// harness.
+// `latchFallback: false` only reports; late weather and status readings
+// re-run the check, and the status sources exist only while an item needs
+// them. Written into a temporary app by the harness.
 import QtQuick
 import Quickshell
+import "fixtures" as Fixture
 import "Layout.js" as Layout
 ShellRoot {
   id: shellRoot
@@ -15,7 +17,12 @@ ShellRoot {
   // One case's saved values between its phases.
   property var saved: null
   readonly property var elementNames: ({ date: "dateLabel", clock: "clockLabel", account: "identityBlock",
-    password: "inputField", media: "mediaRow", status: "statusFooter", calendar: "calendarBlock" })
+    password: "inputField", media: "mediaRow", status: "statusFooter", calendar: "calendarBlock", weather: "weatherBlock" })
+  readonly property var sampleWeather: ({ temperature: 6, unit: "C", code: "lightrain", condition: "Light rain", high: 10, low: 2,
+    location: "Bergen", updatedAtMs: 1 })
+  function sources() {
+    return [Fixture.Sources.volumeSources, Fixture.Sources.bluetoothSources, Fixture.Sources.keyboardSources].join(",")
+  }
 
   FloatingWindow {
     visible: true
@@ -203,6 +210,93 @@ ShellRoot {
           var clock = findNamed(view, "clockLabel")
           if (!near(view.drawnRect("clock").x - view.reservedRect("clock").x, -192)) fail("clock not offset: " + clock.x)
         } }
+    ] },
+    { name: "weather arriving late re-runs the check", phases: [
+      { apply: function() {
+          view.weather = null
+          view.look = look({ layout: { weather: { hidden: false, zone: "middle-center", offset: { x: 0, y: 0.2 } } } })
+        },
+        check: function() {
+          expectProblem("")
+          if (findNamed(view, "weatherBlock").visible || view.elementRects.weather !== undefined) fail("weather shows without data")
+        } },
+      { apply: function() { view.weather = shellRoot.sampleWeather },
+        check: function() {
+          expectProblem("element-overlap")
+          if (!findNamed(view, "weatherBlock").visible) fail("the weather didn't show")
+        } },
+      { apply: function() { view.weather = null }, check: function() { expectProblem("") } }
+    ] },
+    { name: "weather glass, details and place", phases: [
+      { apply: function() {
+          view.weather = shellRoot.sampleWeather
+          view.look = look({ layout: { weather: { hidden: false, style: "pill", glass: 0.3, screens: "primary" } } })
+        },
+        check: function() {
+          expectProblem("")
+          var surface = findNamed(view, "weatherSurface")
+          if (!surface.visible || !near(surface.color.a * 1000, view.glassAt(0.3).a * 1000)) fail("weather glass " + surface.color.a)
+          if (findNamed(view, "weatherBlock").width >= 200) fail("the temperature alone is wide: " + findNamed(view, "weatherBlock").width)
+          shellRoot.saved = findNamed(view, "weatherBlock").width
+        } },
+      { apply: function() { view.look = look({ layout: { weather: { hidden: false, style: "pill", details: "full", location: true } } }) },
+        check: function() {
+          expectProblem("")
+          if (!(findNamed(view, "weatherBlock").width > shellRoot.saved)) fail("the details didn't widen the pill")
+        } },
+      { apply: function() { view.primary = false },
+        check: function() { if (!findNamed(view, "weatherBlock").visible) fail("weather left a secondary view") } },
+      { apply: function() {
+          view.primary = true
+          view.look = look({ layout: { weather: { hidden: false, screens: "primary" } } })
+        }, check: function() {} },
+      { apply: function() { view.primary = false },
+        check: function() { if (findNamed(view, "weatherBlock").visible) fail("a primary-only weather on a secondary view") } },
+      { apply: function() { view.primary = true; view.weather = null; view.look = Layout.defaults() }, check: function() {} }
+    ] },
+    { name: "status sources only while an item needs them", phases: [
+      { apply: function() { view.look = Layout.defaults() },
+        check: function() {
+          if (sources() !== "0,0,0" || view.systemShown) fail("sources without items: " + sources() + " " + view.systemShown)
+        } },
+      { apply: function() { view.look = look({ layout: { status: { items: ["volume", "bluetooth", "keyboard", "network"] } } }) },
+        check: function() {
+          expectProblem("")
+          if (sources() !== "1,1,1" || view.systemShown) fail("sources for three items: " + sources() + " " + view.systemShown)
+          for (var name of ["volume", "bluetooth", "keyboard", "network"])
+            if (!findNamed(view, name + "Status").visible) fail(name + " doesn't show")
+          if (findNamed(view, "batteryStatus")) fail("an item not named is made")
+          if (view.volumePercent !== 64 || view.keyboardLayout === "") fail("readings " + [view.volumePercent, view.keyboardLayout])
+        } },
+      { apply: function() { view.look = look({ layout: { status: { items: ["uptime"], style: "system" } } }) },
+        check: function() {
+          if (sources() !== "0,0,0") fail("sources after the items went: " + sources())
+          if (!view.uptimeWanted || view.loadWanted || view.memoryWanted) fail("/proc reads " + [view.uptimeWanted, view.loadWanted, view.memoryWanted])
+        } },
+      { apply: function() { view.look = look({ layout: { status: { items: ["volume"], hidden: true } } }) },
+        check: function() { if (sources() !== "0,0,0") fail("sources for a hidden status: " + sources()) } },
+      { apply: function() { view.look = look({ layout: { status: { items: ["volume"] } } }); Fixture.Sources.volumeAvailable = false },
+        check: function() {
+          expectProblem("")
+          if (findNamed(view, "statusFooter").visible || view.elementRects.status !== undefined) fail("an empty status shows")
+        } },
+      { apply: function() { view.look = look({ layout: { status: { items: ["volume", "network"] } } }) },
+        check: function() {
+          if (findNamed(view, "volumeStatus").visible || !findNamed(view, "networkStatus").visible) fail("an unavailable item shows")
+          Fixture.Sources.volumeAvailable = true
+        } },
+      // A host's samples (Lock Studio): no source of the view's own.
+      { apply: function() {
+          view.liveSources = false
+          view.hasVolume = true
+          view.volumePercent = 30
+          view.volumeMuted = true
+        },
+        check: function() {
+          if (sources() !== "0,0,0") fail("sources with liveSources false: " + sources())
+          if (!findNamed(view, "volumeStatus").visible) fail("the sample volume doesn't show")
+        } },
+      { apply: function() { view.liveSources = true; view.look = Layout.defaults() }, check: function() {} }
     ] },
     { name: "latchFallback false reports, true falls back", phases: [
       { apply: function() { view.look = look({ layout: { status: { offset: { x: 0.3, y: 0 } } } }) },
