@@ -1,6 +1,6 @@
 # Plan: Lock Studio, a desktop app for the Foamy lock screen
 
-Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Builds on
+Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–3 done (see Progress). Builds on
 [layout-engine.md](layout-engine.md) (zones, presets, safety checks, IPC).
 
 ## Goal
@@ -383,6 +383,58 @@ runtime), kit-check, lint and the validator. Each is one commit.
   step 4. Options: render the canvas at half size, or check only on drop.
 - **Free offsets on small screens.** The lock falls back safely; the app
   warns at reference sizes.
+
+## Progress (2026-11-08)
+
+Steps 1 to 3 are done on `feat/layout-engine`, offline (the harness only;
+nothing ran on the real lock).
+
+- **1, the `uiScale` seam.** Every element has a required `uiScale`, set by
+  LockView (`elementScale(name)`). The field, dot and inset sizes moved into
+  PasswordElement; the centre column is `contentWidthAt(scale)`, clamped to
+  the screen less 64 px (at the view's scale). Thumbnails, parity and every
+  suite were identical (thumbnails byte for byte).
+- **2, the look format.** Layout.js: `scale`, `opacity`, `offset`, `glass`,
+  `screens`, the password limits, `GLASS_STYLES`, `elementLimits()` and the
+  canonical form. `catalog` is version 2 with `elementLimits` and `screens`.
+- **3, rendering and geometry.** Offsets in `placeX`/`placeY`,
+  `reservedRect` for the decorations, `glassAt()`/`glassFill`,
+  `screens: "primary"`, `geometryProblem()`, `latchFallback`,
+  `geometryProblemCode`, `elementRects` and the full `geometryKey`. A new
+  harness suite, `placement` (also run by `layout`), holds the new cases.
+
+Decisions made while building:
+- **Canonical form strips defaults** (`scale: 1`, `opacity: 1`,
+  `screens: "all"`, a zero offset) instead of filling them in, so a preset's
+  look, `status` and the catalog are unchanged for existing looks. The scale
+  is stored exactly on its step (`Math.round(v * 20) / 20`). `plainFoamy`
+  compares `Layout.canonical(look)`.
+- **`glass` is accepted per element, not per style.** The date (no glass
+  style) rejects it; any style of the other elements accepts it, and the
+  styles without a surface ignore it, so switching style never makes a look
+  invalid. The glass styles: clock `analog`, `ring`; account `chip`;
+  password `pill`, `box`, `card`; media `card`, `pill`, `art`; status
+  `pill`, `system`; calendar `card`. The flip cards and terminal panel are
+  fixed dark fills, not glass.
+- **Where the codes live.** `geometryError` gained `password-high` (the
+  field's top must be at least a third down); a new
+  `Layout.lookGeometryError(elements, rects, …)` adds `element-offscreen`
+  (1 px slack) and `element-overlap`. Order: the field's codes first. The
+  field is still checked against every element, its own stack included,
+  as before.
+- **The stricter overlap rule found two things.** The `sheet` panel
+  straddled the centred media card on a portrait 1080×1920 screen; on narrow
+  screens it now widens over the centred bottom corners, as `split` does.
+  The style sweep put the `system` status panel beside the top-center clock
+  on 800×1000, where they really overlap; that case now moves the date and
+  clock to the middle row.
+- **The layout test** runs 1080×1920 as a fifth size (800×1000 kept) and
+  requires `geometryProblem() === ""` for every preset and state.
+- **The plugin validator** was run as
+  `/usr/share/omarchy/bin/omarchy-plugin-validate .` (the same read-only
+  script `omarchy plugin validate` dispatches to).
+
+Open: live validation on a real lock (as before), and steps 4 to 9.
 
 ## Open questions for the user
 
