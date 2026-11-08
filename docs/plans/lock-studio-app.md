@@ -1,6 +1,6 @@
 # Plan: Lock Studio, a desktop app for the Foamy lock screen
 
-Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–5 done (see Progress). Builds on
+Status: revision 3 (2026-11-08): Rust split decided; revision 2 was reviewed. Steps 1–6 done (see Progress). Builds on
 [layout-engine.md](layout-engine.md) (zones, presets, safety checks, IPC).
 
 ## Goal
@@ -527,15 +527,105 @@ desktop):
   `studio/`, where `kit` isn't): 20 warnings, all `FoamyStyle.font.*`
   typed as QObject by the kit.
 
-Open for steps 6 to 8: the inspector's controls and the background page;
-dragging from the library (show a hidden module at the drop point, hide by
-dropping on the library); the preset picker in the header (a menu) and the
-confirmation before a preset drops changes; the picture background (via
-the helper) and the Omarchy wallpaper on the canvas (it shows the theme
-colour today); the lock's time format and "show user info" settings on the
-canvas; drafts on disk, Apply, Preview and the quit guard; `displayAwake`
-also off while the session is locked; screen hot-plug while a check runs;
-accessibility review with a screen reader.
+**Step 6** (offscreen only; nothing ran on the desktop):
+- **Files** (names differ from the list above): `Inspector.qml`, `Library.qml`,
+  `ScenePage.qml` (the background page and glass and dim), `PresetMenu.qml`
+  (the strip stays in `StudioWindow`), `LockSources.qml`, and the controls
+  `StyleArt`, `StyleTiles`, `ZonePicker`, `StudioSlider`, `StepField`,
+  `SectionLabel`, `PaneNote`.
+- **Draft.js** gained the inspector's and scene's edits, each refusing
+  what the lock would: `setStyle`, `setOpacity` (hundredths, the field's
+  floor 0.7), `setGlass` (null gives the look's glass back; `glassOf`,
+  `hasGlass` for the current style), `setScreens`, `resetOffset`,
+  `offsetPixels`/`pixelsToSteps`/`stepsToPixels`, `setBackground` (source,
+  blur, dim, decor; "picture" only with a path), `setPicture` (source and
+  path in one step), `setGlassLook`, `place(…, show)` (a module dropped
+  from the library is shown in the same step) and `presetKeeping` (the
+  draft's overrides on another preset, sparse against it; null when the
+  lock refuses them). Node-tested.
+- **Inspector** (`Inspector.qml`): Shown (not the field), style tiles for
+  every style in `Layout.STYLES` (`StyleTiles` + `StyleArt`, ported from
+  foamy-lock-studio; its FoamyIcon icons are drawn on a Canvas here, and
+  the drawings never mirror; decoration tiles do), size, opacity and glass
+  sliders (`StudioSlider`; glass only for a style in `GLASS_STYLES`, with
+  "Use the look's" to clear it; ranges from `LIMITS`/`PASSWORD_LIMITS`), the
+  3×3 `ZonePicker` (the field's top row faded and skipped), offset X/Y
+  (`StepField`) in grid steps with their pixels at the screen shown,
+  "Reset position", screens All/Primary (not account or field), and notes
+  when the lock's settings hide the account or media. **Offsets from the
+  fields go through the arrow keys' code** (`Canvas.offsetTo` →
+  `Draft.nudge`), so they stay on screen and the field below the top third;
+  X is towards the reading end (logical), like the stored offset.
+- **One undo step per edit; a slider drag is one step.** A drag shows
+  through `StudioWindow.preview()` (`previewDraft`, which only the canvas
+  shows; the checker follows committed looks) and commits on release; each
+  key press commits.
+- **Library** (`Library.qml`): rows with a grip, faded when hidden.
+  Dragging a row onto the canvas starts a canvas gesture
+  (`Canvas.beginInsert`): the module (shown or not) follows the pointer
+  with the canvas's snapping and zone highlight, and the drop is
+  `place(…, show)`; leaving the canvas cancels it. A module dragged from the
+  canvas over the library shows "Drop to hide" and hides on drop (never the
+  field). Keys: Up/Down walk and select, Insert shows, Delete hides (added to
+  the `?` list).
+- **Presets:** the header button opens `PresetMenu.qml` (all selectable
+  presets with their thumbnails, dropped from the button and mirrored
+  right to left; arrows, Enter, Esc). Picking in the menu or the strip
+  with changes asks: **Keep changes** (`presetKeeping`; disabled with a
+  note when the lock refuses them), **Replace**, or Cancel/Esc; either
+  answer is one undo step. It asks for **any** change, background and glass
+  included, not only element changes, since a preset replaces those too.
+- **Scene pages** (`ScenePage.qml`, in the inspector pane, chosen from the
+  library): Background (source list, picture, blur for the wallpaper and
+  picture, decoration tiles) and Glass and dim (dim within 0–90 %, glass
+  opacity, tint). Hints from the retired popup (drawn sources, GPU-only
+  blur).
+- **Outside sources** (`LockSources.qml`):
+  - *Omarchy wallpaper:* the helper's `wallpaper` probe on
+    `~/.local/state/omarchy/current/background` (as Service), re-run when the
+    window shows and on a theme change; the view loads the file as the lock
+    does. **A video wallpaper shows the theme colour** (the lock's poster
+    frame comes from Omarchy's `poster.sh`, not run here).
+  - *Lock settings:* `~/.config/omarchy/shell.json` through a FileView that
+    is never written, parsed by `Model.parseConfig`; `timeFormat`,
+    `showUserInfo` and `showMedia` reach the canvas, the probe and the
+    checker views. Without a valid entry, the lock's defaults.
+  - *Picture:* `foamy-lock-helper studio pick-picture` (FoamyNative from
+    the app root), replies translated by code (`NO_SESSION_BUS`,
+    `PORTAL_UNAVAILABLE`, `PORTAL_FAILED`, unavailable helper, cancelled is
+    silent, a path the lock refuses is "UNSUPPORTED"). The picture is
+    prepared by the helper's sandboxed `artwork` job, kind `background`, at
+    the screen shown and the blur (debounced 250 ms), and shown only then;
+    until it is, the theme colour. **Deviation:** it runs with
+    `XDG_CACHE_HOME=$XDG_CACHE_HOME/foamy-lock-studio/picture`, so the
+    studio's preparations (one per screen size and blur) never evict the
+    lock's own prepared picture from its four-file cache.
+- **Switches** (`StudioToggle`) are drawn as Ui/ToggleSwitch (what
+  FoamyToggle uses) from the Commons tokens, since the root has no `qs.Ui`:
+  the theme's control fills and border, square on sharp themes.
+- **RTL:** row labels set `AlignLeft` so they mirror; sliders fill from the
+  reading start; the zone picker and menus mirror.
+- **Harness `studio`:** the temporary HOME has a wallpaper link, the lock's
+  entry (12-hour clock) and a picture. New steps cover the inspector, the
+  library drag in and out, the preset menu and question, and both scene
+  pages; the chooser never runs (its replies are fed to `applyPick`), the
+  picture goes through the real sandboxed helper, and a missing one is
+  reported. Six more captures. Passes in en, no and ar.
+- **Lint:** in a copied root, the studio files show only the known kinds:
+  `FoamyStyle.font.*` members, `qs.Commons` names qmllint can't resolve
+  there (Style, Border, Color), and Process `environment` maps (as in
+  Service.qml).
+- **Costs:** unchanged in en and no. In Arabic with the 12-hour clock a
+  commit costs about 21 ms (2.3 ms at 24 h): the lock's own Arabic AM/PM
+  clock text, on every relayout; worth a look on the lock itself.
+- **Live app:** the new files aren't in a root built before them; restart
+  the app (`foamy-lock-helper studio` rebuilds the root).
+
+Open for steps 7 and 8: drafts on disk (and starting from the saved look),
+Apply, Preview and the quit guard; `displayAwake` also off while the
+session is locked; screen hot-plug while a check runs; the video
+wallpaper's still frame; accessibility review with a screen reader; the
+README and its screenshots.
 
 ## Open questions for the user
 
