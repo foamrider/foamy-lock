@@ -137,6 +137,7 @@ Item {
     case "clock:small": return clockSmall
     case "clock:poster": return clockPoster
     case "clock:ring": return clockRing
+    case "clock:serif": return clockSerif
     case "date:long": return dateLong
     case "date:caps": return dateCaps
     case "date:short": return dateShort
@@ -321,6 +322,7 @@ Item {
   // ---- clock (digits keep their order in right-to-left languages)
   Component { id: clockThin; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.weight: Font.Light } } }
   Component { id: clockBold; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.weight: Font.Black; font.letterSpacing: -0.5 } } }
+  Component { id: clockSerif; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.family: "Noto Serif Display"; font.weight: Font.Light } } }
   Component { id: clockMono; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.family: FoamyStyle.monoFamily } } }
   Component {
     id: clockStacked

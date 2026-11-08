@@ -13,6 +13,8 @@ import "../kit"
 // - "small": one line in the text face, for a bar or a card.
 // - "poster": huge heavy hours over minutes, the minutes in the accent.
 // - "ring": the time inside a ring that fills with the minutes of the hour.
+// - "serif": large, light serif numerals, as on a magazine page (shrinks to
+//   fit like the text styles).
 // The host sets the width in the center column; elsewhere it is
 // `naturalWidth`. Nothing here animates.
 Item {
@@ -30,14 +32,17 @@ Item {
   readonly property bool bold: styleName === "bold"
   readonly property bool mono: styleName === "mono"
   readonly property bool small: styleName === "small"
+  readonly property bool serif: styleName === "serif"
   // The styles drawn by the single text line below.
-  readonly property bool textual: styleName === "thin" || bold || mono || small
+  readonly property bool textual: styleName === "thin" || bold || mono || small || serif
+  // A serif face where one is installed (as the date's serif style); fontconfig's generic serif otherwise.
+  readonly property string serifFamily: view.fontOr("Georgia", view.fontOr("Noto Serif Display", view.fontOr("Noto Serif", "serif")))
   readonly property bool twelveHour: view.timeFormat === "12h"
   // Stacked under another element, the numerals' top bearing would leave a
   // gap: pull the clock up instead of the zone's usual spacing. The drawn
   // faces have no bearing and keep a small gap.
   readonly property real stackGap: Math.round((bold ? -12 : styleName === "thin" ? -20 : mono ? -14
-    : styleName === "stacked" ? -14 : styleName === "outline" ? -8 : small ? 2 : styleName === "poster" ? -10 : 10) * uiScale)
+    : styleName === "stacked" ? -14 : styleName === "outline" ? -8 : small ? 2 : styleName === "poster" ? -10 : serif ? -16 : 10) * uiScale)
   // The main line, as the tests read it.
   readonly property alias text: label.text
   readonly property alias font: label.font
@@ -101,10 +106,12 @@ Item {
     fontSizeMode: labelMetrics.advanceWidth > width - 1 ? Text.Fit : Text.FixedSize
     minimumPixelSize: Math.round((clock.small ? 18 : 48) * clock.uiScale)
     color: clock.view.foreground
-    font.family: clock.mono ? FoamyStyle.monoFamily : clock.bold || clock.small ? clock.view.textFontFamily : clock.view.displayFontFamily
-    font.pixelSize: Math.round((clock.bold ? 150 : clock.mono ? 140 : clock.small ? 34 : 192) * clock.uiScale)
-    font.weight: clock.bold ? Font.Bold : clock.mono ? Font.Medium : clock.small ? Font.DemiBold : Font.Normal
-    font.letterSpacing: clock.bold ? Math.round(-4 * clock.uiScale) : clock.mono ? Math.round(-6 * clock.uiScale) : 0
+    font.family: clock.mono ? FoamyStyle.monoFamily : clock.serif ? clock.serifFamily
+      : clock.bold || clock.small ? clock.view.textFontFamily : clock.view.displayFontFamily
+    font.pixelSize: Math.round((clock.bold ? 150 : clock.mono ? 140 : clock.small ? 34 : clock.serif ? 168 : 192) * clock.uiScale)
+    font.weight: clock.bold ? Font.Bold : clock.mono ? Font.Medium : clock.small ? Font.DemiBold : clock.serif ? Font.Light : Font.Normal
+    font.letterSpacing: clock.bold ? Math.round(-4 * clock.uiScale) : clock.mono ? Math.round(-6 * clock.uiScale)
+      : clock.serif ? Math.round(-3 * clock.uiScale) : 0
     horizontalAlignment: clock.textAlignment
 
     TextMetrics {

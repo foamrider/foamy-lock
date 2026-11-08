@@ -22,7 +22,7 @@ var ZONES = (function() {
 })()
 var STYLES = {
   date: ["long", "caps", "short", "serif", "numeric", "stacked", "week"],
-  clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog", "small", "poster", "ring"],
+  clock: ["thin", "bold", "stacked", "mono", "outline", "dots", "flip", "analog", "small", "poster", "ring", "serif"],
   account: ["avatar", "chip", "name"],
   password: ["pill", "underline", "box", "dots", "terminal", "card"],
   media: ["card", "line", "pill", "art", "hero", "minimal", "disc"],

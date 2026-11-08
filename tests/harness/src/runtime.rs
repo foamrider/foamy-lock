@@ -761,7 +761,7 @@ fn look(test: &Test) -> R {
                 .is_some_and(|s| s.iter().any(|s| s == "pill") && s.iter().any(|s| s == "terminal"))
             && at(&catalog, "styles.clock")?
                 .as_array()
-                .is_some_and(|s| s.len() == 11 && s.iter().any(|s| s == "ring"))
+                .is_some_and(|s| s.len() == 12 && s.iter().any(|s| s == "ring") && s.iter().any(|s| s == "serif"))
             && at(&catalog, "styles.calendar")?
                 .as_array()
                 .is_some_and(|s| s.iter().any(|s| s == "card"))
