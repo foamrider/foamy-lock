@@ -19,6 +19,8 @@ Item {
   id: clock
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "thin"
@@ -28,7 +30,6 @@ Item {
   // The styles drawn by the single text line below.
   readonly property bool textual: styleName === "thin" || bold || mono || small
   readonly property bool twelveHour: view.timeFormat === "12h"
-  readonly property real uiScale: view.uiScale
   // Stacked under another element, the numerals' top bearing would leave a
   // gap: pull the clock up instead of the zone's usual spacing. The drawn
   // faces have no bearing and keep a small gap.

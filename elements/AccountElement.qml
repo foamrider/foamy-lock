@@ -8,14 +8,16 @@ Item {
   id: account
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "avatar"
   readonly property bool chip: styleName === "chip"
   readonly property bool nameOnly: styleName === "name"
-  readonly property real chipPadding: Math.round(7 * view.uiScale)
-  readonly property real chipGap: Math.round(10 * view.uiScale)
-  readonly property real chipEnd: Math.round(18 * view.uiScale)
+  readonly property real chipPadding: Math.round(7 * uiScale)
+  readonly property real chipGap: Math.round(10 * uiScale)
+  readonly property real chipEnd: Math.round(18 * uiScale)
   // Positions are plain x/y bindings, mirrored here: switching anchors on and
   // off between styles at runtime leaves stale anchors behind.
   readonly property bool mirrored: view.rightToLeft
@@ -25,7 +27,7 @@ Item {
     : nameOnly ? nameLabel.implicitWidth : Math.max(avatar.width, nameLabel.implicitWidth)
 
   objectName: "identityBlock"
-  height: chip ? Math.round(48 * view.uiScale) : nameOnly ? nameLabel.height
+  height: chip ? Math.round(48 * uiScale) : nameOnly ? nameLabel.height
     : avatar.height + nameLabel.topMargin + nameLabel.height
 
   Rectangle {
@@ -42,7 +44,7 @@ Item {
     id: avatar
     objectName: "avatar"
     visible: !account.nameOnly
-    width: Math.round((account.chip ? 34 : 84) * account.view.uiScale)
+    width: Math.round((account.chip ? 34 : 84) * account.uiScale)
     height: width
     radius: width / 2
     y: account.chip ? (account.height - height) / 2 : 0
@@ -99,7 +101,7 @@ Item {
       text: account.view.displayName.length > 0 ? account.view.displayName.charAt(0).toLocaleUpperCase() : "?"
       color: account.view.foreground
       font.family: account.view.textFontFamily
-      font.pixelSize: Math.round((account.chip ? 15 : 34) * account.view.uiScale)
+      font.pixelSize: Math.round((account.chip ? 15 : 34) * account.uiScale)
       font.weight: Font.Light
     }
 
@@ -116,15 +118,15 @@ Item {
     id: nameLabel
     objectName: "nameLabel"
     textFormat: Text.PlainText
-    readonly property real topMargin: Math.round(7 * account.view.uiScale)
-    height: Math.round((account.chip ? 24 : account.nameOnly ? 36 : 34) * account.view.uiScale)
+    readonly property real topMargin: Math.round(7 * account.uiScale)
+    height: Math.round((account.chip ? 24 : account.nameOnly ? 36 : 34) * account.uiScale)
     y: account.chip ? (account.height - height) / 2 : account.nameOnly ? 0 : avatar.height + topMargin
     width: account.chip ? Math.max(0, account.width - account.chipPadding - avatar.width - account.chipGap - account.chipEnd) : account.width
     x: !account.chip ? 0 : account.mirrored ? account.chipEnd : account.chipPadding + avatar.width + account.chipGap
     text: account.view.displayName
     color: account.view.foreground
     font.family: account.view.textFontFamily
-    font.pixelSize: Math.round((account.chip ? 16 : account.nameOnly ? 24 : 20) * account.view.uiScale)
+    font.pixelSize: Math.round((account.chip ? 16 : account.nameOnly ? 24 : 20) * account.uiScale)
     font.weight: account.nameOnly ? Font.Medium : Font.Normal
     elide: Text.ElideRight
     horizontalAlignment: account.chip || account.alignment === "start" ? Text.AlignLeft

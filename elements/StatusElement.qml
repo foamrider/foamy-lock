@@ -10,16 +10,18 @@ Row {
   id: status
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   // "text" (icons and labels), "icons" (icons only), "pill" or "system".
   property string styleName: "text"
   readonly property bool pill: styleName === "pill"
   readonly property bool system: styleName === "system"
   // Each part's padding on either side; the pill packs them edge to edge.
-  readonly property real partPadding: pill ? Math.round(11 * view.uiScale) : Math.round(24 * view.uiScale) / 2
+  readonly property real partPadding: pill ? Math.round(11 * uiScale) : Math.round(24 * uiScale) / 2
 
   objectName: "statusFooter"
-  height: system ? systemPanel.height : Math.round(38 * view.uiScale)
-  spacing: pill ? 0 : Math.round(10 * view.uiScale)
+  height: system ? systemPanel.height : Math.round(38 * uiScale)
+  spacing: pill ? 0 : Math.round(10 * uiScale)
 
   Item {
     id: networkPill
@@ -45,7 +47,7 @@ Row {
     Row {
       id: networkStatusContent
       anchors.centerIn: parent
-      spacing: Math.round(8 * status.view.uiScale)
+      spacing: Math.round(8 * status.uiScale)
 
       Text {
         textFormat: Text.PlainText
@@ -55,7 +57,7 @@ Row {
         color: status.view.foreground
         opacity: 0.76
         font.family: status.view.iconFontFamily
-        font.pixelSize: Math.round(18 * status.view.uiScale)
+        font.pixelSize: Math.round(18 * status.uiScale)
         font.weight: Font.Light
         verticalAlignment: Text.AlignVCenter
       }
@@ -68,7 +70,7 @@ Row {
         color: status.view.foreground
         opacity: 0.88
         font.family: status.view.textFontFamily
-        font.pixelSize: Math.round(15 * status.view.uiScale)
+        font.pixelSize: Math.round(15 * status.uiScale)
         font.weight: Font.Normal
         verticalAlignment: Text.AlignVCenter
       }
@@ -85,7 +87,7 @@ Row {
     Row {
       id: batteryStatusContent
       anchors.centerIn: parent
-      spacing: Math.round(7 * status.view.uiScale)
+      spacing: Math.round(7 * status.uiScale)
 
       Text {
         textFormat: Text.PlainText
@@ -95,7 +97,7 @@ Row {
         color: status.view.foreground
         opacity: 0.76
         font.family: status.view.iconFontFamily
-        font.pixelSize: Math.round(18 * status.view.uiScale)
+        font.pixelSize: Math.round(18 * status.uiScale)
         font.weight: Font.Light
         verticalAlignment: Text.AlignVCenter
       }
@@ -108,7 +110,7 @@ Row {
         color: status.view.foreground
         opacity: 0.88
         font.family: status.view.textFontFamily
-        font.pixelSize: Math.round(15 * status.view.uiScale)
+        font.pixelSize: Math.round(15 * status.uiScale)
         font.weight: Font.Normal
         verticalAlignment: Text.AlignVCenter
       }
@@ -120,7 +122,7 @@ Row {
   Rectangle {
     id: systemPanel
     objectName: "systemPanel"
-    readonly property real unit: status.view.uiScale
+    readonly property real unit: status.uiScale
     readonly property real padding: Math.round(22 * unit)
     readonly property real rowHeight: Math.round(46 * unit)
     readonly property real rowGap: Math.round(12 * unit)

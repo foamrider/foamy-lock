@@ -10,11 +10,13 @@ Item {
   id: calendar
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "card"
   readonly property bool card: styleName === "card"
-  readonly property real unit: view.uiScale
+  readonly property real unit: uiScale
   readonly property real cell: Math.round(42 * unit)
   readonly property real rowHeight: Math.round(34 * unit)
   readonly property real padding: Math.round(22 * unit)

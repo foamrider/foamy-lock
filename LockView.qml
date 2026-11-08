@@ -63,13 +63,8 @@ Item {
   property bool rightToLeft: FoamyI18n.rightToLeft
   readonly property string placeholderText: FoamyI18n.t("Enter password")
   readonly property real uiScale: Math.max(0.82, Math.min(1.12, height / 1080))
-  readonly property real contentWidth: Math.min(Math.round(560 * uiScale), width - Math.round(64 * uiScale))
-  readonly property real fieldWidth: Math.min(Math.round(320 * uiScale), contentWidth)
-  readonly property int fieldHeight: Math.round(51 * uiScale)
-  readonly property int fieldLeadingInset: Math.round(24 * uiScale)
-  readonly property int fieldFontSize: Math.round(18 * uiScale)
-  readonly property int passwordDotFontSize: Math.round(17 * uiScale)
-  readonly property int passwordDotLetterSpacing: Math.round(2 * uiScale)
+  // The centre column at the view's own scale; an element uses contentWidthAt(its scale).
+  readonly property real contentWidth: contentWidthAt(uiScale)
   readonly property color foreground: themeLock("text", Commons.Color.lock.text, Qt.rgba(0.98, 0.98, 1, 0.96))
   readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
   readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
@@ -371,9 +366,21 @@ Item {
     return Math.max(140 * uiScale, corners > 0 ? corners + edgeMargin("bottom") + zoneGap : 0)
   }
 
+  // An element's scale: the view's, for its screen.
+  function elementScale(name) {
+    return uiScale
+  }
+
+  // The centre column's width for an element at `scale`: it grows with the
+  // element, but never past the screen less its margins.
+  function contentWidthAt(scale) {
+    return Math.min(Math.round(560 * scale), width - Math.round(64 * uiScale))
+  }
+
   // Full content width in the center column, natural width at the sides.
   function textWidth(name, naturalWidth) {
-    return Layout.zoneColumn(placed[name].zone) === "center" ? contentWidth : Math.min(contentWidth, naturalWidth)
+    var limit = contentWidthAt(elementScale(name))
+    return Layout.zoneColumn(placed[name].zone) === "center" ? limit : Math.min(limit, naturalWidth)
   }
 
   function rectOf(item) {
@@ -554,6 +561,7 @@ Item {
     DateElement {
       id: dateLabel
       view: root
+      uiScale: root.elementScale("date")
       styleName: root.placed.date.style
       z: 2
       alignment: root.elementAlignment("date")
@@ -566,6 +574,7 @@ Item {
     ClockElement {
       id: clockLabel
       view: root
+      uiScale: root.elementScale("clock")
       styleName: root.placed.clock.style
       z: 2
       alignment: root.elementAlignment("clock")
@@ -578,6 +587,7 @@ Item {
     AccountElement {
       id: identityBlock
       view: root
+      uiScale: root.elementScale("account")
       styleName: root.placed.account.style
       alignment: root.elementAlignment("account")
       visible: root.elementShown("account")
@@ -590,6 +600,7 @@ Item {
     PasswordElement {
       id: inputField
       view: root
+      uiScale: root.elementScale("password")
       chromeVisible: root.primary
       styleName: root.placed.password.style
       alignment: root.elementAlignment("password")
@@ -600,6 +611,7 @@ Item {
     MediaElement {
       id: mediaRow
       view: root
+      uiScale: root.elementScale("media")
       styleName: root.placed.media.style
       visible: root.elementShown("media")
       x: root.placeX("media", width)
@@ -609,6 +621,7 @@ Item {
     CalendarElement {
       id: calendarBlock
       view: root
+      uiScale: root.elementScale("calendar")
       styleName: root.placed.calendar.style
       alignment: root.elementAlignment("calendar")
       visible: root.elementShown("calendar")
@@ -619,6 +632,7 @@ Item {
     StatusElement {
       id: statusFooter
       view: root
+      uiScale: root.elementScale("status")
       styleName: root.placed.status.style
       visible: root.elementShown("status")
       x: root.placeX("status", width)

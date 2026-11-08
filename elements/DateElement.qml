@@ -9,6 +9,8 @@ Item {
   id: date
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   property string styleName: "long"
@@ -40,9 +42,9 @@ Item {
     opacity: date.caps ? 0.86 : 1
     font.family: date.serif ? date.serifFamily
       : date.caps || date.abbreviated ? date.view.textFontFamily : date.view.displayFontFamily
-    font.pixelSize: Math.round((date.caps ? 17 : date.abbreviated ? 24 : date.serif ? 64 : 30) * date.view.uiScale)
+    font.pixelSize: Math.round((date.caps ? 17 : date.abbreviated ? 24 : date.serif ? 64 : 30) * date.uiScale)
     font.weight: date.caps ? Font.Medium : date.abbreviated ? Font.DemiBold : Font.Normal
-    font.letterSpacing: date.caps ? Math.round(3 * date.view.uiScale) : 0
+    font.letterSpacing: date.caps ? Math.round(3 * date.uiScale) : 0
     horizontalAlignment: date.textAlignment
     elide: Text.ElideRight
   }
@@ -59,9 +61,9 @@ Item {
     color: date.view.foreground
     opacity: 0.86
     font.family: date.view.textFontFamily
-    font.pixelSize: Math.round(14 * date.view.uiScale)
+    font.pixelSize: Math.round(14 * date.uiScale)
     font.weight: Font.Medium
-    font.letterSpacing: Math.round(4 * date.view.uiScale)
+    font.letterSpacing: Math.round(4 * date.uiScale)
     horizontalAlignment: date.textAlignment
     elide: Text.ElideRight
   }

@@ -10,35 +10,39 @@ Rectangle {
   id: media
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   property string styleName: "card"
   readonly property bool line: styleName === "line"
   readonly property bool cardStyle: styleName === "card"
   readonly property bool pill: styleName === "pill"
   readonly property bool art: styleName === "art"
   // Positions of the new styles are plain x/y bindings, mirrored here.
+  // The centre column at this element's scale: the line and pill never grow past it.
+  readonly property real contentWidth: view.contentWidthAt(uiScale)
   readonly property bool mirrored: view.rightToLeft
-  readonly property real pillPadding: Math.round(6 * view.uiScale)
-  readonly property real artPadding: Math.round(14 * view.uiScale)
+  readonly property real pillPadding: Math.round(6 * uiScale)
+  readonly property real artPadding: Math.round(14 * uiScale)
   // The art style's rows, from constants (no chain through the items).
-  readonly property real artWidth: Math.round(236 * view.uiScale)
+  readonly property real artWidth: Math.round(236 * uiScale)
   readonly property real artSize: artWidth - 2 * artPadding
-  readonly property real artTitleY: artPadding + artSize + Math.round(12 * view.uiScale)
-  readonly property real artArtistY: artTitleY + Math.round(24 * view.uiScale)
-  readonly property real artControlsY: artArtistY + Math.round(26 * view.uiScale)
-  readonly property real pillTitleWidth: Math.min(mediaTitle.implicitWidth, Math.round(220 * view.uiScale))
+  readonly property real artTitleY: artPadding + artSize + Math.round(12 * uiScale)
+  readonly property real artArtistY: artTitleY + Math.round(24 * uiScale)
+  readonly property real artControlsY: artArtistY + Math.round(26 * uiScale)
+  readonly property real pillTitleWidth: Math.min(mediaTitle.implicitWidth, Math.round(220 * uiScale))
   readonly property string title: view.activePlayer ? String(view.activePlayer.trackTitle || "") : ""
   readonly property string artist: view.activePlayer ? String(view.activePlayer.trackArtist || "") : ""
 
   objectName: "mediaRow"
-  width: line ? Math.min(mediaLine.implicitWidth, view.contentWidth)
-    : pill ? Math.min(view.contentWidth, pillPadding + albumArt.width + Math.round(12 * view.uiScale) + pillTitleWidth
-      + Math.round(6 * view.uiScale) + mediaControls.width + pillPadding)
+  width: line ? Math.min(mediaLine.implicitWidth, contentWidth)
+    : pill ? Math.min(contentWidth, pillPadding + albumArt.width + Math.round(12 * uiScale) + pillTitleWidth
+      + Math.round(6 * uiScale) + mediaControls.width + pillPadding)
     : art ? artWidth
-    : Math.min(Math.round(470 * view.uiScale), view.width - 48 * view.uiScale)
-  height: pill ? Math.round(46 * view.uiScale)
-    : art ? artControlsY + Math.round(54 * view.uiScale)
-    : Math.round((line ? 30 : 92) * view.uiScale)
-  radius: pill ? height / 2 : Math.round(22 * view.uiScale)
+    : Math.min(Math.round(470 * uiScale), view.width - 48 * view.uiScale)
+  height: pill ? Math.round(46 * uiScale)
+    : art ? artControlsY + Math.round(54 * uiScale)
+    : Math.round((line ? 30 : 92) * uiScale)
+  radius: pill ? height / 2 : Math.round(22 * uiScale)
   color: line ? "transparent" : view.glass
   border.width: line ? 0 : 1
   border.color: view.glassBorder
@@ -50,12 +54,12 @@ Rectangle {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Math.round(8 * media.view.uiScale)
+    spacing: Math.round(8 * media.uiScale)
 
     LineIcon {
       id: lineIcon
       anchors.verticalCenter: parent.verticalCenter
-      width: Math.round(18 * media.view.uiScale)
+      width: Math.round(18 * media.uiScale)
       height: width
       pathData: "M9 18V5l12-2v13 M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z M21 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z"
       opacity: 0.8
@@ -64,7 +68,7 @@ Rectangle {
     Text {
       objectName: "mediaLineText"
       anchors.verticalCenter: parent.verticalCenter
-      width: Math.min(implicitWidth, media.view.contentWidth - lineIcon.width - parent.spacing)
+      width: Math.min(implicitWidth, media.contentWidth - lineIcon.width - parent.spacing)
       textFormat: Text.PlainText
       text: {
         var player = media.view.activePlayer
@@ -76,7 +80,7 @@ Rectangle {
       color: media.view.foreground
       opacity: 0.88
       font.family: media.view.textFontFamily
-      font.pixelSize: Math.round(15 * media.view.uiScale)
+      font.pixelSize: Math.round(15 * media.uiScale)
       elide: Text.ElideRight
     }
   }
@@ -86,14 +90,14 @@ Rectangle {
     objectName: "albumArt"
     visible: !media.line
     // The card's thumbnail, the pill's round one, or the art square.
-    readonly property real inset: media.pill ? media.pillPadding : media.art ? media.artPadding : Math.round(14 * media.view.uiScale)
+    readonly property real inset: media.pill ? media.pillPadding : media.art ? media.artPadding : Math.round(14 * media.uiScale)
     width: media.pill ? media.height - 2 * media.pillPadding : media.art ? media.artSize
-      : Math.round(64 * media.view.uiScale)
+      : Math.round(64 * media.uiScale)
     height: width
     // Round in the pill where the GPU masks the artwork; without the mask a
     // rounded square matches the clipped picture.
-    radius: media.pill ? (GraphicsInfo.api !== GraphicsInfo.Software ? width / 2 : Math.round(7 * media.view.uiScale))
-      : Math.round((media.art ? 14 : 9) * media.view.uiScale)
+    radius: media.pill ? (GraphicsInfo.api !== GraphicsInfo.Software ? width / 2 : Math.round(7 * media.uiScale))
+      : Math.round((media.art ? 14 : 9) * media.uiScale)
     x: media.art ? media.artPadding : media.mirrored ? media.width - inset - width : inset
     y: media.art ? media.artPadding : (media.height - height) / 2
     color: Qt.rgba(0.025, 0.035, 0.065, 0.55)
@@ -145,7 +149,7 @@ Rectangle {
       color: media.view.secondary
       opacity: 0.78
       font.family: media.view.iconFontFamily
-      font.pixelSize: Math.round((media.art ? 54 : media.pill ? 16 : 20) * media.view.uiScale)
+      font.pixelSize: Math.round((media.art ? 54 : media.pill ? 16 : 20) * media.uiScale)
       font.weight: Font.Light
     }
   }
@@ -155,16 +159,16 @@ Rectangle {
     id: mediaTitle
     objectName: "mediaTitle"
     visible: media.pill || media.art
-    readonly property real pillStart: media.pillPadding + albumArt.width + Math.round(12 * media.view.uiScale)
+    readonly property real pillStart: media.pillPadding + albumArt.width + Math.round(12 * media.uiScale)
     x: media.art ? media.artPadding : media.mirrored ? media.width - pillStart - width : pillStart
     y: media.art ? media.artTitleY : (media.height - height) / 2
     width: media.art ? media.width - 2 * media.artPadding : media.pillTitleWidth
-    height: Math.round((media.art ? 24 : 22) * media.view.uiScale)
+    height: Math.round((media.art ? 24 : 22) * media.uiScale)
     textFormat: Text.PlainText
     text: media.pill ? media.title || media.artist : media.title
     color: media.view.foreground
     font.family: media.view.textFontFamily
-    font.pixelSize: Math.round((media.art ? 17 : 15) * media.view.uiScale)
+    font.pixelSize: Math.round((media.art ? 17 : 15) * media.uiScale)
     font.weight: Font.Medium
     horizontalAlignment: media.art ? Text.AlignHCenter : Text.AlignLeft
     verticalAlignment: Text.AlignVCenter
@@ -178,12 +182,12 @@ Rectangle {
     x: media.artPadding
     y: media.artArtistY
     width: media.width - 2 * media.artPadding
-    height: Math.round(20 * media.view.uiScale)
+    height: Math.round(20 * media.uiScale)
     textFormat: Text.PlainText
     text: media.artist
     color: media.view.secondary
     font.family: media.view.textFontFamily
-    font.pixelSize: Math.round(14 * media.view.uiScale)
+    font.pixelSize: Math.round(14 * media.uiScale)
     font.weight: Font.Light
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
@@ -194,11 +198,11 @@ Rectangle {
     id: trackInfo
     visible: media.cardStyle
     anchors.left: albumArt.right
-    anchors.leftMargin: Math.round(17 * media.view.uiScale)
+    anchors.leftMargin: Math.round(17 * media.uiScale)
     anchors.right: mediaControls.left
-    anchors.rightMargin: Math.round(16 * media.view.uiScale)
+    anchors.rightMargin: Math.round(16 * media.uiScale)
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Math.round(3 * media.view.uiScale)
+    spacing: Math.round(3 * media.uiScale)
 
     Text {
       objectName: "trackTitle"
@@ -207,7 +211,7 @@ Rectangle {
       text: media.view.activePlayer ? String(media.view.activePlayer.trackTitle || "") : ""
       color: media.view.foreground
       font.family: media.view.textFontFamily
-      font.pixelSize: Math.round(17 * media.view.uiScale)
+      font.pixelSize: Math.round(17 * media.uiScale)
       font.weight: Font.Medium
       elide: Text.ElideRight
     }
@@ -219,7 +223,7 @@ Rectangle {
       text: media.view.activePlayer ? String(media.view.activePlayer.trackArtist || "") : ""
       color: media.view.secondary
       font.family: media.view.textFontFamily
-      font.pixelSize: Math.round(15 * media.view.uiScale)
+      font.pixelSize: Math.round(15 * media.uiScale)
       font.weight: Font.Light
       elide: Text.ElideRight
     }
@@ -234,14 +238,14 @@ Rectangle {
     layoutDirection: media.view.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight
     // At the trailing end of the card and pill (mirrored by hand), centred
     // under the art. The pill keeps only play/pause.
-    readonly property real trailing: Math.round((media.pill ? 5 : 12) * media.view.uiScale)
+    readonly property real trailing: Math.round((media.pill ? 5 : 12) * media.uiScale)
     x: media.art ? Math.round((media.width - width) / 2) : media.mirrored ? trailing : media.width - trailing - width
     y: media.art ? media.artControlsY : (media.height - height) / 2
-    spacing: Math.round(5 * media.view.uiScale)
+    spacing: Math.round(5 * media.uiScale)
 
     Item {
       visible: !media.pill
-      width: Math.round(42 * media.view.uiScale)
+      width: Math.round(42 * media.uiScale)
       height: width
       opacity: media.view.activePlayer && media.view.activePlayer.canGoPrevious ? 1 : 0.38
 
@@ -255,7 +259,7 @@ Rectangle {
 
       LineIcon {
         anchors.centerIn: parent
-        width: Math.round(21 * media.view.uiScale)
+        width: Math.round(21 * media.uiScale)
         height: width
         pathData: "M6 5v14 M19 5 8 12l11 7Z"
         opacity: 0.9
@@ -272,7 +276,7 @@ Rectangle {
     }
 
     Item {
-      width: Math.round((media.pill ? 36 : 46) * media.view.uiScale)
+      width: Math.round((media.pill ? 36 : 46) * media.uiScale)
       height: width
       opacity: media.view.activePlayer
         && (media.view.activePlayer.canTogglePlaying || media.view.activePlayer.canPlay || media.view.activePlayer.canPause) ? 1 : 0.38
@@ -287,7 +291,7 @@ Rectangle {
 
       LineIcon {
         anchors.centerIn: parent
-        width: Math.round((media.pill ? 20 : 26) * media.view.uiScale)
+        width: Math.round((media.pill ? 20 : 26) * media.uiScale)
         height: width
         pathData: media.view.activePlayer && media.view.activePlayer.isPlaying ? "M8 5v14 M16 5v14" : "M7 4 20 12 7 20Z"
         opacity: 0.9
@@ -306,7 +310,7 @@ Rectangle {
 
     Item {
       visible: !media.pill
-      width: Math.round(42 * media.view.uiScale)
+      width: Math.round(42 * media.uiScale)
       height: width
       opacity: media.view.activePlayer && media.view.activePlayer.canGoNext ? 1 : 0.38
 
@@ -320,7 +324,7 @@ Rectangle {
 
       LineIcon {
         anchors.centerIn: parent
-        width: Math.round(21 * media.view.uiScale)
+        width: Math.round(21 * media.uiScale)
         height: width
         pathData: "M18 5v14 M5 5l11 7-11 7Z"
         opacity: 0.9

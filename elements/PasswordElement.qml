@@ -10,6 +10,8 @@ Rectangle {
   id: field
   // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
   required property var view
+  // This element's size: the view's scale for its screen (LockView sets it).
+  required property real uiScale
   // "start", "center" or "end" (logical: mirrors with the language).
   property string alignment: "center"
   // Off on a surface that doesn't get the keys: the editor stays live and
@@ -33,6 +35,15 @@ Rectangle {
   readonly property bool card: styleName === "card"
   // A password being typed is never invisible, whichever surface has it.
   readonly property bool chromeShown: chromeVisible || view.passwordText.length > 0
+  // The centre column at this element's scale (it bounds the hint and the
+  // notice), and the field's own sizes.
+  readonly property real contentWidth: view.contentWidthAt(uiScale)
+  readonly property real fieldWidth: Math.min(Math.round(320 * uiScale), contentWidth)
+  readonly property int fieldHeight: Math.round(51 * uiScale)
+  readonly property int fieldLeadingInset: Math.round(24 * uiScale)
+  readonly property int fieldFontSize: Math.round(18 * uiScale)
+  readonly property int passwordDotFontSize: Math.round(17 * uiScale)
+  readonly property int passwordDotLetterSpacing: Math.round(2 * uiScale)
   readonly property alias input: passwordInput
   readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
     ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
@@ -42,22 +53,22 @@ Rectangle {
   // The surface behind everything: glass for the pill while typing, always
   // for the box and card, a dark panel for the terminal, none otherwise.
   readonly property bool surfaceShown: chromeShown && (box || card || terminal || (styleName === "pill" && view.showPassword))
-  readonly property real submitWidth: Math.round(70 * view.uiScale)
+  readonly property real submitWidth: Math.round(70 * uiScale)
   // The submit arrow: the pill and card while typing, the box always; the
   // dots and terminal submit with Enter alone.
   readonly property bool submitShown: chromeShown && (box || (!dotsOnly && !terminal && view.showPassword))
   // The editor's inset from the leading and trailing edges of its area.
-  readonly property real inset: Math.round(16 * view.uiScale)
-  readonly property real editorLeading: terminal ? 0 : dotsOnly ? inset : view.fieldLeadingInset
+  readonly property real inset: Math.round(16 * uiScale)
+  readonly property real editorLeading: terminal ? 0 : dotsOnly ? inset : fieldLeadingInset
   readonly property real editorTrailing: dotsOnly || terminal ? inset : submitWidth
-  readonly property real cardPadding: Math.round(16 * view.uiScale)
+  readonly property real cardPadding: Math.round(16 * uiScale)
 
   objectName: "inputField"
-  width: box || terminal || card ? Math.min(Math.round((terminal ? 440 : 360) * view.uiScale), view.contentWidth) : view.fieldWidth
-  height: box ? Math.round(56 * view.uiScale) : terminal ? Math.round(50 * view.uiScale)
-    : card ? Math.round(138 * view.uiScale) : view.fieldHeight
-  radius: box ? Math.round(12 * view.uiScale) : terminal ? Math.round(6 * view.uiScale)
-    : card ? Math.round(24 * view.uiScale) : underline || dotsOnly ? 0 : height / 2
+  width: box || terminal || card ? Math.min(Math.round((terminal ? 440 : 360) * uiScale), contentWidth) : fieldWidth
+  height: box ? Math.round(56 * uiScale) : terminal ? Math.round(50 * uiScale)
+    : card ? Math.round(138 * uiScale) : fieldHeight
+  radius: box ? Math.round(12 * uiScale) : terminal ? Math.round(6 * uiScale)
+    : card ? Math.round(24 * uiScale) : underline || dotsOnly ? 0 : height / 2
   color: !surfaceShown ? "transparent" : terminal ? Qt.rgba(0.012, 0.016, 0.03, 0.72) : view.glass
   border.width: surfaceShown ? 1 : 0
   border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
@@ -70,11 +81,11 @@ Rectangle {
   Item {
     id: editorArea
     objectName: "editorArea"
-    readonly property real promptEnd: field.inset + prompt.implicitWidth + Math.round(10 * field.view.uiScale)
+    readonly property real promptEnd: field.inset + prompt.implicitWidth + Math.round(10 * field.uiScale)
     x: field.card ? field.cardPadding : field.terminal && !field.mirrored ? promptEnd : 0
     y: field.card ? field.height - height - field.cardPadding : 0
     width: field.card ? field.width - 2 * field.cardPadding : field.terminal ? field.width - promptEnd : field.width
-    height: field.card ? Math.round(50 * field.view.uiScale) : field.height
+    height: field.card ? Math.round(50 * field.uiScale) : field.height
   }
 
   // Where the idle hint sits: the editor area without the box's arrow segment.
@@ -90,14 +101,14 @@ Rectangle {
     id: greeting
     objectName: "cardGreeting"
     visible: field.card && field.chromeShown
-    x: Math.round(22 * field.view.uiScale)
-    y: Math.round(20 * field.view.uiScale)
+    x: Math.round(22 * field.uiScale)
+    y: Math.round(20 * field.uiScale)
     width: field.width - 2 * x
     textFormat: Text.PlainText
     text: FoamyI18n.t("Welcome back")
     color: field.view.foreground
     font.family: field.view.textFontFamily
-    font.pixelSize: Math.round(20 * field.view.uiScale)
+    font.pixelSize: Math.round(20 * field.uiScale)
     font.weight: Font.Medium
     horizontalAlignment: field.alignment === "start" ? Text.AlignLeft : field.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
     elide: Text.ElideRight
@@ -128,7 +139,7 @@ Rectangle {
     color: field.view.foreground
     opacity: 0.72
     font.family: FoamyStyle.monoFamily
-    font.pixelSize: Math.round(16 * field.view.uiScale)
+    font.pixelSize: Math.round(16 * field.uiScale)
     font.weight: Font.Medium
   }
 
@@ -136,7 +147,7 @@ Rectangle {
   Rectangle {
     visible: field.box && field.chromeShown
     x: field.mirrored ? field.submitWidth : field.width - field.submitWidth - width
-    y: Math.round(10 * field.view.uiScale)
+    y: Math.round(10 * field.uiScale)
     width: 1
     height: field.height - 2 * y
     color: field.view.glassBorder
@@ -148,7 +159,7 @@ Rectangle {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    height: Math.max(1, Math.round(1.5 * field.view.uiScale))
+    height: Math.max(1, Math.round(1.5 * field.uiScale))
     color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
     opacity: field.view.errorState ? 1 : (field.view.showPassword ? 0.85 : 0.5)
   }
@@ -156,8 +167,8 @@ Rectangle {
   TextMetrics {
     id: dotMetrics
     font.family: field.editorFontFamily
-    font.pixelSize: field.view.passwordDotFontSize
-    font.letterSpacing: field.view.passwordDotLetterSpacing
+    font.pixelSize: field.passwordDotFontSize
+    font.letterSpacing: field.passwordDotLetterSpacing
     text: "●".repeat(passwordInput.text.length)
   }
 
@@ -169,16 +180,16 @@ Rectangle {
     id: unlockHint
     objectName: "unlockHint"
     readonly property bool contained: field.box || field.card || field.terminal
-    readonly property real limit: contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.view.uiScale)) : field.view.contentWidth
+    readonly property real limit: contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.uiScale)) : field.contentWidth
     x: !field.terminal ? hintArea.x + (hintArea.width - width) / 2
       : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
     y: hintArea.y + (hintArea.height - height) / 2
-    spacing: Math.round(10 * field.view.uiScale)
+    spacing: Math.round(10 * field.uiScale)
     visible: field.chromeShown && !field.view.showPassword
 
     FingerprintIcon {
       id: unlockHintIcon
-      width: Math.round((field.dotsOnly || field.terminal ? 20 : 26) * field.view.uiScale)
+      width: Math.round((field.dotsOnly || field.terminal ? 20 : 26) * field.uiScale)
       height: width
       anchors.verticalCenter: parent.verticalCenter
       lineColor: field.view.foreground
@@ -194,7 +205,7 @@ Rectangle {
       color: field.view.foreground
       opacity: field.dotsOnly || field.terminal ? 0.82 : 1
       font.family: field.editorFontFamily
-      font.pixelSize: Math.round((field.dotsOnly || field.terminal ? 13 : unlockHint.contained ? 14 : 15) * field.view.uiScale)
+      font.pixelSize: Math.round((field.dotsOnly || field.terminal ? 13 : unlockHint.contained ? 14 : 15) * field.uiScale)
       horizontalAlignment: field.terminal ? Text.AlignLeft : Text.AlignHCenter
       wrapMode: Text.WordWrap
       maximumLineCount: 2
@@ -230,13 +241,13 @@ Rectangle {
     selectedTextColor: field.view.foreground
     font.family: field.editorFontFamily
     font.pixelSize: text.length > 0
-      ? Math.max(1, Math.floor(field.view.passwordDotFontSize * field.passwordDotScale))
-      : field.view.fieldFontSize
-    font.letterSpacing: text.length > 0 ? field.view.passwordDotLetterSpacing * field.passwordDotScale : 0
+      ? Math.max(1, Math.floor(field.passwordDotFontSize * field.passwordDotScale))
+      : field.fieldFontSize
+    font.letterSpacing: text.length > 0 ? field.passwordDotLetterSpacing * field.passwordDotScale : 0
     cursorVisible: activeFocus && field.view.showPasswordCursor && text.length > 0
     // The terminal's caret is a block.
     cursorDelegate: Rectangle {
-      width: field.terminal ? Math.round(10 * field.view.uiScale) : 2
+      width: field.terminal ? Math.round(10 * field.uiScale) : 2
       color: field.view.foreground
       opacity: field.terminal ? 0.7 : 1
       visible: passwordInput.cursorVisible
@@ -275,7 +286,7 @@ Rectangle {
       ? field.view.foreground
       : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
     font.family: field.editorFontFamily
-    font.pixelSize: field.dotsOnly ? Math.round(13 * field.view.uiScale) : field.terminal ? Math.round(15 * field.view.uiScale) : field.view.fieldFontSize
+    font.pixelSize: field.dotsOnly ? Math.round(13 * field.uiScale) : field.terminal ? Math.round(15 * field.uiScale) : field.fieldFontSize
     font.italic: field.view.errorState
     horizontalAlignment: field.dotsOnly ? Text.AlignHCenter : Text.AlignLeft
     verticalAlignment: Text.AlignVCenter
@@ -292,7 +303,7 @@ Rectangle {
 
     Rectangle {
       anchors.centerIn: parent
-      width: Math.round(38 * field.view.uiScale)
+      width: Math.round(38 * field.uiScale)
       height: width
       radius: width / 2
       color: submitMouse.containsMouse && submitMouse.enabled
@@ -304,25 +315,25 @@ Rectangle {
       id: submitArrow
       objectName: "submitArrow"
       anchors.centerIn: parent
-      width: Math.round(30 * field.view.uiScale)
-      height: Math.round(26 * field.view.uiScale)
+      width: Math.round(30 * field.uiScale)
+      height: Math.round(26 * field.uiScale)
       // The submit arrow points along the reading direction, mirrored
       // around its own centre (a bare `width` inside Scale is the view's).
       transform: Scale { origin.x: submitArrow.width / 2; xScale: field.view.rightToLeft ? -1 : 1 }
 
       Rectangle {
-        x: Math.round(2 * field.view.uiScale)
-        width: Math.round(23 * field.view.uiScale)
-        height: Math.max(1, Math.round(1.6 * field.view.uiScale))
+        x: Math.round(2 * field.uiScale)
+        width: Math.round(23 * field.uiScale)
+        height: Math.max(1, Math.round(1.6 * field.uiScale))
         anchors.verticalCenter: parent.verticalCenter
         radius: height / 2
         color: field.view.foreground
       }
 
       Rectangle {
-        x: Math.round(15 * field.view.uiScale)
-        width: Math.round(10 * field.view.uiScale)
-        height: Math.max(1, Math.round(1.6 * field.view.uiScale))
+        x: Math.round(15 * field.uiScale)
+        width: Math.round(10 * field.uiScale)
+        height: Math.max(1, Math.round(1.6 * field.uiScale))
         anchors.verticalCenter: parent.verticalCenter
         transformOrigin: Item.Right
         rotation: 45
@@ -331,9 +342,9 @@ Rectangle {
       }
 
       Rectangle {
-        x: Math.round(15 * field.view.uiScale)
-        width: Math.round(10 * field.view.uiScale)
-        height: Math.max(1, Math.round(1.6 * field.view.uiScale))
+        x: Math.round(15 * field.uiScale)
+        width: Math.round(10 * field.uiScale)
+        height: Math.max(1, Math.round(1.6 * field.uiScale))
         anchors.verticalCenter: parent.verticalCenter
         transformOrigin: Item.Right
         rotation: -45
@@ -355,16 +366,16 @@ Rectangle {
   Text {
     objectName: "fingerprintNotice"
     // Plain x/y, mirrored here (see AccountElement: no anchors toggled at runtime).
-    y: field.height + Math.round(8 * field.view.uiScale)
+    y: field.height + Math.round(8 * field.uiScale)
     x: field.alignment === "center" ? (field.width - width) / 2
       : (field.alignment === "start") !== field.view.rightToLeft ? 0 : field.width - width
-    width: field.alignment === "center" ? field.view.contentWidth : field.width
+    width: field.alignment === "center" ? field.contentWidth : field.width
     visible: field.chromeShown && field.view.fingerprintUnavailable
     textFormat: Text.PlainText
     text: FoamyI18n.t("Fingerprint reader unavailable")
     color: field.view.foreground
     font.family: field.view.textFontFamily
-    font.pixelSize: Math.round(13 * field.view.uiScale)
+    font.pixelSize: Math.round(13 * field.uiScale)
     horizontalAlignment: field.alignment === "start" ? Text.AlignLeft : field.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
     wrapMode: Text.WordWrap
   }
