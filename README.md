@@ -298,6 +298,21 @@ styles, the element keys with their limits (`elementLimits`: ranges, glass style
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
+`saveLook` also takes `userPreset`, the id of the user preset the look came from
+(omitted, the link is removed). A `shell.json` that Omarchy can't read is never
+written: the answer is then `write-failed`.
+
+**User presets.** `userPresets` in the `foamy.lock` entry holds your own presets,
+newest first: `[{"id": "u-…", "name": "Foamy (mine)", "look": {"preset": …,
+"layout": …, "background": …, "glass": …}}]`, at most 50 and 256 KiB. Each item is
+checked on its own: an invalid one is skipped (`status` and `catalog` count it in
+`userPresetsInvalid`), and nothing in the list can change the settings or the look.
+`catalog` lists them (`userPresets`, with the built-in preset's thumbnail), and
+`previewPreset user:<id>` previews one. Editors change one at a time:
+`savePreset '<json>'` (`{id, name, look}`; the id is the caller's own, a new id goes
+first, a known one is updated), `renamePreset <id> <name>` and `deletePreset <id>`
+(which also drops the look's link to it). They answer like `saveLook`, plus `full`,
+`too-large` and `unknown-preset`; a repeated call answers `unchanged`.
 
 ## Lock Studio
 
@@ -358,6 +373,12 @@ a warning.
   isn't running or didn't answer (it is asked once more; if it still doesn't
   answer, the look may or may not be saved). Anything but a save keeps the draft.
   While the lock screen doesn't have your changes, the header says **Unsaved changes**.
+- **Your presets** come first in the preset menu, then the built-in ones. Applying
+  changes made on a built-in preset asks for a name (prefilled "Foamy (mine)"), saves
+  your preset and applies it; **Apply without saving a preset** applies the look as it
+  is. Applying changes on one of your presets updates it. **Save as new…**, rename and
+  delete (asked first) are in the menu. They live in `shell.json` with the lock
+  screen's other settings (see User presets above).
 - **Reset** goes back to the last saved look, or to the preset without your changes;
   either can be undone.
 - **Preview full screen** shows the look on the lock screen's own preview overlay without

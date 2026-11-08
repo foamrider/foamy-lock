@@ -288,10 +288,11 @@ one or more commits on `feat/layout-engine`.
   - Kit sync, plus the `root.rs` Ui link and binary rebuild.
 - **R2-2. User presets** (D1, D2).
   - Lock: `userPresets` and `userPreset` validation (Model/Layout), the
-    `saveStudio` IPC and the catalog listing user presets. `previewPreset`
+    preset IPC (`savePreset`, `renamePreset`, `deletePreset`; see Changes
+    after review) and the catalog listing user presets. `previewPreset`
     accepts `user:<id>`.
   - App: the naming prompt, update vs save-as, rename and delete, ordering.
-  - Rust: `studio apply` gains a mode that sends `saveStudio`.
+  - Rust: `studio preset save|rename|delete` beside `studio apply`.
 - **R2-3. Element extras and styles** (D4 password and status, D5).
   - Lock data sources: volume, bluetooth, keyboard.
   - Parity unchanged.
@@ -475,6 +476,82 @@ nothing ran on the real lock or the desktop):
   paging and wrapping, the state file, Mugshot absent (no button, install
   hint) and present (a fake script, started, never the real one). New
   captures: `studio-reset`, `studio-look`, `studio-tips`.
+
+**R2-2, user presets** (2026-11-08, on `feat/layout-engine`; offscreen only,
+the fake omarchy-shell, nothing ran on the real lock or shell):
+- **Lock, the third group:** `Layout.parseUserPresets` (a separate region at
+  the end of Layout.js, its own exports) reads `userPresets` item by item:
+  an invalid item (shape, id slug, name of 1 to 64 characters without
+  control characters, a look parseLook refuses, a second item with an id
+  already read, past 50 items or 256 KiB) is skipped and counted, the
+  others kept. Service calls it beside parseConfig and parseLook; nothing
+  in it touches `settings` or `look`, and an unknown `userPreset` is
+  ignored. `status` adds `userPresets` (ids and names),
+  `userPresetsInvalid`, `userPresetsError` and `userPreset`; `catalog`
+  adds `userPresets` (entry, effective look, the built-in preset's
+  thumbnail), the same counts and `userPresetLimits`. `previewPreset`
+  takes `user:<id>`.
+- **IPC contract** (target `foamy.lock`; Layout.savingPreset,
+  renamingPreset, deletingPreset merge one item into the entry as last
+  read and keep every other item, invalid ones too):
+  - `savePreset <json>`: `{id, name, look}`, `look` without
+    `userPreset`. A known id is updated in place, a new one goes first.
+  - `renamePreset <id> <name>`: `unknown-preset` for an id not there.
+  - `deletePreset <id>`: also drops `userPreset` when it names it; an id
+    not there answers `unchanged`.
+  - `saveLook` takes `userPreset` as a fifth key (omitted: removed).
+  - Replies: `ok`, `unchanged`, `invalid-json`, `invalid: …`, `locked`,
+    `unsupported`, `no-entry`, `write-failed`, and for the preset calls
+    `full` (50), `too-large` (256 KiB of the list as written),
+    `unknown-preset`. Each call is idempotent.
+  - **write-failed:** the scoped shell API doesn't expose
+    `userConfigUnreadable`, so Service applies Omarchy's own rule to its
+    own read of shell.json (`entryState`: not a version 1 object, or not
+    read at all) and answers `write-failed` before writing; saveLook
+    too.
+  - **lastEntry:** set to the written entry as soon as
+    `updateEntryInline` returns true (and the presets re-read), so two
+    quick writes don't revert each other.
+- **Helper:** `studio preset save|rename|delete`, stdin `{id, name,
+  look}` / `{id, name}` / `{id}`, the lock's checks on shape (64 KiB per
+  argument), `studio apply`'s reply line and single retry
+  (`apply::run`); `full`, `too-large` and `unknown-preset` confirm after
+  a retry, `write-failed` (like `locked`) doesn't. A look (apply, the
+  draft file) may carry `userPreset`. Binaries rebuilt and pinned.
+- **App (D2):** the draft carries its link (`userPreset`): `commit()`
+  keeps it on every edit, a built-in pick or Reset to one drops it, the
+  draft file and `savedDraft` keep it. Apply is still the single entry
+  point (`Draft.saveMode`): a built-in preset with changes asks for a
+  name (FoamyTextSettingField, prefilled "<Preset> (mine)" / "(mitt)",
+  " 2" when taken) with "Apply without saving a preset" and Cancel; a
+  user preset with changes is updated, then applied; savePreset then
+  saveLook with the link, and a refused save stops before saveLook. The
+  preset menu always shows "Your presets" (with "Save as new…", and an
+  empty note without any) above "Built-in"; each user tile has rename and
+  delete (pencil, trash; F2 and Delete on the cursor); delete asks.
+  Picking a user preset with changes only offers Replace. Reset's
+  "Preset <name>" goes back to the user preset as saved. The list updates
+  as soon as the lock confirms (Draft.presetsAfter) until shell.json
+  follows. Names show as plain text (StudioButton, the questions). The
+  tip "Saving changes to a preset creates your own" joined the list.
+- **Tests:** node (`user-presets.test.cjs`: bad list with the look still
+  applying, per-item drops, caps, idempotent retry, two quick operations;
+  `studio-presets.test.cjs`: the link, saveMode, ids, names, the list
+  after an operation); runtime (`user_presets`: listing, preview, save,
+  retry, rename right after save, the fifth key, delete, strict parsing,
+  both caps, write-failed, no-entry); helper unit and CLI tests; studio
+  harness (en/no/ar) for every flow, with two new captures
+  (`studio-user-presets`, `studio-preset-name`).
+- **Deviations:** `catalog` stays version 2 (the keys are additive; the
+  round-2 elements branch bumps it to 3). "Save as new…" applies too, as
+  the plan's "save as preset and apply" order. Quitting's "Apply and
+  quit" never asks for a name (a built-in look is applied as it is).
+- **The user's review of the live app** (its own commit): the tips' previous
+  and next are small ghost buttons under the text; tips launch nothing
+  (the "Open Mugshot" button and `openMugshot()` are gone); the header shows
+  only "Unsaved changes" as a warning (and Apply/Preview results), no
+  "The lock has this look"; the studio strings and the README's Lock Studio
+  section say "lock screen" / "låseskjerm".
 
 ## Open questions for the user
 
