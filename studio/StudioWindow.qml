@@ -7,7 +7,7 @@ import "Layout.js" as LockLayout
 import "." as Studio
 import "Draft.js" as Draft
 
-// Lock Studio's window content (mockup A, "Canvas"): a header (preset,
+// Lock Studio's window content (mockup A, "Canvas"): a header (preset menu,
 // screen, undo and redo, preview, apply), the library (modules and scene)
 // on the reading start, the live canvas in the middle with its preview
 // states, switches, problems and presets, and the inspector (or a scene
@@ -15,8 +15,10 @@ import "Draft.js" as Draft
 //
 // It owns the draft: `history` (Draft.history) holds the entry being edited
 // and its undo steps; every edit goes through commit(). A slider drag shows
-// through preview() and commits once. Keys that work everywhere are in
-// appKey(); the canvas, the library and the controls handle their own.
+// through preview() and commits once. Picking a preset with changes asks
+// first (keep them on the new preset, or replace them); either is one
+// undo step. Keys that work everywhere are in appKey(); the canvas, the
+// library and the controls handle their own.
 FocusScope {
   id: studio
 
@@ -43,6 +45,9 @@ FocusScope {
   // pointer is in the window.
   property string libraryDrag: ""
   property point libraryDragPoint: Qt.point(0, 0)
+  // The preset waiting for "Keep changes" or "Replace" ("" otherwise).
+  property string pendingPreset: ""
+  readonly property var keptPreset: pendingPreset ? Draft.presetKeeping(draft, pendingPreset) : null
   readonly property bool rightToLeft: FoamyI18n.rightToLeft
   readonly property alias canvas: lockCanvas
   readonly property alias checker: lockChecker
@@ -50,6 +55,7 @@ FocusScope {
   readonly property alias library: library
   readonly property alias inspector: inspectorPage
   readonly property alias scenePage: scenePage
+  readonly property alias presetMenu: presetMenu
   readonly property var lockSettings: lockSources.settings
   readonly property var problems: lockChecker.problems
   readonly property bool applyBlocked: problems.some(function(problem) { return !problem.reference })
@@ -81,9 +87,31 @@ FocusScope {
     page = "module"
   }
 
-  // A preset picked in the strip: the draft starts over from it.
+  // A preset picked (menu, strip): at once without changes, else ask.
   function requestPreset(name) {
-    commit(Draft.setPreset(draft, name))
+    presetMenu.close()
+    if (LockLayout.SELECTABLE_PRESETS.indexOf(name) === -1) return
+    if (changes === 0) {
+      commit(Draft.setPreset(draft, name))
+      return
+    }
+    pendingPreset = name
+    keepButton.forceActiveFocus(Qt.PopupFocusReason)
+  }
+
+  // The answer: keep the changes on the new preset, or replace them.
+  function answerPreset(keep) {
+    var name = pendingPreset
+    pendingPreset = ""
+    if (!name) return
+    var next = keep ? Draft.presetKeeping(draft, name) : Draft.setPreset(draft, name)
+    if (next) commit(next)
+    presetStrip.forceActiveFocus(Qt.OtherFocusReason)
+  }
+
+  function cancelPreset() {
+    pendingPreset = ""
+    presetStrip.forceActiveFocus(Qt.OtherFocusReason)
   }
 
   // --- dragging from the library onto the canvas ---------------------------
@@ -192,6 +220,10 @@ FocusScope {
       quitRequested()
       return true
     }
+    if (key === Qt.Key_Escape && pendingPreset) {
+      cancelPreset()
+      return true
+    }
     if (ctrl && key === Qt.Key_Z) {
       if (shift) redo()
       else undo()
@@ -271,10 +303,12 @@ FocusScope {
             id: presetButton
             objectName: "studioPresetButton"
             focus: true
-            text: studio.presetLabel(studio.draft.preset)
+            text: studio.presetLabel(studio.draft.preset) + "  \u25BE"
             detail: studio.changes > 0 ? FoamyI18n.t("studio.edited") : ""
-            Accessible.name: FoamyI18n.t("studio.preset", text)
-            onClicked: presetStrip.forceActiveFocus(Qt.TabFocusReason)
+            checked: presetMenu.visible
+            Accessible.role: Accessible.ButtonMenu
+            Accessible.name: FoamyI18n.t("studio.preset", studio.presetLabel(studio.draft.preset))
+            onClicked: presetMenu.visible ? presetMenu.close() : presetMenu.open()
           }
 
           Segmented {
@@ -634,6 +668,100 @@ FocusScope {
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.caption
       font.weight: Font.DemiBold
+    }
+  }
+
+  Studio.PresetMenu {
+    id: presetMenu
+    anchorItem: presetButton
+    current: studio.draft.preset
+    onPicked: function(name) { studio.requestPreset(name) }
+    onClosed: presetButton.forceActiveFocus(Qt.OtherFocusReason)
+  }
+
+  // "Keep changes?" before a preset replaces the draft's changes.
+  Rectangle {
+    id: presetDialog
+    objectName: "studioPresetDialog"
+    anchors.fill: parent
+    visible: studio.pendingPreset !== ""
+    color: Qt.alpha(FoamyPalette.background, 0.72)
+    z: 30
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: studio.cancelPreset()
+    }
+
+    Rectangle {
+      anchors.centerIn: parent
+      width: Math.min(parent.width - 2 * FoamyStyle.padding, 440)
+      height: dialogColumn.implicitHeight + 2 * FoamyStyle.padding
+      radius: FoamyStyle.radius
+      color: FoamyPalette.background
+      border.width: FoamyStyle.borderWidth
+      border.color: FoamyPalette.border
+      Accessible.role: Accessible.Dialog
+      Accessible.name: dialogTitle.text
+      Accessible.description: dialogBody.text
+
+      MouseArea { anchors.fill: parent }
+
+      Column {
+        id: dialogColumn
+        x: FoamyStyle.padding
+        y: FoamyStyle.padding
+        width: parent.width - 2 * FoamyStyle.padding
+        spacing: FoamyStyle.gap
+
+        Text {
+          id: dialogTitle
+          width: parent.width
+          horizontalAlignment: Text.AlignLeft
+          text: FoamyI18n.t("studio.presetAsk", studio.presetLabel(studio.pendingPreset || studio.draft.preset))
+          wrapMode: Text.Wrap
+          color: FoamyPalette.text
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.heading
+          font.weight: Font.DemiBold
+          Accessible.role: Accessible.Heading
+          Accessible.name: text
+        }
+        Text {
+          id: dialogBody
+          width: parent.width
+          horizontalAlignment: Text.AlignLeft
+          text: FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, studio.presetLabel(studio.pendingPreset || studio.draft.preset)])
+            + (studio.pendingPreset && !studio.keptPreset ? "\n" + FoamyI18n.t("studio.presetCantKeep") : "")
+          wrapMode: Text.Wrap
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+        }
+        RowLayout {
+          width: parent.width
+          spacing: FoamyStyle.gap
+          Item { Layout.fillWidth: true }
+          StudioButton {
+            objectName: "studioPresetCancel"
+            text: FoamyI18n.t("studio.cancel")
+            onClicked: studio.cancelPreset()
+          }
+          StudioButton {
+            objectName: "studioPresetReplace"
+            text: FoamyI18n.t("studio.presetReplace")
+            onClicked: studio.answerPreset(false)
+          }
+          StudioButton {
+            id: keepButton
+            objectName: "studioPresetKeep"
+            primary: true
+            enabled: studio.keptPreset !== null
+            text: FoamyI18n.t("studio.presetKeep")
+            onClicked: studio.answerPreset(true)
+          }
+        }
+      }
     }
   }
 
