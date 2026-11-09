@@ -153,16 +153,21 @@ fn install_and_open_use_the_plugin_dir() {
     let desktop = home
         .0
         .join("home/.local/share/applications/foamy-lock-studio.desktop");
+    let text = fs::read_to_string(&desktop).unwrap();
     assert!(
-        fs::read_to_string(&desktop)
-            .unwrap()
-            .contains(&format!("\nExec={} studio\n", helper.display()))
+        text.contains(&format!(" sh {} {} ", helper.display(), desktop.display())),
+        "{text}"
     );
+    let (reply, code) = home.run(&["studio", "ensure"], "");
+    assert_eq!((reply["action"].as_str(), code), (Some("current"), 0));
     let (reply, code) = home.run(&["studio", "uninstall"], "");
     assert_eq!(
         (reply["removed"].as_array().map(Vec::len), code),
         (Some(1), 0)
     );
+    let (reply, code) = home.run(&["studio", "ensure"], "");
+    assert_eq!((reply["action"].as_str(), code), (Some("declined"), 0));
+    assert!(!desktop.exists());
     // No quickshell: the root isn't even built.
     let (reply, code) = home.run(&["studio", "open"], "");
     assert_eq!(

@@ -1743,6 +1743,34 @@ Item {
     checkStrandedLock()
   }
 
+  // Lock Studio's launcher entry: once per shell start, a while after it so
+  // it doesn't add to the start, the helper adds or refreshes the entry
+  // (`studio ensure`: nothing after `studio uninstall`, no write when it is
+  // current). The entry removes itself once the plugin is gone.
+  property string launcherAction: ""
+  Timer {
+    id: launcherTimer
+    interval: 20000
+    running: true
+    onTriggered: launcherProc.running = true
+  }
+  Process {
+    id: launcherProc
+    command: ["timeout", "--kill-after=1s", "5s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["studio", "ensure"]))
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_DATA_HOME: Quickshell.env("XDG_DATA_HOME") || root.home + "/.local/share",
+      XDG_STATE_HOME: Quickshell.env("XDG_STATE_HOME") || root.home + "/.local/state",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    stdout: StdioCollector { id: launcherOutput; waitForEnd: true }
+    onExited: function(exitCode, exitStatus) {
+      var data = null
+      try { data = JSON.parse(launcherOutput.text) } catch (error) { data = null }
+      root.launcherAction = data && data.ok === true && typeof data.action === "string" ? data.action
+        : "error:" + (data && typeof data.code === "string" ? data.code : String(exitCode))
+    }
+  }
+
   Component.onCompleted: {
     knownScreenCount = realScreenCount()
     refreshBackground()
@@ -1770,6 +1798,7 @@ Item {
       userPresetsInvalid: root.userPresetsInvalid,
       userPresetsError: root.userPresetsError,
       userPreset: root.userPresetLink,
+      launcher: root.launcherAction,
       // Never the place name: status is readable by any local process.
       weather: { state: root.weatherState, shown: root.weather !== null, polls: root.weatherPolls,
         updatedAt: root.weatherReport ? new Date(root.weatherReport.updatedAtMs).toISOString() : "" },

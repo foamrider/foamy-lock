@@ -466,15 +466,18 @@ It runs the lock screen's own drawing code in its own window, so what you see is
 the lock screen shows, and it saves through Foamy Lock (`saveLook`), never by writing
 `shell.json` itself.
 
-Add it to the app launcher once:
+Open **Lock Studio** from the app launcher, or run the helper:
 
 ```sh
-~/.config/omarchy/plugins/foamy.lock/bin/$HOSTTYPE/foamy-lock-helper studio install
+~/.config/omarchy/plugins/foamy.lock/bin/$HOSTTYPE/foamy-lock-helper studio
 ```
 
-Then open **Lock Studio** from the launcher, or run the same helper with
-`studio open` (or just `studio`). Opening it again brings the open window to the
-front. `studio uninstall` removes the launcher entry.
+Opening it again brings the open window to the front.
+
+**The launcher entry.**
+- **Added automatically:** about 20 seconds after the shell starts, the lock adds the entry (`studio ensure`). It writes `~/.local/share/applications/foamy-lock-studio.desktop` and the icon under `~/.local/share/icons/hicolor/`, and it rewrites them only when they've changed, for example after the plugin moves.
+- **Removed with the plugin:** the entry's command starts the helper while the helper is there. Once the plugin is gone, choosing the entry removes it and its icon. Omarchy has no removal hook, and its launcher ignores `TryExec`.
+- **Turning it off:** `studio uninstall` removes the entry and keeps it off. `studio install` adds it again.
 
 **Editing.** Drag an element on the canvas; it snaps to where it would sit in each
 zone, to the screen's centre lines, to the other elements' edges and to a grid. The

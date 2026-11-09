@@ -17,7 +17,7 @@
 //!   "action": "raised" | "running" | "started", "root": …}` (`started`
 //!   adds `pid` and `log`; `running` means an instance is there but didn't
 //!   take the raise, with `detail`).
-//! - `studio install` / `studio uninstall`: see [`desktop`].
+//! - `studio install` / `studio ensure` / `studio uninstall`: see [`desktop`].
 //! - `studio draft-load` / `studio draft-save` / `studio draft-clear`: see
 //!   [`draft`].
 //! - `studio apply`: see [`apply`].
@@ -372,7 +372,7 @@ pub fn iso8601(time: SystemTime) -> String {
     )
 }
 
-const USAGE: &str = "usage: foamy-lock-helper studio [open | install | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name [media filter name]]]]";
+const USAGE: &str = "usage: foamy-lock-helper studio [open | install | ensure | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name [media filter name]]]]";
 
 /// `foamy-lock-helper studio <args>`.
 pub fn main(args: &[OsString]) -> Result<Value, Failure> {
@@ -382,6 +382,7 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
     match words.as_slice() {
         [] | ["open"] => root::open(&env, &current_plugin_dir()?, &root::Options::default()),
         ["install"] => desktop::install(&env, &current_plugin_dir()?),
+        ["ensure"] => desktop::ensure(&env, &current_plugin_dir()?),
         ["uninstall"] => desktop::uninstall(&env),
         ["draft-load"] => draft::load(&env),
         ["draft-save"] => draft::save(&env, &read_stdin(draft::MAX_REQUEST)?),
