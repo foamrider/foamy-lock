@@ -4,6 +4,8 @@ import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
+// Read only: the monitors' native size for a video background.
+import Quickshell.Hyprland
 // Qualify the theme singleton to avoid QtQuick.Color taking precedence.
 import qs.Commons as Commons
 import "kit"
@@ -12,6 +14,8 @@ import "kit/FoamyNative.js" as FoamyNative
 import "Model.js" as Model
 // Fingerprint recovery adapted from Omarchy PR #7158 and v4.5.0-rc1 (03ff1ef).
 import "FingerprintModel.js" as FingerprintModel
+import "Layout.js" as Layout
+import "elements" as Elements
 
 Item {
   id: root
@@ -38,6 +42,9 @@ Item {
   // Blanking pauses new attempts, preserving a pending backoff until wake.
   property bool fingerprintPaused: false
   property bool fingerprintSleptWhilePaused: false
+  // Set by runBlank, cleared by runWake: drawn backgrounds hold still while
+  // the display is off (input or a new lock wakes it through runWake).
+  property bool displayBlanked: false
   property double fingerprintRetryDueMs: 0
   property int fingerprintRetryBackoffMs: 0
   property int knownScreenCount: 0
@@ -46,6 +53,12 @@ Item {
   property double fingerprintResumedAtMs: 0
   property int fingerprintProbeStreak: 0
   property bool previewVisible: false
+  // For previewHoldMs after the preview overlay closes, its window stays
+  // mapped, empty and input-transparent but holding the keyboard: keys
+  // typed into the overlay (a password, perhaps, as on a real lock) don't
+  // spill into the window below. A real lock ends it at once.
+  property bool previewHolding: false
+  readonly property int previewHoldMs: 500
   property string enteredPassword: ""
   property string pendingPassword: ""
   property string failureMessage: ""
@@ -81,6 +94,98 @@ Item {
   // null until shell.json has been read once.
   property var stockLockEnabled: null
   property string conflictLogged: ""
+  // The look (Layout.js): validated apart from `settings`, so a mistake in
+  // one never resets the other. The last valid look stays (foamy on start).
+  property var look: Layout.defaults()
+  // The foamy.lock entry as last read, so saveLook can keep its other keys.
+  property var lastEntry: null
+  property string lookError: ""
+  // The preview overlay's own look (previewPreset); null shows `look`.
+  property var previewLook: null
+  // User presets (Layout.parseUserPresets): a third group, read item by
+  // item from the same entry, never touching `settings` or `look`.
+  property var userPresets: []
+  property int userPresetsInvalid: 0
+  property string userPresetsError: ""
+  // The saved look's link to one of them ("" without one, or for an id
+  // that isn't in the list).
+  property string userPresetLink: ""
+  // Whether Omarchy would write shell.json as last read: "ok", "no-entry"
+  // (no single foamy.lock entry), or "unreadable" (not a version 1 object,
+  // or not read at all), where Omarchy skips the write (persistShellConfig).
+  property string entryState: "unreadable"
+  // The weather element's data: Foamy Weather's `current()` over
+  // FoamyPeerIpc (see pollWeather), checked by Model.parseWeather. Fetched
+  // only while a lock or preview shows a look with the weather in it: when
+  // it opens, then every weatherPollMs while the display is awake. Shown
+  // while under three hours old; hidden on no answer, an error or an
+  // invalid reply. weatherState is the last answer's state, or "absent"
+  // (no foamy.weather target: nothing is called) or "idle".
+  property var weatherReport: null
+  property string weatherState: "idle"
+  property double weatherClockMs: Date.now()
+  property double weatherPolledAtMs: 0
+  property int weatherPolls: 0
+  property int weatherPendingLeft: 0
+  property bool weatherBusy: false
+  readonly property int weatherPollMs: 900000
+  // A cold service answers "pending" for a few seconds: ask again, at most
+  // this many times, this far apart.
+  readonly property int weatherRetryMs: 10000
+  readonly property int weatherRetries: 3
+  readonly property var weather: Model.weatherFresh(weatherReport, weatherClockMs) ? weatherReport : null
+  readonly property bool weatherWanted: (lockRequested && !displayBlanked && lookShowsWeather(look))
+    || (previewVisible && lookShowsWeather(previewLook || look))
+  // Lock surfaces that have keyboard focus: the field shows there, or on
+  // every surface while none does (Layout.isPrimary).
+  property int activeSurfaces: 0
+  // The last geometry fallback a lock view reported ("" when none).
+  property string layoutError: ""
+  property string fallbackPreset: ""
+  // The look's own picture, prepared by the helper's sandbox while unlocked
+  // (decoded, cropped to the largest screen, blurred). Qt never decodes the
+  // original; without a prepared file the theme colour shows.
+  readonly property bool pictureWanted: look.background.source === "picture" && look.background.path !== ""
+    && !Layout.isVideoPath(look.background.path)
+  // One prepared picture at a time, for the look on screen: the preview's,
+  // else the saved one. A view uses it only when it was made for its look.
+  readonly property var pictureLook: previewLook || look
+  readonly property string lookPictureKey: pictureKey(look)
+  readonly property string previewPictureKey: pictureKey(pictureLook)
+  property string pictureRenderPath: ""
+  property string pictureError: ""
+  property string pictureRequestKey: ""
+  property bool picturePending: false
+  property bool pictureHelperUnavailable: false
+  // A video background (Layout.isVideoPath; see videoKey): the helper's
+  // video-probe, run in its sandbox while unlocked for the look on screen,
+  // gives the poster (the still of a picture source with a video path) and
+  // the clip Lock Studio converted for this file and the largest screen's
+  // native size, if there is one. The lock never converts and never
+  // decodes the original; a view plays only that clip (motion "play").
+  readonly property string videoCacheDirectory: avatarCacheDirectory + "/video/"
+  // video-probe for a video Omarchy wallpaper's still (posterProc).
+  readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"])
+  readonly property bool hyprlandSession: !!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
+  // Hyprland's monitors (read only): Qt only knows the integer scale.
+  readonly property var videoNatives: {
+    var out = []
+    var monitors = hyprlandSession ? Hyprland.monitors.values : []
+    for (var i = 0; i < monitors.length; i++) {
+      var ipc = monitors[i].lastIpcObject
+      if (ipc) out.push({ width: Number(ipc.width) || 0, height: Number(ipc.height) || 0, transform: Number(ipc.transform) || 0 })
+    }
+    return out
+  }
+  readonly property string lookVideoKey: videoKey(look)
+  readonly property string previewVideoKey: videoKey(pictureLook)
+  property string videoRequestKey: ""
+  property string videoPosterRender: ""
+  property string videoClipPath: ""
+  property string videoError: ""
+  property bool videoPending: false
+  property bool videoHelperUnavailable: false
+  property string videoFailure: ""
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -97,7 +202,12 @@ Item {
   Artwork {
     id: artwork
     player: root.activePlayer
+    // Only the styles with a cover show artwork (Layout.ARTWORK_STYLES): a
+    // hidden or one-line player, or a look without the cover
+    // (media.artwork false), prepares none.
     allowed: root.settings.showMedia && root.settings.showArtwork
+      && !root.look.elements.media.hidden && Layout.ARTWORK_STYLES.indexOf(root.look.elements.media.style) !== -1
+      && root.look.elements.media.artwork !== false
     locked: root.locked
     hosts: root.settings.artworkHosts
     fileRoots: root.settings.artworkFileRoots
@@ -111,8 +221,75 @@ Item {
       settings = result.settings
       stockLockEnabled = result.stockLockEnabled
     } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
+    noteEntryState(text, result.entry)
+    // The look keys are read whenever the file has one foamy.lock entry.
+    if (result.entry) {
+      applyUserPresets(result.entry)
+      lastEntry = result.entry
+      var parsed = Layout.parseLook(result.entry)
+      lookError = parsed.error
+      if (parsed.valid) {
+        if (JSON.stringify(parsed.look) !== JSON.stringify(look)) look = parsed.look
+      } else console.warn("foamy.lock: " + lookError + "; keeping the previous look")
+    }
     // Services may have been added or removed with this edit.
     Qt.callLater(checkLockRoute)
+  }
+
+  // --- user presets and writes (Lock Studio round 2, step R2-2) --------------
+
+  // Omarchy writes shell.json only over a version 1 object it could read
+  // (persistShellConfig skips the write otherwise, and still reports a
+  // change): a save must then say write-failed, never ok. An empty file is
+  // written, but it has no entry to merge into.
+  function noteEntryState(text, entry) {
+    var source = String(text || "")
+    var config = null
+    try { config = JSON.parse(source) } catch (error) { config = null }
+    var readable = config !== null && typeof config === "object" && !Array.isArray(config) && config.version === 1
+    entryState = readable ? (entry ? "ok" : "no-entry") : source.trim() === "" ? "no-entry" : "unreadable"
+  }
+
+  function applyUserPresets(entry) {
+    var parsed = Layout.parseUserPresets(entry)
+    if (JSON.stringify(parsed.presets) !== JSON.stringify(userPresets)) userPresets = parsed.presets
+    userPresetsInvalid = parsed.invalid
+    if (parsed.error !== userPresetsError) {
+      userPresetsError = parsed.error
+      if (parsed.error) console.warn("foamy.lock: " + parsed.invalid + " user preset(s) skipped: " + parsed.error)
+    }
+    userPresetLink = Layout.userPresetLink(entry, parsed.presets)
+  }
+
+  // The entry an IPC write merges into, or the reply when there is none
+  // to write.
+  function writableEntry() {
+    if (!shell || typeof shell.updateEntryInline !== "function") return "unsupported"
+    if (!lastEntry || entryState === "no-entry") return "no-entry"
+    if (entryState !== "ok") return "write-failed"
+    return lastEntry
+  }
+
+  // Writes `next` (the entry without its id) through Omarchy's own
+  // updateEntryInline and takes it as the entry last read at once, so a
+  // second write before the file watch reports this one merges over it,
+  // never over the entry before (two quick saves don't revert each other).
+  function writeEntry(next) {
+    if (!shell.updateEntryInline("foamy.lock", next)) return "unchanged"
+    var written = { id: "foamy.lock" }
+    for (var key in next) written[key] = next[key]
+    lastEntry = written
+    applyUserPresets(written)
+    return "ok"
+  }
+
+  // The catalog's user presets: each with its look and its built-in
+  // preset's thumbnail (user presets have none of their own).
+  function catalogUserPresets(dir) {
+    return userPresets.map(function(preset) {
+      return { id: preset.id, name: preset.name, entry: preset.look, look: preset.effective,
+        thumbnail: dir + "/previews/presets/" + preset.effective.preset + ".png" }
+    })
   }
 
   // The socket answers from the first enabled handler for a target. When a
@@ -252,7 +429,10 @@ Item {
       return
     }
     if (posterProc.running) return
+    var size = Model.videoScreenSize(videoNatives, Quickshell.screens || [])
     posterProc.sourcePath = backgroundPath
+    posterProc.request = JSON.stringify({ path: backgroundPath, width: size[0], height: size[1] })
+    posterProc.stdinEnabled = true
     posterProc.sourceSignature = backgroundSignature
     posterProc.running = true
   }
@@ -371,6 +551,193 @@ Item {
     refreshAvatarThumbnail()
   }
 
+  onPreviewVisibleChanged: {
+    if (previewVisible) {
+      previewHolding = false
+      previewHoldTimer.stop()
+    } else {
+      previewLook = null
+      previewHolding = true
+      previewHoldTimer.restart()
+    }
+  }
+  onPreviewLookChanged: {
+    Qt.callLater(refreshPicture)
+    refreshVideoScreens()
+  }
+  // Fallback reports describe the views of the current lock and look.
+  onLockRequestedChanged: {
+    if (lockRequested) clearLayoutFallback()
+    // A picture changed while locked is prepared once unlocked.
+    else {
+      refreshPicture()
+      refreshVideo()
+    }
+  }
+  onLookChanged: {
+    clearLayoutFallback()
+    // After the bindings that read the look have caught up.
+    Qt.callLater(refreshPicture)
+    refreshVideoScreens()
+  }
+  // The look, the Omarchy wallpaper or a screen changed what to probe.
+  onPreviewVideoKeyChanged: Qt.callLater(refreshVideo)
+
+  // The largest screen in logical pixels, inside the helper's bounds.
+  function pictureSize() {
+    var screens = Quickshell.screens || []
+    var width = 0
+    var height = 0
+    for (var i = 0; i < screens.length; i++) {
+      if (!screens[i]) continue
+      width = Math.max(width, Math.round(screens[i].width || 0))
+      height = Math.max(height, Math.round(screens[i].height || 0))
+    }
+    if (width < 16 || height < 16) return [1920, 1080]
+    return [Math.min(width, 7680), Math.min(height, 4320)]
+  }
+
+  // The helper request for a look's picture, "" when it has none.
+  function pictureKey(target) {
+    var background = target ? target.background : null
+    if (!background || background.source !== "picture" || !background.path || Layout.isVideoPath(background.path)) return ""
+    var size = pictureSize()
+    return JSON.stringify({ kind: "background", path: background.path, width: size[0], height: size[1],
+      blur: background.blur })
+  }
+
+  // --- video backgrounds --------------------------------------------------------
+
+  // The video a look shows: a picture source's video path (its poster is
+  // the still either way), or the Omarchy wallpaper when it is a video and
+  // the look plays (its still stays Omarchy's poster). "" otherwise.
+  function videoSourcePath(target) {
+    var background = target ? target.background : null
+    if (!background) return ""
+    if (background.source === "picture" && Layout.isVideoPath(background.path)) return background.path
+    if (background.source === "omarchy" && videoBackground && Layout.playsVideo(background)) return backgroundPath
+    return ""
+  }
+
+  function isVideoPicture(target) {
+    return !!target && target.background.source === "picture" && Layout.isVideoPath(target.background.path)
+  }
+
+  // The helper's video-probe request for a look ("" without a video): the
+  // file and the largest screen's native size, the clip's key.
+  function videoKey(target) {
+    var path = videoSourcePath(target)
+    if (!path) return ""
+    var size = Model.videoScreenSize(videoNatives, Quickshell.screens || [])
+    return JSON.stringify({ path: path, width: size[0], height: size[1] })
+  }
+
+  // Asks Hyprland for its monitors again (a read-only query), so the native
+  // size follows mode and scale changes.
+  function refreshVideoScreens() {
+    if (hyprlandSession) Hyprland.refreshMonitors()
+  }
+
+  function refreshVideo() {
+    var key = previewVideoKey
+    if (!key) {
+      videoRequestKey = ""
+      videoPosterRender = ""
+      videoClipPath = ""
+      videoError = ""
+      return
+    }
+    if (key === videoRequestKey) return
+    // Probed while unlocked only, as the picture is prepared.
+    if (currentlyLocked()) return
+    if (videoProc.running) {
+      videoPending = true
+      return
+    }
+    // Never the previous video's poster or clip under this key.
+    videoRequestKey = key
+    videoPosterRender = ""
+    videoClipPath = ""
+    if (videoHelperUnavailable) {
+      applyVideoResult('{"ok":false,"error":"helper-unavailable"}', key)
+      return
+    }
+    videoProc.request = key
+    videoProc.stdinEnabled = true
+    videoProc.running = true
+  }
+
+  // The probe's reply for `request` (Model.videoProbeResult's checks).
+  function applyVideoResult(text, request) {
+    if (request !== videoRequestKey) return
+    var result = Model.videoProbeResult(text, videoCacheDirectory)
+    var violations = result.ok && Array.isArray(result.reply.violations) ? result.reply.violations : []
+    videoPosterRender = result.poster
+    videoClipPath = result.clip
+    videoError = !result.ok ? result.error
+      : violations.length > 0 && /^[a-z-]{1,48}$/.test(String(violations[0])) ? String(violations[0])
+      : !result.poster ? "video-poster-missing" : ""
+    if (videoError) console.warn("foamy.lock: video background has no poster or clip (" + videoError + ")")
+  }
+
+  // A view gave up on the clip ("error" or "stall"): its poster stays.
+  function noteVideoFailure(reason) {
+    videoFailure = reason
+    logEvent("video-gave-up: " + reason)
+  }
+
+  function refreshPicture() {
+    var key = pictureKey(pictureLook)
+    if (!key) {
+      pictureRequestKey = ""
+      pictureRenderPath = ""
+      pictureError = ""
+      return
+    }
+    if (key === pictureRequestKey) return
+    // Prepared while unlocked only: a lock keeps what it was shown with.
+    if (currentlyLocked()) return
+    if (pictureProc.running) {
+      picturePending = true
+      return
+    }
+    pictureRequestKey = key
+    if (pictureHelperUnavailable) {
+      applyPictureResult('{"ok":false,"error":"helper-unavailable"}')
+      return
+    }
+    pictureProc.request = key
+    pictureProc.stdinEnabled = true
+    pictureProc.running = true
+  }
+
+  function applyPictureResult(text) {
+    var result = null
+    try { result = JSON.parse(String(text || "")) } catch (error) { result = null }
+    var directory = avatarCacheDirectory + "/background/"
+    if (result && result.ok === true && typeof result.path === "string"
+        && result.path.indexOf(directory) === 0 && /^[0-9a-f]{64}\.png$/.test(result.path.slice(directory.length))) {
+      pictureError = ""
+      pictureRenderPath = result.path
+    } else {
+      pictureError = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
+        ? result.error : "picture-helper-failed"
+      pictureRenderPath = ""
+      console.warn("foamy.lock: background picture unavailable (" + pictureError + "); showing the theme colour")
+    }
+  }
+
+  function clearLayoutFallback() {
+    layoutError = ""
+    fallbackPreset = ""
+  }
+
+  function noteLayoutFallback(error, preset) {
+    layoutError = error
+    fallbackPreset = preset
+    logEvent("layout-fallback: " + error + " -> " + preset)
+  }
+
   function logEvent(event) {
     lastEvent = event
     lastEventAt = new Date().toISOString()
@@ -411,10 +778,13 @@ Item {
     resetAuthenticationState()
     // The preview overlay is not a lock; never leave it behind a real one.
     previewVisible = false
+    endPreviewHold()
     lockRequested = true
+    displayBlanked = false
     armBlankTimer()
     logEvent("lock-requested")
     queueSessionLock()
+    openWeather()
 
     Qt.callLater(function() {
       root.refreshBackground()
@@ -423,6 +793,63 @@ Item {
     })
 
     return true
+  }
+
+  // Whether a look shows the weather element.
+  function lookShowsWeather(target) {
+    var item = target && target.elements ? target.elements.weather : null
+    return !!item && !item.hidden
+  }
+
+  // A lock or preview opened: fetch the weather now (when its look shows it).
+  function openWeather() {
+    weatherPolledAtMs = 0
+    Qt.callLater(pollWeatherIfDue)
+  }
+
+  function pollWeatherIfDue() {
+    if (weatherWanted && Date.now() - weatherPolledAtMs >= weatherPollMs) pollWeather()
+  }
+
+  function pollWeather() {
+    if (!weatherWanted) return
+    weatherPendingLeft = weatherRetries
+    weatherPolledAtMs = Date.now()
+    requestWeather()
+  }
+
+  // One call. An absent Foamy Weather costs nothing: without a foamy.weather
+  // target in IpcRegistry nothing is called and no process starts.
+  function requestWeather() {
+    weatherRetryTimer.stop()
+    if (IpcResolver.handlersFor(root, "foamy.weather").length === 0) {
+      weatherState = "absent"
+      weatherReport = null
+      return
+    }
+    if (weatherBusy) return
+    weatherBusy = true
+    weatherPolls++
+    weatherPeer.call("foamy.weather", "current", [], function(ok, output) {
+      root.weatherBusy = false
+      root.applyWeatherReply(ok, output)
+    })
+  }
+
+  // A reply ("Function not found." from an older Foamy Weather is not ok):
+  // pending asks again later and keeps what shows; anything else replaces it.
+  function applyWeatherReply(ok, output) {
+    weatherClockMs = Date.now()
+    var parsed = ok ? Model.parseWeather(output, weatherClockMs) : { state: "unavailable", weather: null }
+    weatherState = parsed.state
+    if (parsed.state === "pending") {
+      if (weatherPendingLeft > 0 && weatherWanted) {
+        weatherPendingLeft--
+        weatherRetryTimer.restart()
+      }
+      return
+    }
+    weatherReport = parsed.state === "ok" ? parsed.weather : null
   }
 
   function finishUnlock() {
@@ -446,6 +873,7 @@ Item {
   }
 
   function runWake() {
+    displayBlanked = false
     if (!wakeProcess.running) wakeProcess.running = true
     if (lockRequested) armBlankTimer()
     resumeFingerprint()
@@ -520,6 +948,7 @@ Item {
   }
 
   function runBlank() {
+    displayBlanked = true
     pauseFingerprint()
     if (!blankProcess.running) blankProcess.running = true
   }
@@ -687,8 +1116,26 @@ Item {
 
       LockView {
         id: lockView
+        // Keystrokes arrive at the focused surface; Window.active follows it.
+        readonly property bool surfaceActive: Window.active
+        onSurfaceActiveChanged: root.activeSurfaces = Math.max(0, root.activeSurfaces + (surfaceActive ? 1 : -1))
+        Component.onDestruction: if (surfaceActive) root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
+        look: root.look
+        displayAwake: !root.displayBlanked
+        weather: root.weather
+        primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
+        onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
         anchors.fill: parent
-        backgroundPath: root.lockWallpaperPath
+        // Only a picture (or a video's poster) made for this look; otherwise
+        // the theme colour. A video's poster is not blurred yet.
+        backgroundPath: root.isVideoPicture(root.look)
+          ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "")
+          : !root.pictureWanted ? root.lockWallpaperPath
+          : root.pictureRequestKey === root.lookPictureKey ? root.pictureRenderPath : ""
+        backgroundPrepared: root.pictureWanted
+        // Only the clip made for this look's video and screen.
+        videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
+        onVideoFailed: function(reason) { root.noteVideoFailure(reason) }
         backgroundVersion: root.backgroundVersion
         fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
         fingerprintUnavailable: root.fingerprintUnavailable
@@ -718,17 +1165,31 @@ Item {
 
   PanelWindow {
     id: previewWindow
-    visible: root.previewVisible
+    visible: root.previewVisible || root.previewHolding
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "foamy-lock-preview"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
+    // While holding (closed, keys still swallowed) the pointer goes through.
+    mask: root.previewVisible ? null : previewNoInput
+
+    Region { id: previewNoInput }
 
     LockView {
+      objectName: "previewView"
       anchors.fill: parent
-      backgroundPath: root.lockWallpaperPath
+      visible: root.previewVisible
+      // A preview isn't a lock: it never asks for the password.
+      showUnlockHint: false
+      backgroundPath: root.isVideoPicture(root.pictureLook)
+        ? (root.videoRequestKey === root.previewVideoKey ? root.videoPosterRender : "")
+        : !root.previewPictureKey ? root.lockWallpaperPath
+        : root.pictureRequestKey === root.previewPictureKey ? root.pictureRenderPath : ""
+      backgroundPrepared: root.previewPictureKey !== ""
+      videoPath: root.previewVideoKey !== "" && root.videoRequestKey === root.previewVideoKey ? root.videoClipPath : ""
+      onVideoFailed: function(reason) { root.noteVideoFailure(reason) }
       backgroundVersion: root.backgroundVersion
       fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
       fingerprintUnavailable: root.fingerprintUnavailable
@@ -747,16 +1208,31 @@ Item {
       userDisplayName: root.userDisplayName
       avatarPath: root.userAvatarRenderPath
       avatarVersion: root.userAvatarVersion
+      look: root.previewLook || root.look
+      weather: root.weather
+      primary: true
+      onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
+    }
+
+    // Says what this is: a look on the screen, not a lock.
+    Elements.PreviewBanner {
+      visible: root.previewVisible
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: FoamyStyle.gap * 3
+      maximumWidth: parent.width - FoamyStyle.gap * 4
     }
 
     MouseArea {
       anchors.fill: parent
+      enabled: root.previewVisible
       acceptedButtons: Qt.LeftButton | Qt.RightButton
       onClicked: root.previewVisible = false
     }
 
     // The overlay holds exclusive keyboard focus, so any key closes it too:
     // without a pointer it would otherwise block the keyboard until hidePreview.
+    // While holding, keys are swallowed the same way.
     Item {
       id: previewKeys
       anchors.fill: parent
@@ -765,9 +1241,51 @@ Item {
     }
   }
 
+  FoamyPeerIpc {
+    id: weatherPeer
+    // One call at a time (weatherBusy); the omarchy-shell fallback, for a
+    // target IpcRegistry can't run, is bounded the same way.
+    limit: 1
+  }
+
+  // Every weatherPollMs while a shown look has the weather (the display awake).
+  Timer {
+    interval: root.weatherPollMs
+    repeat: true
+    running: root.weatherWanted
+    onRunningChanged: if (running) Qt.callLater(root.pollWeatherIfDue)
+    onTriggered: root.pollWeather()
+  }
+
+  Timer {
+    id: weatherRetryTimer
+    interval: root.weatherRetryMs
+    onTriggered: if (root.weatherWanted) root.requestWeather()
+  }
+
+  // The three-hour cutoff applies while a report is held, replies or not.
+  Timer {
+    interval: 60000
+    repeat: true
+    running: root.weatherReport !== null
+    onTriggered: root.weatherClockMs = Date.now()
+  }
+
+  // Any key closes the preview; while holding, keys are only swallowed.
   function previewKeyPressed(event) {
     previewVisible = false
     if (event) event.accepted = true
+  }
+
+  function endPreviewHold() {
+    previewHoldTimer.stop()
+    previewHolding = false
+  }
+
+  Timer {
+    id: previewHoldTimer
+    interval: root.previewHoldMs
+    onTriggered: root.previewHolding = false
   }
 
   PamContext {
@@ -924,11 +1442,18 @@ Item {
     id: posterProc
     property string sourcePath: ""
     property string sourceSignature: ""
-    // 4.5 owns this helper and its decoder/cache. 4.0.6 has no helper and
-    // keeps the plain background for videos without importing any new QML API.
-    command: ["timeout", "--kill-after=1s", "16s", "bash", "-c",
-      '[[ -f $1 ]] || exit 69; exec bash "$1" "$2"', "foamy-lock-poster",
-      (root.omarchyPath || Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/shell/plugins/lock/poster.sh", sourcePath]
+    property string request: ""
+    // A video Omarchy wallpaper's still: the poster of the helper's
+    // video-probe (the same sandboxed probe and cache as a picture source's
+    // video), never a decoder outside the sandbox. Its own limit is 60 s.
+    command: ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
     stdout: StdioCollector { id: posterOutput; waitForEnd: true }
     onExited: function(exitCode, exitStatus) {
       // A theme can change during extraction; never show the previous theme's frame.
@@ -936,13 +1461,13 @@ Item {
         root.refreshPoster()
         return
       }
-      var path = String(posterOutput.text || "").trim()
-      if (exitCode === 0 && exitStatus === 0 && path[0] === "/" && !Model.isVideoPath(path)) {
-        root.videoPosterPath = path
+      var result = Model.videoProbeResult(exitCode === 0 && exitStatus === 0 ? posterOutput.text : "", root.videoCacheDirectory)
+      if (result.ok && result.poster) {
+        root.videoPosterPath = result.poster
         root.wallpaperError = ""
       } else {
         root.videoPosterPath = ""
-        root.wallpaperError = exitCode === 69 ? "video-poster-unavailable" : "video-poster-failed"
+        root.wallpaperError = FoamyNative.unavailable(exitCode) ? "video-poster-unavailable" : "video-poster-failed"
       }
     }
   }
@@ -971,6 +1496,63 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyAccountsIdentity(text)
+    }
+  }
+
+  Process {
+    id: pictureProc
+    property string request: ""
+    // The helper's own job limit is 9 s.
+    command: ["timeout", "--kill-after=1s", "12s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: pictureOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (FoamyNative.unavailable(exitCode)) {
+        root.pictureHelperUnavailable = true
+        root.applyPictureResult('{"ok":false,"error":"helper-unavailable"}')
+      } else {
+        root.applyPictureResult(pictureOutput.text)
+      }
+      if (root.picturePending) {
+        root.picturePending = false
+        root.refreshPicture()
+      }
+    }
+  }
+
+  Process {
+    id: videoProc
+    property string request: ""
+    // The helper's own job limit is 60 s (hashing up to 2 GiB, ffprobe and
+    // the poster, each in its sandbox).
+    command: ["timeout", "--kill-after=1s", "65s"].concat(FoamyNative.command(
+      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"]))
+    clearEnvironment: true
+    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    onStarted: {
+      write(request + "\n")
+      stdinEnabled = false
+    }
+    stdout: StdioCollector { id: videoOutput; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (FoamyNative.unavailable(exitCode)) {
+        root.videoHelperUnavailable = true
+        root.applyVideoResult('{"ok":false,"error":"helper-unavailable"}', videoProc.request)
+      } else {
+        root.applyVideoResult(videoOutput.text, videoProc.request)
+      }
+      if (root.videoPending) {
+        root.videoPending = false
+        root.refreshVideo()
+      }
     }
   }
 
@@ -1110,6 +1692,8 @@ Item {
       }
       root.knownScreenCount = screens
       root.requestSessionLock()
+      root.refreshPicture()
+      root.refreshVideoScreens()
 
       // A monitor still coming up has no workspace, so cannot answer yet.
       strandedLockRetryTimer.rearm()
@@ -1133,6 +1717,7 @@ Item {
     onLoaded: root.applyConfiguration(text())
     onFileChanged: reload()
     onLoadFailed: {
+      root.entryState = "unreadable"
       root.configError = "Cannot read " + root.configPath
       console.warn("foamy.lock: " + root.configError + "; keeping previous settings")
     }
@@ -1173,6 +1758,21 @@ Item {
     return JSON.stringify({
       settings: root.settings,
       configError: root.configError,
+      preset: root.look.preset,
+      look: root.look,
+      lookError: root.lookError,
+      layoutError: root.layoutError,
+      fallbackPreset: root.fallbackPreset,
+      activeSurfaces: root.activeSurfaces,
+      previewPreset: root.previewLook ? root.previewLook.preset : "",
+      // User presets: their ids and names, the items skipped, the link.
+      userPresets: root.userPresets.map(function(preset) { return { id: preset.id, name: preset.name } }),
+      userPresetsInvalid: root.userPresetsInvalid,
+      userPresetsError: root.userPresetsError,
+      userPreset: root.userPresetLink,
+      // Never the place name: status is readable by any local process.
+      weather: { state: root.weatherState, shown: root.weather !== null, polls: root.weatherPolls,
+        updatedAt: root.weatherReport ? new Date(root.weatherReport.updatedAtMs).toISOString() : "" },
       locked: root.currentlyLocked(),
       requested: root.lockRequested,
       pending: root.pendingSessionLock,
@@ -1183,6 +1783,7 @@ Item {
       fingerprint: root.fingerprintConfigured,
       fingerprintUnavailable: root.fingerprintUnavailable,
       fingerprintPaused: root.fingerprintPaused,
+      displayBlanked: root.displayBlanked,
       authenticating: root.authenticating,
       wallpaperError: root.wallpaperError,
       artworkState: artwork.state,
@@ -1192,6 +1793,12 @@ Item {
       avatarPath: root.userAvatarPath,
       avatarRenderPath: root.userAvatarRenderPath,
       avatarError: root.avatarError,
+      pictureError: root.pictureError,
+      picturePath: root.pictureRenderPath,
+      // A video background: the probe's poster and clip ("" without), why
+      // not, and the last view to give up on the clip ("error", "stall").
+      video: { poster: root.videoPosterRender, clip: root.videoClipPath, error: root.videoError,
+        failure: root.videoFailure, request: root.videoRequestKey ? JSON.parse(root.videoRequestKey) : null },
       conflict: reasons.length > 0,
       conflictReasons: reasons,
       ipcFastPath: IpcResolver.fastPath(root),
@@ -1229,15 +1836,20 @@ Item {
     }
 
     function preview(): string {
+      // Like previewLook and previewPreset: no overlay over a real lock.
+      if (root.currentlyLocked()) return "locked"
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
+      root.previewLook = null
       root.previewVisible = true
+      root.openWeather()
       return "ok"
     }
 
     function hidePreview(): string {
       root.previewVisible = false
+      root.previewLook = null
       return "ok"
     }
   }
@@ -1254,10 +1866,197 @@ Item {
   // A target only this plugin uses, so its status (and the conflict flag)
   // stays reachable even if another lock service answers "lock".
   FoamyIpc {
+    id: foamyLockIpc
     target: "foamy.lock"
 
     function status(): string {
       return root.statusJson()
+    }
+
+    // The preview overlay with a built-in preset instead of the saved look.
+    // Nothing is saved; `lock preview` and hidePreview go back to the look.
+    // Like the rest of IPC, nothing here can unlock.
+    // Everything an editor needs to offer choices without hard-coding them:
+    // elements, zones, styles, the element keys and their limits, presets (with
+    // their looks and thumbnails), background sources and the saved look.
+    // Read-only. Version 2 added elementLimits (scale, opacity, offset, glass,
+    // screens; see Layout.elementLimits). Version 3 added the weather element,
+    // the new date and calendar styles, each element's own keys
+    // (elementKeysFor; their values and defaults in elementLimits.*.options),
+    // statusItems, and weather: whether Foamy Weather answers here
+    // (`target`: a foamy.weather target is registered; `state`: the last
+    // answer's, see weatherState). Version 4 added shapes (background.shapes):
+    // shapeKinds, shapeLimits (Layout.shapeCatalog: keys, limits, defaults
+    // and the values each key takes) and templates (each template's shapes);
+    // backgroundDecor stays for older clients (a look may still say decor).
+    function catalog(): string {
+      var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
+      var presets = []
+      for (var i = 0; i < Layout.SELECTABLE_PRESETS.length; i++) {
+        var name = Layout.SELECTABLE_PRESETS[i]
+        presets.push({ name: name, look: Layout.preset(name), thumbnail: dir + "/previews/presets/" + name + ".png" })
+      }
+      var keysFor = {}
+      for (var e = 0; e < Layout.ELEMENTS.length; e++) keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
+      return JSON.stringify({ version: 4, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
+        elementKeysFor: keysFor, statusItems: Layout.STATUS_ITEMS,
+        weather: { target: IpcResolver.handlersFor(root, "foamy.weather").length > 0, state: root.weatherState },
+        elementLimits: Layout.elementLimits(), screens: Layout.SCREENS,
+        zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
+        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundAnimations: Layout.DRAWN_SOURCES,
+        backgroundColors: Layout.THEME_COLORS, backgroundDecor: Layout.DECORATIONS,
+        shapeKinds: Layout.SHAPE_KINDS, shapeLimits: Layout.shapeCatalog(), templates: Layout.templates(),
+        glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
+        // Cover art (additive): the settings' mode (Model.coverArtMode:
+        // off, player, spotify or custom) and what setCoverArt takes.
+        coverArt: Model.coverArtMode(root.settings), coverArtModes: Model.COVER_ART_MODES,
+        // Video backgrounds: background.motion and its defaults (additive).
+        backgroundMotions: Layout.MOTIONS, backgroundDefaults: Layout.BACKGROUND_DEFAULTS,
+        look: root.look, lookError: root.lookError,
+        // User presets (R2-2): newest first, the items skipped, the link
+        // and the limits of savePreset.
+        userPresets: root.catalogUserPresets(dir), userPresetsInvalid: root.userPresetsInvalid,
+        userPresetsError: root.userPresetsError, userPreset: root.userPresetLink,
+        userPresetLimits: { count: Layout.USER_PRESET_LIMIT, bytes: Layout.USER_PRESETS_BYTES,
+          name: Layout.USER_PRESET_NAME_LENGTH } })
+    }
+
+    // The preview overlay with an unsaved look: a JSON object with the same
+    // keys as the foamy.lock entry (preset, layout, background, glass),
+    // validated by the same rules. Nothing is saved; nothing can unlock.
+    function previewLook(look: string): string {
+      var entry = null
+      var text = String(look || "")
+      var big = Layout.ipcArgumentError(text)
+      if (big) return "invalid: " + big
+      try { entry = JSON.parse(text) } catch (error) { return "invalid-json" }
+      var parsed = Layout.parseLook(entry)
+      if (!parsed.valid) return "invalid: " + parsed.error
+      if (root.currentlyLocked()) return "locked"
+      root.refreshBackground()
+      root.refreshFingerprintStatus()
+      root.refreshUserIdentity()
+      root.previewLook = parsed.look
+      root.previewVisible = true
+      root.openWeather()
+      return "ok"
+    }
+
+    // Save a look from an editor: the foamy.lock entry's look keys (preset,
+    // layout, background, glass) and `userPreset` (the user preset it came
+    // from), validated like shell.json. They replace the entry's look keys
+    // (omitted ones are removed, so a reset drops its overrides, and a look
+    // saved without `userPreset` drops the link); every other setting in the
+    // entry is kept. Written through Omarchy's own updateEntryInline
+    // (FileView atomicWrites: a symlinked shell.json stays a symlink), so
+    // the change comes back through the normal config watch. "write-failed"
+    // when Omarchy would skip the write (shell.json unreadable). Nothing here
+    // can unlock.
+    function saveLook(look: string): string {
+      var keys = ["preset", "layout", "background", "glass", "userPreset"]
+      var request = null
+      var text = String(look || "")
+      var big = Layout.ipcArgumentError(text)
+      if (big) return "invalid: " + big
+      try { request = JSON.parse(text) } catch (error) { return "invalid-json" }
+      if (!request || typeof request !== "object" || Array.isArray(request)) return "invalid: expected an object"
+      for (var key in request)
+        if (keys.indexOf(key) === -1) return "invalid: unknown key " + key
+      var parsed = Layout.parseLook(request)
+      if (!parsed.valid) return "invalid: " + parsed.error
+      if (request.userPreset !== undefined && Layout.userPresetIdError(request.userPreset))
+        return "invalid: userPreset must be a user preset's id"
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var next = {}
+      for (var existing in base)
+        if (existing !== "id" && keys.indexOf(existing) === -1) next[existing] = base[existing]
+      for (var i = 0; i < keys.length; i++)
+        if (request[keys[i]] !== undefined) next[keys[i]] = request[keys[i]]
+      return root.writeEntry(next)
+    }
+
+    // A built-in preset by name, or a user preset as `user:<id>`.
+    function previewPreset(name: string): string {
+      var user = String(name).indexOf("user:") === 0 ? Layout.findUserPreset(root.userPresets, String(name).slice(5)) : null
+      if (!user && Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return "unknown-preset"
+      if (root.currentlyLocked()) return "locked"
+      root.refreshBackground()
+      root.refreshFingerprintStatus()
+      root.refreshUserIdentity()
+      root.previewLook = user ? user.effective : Layout.preset(name)
+      root.previewVisible = true
+      root.openWeather()
+      return "ok"
+    }
+
+    // User presets (Layout.js, "user presets"), one item per call, merged
+    // into the entry as last read: the list itself never crosses IPC (an
+    // argument is at most 64 KiB). The replies are saveLook's (ok,
+    // unchanged, invalid-json, invalid: …, locked, unsupported, no-entry,
+    // write-failed) plus full (50 presets), too-large (256 KiB of presets)
+    // and unknown-preset (renamePreset). Nothing here can unlock.
+
+    // `preset`: { id, name, look }, `look` with the look keys saveLook takes
+    // but `userPreset`. The id is the caller's own, so a retry is the same
+    // save ("unchanged" once the first landed). A known id is updated where
+    // it is; a new one goes first.
+    function savePreset(preset: string): string {
+      var item = null
+      var text = String(preset || "")
+      var big = Layout.ipcArgumentError(text)
+      if (big) return "invalid: " + big
+      try { item = JSON.parse(text) } catch (error) { return "invalid-json" }
+      var problem = Layout.userPresetError(item)
+      if (problem) return "invalid: " + problem
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var change = Layout.savingPreset(base, item)
+      return change.error || root.writeEntry(change.entry)
+    }
+
+    function renamePreset(presetId: string, name: string): string {
+      var problem = Layout.userPresetIdError(presetId) || Layout.userPresetNameError(name)
+      if (problem) return "invalid: " + problem
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var change = Layout.renamingPreset(base, presetId, name)
+      return change.error || root.writeEntry(change.entry)
+    }
+
+    // Cover art (Lock Studio's choice): `mode` is "off", "player" or
+    // "spotify" (Model.coverArtSettings), and nothing else; it sets the
+    // entry's showArtwork and artworkHosts to that fixed pair (a host never
+    // comes from the caller) and keeps every other key. The replies are
+    // saveLook's. Downloads stay in the helper, with its checks. Nothing
+    // here can unlock.
+    function setCoverArt(mode: string): string {
+      var change = Model.coverArtSettings(String(mode))
+      if (!change || String(mode) !== mode) return "invalid: mode must be one of " + Model.COVER_ART_MODES.join(", ")
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var next = {}
+      for (var key in base)
+        if (key !== "id") next[key] = base[key]
+      next.showArtwork = change.showArtwork
+      next.artworkHosts = change.artworkHosts.slice()
+      return root.writeEntry(next)
+    }
+
+    // An id that isn't there answers "unchanged"; the saved look keeps
+    // working, without its link.
+    function deletePreset(presetId: string): string {
+      var problem = Layout.userPresetIdError(presetId)
+      if (problem) return "invalid: " + problem
+      if (root.currentlyLocked()) return "locked"
+      var base = root.writableEntry()
+      if (typeof base === "string") return base
+      var change = Layout.deletingPreset(base, presetId)
+      return change.error || root.writeEntry(change.entry)
     }
   }
 }

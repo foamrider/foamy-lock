@@ -1,88 +1,12 @@
-"""Render LockView with synthetic identity, media, power, and network data only.
-
-Usage: tests/render.py [--language CODE] [--host 4.5|4.0|both]
-
-Hermetic: a temporary HOME and XDG config, English unless --language picks
-another Omarchy language code (e.g. `no`), whatever the desktop uses. The host
-is Omarchy 4.5 (tests/hosts.py). FOAMY_RENDER_OUT keeps a copy of the captures."""
-import argparse
-import os
-import re
-import signal
-import sys
-from pathlib import Path
-import shutil
-import subprocess
-import tempfile
-import struct
-import importlib.util
-
-source = Path(__file__).resolve().parents[1]
-
-
-def load(name):
-    spec = importlib.util.spec_from_file_location(name, source / 'tests' / f'{name}.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-# Fixture images (the helper itself is tested in artwork_test.py).
-artwork = load('png_fixture')
-hosts = load('hosts')
-parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-parser.add_argument('--language', default='en', help='Omarchy language code (default en)')
-parser.add_argument('--host', default='4.5', choices=hosts.CHOICES)
-args = parser.parse_args()
-if not re.fullmatch(r'[a-z]{2,3}(-[A-Za-z]{2})?', args.language):
-    parser.error(f'not a language code: {args.language!r}')
-host_name, host_shell = hosts.current(__file__, args.host, sys.argv[1:])
-base = Path(tempfile.mkdtemp(prefix='foamy-lock-render-'))
-app = base / 'app'
-app.mkdir()
-# The view receives only a generated thumbnail, exactly as in production.
-pixels = bytes(channel for y in range(256) for x in range(256)
-               for channel in (30 + x // 3, 70 + y // 2, 130 + x // 4))
-(app / 'artwork.png').write_bytes(artwork.encode_png(pixels))
-(app / 'Commons').symlink_to(host_shell / 'Commons', target_is_directory=True)
-# The plugin's stamped kit (FoamyI18n, FoamyStyle) and catalogs, unmodified.
-(app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
-(app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
-(app / 'qmldir').write_text('')
-shutil.copy(source / 'Model.js', app)
-view = (source / 'LockView.qml').read_text()
-view = view.replace('import Quickshell.Networking', 'import "fixtures" as Fixture').replace('import Quickshell.Services.UPower\n', '')
-view = view.replace('Networking.', 'Fixture.Networking.').replace('NetworkConnectivity.', 'Fixture.Networking.').replace('DeviceType.', 'Fixture.Networking.')
-view = view.replace('UPower.', 'Fixture.Power.').replace('UPowerDeviceState.', 'Fixture.Power.')
-view = view.replace('lockClock.date', 'new Date(2026, 8, 26, 10, 24)')
-(app / 'LockView.qml').write_text(view)
-fixtures = app / 'fixtures'
-fixtures.mkdir()
-(fixtures / 'qmldir').write_text('module Fixture\nsingleton Networking 1.0 Networking.qml\nsingleton Power 1.0 Power.qml\n')
-(fixtures / 'Networking.qml').write_text('''pragma Singleton
+// Render shell: the real LockView with synthetic data, stepped through wide,
+// narrow, failure, busy, fallback and right-to-left states; each state is
+// captured to capture-N.png. Written into a temporary app by the harness.
 import QtQuick
-QtObject {
-  enum State { Full, Portal, Limited, None, Wired }
-  property int connectivity: Networking.Full
-  property var devices: ({values: []})
-}
-''')
-(fixtures / 'Power.qml').write_text('''pragma Singleton
-import QtQuick
-QtObject {
-  enum State { Charging, FullyCharged, PendingCharge }
-  property bool onBattery: true
-  property var displayDevice: ({ready: true, isPresent: true, isLaptopBattery: true, percentage: 0.82, state: 0})
-}
-''')
-# This neutral vector wallpaper is test data, not the user's wallpaper.
-(app / 'wallpaper.svg').write_text('''<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-<defs><linearGradient id="g" x2="0.9" y2="1"><stop stop-color="#15394f"/><stop offset=".6" stop-color="#24405a"/><stop offset="1" stop-color="#171e3d"/></linearGradient><linearGradient id="w"><stop stop-color="#367782"/><stop offset="1" stop-color="#273356"/></linearGradient></defs>
-<path fill="url(#g)" d="M0 0h1920v1080H0z"/><path fill="url(#w)" opacity=".5" d="M0 640C500 300 700 950 1250 500S1760 250 1920 350v730H0z"/><path fill="#49717f" opacity=".18" d="M0 880C550 410 900 1150 1450 760s400-260 470-250v570H0z"/>
-</svg>''')
-(app / 'shell.qml').write_text('''import QtQuick
 import Quickshell
 import "fixtures" as Fixture
+import "elements" as Elements
+import "kit"
+import "Layout.js" as Layout
 ShellRoot {
   FloatingWindow {
     id: window
@@ -102,6 +26,17 @@ ShellRoot {
       onPasswordTextEdited: function(value) { passwordText = value }
       onClearFailureRequested: failureMessage = ""
     }
+    // The preview overlay's banner (Service.qml), shown over the last state.
+    Elements.PreviewBanner {
+      id: banner
+      parent: view
+      z: 100
+      visible: false
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: FoamyStyle.gap * 3
+      maximumWidth: view.width - FoamyStyle.gap * 4
+    }
     QtObject {
       id: player
       property string trackTitle: "Evening Light"
@@ -117,6 +52,55 @@ ShellRoot {
       function previous() { actions++ }
       function next() { actions++ }
       function togglePlaying() { actions++ }
+    }
+    // Every animation's still frame (the software renderer paints it once,
+    // with no shader): the backdrop alone, each twice (the second after
+    // switching away and back) for render.rs to compare byte for byte.
+    Timer {
+      id: stills
+      property int index: -1
+      readonly property int count: Layout.DRAWN_SOURCES.length
+      interval: 600
+      repeat: false
+      function next() {
+        index++
+        if (index >= 2 * count) {
+          console.log("PASS: every animation's still frame: " + Layout.DRAWN_SOURCES.join(", "))
+          Qt.quit()
+          return
+        }
+        view.width = 1920; view.height = 1080
+        view.rightToLeft = false
+        view.passwordText = ""
+        // The second pass comes back to each from another animation.
+        if (index >= count) view.look = Layout.parseLook({ preset: "foamy", background: { source: Layout.DRAWN_SOURCES[(index + 1) % count] } }).look
+        view.look = Layout.parseLook({ preset: "foamy", background: { source: Layout.DRAWN_SOURCES[index % count] } }).look
+        restart()
+      }
+      onTriggered: {
+        var name = Layout.DRAWN_SOURCES[index % count]
+        function findNamed(item, objectName) {
+          if (item.objectName === objectName) return item
+          for (var i = 0; i < item.children.length; i++) {
+            var found = findNamed(item.children[i], objectName)
+            if (found) return found
+          }
+          return null
+        }
+        var backdrop = findNamed(view, "backdrop")
+        var painted = findNamed(backdrop, "backdropStill")
+        var shader = findNamed(backdrop, "backdropShader")
+        if (!backdrop.visible || backdrop.source !== name || backdrop.moving || backdrop.phase !== backdrop.stillPhase
+            || !painted || painted.status !== Loader.Ready || !shader || shader.active)
+          throw new Error("The " + name + " still frame isn't painted: " + JSON.stringify([backdrop.visible, backdrop.source,
+            backdrop.moving, backdrop.phase, backdrop.stillPhase, painted && painted.status, shader && shader.active]))
+        var file = "capture-animation-" + name + (index >= count ? "-again" : "") + ".png"
+        if (!backdrop.grabToImage(function(shot) {
+          if (!shot.saveToFile(Qt.resolvedUrl(file).toString().replace("file://", "")))
+            throw new Error("Screenshot save failed")
+          stills.next()
+        })) throw new Error("Screenshot capture failed")
+      }
     }
     Timer {
       id: step
@@ -168,6 +152,11 @@ ShellRoot {
             if (clipper.clip && (inside.x < 0 || inside.y < 0 || inside.x + hint.width > clipper.width || inside.y + hint.height > clipper.height))
               throw new Error("Unlock hint is clipped by " + clipper + ": " + hintText.text)
           }
+          // The preview overlay turns it off (it isn't a lock).
+          view.showUnlockHint = false
+          if (hint.visible) throw new Error("showUnlockHint: false leaves the unlock hint")
+          view.showUnlockHint = true
+          if (!hint.visible) throw new Error("the unlock hint didn't come back")
         }
         if (!view.grabToImage(function(result) {
           if (!result.saveToFile(Qt.resolvedUrl("capture-" + step.index + ".png").toString().replace("file://", "")))
@@ -237,7 +226,25 @@ ShellRoot {
             if (end.x > field.width / 2) throw new Error("Submit arrow should sit at the leading (left) edge in right-to-left")
             console.log("PASS: right-to-left mirroring with fixed transport order")
             console.log("PASS: wide/narrow artwork, empty/error icon fallback, media action, password focus/binding, failure, busy, hidden identity, no media/battery")
-            Qt.quit()
+            // The preview banner reads in the shell's language: its title whole
+            // on one line, the hint drawn, both inside the screen.
+            banner.visible = true
+            var title = banner.title, bannerHint = banner.hint
+            if (title.text === "" || title.text !== FoamyI18n.t("Preview") || bannerHint.text === "")
+              throw new Error("The preview banner has no text: " + JSON.stringify([title.text, bannerHint.text]))
+            if (title.truncated || !(title.paintedWidth > 0) || title.width < Math.ceil(title.implicitWidth) - 1
+                || bannerHint.truncated || !(bannerHint.paintedWidth > 0) || !(bannerHint.width > 0))
+              throw new Error("The preview banner's text isn't drawn: " + JSON.stringify([banner.width, title.width, title.implicitWidth, title.paintedWidth, bannerHint.width]))
+            var bannerAt = banner.mapToItem(view, 0, 0)
+            if (bannerAt.x < 0 || bannerAt.x + banner.width > view.width || banner.height < title.height + bannerHint.height)
+              throw new Error("The preview banner doesn't fit: " + bannerAt.x + " " + banner.width + "x" + banner.height)
+            if (!view.grabToImage(function(shot) {
+              if (!shot.saveToFile(Qt.resolvedUrl("capture-banner.png").toString().replace("file://", "")))
+                throw new Error("Screenshot save failed")
+              console.log("PASS: preview banner reads " + JSON.stringify(title.text) + " " + JSON.stringify(bannerHint.text))
+              banner.visible = false
+              stills.next()
+            })) throw new Error("Screenshot capture failed")
             return
           }
           step.restart()
@@ -246,50 +253,3 @@ ShellRoot {
     }
   }
 }
-''')
-runtime = base / 'runtime'
-runtime.mkdir(mode=0o700)
-home = base / 'home'
-home.mkdir()
-# Register generated view types beside the explicit singleton in this fixture.
-with (app / 'qmldir').open('a') as registry:
-    for qml in app.glob('*.qml'):
-        if qml.name[0].isupper() and qml.name != 'FoamyI18n.qml':
-            registry.write(f'{qml.stem} 1.0 {qml.name}\n')
-
-# The language comes from this temporary config only, never the desktop's.
-language_file = home / '.config/omarchy/language'
-language_file.parent.mkdir(parents=True)
-language_file.write_text(args.language + '\n')
-env = hosts.hermetic(os.environ, home, runtime, language_file)
-# OMARCHY_PATH is the host tree: Commons reads its language catalogs there.
-env.update(OMARCHY_PATH=str(host_shell.parent), QT_QPA_PLATFORM='offscreen',
-           QT_QUICK_BACKEND='software', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion', LANG='en_US.UTF-8', LC_ALL='en_US.UTF-8', LC_TIME='en_US.UTF-8')
-log_path = base / 'render.log'
-with log_path.open('w') as log:
-    process = subprocess.Popen(['dbus-run-session', '--', 'quickshell', '-p', str(app), '--no-color'],
-                               env=env, stdout=log, stderr=log, start_new_session=True)
-    try:
-        process.wait(timeout=15)
-    except subprocess.TimeoutExpired:
-        print(log_path.read_text())
-        raise
-    finally:
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
-            process.wait(timeout=3)
-output = log_path.read_text()
-print(output)
-assert process.returncode == 0 and 'PASS:' in output, output
-for i, size in enumerate([(1920, 1080), (800, 1000), (1280, 720), (1280, 720), (1920, 1080), (800, 1000), (1920, 1080), (800, 1000), (1920, 1080)]):
-    image = (app / f'capture-{i}.png').read_bytes()
-    assert struct.unpack('>II', image[16:24]) == size
-print(f'Renders ({host_name} {host_shell}, language {args.language}):', app)
-# Optional: keep the captures (screenshots for review).
-if os.environ.get('FOAMY_RENDER_OUT'):
-    out = Path(os.environ['FOAMY_RENDER_OUT'])
-    if args.host == 'both':
-        out = out / host_name
-    out.mkdir(parents=True, exist_ok=True)
-    for capture in app.glob('capture-*.png'):
-        shutil.copy(capture, out / capture.name)

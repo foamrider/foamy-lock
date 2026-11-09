@@ -5,7 +5,7 @@
 crate native
 binary foamy-lock-helper
 toolchain 1.99.1
-kit 0.5.2
-source 253ea3ba614e4b25e242a0f1ebff5f8a74f21f71393e04315092de5df2bcb9e8
-eccaddcc84105d00420072c23051fc880c2b1e3530432c2f77fed65032ce394a  bin/aarch64/foamy-lock-helper
-cd57b67596038da19fe205bffb63fc4f4c148f7f21826774a4496fefedcac4b5  bin/x86_64/foamy-lock-helper
+kit 0.6.0
+source 0fe9e1a0e3c644e1571fe900a330f30b051716a9cab69940e9277ec203f93fc7
+261822cb4af574e3cc5d90e8a358105b126754f8deaa3f2bfdccb6c07abd1a66  bin/aarch64/foamy-lock-helper
+4591d0554f561196f44ac2e7f3c81fd41b71141cb33605e21c88416ad265864a  bin/x86_64/foamy-lock-helper

@@ -1,0 +1,668 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import qs.Commons as Commons
+import "kit"
+import "Layout.js" as Layout
+import "Draft.js" as Draft
+
+// The live canvas: the real lock screen (SampleView) at the chosen screen's
+// logical size, scaled to fit, with the editor drawn over it: zones, the
+// selection and its handles, snap guides and problem outlines.
+//
+// Editing: drag a module to move it (snapping; Shift held is free, Alt
+// holds the axis it started along), drag a corner to scale it, or use the
+// keyboard (see keyPressed). Mid-drag the module moves by an offset in its
+// own zone; the drop picks the zone (Draft.drop) and emits `edited` once.
+// Shift and Alt are read from key presses and releases as well as from the
+// pointer, so pressing one mid-drag takes effect without moving.
+//
+// A click on the canvas beside the lock image (the letterbox around it)
+// asks to clear the selection (deselectRequested); the window then shows
+// the look as a whole. Esc does the same (StudioWindow.appKey).
+//
+// Shapes are the lock's own drawing. A click on one where no module is
+// selects it (shapeSelectRequested); the selected shape is outlined, with
+// what it wraps (its zones' cells, or its modules' outlines). Delete
+// removes it. No handles: a shape's size comes from what it wraps.
+FocusScope {
+  id: canvas
+
+  property var draft: ({ preset: Layout.DEFAULT_PRESET })
+  property string selected: ""
+  // The shape selected on the shapes page (-1: none).
+  property int selectedShape: -1
+  property int screenWidth: 1920
+  property int screenHeight: 1080
+  // "idle", "typing", "wrong" or "noMedia".
+  property string previewState: "idle"
+  property bool showZones: true
+  property bool snapping: true
+  // The window can be seen: the background loads only then.
+  property bool awake: true
+  // Drawn backgrounds move (and the "system" status reads /proc) only
+  // while this is true too (StudioWindow.moving).
+  property bool moving: true
+  // Modules to outline as a problem on this screen.
+  property var problemNames: []
+  // Accessible description of the selection (the window words it).
+  property string selectionText: ""
+  // The background the view shows (LockSources), and the lock's settings.
+  property string backgroundPath: ""
+  property bool backgroundPrepared: false
+  property int backgroundVersion: 0
+  property var lockSettings: ({ timeFormat: "24h", showUserInfo: true, showMedia: true })
+  // Dropping a module from the canvas on this item (the library) hides it.
+  property Item hideArea: null
+
+  signal edited(var draft)
+  signal selectRequested(string name)
+  signal shapeSelectRequested(int index)
+  signal deselectRequested()
+
+  readonly property var look: Draft.lookOf(draft)
+  // The look while a drag or resize is shown; null otherwise.
+  property var liveLook: null
+  // { mode: "move" | "resize", name, start, … } while one runs.
+  property var gesture: null
+  property bool shiftHeld: false
+  property bool altHeld: false
+  readonly property bool rightToLeft: view.rightToLeft
+  readonly property real zoom: Math.max(0.01, Math.min((stageArea.width - 2) / screenWidth, (stageArea.height - 2) / screenHeight))
+  readonly property alias view: view
+  readonly property var rects: view.elementRects
+  readonly property var selectedRect: selected && rects[selected] ? rects[selected] : null
+  // The selected shape as drawn (Layout.shapeRects), or null.
+  readonly property var shapeRect: {
+    var all = view.shapeGeometry
+    for (var i = 0; i < all.length; i++) if (all[i].index === selectedShape) return all[i]
+    return null
+  }
+  // What it wraps: the shown modules, and the zones of a zone shape.
+  readonly property var shapeModules: shapeRect ? shapeRect.wraps || [] : []
+  readonly property var shapeZones: {
+    var shape = (look.background.shapes || [])[selectedShape]
+    return shape && shape.wrap && shape.wrap.zones ? shape.wrap.zones : []
+  }
+  // A module dragged from the canvas is over the library: a drop hides it.
+  readonly property bool hiding: gesture !== null && gesture.overHide === true
+  // The lock image in the canvas's own coordinates.
+  readonly property rect stageRect: Qt.rect(stage.x + stageArea.x, stage.y + stageArea.y, stage.width, stage.height)
+
+  activeFocusOnTab: true
+  Accessible.role: Accessible.Graphic
+  Accessible.name: FoamyI18n.t("studio.canvas")
+  Accessible.description: selectionText
+
+  Keys.onPressed: function(event) { if (canvas.keyPressed(event.key, event.modifiers)) event.accepted = true }
+  Keys.onReleased: function(event) { if (canvas.keyReleased(event.key, event.modifiers)) event.accepted = true }
+  onActiveFocusChanged: if (!activeFocus) { shiftHeld = false; altHeld = false }
+
+  function geometry() {
+    return { width: screenWidth, height: screenHeight, margin: Math.round(4 * view.uiScale), rightToLeft: rightToLeft }
+  }
+
+  // The topmost module under a point in view pixels: the selected one when
+  // it's there, else the smallest.
+  function hit(x, y) {
+    var best = "", area = Infinity
+    for (var name in rects) {
+      var r = rects[name]
+      if (x < r.x || y < r.y || x > r.x + r.width || y > r.y + r.height) continue
+      if (name === selected) return name
+      if (r.width * r.height < area) {
+        best = name
+        area = r.width * r.height
+      }
+    }
+    return best
+  }
+
+  // Where `name` would sit in each zone it may use, measured on the probe
+  // view with the lock's own placement code.
+  function measureAnchors(name) {
+    var zones = Draft.zonesFor(name)
+    var anchors = []
+    for (var i = 0; i < zones.length; i++) {
+      probe.look = Draft.probeLook(look, name, zones[i])
+      var r = probe.drawnRect(name)
+      anchors.push({ zone: zones[i], x: r.x, y: r.y, width: r.width, height: r.height })
+    }
+    return anchors
+  }
+
+  function snapInput(g) {
+    var geo = geometry()
+    return { name: g.name, width: geo.width, height: geo.height, margin: geo.margin, rightToLeft: geo.rightToLeft,
+      start: g.start, delta: g.delta, axis: altHeld ? g.axis : "", snapping: snapping && !shiftHeld,
+      radius: Draft.snapRadius(zoom), anchors: g.anchors, others: g.others }
+  }
+
+  // The shape drawn at a point in view pixels (the last drawn on top), or
+  // -1: inside a box or panel, or on a frame's band (between the screen's
+  // edge and a little inside its line).
+  function shapeHit(x, y) {
+    var all = view.shapeGeometry
+    for (var i = all.length - 1; i >= 0; i--) {
+      var s = all[i]
+      var inside = x >= s.x && y >= s.y && x <= s.x + s.width && y <= s.y + s.height
+      if (s.kind !== "frame" && inside) return s.index
+      var reach = s.inset + Math.round(16 * view.uiScale)
+      if (s.kind === "frame" && (x < reach || y < reach || x > view.width - reach || y > view.height - reach)) return s.index
+    }
+    return -1
+  }
+
+  // A tap on the lock at (x, y) in view pixels: the module there, else the
+  // shape there.
+  function tapAt(x, y) {
+    var name = hit(x, y)
+    if (name) return selectRequested(name)
+    var shape = shapeHit(x, y)
+    if (shape !== -1) shapeSelectRequested(shape)
+    else selectRequested("")
+  }
+
+  // Start moving `name` (the pointer pressed on it, or a test).
+  function beginMove(name) {
+    if (!rects[name]) return false
+    cancelGesture()
+    selectRequested(name)
+    forceActiveFocus(Qt.MouseFocusReason)
+    var anchors = measureAnchors(name)
+    var zone = look.elements[name].zone
+    var current = null
+    for (var i = 0; i < anchors.length; i++) if (anchors[i].zone === zone) current = anchors[i]
+    if (!current) return false
+    var others = []
+    for (var other in rects) if (other !== name) others.push(rects[other])
+    gesture = { mode: "move", name: name, start: view.drawnRect(name), anchors: anchors, current: current,
+      others: others, axis: "", delta: { x: 0, y: 0 }, result: null }
+    updateGesture()
+    return true
+  }
+
+  // Start placing `name` from the library (shown or not) with the pointer
+  // at `point` (view pixels): it follows the pointer with the canvas's
+  // snapping, and the drop shows it there (finishGesture).
+  function beginInsert(name, point) {
+    if (!look.elements[name]) return false
+    cancelGesture()
+    selectRequested(name)
+    var anchors = measureAnchors(name)
+    var zone = look.elements[name].zone
+    var current = null
+    for (var i = 0; i < anchors.length; i++) if (anchors[i].zone === zone) current = anchors[i]
+    if (!current) current = anchors[0]
+    if (!current) return false
+    var others = []
+    for (var other in rects) if (other !== name) others.push(rects[other])
+    var start = { x: current.x, y: current.y, width: current.width, height: current.height }
+    gesture = { mode: "move", insert: true, name: name, base: Draft.probeLook(look, name, current.zone), start: start,
+      origin: { x: start.x + start.width / 2, y: start.y + start.height / 2 }, anchors: anchors, current: current,
+      others: others, axis: "", delta: { x: 0, y: 0 }, result: null }
+    moveInsert(point)
+    return true
+  }
+
+  // The pointer, dragging from the library, is at `point` (view pixels).
+  function moveInsert(point, modifiers) {
+    if (!gesture || !gesture.insert) return
+    moveGesture((point.x - gesture.origin.x) * zoom, (point.y - gesture.origin.y) * zoom, modifiers)
+  }
+
+  // The draft with `name` at `pixels`, its offset in whole pixels (x
+  // towards the reading end): the inspector's fields. Shown, it stays on
+  // screen (the field below the top third) as the arrow keys keep it.
+  function offsetTo(name, pixels) {
+    var item = look.elements[name]
+    if (!item) return draft
+    if (!rects[name]) return Draft.setOffset(draft, name, { x: pixels.x / screenWidth, y: pixels.y / screenHeight })
+    var current = Draft.offsetPixels(Draft.elementValue(item, "offset"), screenWidth, screenHeight)
+    return Draft.nudge(draft, name, (pixels.x - current.x) * (rightToLeft ? -1 : 1), pixels.y - current.y,
+      view.drawnRect(name), view.reservedRect(name), geometry())
+  }
+
+  // Whether the window point `scene` is over the library (hideArea).
+  function overHideArea(scene) {
+    if (!hideArea || !hideArea.visible) return false
+    var p = hideArea.mapFromItem(null, scene.x, scene.y)
+    return p.x >= 0 && p.y >= 0 && p.x <= hideArea.width && p.y <= hideArea.height
+  }
+
+  // Start scaling the selection from a corner (`handle` { x, y }: -1 or 1).
+  function beginResize(handle) {
+    if (!selectedRect) return false
+    cancelGesture()
+    forceActiveFocus(Qt.MouseFocusReason)
+    gesture = { mode: "resize", name: selected, start: view.drawnRect(selected), handle: handle,
+      startScale: Draft.elementValue(look.elements[selected], "scale"), delta: { x: 0, y: 0 }, scale: undefined }
+    return true
+  }
+
+  // The pointer moved by (dx, dy) canvas pixels since the gesture began.
+  // `modifiers` (when known) are the pointer's; `scene` (when known) is
+  // where it is in the window, to find the library under it.
+  function moveGesture(dx, dy, modifiers, scene) {
+    if (!gesture) return
+    if (modifiers !== undefined) {
+      shiftHeld = (modifiers & Qt.ShiftModifier) !== 0
+      altHeld = (modifiers & Qt.AltModifier) !== 0
+    }
+    var g = Object.assign({}, gesture)
+    g.delta = { x: dx / zoom, y: dy / zoom }
+    if (scene !== undefined && g.mode === "move" && !g.insert) g.overHide = g.name !== "password" && overHideArea(scene)
+    // The axis the drag started along, for Alt (two view pixels decide it).
+    if (!g.axis && Math.max(Math.abs(g.delta.x), Math.abs(g.delta.y)) >= 2) g.axis = Draft.dragAxis(g.delta.x, g.delta.y)
+    gesture = g
+    updateGesture()
+  }
+
+  // Recompute the shown result from the last movement (also after Shift or
+  // Alt changes with the pointer still).
+  function updateGesture() {
+    if (!gesture) return
+    var g = Object.assign({}, gesture)
+    if (g.mode === "move") {
+      g.result = Draft.snap(snapInput(g))
+      liveLook = Draft.draggedLook(g.base || look, g.name, g.result.rect, g.current, geometry())
+    } else {
+      g.scale = Draft.resizeScale(g.name, g.startScale, g.start, g.handle, g.delta, shiftHeld)
+      liveLook = Draft.scaledLook(look, g.name, g.scale)
+    }
+    gesture = g
+  }
+
+  // The drop: one edit (zone, order and offset, or the scale on its step).
+  function finishGesture() {
+    var g = gesture
+    if (!g) return
+    gesture = null
+    var next = draft
+    if (g.mode === "move" && g.overHide) {
+      next = Draft.setHidden(draft, g.name, true)
+    } else if (g.mode === "move" && g.result) {
+      var placed = Draft.drop(g.result.rect, snapInput(g))
+      if (placed) next = Draft.place(draft, g.name, placed.zone, placed.offset, g.insert === true)
+    } else if (g.mode === "resize" && g.scale !== undefined) {
+      next = Draft.setScale(draft, g.name, g.scale)
+    }
+    liveLook = null
+    if (!Draft.same(next, draft)) edited(next)
+  }
+
+  function cancelGesture() {
+    gesture = null
+    liveLook = null
+  }
+
+  function setModifier(key, held) {
+    if (key === Qt.Key_Shift) shiftHeld = held
+    else if (key === Qt.Key_Alt) altHeld = held
+    else return false
+    updateGesture()
+    return true
+  }
+
+  // Keys on the canvas; true when handled. With a module selected: arrows
+  // move one grid step (Shift: one pixel), Ctrl+arrows to the neighbouring
+  // zone, + and - scale, Delete hides (not the password field).
+  function keyPressed(key, modifiers) {
+    if (setModifier(key, true)) return false
+    if (key === Qt.Key_Escape && gesture) {
+      cancelGesture()
+      return true
+    }
+    // The selected shape (the shapes page): Delete removes it.
+    if (!selected && !gesture && selectedShape !== -1 && key === Qt.Key_Delete) {
+      var removed = Draft.removeShape(draft, selectedShape)
+      if (!Draft.same(removed, draft)) edited(removed)
+      return true
+    }
+    if (!selected || gesture) return false
+    var directions = {}
+    directions[Qt.Key_Left] = "left"
+    directions[Qt.Key_Right] = "right"
+    directions[Qt.Key_Up] = "up"
+    directions[Qt.Key_Down] = "down"
+    var direction = directions[key]
+    if (direction) {
+      if (modifiers & Qt.ControlModifier) {
+        var zone = look.elements[selected].zone
+        var next = Draft.neighbourZone(zone, direction, rightToLeft, selected)
+        if (next !== zone) edited(Draft.setZone(draft, selected, next))
+        return true
+      }
+      if (!selectedRect) return true
+      var rect = view.drawnRect(selected), anchor = view.reservedRect(selected)
+      var sign = direction === "left" || direction === "up" ? -1 : 1
+      var across = direction === "left" || direction === "right"
+      var step = Draft.gridStep(screenHeight)
+      var delta = (modifiers & Qt.ShiftModifier) ? sign
+        : across ? Draft.gridMove(rect.x + rect.width / 2, anchor.x + anchor.width / 2, sign, step)
+        : Draft.gridMove(rect.y, anchor.y, sign, step)
+      var moved = Draft.nudge(draft, selected, across ? delta : 0, across ? 0 : delta, rect, anchor, geometry())
+      if (!Draft.same(moved, draft)) edited(moved)
+      return true
+    }
+    if (key === Qt.Key_Plus || key === Qt.Key_Equal || key === Qt.Key_Minus) {
+      var scaled = Draft.scaleBy(draft, selected, key === Qt.Key_Minus ? -1 : 1)
+      if (!Draft.same(scaled, draft)) edited(scaled)
+      return true
+    }
+    if (key === Qt.Key_Delete) {
+      var hidden = Draft.setHidden(draft, selected, true)
+      if (!Draft.same(hidden, draft)) edited(hidden)
+      return true
+    }
+    return false
+  }
+
+  function keyReleased(key) {
+    setModifier(key, false)
+    return false
+  }
+
+  // A tap at (x, y) in the canvas: beside the lock image it clears the
+  // selection (true); on the image the image's own handler picks.
+  function tapOutside(x, y) {
+    var r = stageRect
+    if (x >= r.x && y >= r.y && x <= r.x + r.width && y <= r.y + r.height) return false
+    forceActiveFocus(Qt.MouseFocusReason)
+    cancelGesture()
+    deselectRequested()
+    return true
+  }
+
+  function zoneCell(zone) {
+    var column = Layout.screenColumn(zone, rightToLeft)
+    return { column: ["start", "center", "end"].indexOf(column), row: ["top", "middle", "bottom"].indexOf(Layout.zoneRow(zone)) }
+  }
+
+  Item {
+    id: stageArea
+    anchors.fill: parent
+
+    // Beside the lock image: the image's handlers take taps on it.
+    TapHandler {
+      onTapped: function(eventPoint) {
+        var p = stageArea.mapToItem(canvas, eventPoint.position.x, eventPoint.position.y)
+        canvas.tapOutside(p.x, p.y)
+      }
+    }
+
+    Rectangle {
+      id: stage
+      objectName: "studioStage"
+      anchors.centerIn: parent
+      width: Math.round(canvas.screenWidth * canvas.zoom)
+      height: Math.round(canvas.screenHeight * canvas.zoom)
+      clip: true
+      color: Commons.Color.background
+      // Outside the lock: never mirrored (it mirrors itself).
+      LayoutMirroring.enabled: false
+      LayoutMirroring.childrenInherit: true
+
+      SampleView {
+        id: view
+        objectName: "studioView"
+        width: canvas.screenWidth
+        height: canvas.screenHeight
+        transformOrigin: Item.TopLeft
+        scale: canvas.zoom
+        look: canvas.liveLook || canvas.look
+        previewState: canvas.previewState
+        displayAwake: canvas.awake && canvas.moving
+        loadBackground: canvas.awake
+        rightToLeft: FoamyI18n.rightToLeft
+        backgroundPath: canvas.backgroundPath
+        backgroundPrepared: canvas.backgroundPrepared
+        backgroundVersion: canvas.backgroundVersion
+        timeFormat: canvas.lockSettings.timeFormat
+        showUserInfo: canvas.lockSettings.showUserInfo
+        showMedia: canvas.lockSettings.showMedia
+      }
+
+      Item {
+        id: overlay
+        anchors.fill: parent
+
+        // The zone grid, and the zone a drop would pick.
+        Repeater {
+          model: canvas.showZones ? 4 : 0
+          Rectangle {
+            required property int index
+            readonly property bool vertical: index < 2
+            x: vertical ? Math.round(overlay.width * (index % 2 + 1) / 3) : 0
+            y: vertical ? 0 : Math.round(overlay.height * (index % 2 + 1) / 3)
+            width: vertical ? 1 : overlay.width
+            height: vertical ? overlay.height : 1
+            color: Qt.rgba(1, 1, 1, 0.2)
+          }
+        }
+
+        Rectangle {
+          id: targetZone
+          readonly property string zone: canvas.gesture && canvas.gesture.mode === "move" && canvas.gesture.result ? canvas.gesture.result.zone : ""
+          readonly property var cell: zone ? canvas.zoneCell(zone) : null
+          visible: zone !== "" && canvas.showZones && !canvas.hiding
+          x: cell ? Math.round(overlay.width * cell.column / 3) : 0
+          y: cell ? Math.round(overlay.height * cell.row / 3) : 0
+          width: Math.round(overlay.width / 3)
+          height: Math.round(overlay.height / 3)
+          color: Qt.alpha(FoamyPalette.accent, 0.14)
+          border.width: 2
+          border.color: FoamyPalette.accent
+
+          Tag {
+            x: FoamyStyle.gap
+            y: FoamyStyle.gap
+            text: targetZone.zone ? FoamyI18n.t("studio.zone." + targetZone.zone) : ""
+          }
+        }
+
+        // The selected shape: its zones' cells, its modules, its outline.
+        Repeater {
+          model: canvas.shapeZones
+          Rectangle {
+            required property string modelData
+            readonly property var cell: canvas.zoneCell(modelData)
+            x: Math.round(overlay.width * cell.column / 3)
+            y: Math.round(overlay.height * cell.row / 3)
+            width: Math.round(overlay.width / 3)
+            height: Math.round(overlay.height / 3)
+            color: Qt.alpha(FoamyPalette.accent, 0.08)
+          }
+        }
+        Repeater {
+          model: canvas.shapeModules
+          Rectangle {
+            required property string modelData
+            readonly property var r: canvas.rects[modelData]
+            visible: r !== undefined
+            x: r ? r.x * canvas.zoom - 2 : 0
+            y: r ? r.y * canvas.zoom - 2 : 0
+            width: r ? r.width * canvas.zoom + 4 : 0
+            height: r ? r.height * canvas.zoom + 4 : 0
+            color: "transparent"
+            radius: 2
+            border.width: 1
+            border.color: Qt.alpha(FoamyPalette.accent, 0.7)
+          }
+        }
+        Rectangle {
+          objectName: "studioShapeSelection"
+          readonly property var r: canvas.shapeRect
+          visible: r !== null
+          x: r ? r.x * canvas.zoom - 2 : 0
+          y: r ? r.y * canvas.zoom - 2 : 0
+          width: r ? r.width * canvas.zoom + 4 : 0
+          height: r ? r.height * canvas.zoom + 4 : 0
+          color: "transparent"
+          radius: r && r.radius ? r.radius * canvas.zoom + 2 : 2
+          border.width: canvas.activeFocus ? 2 : 1.5
+          border.color: FoamyPalette.accent
+        }
+
+        // Problem outlines.
+        Repeater {
+          model: canvas.problemNames
+          Rectangle {
+            required property var modelData
+            readonly property var r: canvas.rects[modelData]
+            visible: r !== undefined
+            x: r ? r.x * canvas.zoom - 3 : 0
+            y: r ? r.y * canvas.zoom - 3 : 0
+            width: r ? r.width * canvas.zoom + 6 : 0
+            height: r ? r.height * canvas.zoom + 6 : 0
+            color: "transparent"
+            radius: 3
+            border.width: 2
+            border.color: FoamyPalette.error
+          }
+        }
+
+        // Snap guides.
+        Rectangle {
+          readonly property var snapX: canvas.gesture && canvas.gesture.result ? canvas.gesture.result.x : null
+          visible: snapX !== null && snapX.kind !== "grid"
+          x: snapX ? Math.round(snapX.at * canvas.zoom) : 0
+          width: 1
+          height: overlay.height
+          color: FoamyPalette.accent
+        }
+        Rectangle {
+          readonly property var snapY: canvas.gesture && canvas.gesture.result ? canvas.gesture.result.y : null
+          visible: snapY !== null && snapY.kind !== "grid"
+          y: snapY ? Math.round(snapY.at * canvas.zoom) : 0
+          height: 1
+          width: overlay.width
+          color: FoamyPalette.accent
+        }
+
+        // The selection, its tag and corner handles.
+        Rectangle {
+          id: selection
+          objectName: "studioSelection"
+          readonly property var r: canvas.selectedRect
+          visible: r !== null
+          x: r ? r.x * canvas.zoom - 4 : 0
+          y: r ? r.y * canvas.zoom - 4 : 0
+          width: r ? r.width * canvas.zoom + 8 : 0
+          height: r ? r.height * canvas.zoom + 8 : 0
+          color: "transparent"
+          radius: 2
+          border.width: canvas.activeFocus ? 2 : 1.5
+          border.color: FoamyPalette.accent
+
+          Tag {
+            x: 0
+            y: selection.y >= height + 4 ? -height - 4 : selection.height + 4
+            text: canvas.selectionText
+          }
+
+          Repeater {
+            model: [{ x: -1, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: 1, y: 1 }]
+            Rectangle {
+              id: handle
+              required property var modelData
+              width: 9
+              height: 9
+              radius: 2
+              x: (modelData.x < 0 ? 0 : selection.width) - width / 2
+              y: (modelData.y < 0 ? 0 : selection.height) - height / 2
+              color: FoamyPalette.onAccent
+              border.width: 1.5
+              border.color: FoamyPalette.accent
+
+              // A larger grip than the drawn square.
+              Item {
+                anchors.centerIn: parent
+                width: 20
+                height: 20
+                HoverHandler {
+                  cursorShape: handle.modelData.x === handle.modelData.y ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+                }
+                DragHandler {
+                  target: null
+                  dragThreshold: 2
+                  onActiveChanged: {
+                    if (active) canvas.beginResize(handle.modelData)
+                    else canvas.finishGesture()
+                  }
+                  onActiveTranslationChanged: if (active) canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers)
+                }
+              }
+            }
+          }
+        }
+
+        TapHandler {
+          onTapped: function(eventPoint) {
+            canvas.forceActiveFocus(Qt.MouseFocusReason)
+            canvas.tapAt(eventPoint.position.x / canvas.zoom, eventPoint.position.y / canvas.zoom)
+          }
+        }
+
+        DragHandler {
+          id: moveDrag
+          target: null
+          dragThreshold: 4
+          onActiveChanged: {
+            if (active) {
+              var press = centroid.pressPosition
+              var name = canvas.hit(press.x / canvas.zoom, press.y / canvas.zoom)
+              if (name) canvas.beginMove(name)
+            } else canvas.finishGesture()
+          }
+          onActiveTranslationChanged: if (active) canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers, centroid.scenePosition)
+        }
+      }
+    }
+
+    // Focus is always visible.
+    Rectangle {
+      anchors.fill: stage
+      anchors.margins: -3
+      color: "transparent"
+      radius: FoamyStyle.radiusSmall
+      border.width: 2
+      border.color: FoamyPalette.accent
+      visible: canvas.activeFocus
+    }
+  }
+
+  // Measures anchors (never shown): the same lock, sized and filled like
+  // the canvas, given a look per zone.
+  SampleView {
+    id: probe
+    visible: false
+    width: canvas.screenWidth
+    height: canvas.screenHeight
+    previewState: canvas.previewState
+    displayAwake: false
+    loadBackground: false
+    rightToLeft: FoamyI18n.rightToLeft
+    timeFormat: canvas.lockSettings.timeFormat
+    showUserInfo: canvas.lockSettings.showUserInfo
+    showMedia: canvas.lockSettings.showMedia
+  }
+
+  component Tag: Rectangle {
+    property string text: ""
+    visible: text !== ""
+    width: tagLabel.implicitWidth + 2 * FoamyStyle.gapSmall + 4
+    height: tagLabel.implicitHeight + FoamyStyle.gapTiny * 2
+    radius: FoamyStyle.radiusSmall / 2
+    color: FoamyPalette.accent
+    Text {
+      id: tagLabel
+      textFormat: Text.PlainText
+      anchors.centerIn: parent
+      text: parent.text
+      color: FoamyPalette.onAccent
+      font.family: FoamyStyle.fontFamily
+      font.pixelSize: FoamyStyle.font.caption
+      font.weight: Font.DemiBold
+    }
+  }
+}

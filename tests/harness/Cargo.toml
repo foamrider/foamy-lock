@@ -1,0 +1,15 @@
+[package]
+name = "foamy-lock-harness"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Development-only offscreen test harness for foamy-lock (not shipped, not run by the shell)."
+
+# Its own workspace: the plugin's root workspace (and its Cargo.lock) is the
+# helper's build input, hashed into native/native.pin; this crate stays out of it.
+[workspace]
+
+# Otherwise std only: serde_json reads the runtime test's `lock status` replies.
+[dependencies]
+serde_json = "1"

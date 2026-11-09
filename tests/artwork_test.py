@@ -68,12 +68,17 @@ POLICY = '''<policymap>
   <policy domain="coder" rights="write" pattern="RGB"/>
   <policy domain="path" rights="none" pattern="@*"/>
 </policymap>'''
-# The decoder's seccomp policy: syscalls answered with EPERM, per architecture.
+# The decoder's seccomp policy: syscalls answered with EPERM, per architecture
+# (foamy-kit 0.6.0's decoder_denied: the processes, namespaces, mounts,
+# ptrace and bpf of before, and io_uring, the key store and userfaultfd).
 SECCOMP = {
-    # clone, fork, vfork, ptrace, mount, unshare, setns, bpf, clone3
-    'x86_64': (0xc000003e, {56, 57, 58, 101, 165, 272, 308, 321, 435}),
-    # mount, unshare, ptrace, clone, setns, bpf, clone3
-    'aarch64': (0xc00000b7, {40, 97, 117, 220, 268, 280, 435}),
+    # clone, fork, vfork, ptrace, mount, add_key, request_key, keyctl, unshare,
+    # setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+    # io_uring_register, clone3
+    'x86_64': (0xc000003e, {56, 57, 58, 101, 165, 248, 249, 250, 272, 308, 321, 323, 425, 426, 427, 435}),
+    # mount, unshare, ptrace, add_key, request_key, keyctl, clone, setns, bpf,
+    # userfaultfd, io_uring_setup, io_uring_enter, io_uring_register, clone3
+    'aarch64': (0xc00000b7, {40, 97, 117, 217, 218, 219, 220, 268, 280, 282, 425, 426, 427, 435}),
 }
 RET_KILL_PROCESS, RET_EPERM, RET_ALLOW = 0x80000000, 0x00050001, 0x7fff0000
 
@@ -1240,8 +1245,9 @@ class RealDecoder(Workspace):
                 + struct.pack('>I', zlib.crc32(b'IHDR' + header)) + png(b'\0\0\0', 1, 1)[33:])
         for name, data in [('broken.jpg', b'\xff\xd8\xffbroken'), ('huge.png', huge), ('truncated.png', self.png[:60])]:
             with self.subTest(name=name):
+                # A truncated PNG is refused before the decoder (strip_png_text).
                 self.assertIn(self.error(self.local(self.write(name, data))),
-                              {'decode-failed', 'invalid-pixels', 'decode-timeout'})
+                              {'decode-failed', 'invalid-pixels', 'decode-timeout', 'invalid-png'})
         self.assertEqual(self.leftovers(), [])
 
     def test_avatar_is_sandboxed_resized_and_private(self):

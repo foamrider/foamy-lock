@@ -1,14 +1,71 @@
 //! `foamy-lock-helper`: bounded lock-screen artwork and the account avatar
-//! thumbnail, and the wallpaper probe. Replaces `artwork.py`; carries over
-//! every bound on purpose. Original images never enter the shell: both go
-//! through the same sandboxed decoder and come back as a freshly encoded
-//! 256x256 PNG.
+//! thumbnail, the lock-screen background, and the wallpaper probe. Replaces
+//! `artwork.py`; carries over every bound on purpose. Original images never
+//! enter the shell: all go through the same sandboxed decoder and come
+//! back as a freshly encoded PNG (256x256, or the screen's size for a
+//! background).
 //!
 //! # Contract
 //!
-//! - **argv**: `foamy-lock-helper artwork` (below) or `foamy-lock-helper
-//!   wallpaper <link>` (see `wallpaper`). Anything else replies
-//!   `invalid-request`.
+//! - **argv**: `foamy-lock-helper artwork` (below), `foamy-lock-helper
+//!   wallpaper <link>` (see `wallpaper`), `foamy-lock-helper video-probe`
+//!   or `foamy-lock-helper video-convert` (video wallpapers, below).
+//!   Anything else replies `invalid-request`. `foamy-lock-helper studio …`
+//!   is Lock Studio's, with its own contract and replies (see `studio`); it
+//!   never runs the image sandbox.
+//! - **video-probe** and **video-convert** (see `video`): stdin one line
+//!   `{"path": "/absolute/video", "width": W, "height": H}`, W x H the
+//!   largest screen's native size (16 to 7680 by 16 to 4320, else
+//!   `invalid-size`; then the path as for a background, else
+//!   `invalid-video-path`). The output size is W x H scaled down to fit
+//!   3840x2160, both sides even. The file (symlinks followed, any owner) is
+//!   opened once and only that descriptor is used: hashed (SHA-256) here
+//!   and handed to the sandbox as fd 0. Nothing outside the sandbox reads
+//!   more of it than its first bytes (MP4/MOV `ftyp` or an old QuickTime
+//!   atom, Matroska/WebM's EBML magic; else `unsupported-format`). A file
+//!   over 2 GiB is reported from its size alone.
+//!   - **video-probe** replies one line: `{"ok": true, "bytes",
+//!     "container" ("mp4", "mov", "mkv", "webm"), "codec", "width",
+//!     "height", "fps", "duration" (seconds or null), "violations" (any of
+//!     `input-too-large`, `unsupported-codec`, `input-too-wide`), "output":
+//!     {"width", "height", "fps", "seconds", "frames", "cut"}, "threads",
+//!     "estimate" (seconds), "poster" (the first frame at the output size,
+//!     `<cache>/video/<sha256 of the PNG>.png`, or null), "clip" and
+//!     "clipBytes" (the clip already made for this content and output
+//!     size, or null)}`. The facts and output are null when the size stops
+//!     it before ffprobe; with any violation there is no poster or clip.
+//!     60 s in all.
+//!   - **video-convert** writes `{"progress": {"frames": n, "total": t}}`
+//!     lines (frames stage A handed to stage B, at most every 200 ms), then
+//!     `{"ok": true, "clip": "<cache>/video/<sha256 of the input>-<W>x<H>.mp4",
+//!     "bytes", "frames", "output"}` (at once when that clip exists). One
+//!     conversion at a time (`busy`); a violation fails with its own code.
+//!     SIGTERM stops both stages and replies `cancelled`; 10 minutes in all
+//!     (`job-timeout`). A failure leaves nothing behind: `decode-failed`
+//!     (ffprobe or stage A did not exit 0), `invalid-frames` (no frame, a
+//!     partial one, or more than 60 s of them), `encode-failed`,
+//!     `output-too-large` (over 150 MiB), `source-changed` (the file
+//!     changed while it was read).
+//!   - Other codes: `video-missing`, `not-regular-file`,
+//!     `decoder-unavailable` (no bwrap, ffmpeg or ffprobe),
+//!     `sandbox-architecture-unsupported`, `decode-timeout`,
+//!     `invalid-pixels`, `unsafe-cache`, `cache-busy`, `cancelled`,
+//!     `job-timeout`, `parent-watch-failed`, `source-unavailable`,
+//!     `helper-failed`. Exit status 0; stderr nothing.
+//!   - **Cache**: `$XDG_CACHE_HOME/omarchy/foamy.lock/video/` (0700, this
+//!     user's, else `unsafe-cache`): at most 3 clips (the oldest by mtime
+//!     evicted, never the new one; a probe that finds one touches it) and 6
+//!     posters, each 0600; `.convert` (held for a whole conversion) and
+//!     `.lock` (held while publishing; waited for 2 s, else `cache-busy`).
+//!     Jobs stage in `.job-XXXXXXXX` (reclaimed by the next conversion) or
+//!     `.probe-XXXXXXXX` (after a minute).
+//!   - **Sandbox**: ffprobe and ffmpeg in the image decoder's bubblewrap
+//!     (without the input bind and ImageMagick's policy, with
+//!     `GLIBC_TUNABLES=glibc.malloc.arena_max=1`) behind the kit's threaded
+//!     decoder filter, one memfd per stage; `nice 19` and idle I/O, no core
+//!     dumps, 64 fds, no files written, CPU seconds for the deadline;
+//!     `min(cores - 2, 16)` threads. `video` has the command lines and the
+//!     address-space formulas.
 //! - **wallpaper**: `<link>` is an absolute path, normally
 //!   `~/.local/state/omarchy/current/background`. It is resolved like
 //!   `readlink -f` and must end at a regular file. No stdin, environment or
@@ -24,14 +81,16 @@
 //!   error (such as a permission) `source-unavailable`. Exit status 0;
 //!   stderr nothing. The caller bounds it with `timeout`.
 //!
-//! The rest of this contract is `artwork`'s:
+//! The rest of this contract is `artwork`'s (all three request kinds):
 //!
 //! - **stdin**: one JSON object on one line; the line, newline included, is
 //!   at most 32768 bytes (more: `invalid-request`). Bytes after the first
 //!   newline are ignored. Not JSON (or no input): `source-unavailable`; not
 //!   an object: `invalid-request`.
 //!   - artwork: `{"url": "<file:… or https:…>", "hosts": [...], "roots": [...]}`;
-//!   - avatar: `{"kind": "avatar", "path": "/absolute/path"}`.
+//!   - avatar: `{"kind": "avatar", "path": "/absolute/path"}`;
+//!   - background: `{"kind": "background", "path": "/absolute/path",
+//!     "width": W, "height": H, "blur": B}`.
 //! - **stdout**: exactly one JSON line, `{"ok": true, "path": "<file>"}` or
 //!   `{"ok": false, "error": "<code>"}`, also on cancel and timeout. A code
 //!   never contains a URL, path or decoder message. Exit status 0 (101 only
@@ -44,10 +103,11 @@
 //!   `dns-failed`, `non-public-address`, `redirect-limit`, `http-error`,
 //!   `encoded-response`, `fetch-timeout`, `https-unsupported` (CPU without
 //!   the instructions the TLS library needs), `unsupported-format`,
-//!   `animated-image`, `decoder-unavailable`,
+//!   `animated-image`, `invalid-png`, `decoder-unavailable`,
 //!   `sandbox-architecture-unsupported`, `decode-failed`, `decode-timeout`,
 //!   `invalid-pixels`, `unsafe-cache`, `cache-busy`, `invalid-avatar-path`,
-//!   `avatar-missing`, `not-regular-file`, `cancelled`, `job-timeout`,
+//!   `avatar-missing`, `invalid-background-path`, `background-missing`,
+//!   `invalid-size`, `not-regular-file`, `cancelled`, `job-timeout`,
 //!   `parent-watch-failed`, `timeout`, `source-unavailable`,
 //!   `helper-failed`.
 //! - **Options**: `hosts` at most 32 lowercase DNS names (at least two
@@ -73,6 +133,27 @@
 //!   `MAX_INPUT` bytes (Content-Length checked first).
 //! - **Avatar**: the path may be a symlink or root-owned; a regular file of
 //!   at most 16 MiB.
+//! - **Background**: checked in this order: `width` and `height` integers
+//!   from 16 to 7680 and 16 to 4320 (the screen in logical pixels; else
+//!   `invalid-size`), `blur` a number from 0 to 1 (else `invalid-request`),
+//!   `path` as for the avatar (absolute, at most 4096 characters, no NUL,
+//!   else `invalid-background-path`; missing or dangling
+//!   `background-missing`) but a regular file of at most 32 MiB. The
+//!   output is exactly W x H, cover-scaled and centre-cropped (`-resize
+//!   WxH^ -gravity center -extent WxH`, Qt's `PreserveAspectCrop`), alpha
+//!   over `#171b26`. Blur 0 is none; otherwise a Gaussian of sigma
+//!   `B x min(W, H) / 40` output pixels (27 px at 1 on a 1080-pixel-high
+//!   screen), computed at a reduced scale `min(1/2, 2/sigma)` (sigma
+//!   scaled alike) and scaled back with a triangle filter. A JPEG whose
+//!   frame header shows both sides above max(W, H) is decoded with
+//!   `jpeg:size=SxS`, S = max(W, H) (a DCT-scaled decode that still covers
+//!   the screen in any orientation).
+//! - **PNG text**: before the decoder, a PNG's chunks are walked (only
+//!   their headers) and it is copied without `tEXt`, `zTXt` and `iTXt`
+//!   (`image::strip_png_text`), so libpng never inflates or keeps text.
+//!   Each chunk must have a length under 2^31, lie inside the data and have
+//!   a type of four ASCII letters; at most 16384 chunks, ending with `IEND`
+//!   (bytes after it are dropped); otherwise `invalid-png`.
 //! - **Decoder**: static PNG, JPEG and WebP only. `/usr/bin/magick` in
 //!   `/usr/bin/bwrap` (see `image::command`: every namespace unshared,
 //!   capabilities dropped, new session, read-only `/usr`, the private
@@ -83,7 +164,14 @@
 //!   on aarch64 `mount`, `unshare`, `ptrace`, `clone`, `setns`, `bpf`,
 //!   `clone3`). Limits: 256 MiB address space, 2 s CPU, files up to the
 //!   pixel size, no core dumps, 64 fds, a 3 s deadline and exactly 196608
-//!   bytes (256x256 RGB) of output. Environment `PATH=/usr/bin`; stdin
+//!   bytes (256x256 RGB) of output. A background (P = W x H pixels) has
+//!   768 MiB + 32 x P bytes of address space (1781 MiB at 7680x4320),
+//!   2 s + 1 s per started 3840x2160 of P of CPU (3 to 6 s), that plus 1 s of
+//!   deadline (4 to 7 s, inside the job's 9 s), files up to and exactly
+//!   W x H x 3 bytes of output; its policy is `image::POLICY` with sources
+//!   up to 16384 pixels a side and under 64 megapixels (`area`), memory
+//!   128 MiB under the address space and `time` the CPU seconds
+//!   (`Background::policy`). Environment `PATH=/usr/bin`; stdin
 //!   /dev/null; an empty signal mask; no descriptor but the filter is
 //!   inherited (all inherited descriptors are made close-on-exec at start).
 //! - **Files**: `$XDG_CACHE_HOME` (unset or empty: `$HOME/.cache`)
@@ -91,9 +179,14 @@
 //!   other access, else `unsafe-cache`; lock `artwork/.lock`, `flock`
 //!   without waiting, else `cache-busy`), thumbnails
 //!   `artwork/<sha256 of the PNG>.png` (0600, at most 16 kept, newest by
-//!   mtime), `avatar.png` (0600). Jobs stage in `artwork/.job-XXXXXXXX` or
-//!   `.avatar-XXXXXXXX` (0700, removed afterwards); abandoned `.job-*`
-//!   directories are removed under the lock, `.avatar-*` ones after 60 s.
+//!   mtime), `avatar.png` (0600), `background/` (the same rules as
+//!   `artwork/`: 0700, this user's, else `unsafe-cache`; lock
+//!   `background/.lock`, else `cache-busy`) with backgrounds
+//!   `background/<sha256 of the PNG>.png` (0600, at most 4 kept, newest by
+//!   mtime). Jobs stage in `artwork/.job-XXXXXXXX`,
+//!   `background/.job-XXXXXXXX` or `.avatar-XXXXXXXX` (0700, removed
+//!   afterwards); abandoned `.job-*` directories are removed under their
+//!   lock, `.avatar-*` ones after 60 s.
 //! - **Lifetime**: `PR_SET_PDEATHSIG(SIGTERM)`; a parent that already left
 //!   is `cancelled`. SIGTERM replies `cancelled`, SIGALRM or 9 s in total
 //!   `job-timeout`; the job directory is removed and the decoder (which
@@ -122,12 +215,19 @@ use serde_json::{Value, json};
 mod fetch;
 mod image;
 mod store;
+mod studio;
 mod url;
+mod video;
 mod wallpaper;
+
+#[cfg(test)]
+pub mod forks;
 
 pub const MAX_INPUT: usize = 5 * 1024 * 1024;
 /// Account pictures are often camera photos, larger than track artwork.
 pub const MAX_AVATAR_INPUT: usize = 16 * 1024 * 1024;
+/// Lock-screen backgrounds: wallpapers and full-size photos.
+pub const MAX_BACKGROUND_INPUT: usize = 32 * 1024 * 1024;
 const MAX_REQUEST: usize = 32768;
 const JOB_DEADLINE: Duration = Duration::from_secs(9);
 
@@ -257,13 +357,37 @@ pub fn signals_unblocked<T>(f: impl FnOnce() -> T) -> T {
     result
 }
 
+/// How the cancel thread ends a job.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    /// Replies at once and exits; the decoder dies with the helper.
+    Hard,
+    /// SIGTERM asks the job to stop its children and reply `cancelled`
+    /// itself (`video::CANCEL`); after `SOFT_GRACE` it is stopped hard.
+    Soft,
+}
+
+const SOFT_GRACE: Duration = Duration::from_secs(3);
+
 /// The cancel thread: SIGTERM is `cancelled`, SIGALRM or the job deadline
 /// `job-timeout`.
-fn watch(started: Instant, wake: OwnedFd) {
+fn watch(started: Instant, deadline: Duration, stop: Stop, wake: OwnedFd) {
     mask(libc::SIG_UNBLOCK);
+    let mut cancelling: Option<Instant> = None;
     loop {
-        let left = (started + JOB_DEADLINE).saturating_duration_since(Instant::now());
-        if left.is_zero() {
+        let mut until = started + deadline;
+        if let Some(asked) = cancelling {
+            if state().done {
+                return;
+            }
+            until = until.min(asked + SOFT_GRACE);
+            if Instant::now() >= asked + SOFT_GRACE {
+                cancel("cancelled");
+                return;
+            }
+        }
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() && cancelling.is_none() {
             cancel("job-timeout");
             return;
         }
@@ -272,7 +396,7 @@ fn watch(started: Instant, wake: OwnedFd) {
             events: libc::POLLIN,
             revents: 0,
         };
-        let milliseconds = left.as_millis().clamp(1, i32::MAX as u128) as libc::c_int;
+        let milliseconds = left.as_millis().clamp(1, 100) as libc::c_int;
         // SAFETY: poll(2) on one valid pollfd.
         if unsafe { libc::poll(&mut poll, 1, milliseconds) } <= 0 {
             continue; // timeout or EINTR: the loop checks the deadline
@@ -280,8 +404,12 @@ fn watch(started: Instant, wake: OwnedFd) {
         let mut byte = [0u8; 1];
         // SAFETY: read(2) of one byte into a local buffer from our pipe.
         if unsafe { libc::read(wake.as_raw_fd(), byte.as_mut_ptr().cast(), 1) } == 1 {
-            match byte[0] as libc::c_int {
-                libc::SIGTERM => cancel("cancelled"),
+            match (byte[0] as libc::c_int, stop) {
+                (libc::SIGTERM, Stop::Soft) => {
+                    video::CANCEL.store(true, Ordering::Relaxed);
+                    cancelling.get_or_insert_with(Instant::now);
+                }
+                (libc::SIGTERM, Stop::Hard) => cancel("cancelled"),
                 _ => cancel("job-timeout"),
             }
         }
@@ -290,7 +418,7 @@ fn watch(started: Instant, wake: OwnedFd) {
 
 /// Marks every descriptor above stderr close-on-exec, so nothing the shell
 /// leaked reaches bubblewrap or the decoder (Python's `close_fds=True`).
-fn cloexec_inherited() {
+pub(crate) fn cloexec_inherited() {
     const CLOSE_RANGE_CLOEXEC: libc::c_uint = 1 << 2;
     // SAFETY: close_range(2) with integer arguments only.
     let done = unsafe {
@@ -355,19 +483,30 @@ fn read_request() -> Result<Value, Fail> {
     serde_json::from_slice(&line).map_err(|_| Fail("source-unavailable"))
 }
 
-fn job() -> Result<Value, Fail> {
-    let request = read_request()?;
-    let Value::Object(request) = request else {
-        return Err(Fail("invalid-request"));
-    };
-    if request.get("kind").and_then(Value::as_str) == Some("avatar") {
-        store::prepare_avatar(&request)
-    } else {
-        store::prepare(&request)
+/// The request object on stdin.
+fn request_object() -> Result<serde_json::Map<String, Value>, Fail> {
+    match read_request()? {
+        Value::Object(request) => Ok(request),
+        _ => Err(Fail("invalid-request")),
     }
 }
 
-fn artwork() -> Value {
+fn job() -> Result<Value, Fail> {
+    let request = request_object()?;
+    match request.get("kind").and_then(Value::as_str) {
+        Some("avatar") => store::prepare_avatar(&request),
+        Some("background") => store::prepare_background(&request),
+        _ => store::prepare(&request),
+    }
+}
+
+/// Runs `job` under the cancel thread (`deadline`, `stop`), dying with
+/// the parent; its reply, or the failure as one.
+fn supervised(
+    deadline: Duration,
+    stop: Stop,
+    job: impl FnOnce(Instant) -> Result<Value, Fail>,
+) -> Value {
     let started = Instant::now();
     cloexec_inherited();
     let Some(wake) = install_signals() else {
@@ -381,10 +520,10 @@ fn artwork() -> Value {
     {
         return failure("parent-watch-failed");
     }
-    thread::spawn(move || watch(started, wake));
+    thread::spawn(move || watch(started, deadline, stop, wake));
     let result = match parent {
         Some(pid) if rustix::process::getppid() == Some(pid) && pid.as_raw_nonzero().get() != 1 => {
-            job()
+            job(started)
         }
         _ => Err(Fail("cancelled")),
     };
@@ -395,14 +534,40 @@ fn artwork() -> Value {
     }
 }
 
+fn artwork() -> Value {
+    supervised(JOB_DEADLINE, Stop::Hard, |_| job())
+}
+
+/// `video-probe`: hashing, ffprobe and the poster within a minute.
+fn video_probe() -> Value {
+    supervised(video::PROBE_DEADLINE, Stop::Hard, |_| {
+        video::probe(&request_object()?)
+    })
+}
+
+/// `video-convert`: the stages have the 10 minutes (less what came
+/// before); the cancel thread stops the helper 10 s after that.
+fn video_convert() -> Value {
+    supervised(
+        video::CONVERT_DEADLINE + Duration::from_secs(10),
+        Stop::Soft,
+        |started| video::convert(&request_object()?, started),
+    )
+}
 fn main() -> ExitCode {
+    // Lock Studio: its own replies (`json::error_reply`) and no sandbox.
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "studio") {
+        return json::run(|| studio::main(&args[1..]), json::error_reply);
+    }
     // A reply on every path, even a helper bug (then exit 101, no core dump).
     json::run(
         || -> Result<Value, foamy_helper::Failure> {
-            let args: Vec<OsString> = std::env::args_os().skip(1).collect();
             match (args.first().and_then(|a| a.to_str()), args.len()) {
                 (Some("artwork"), 1) => Ok(artwork()),
                 (Some("wallpaper"), 2) => Ok(wallpaper::probe(&args[1])),
+                (Some("video-probe"), 1) => Ok(video_probe()),
+                (Some("video-convert"), 1) => Ok(video_convert()),
                 _ => Ok(failure("invalid-request")),
             }
         },
