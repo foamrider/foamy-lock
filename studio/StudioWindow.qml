@@ -434,7 +434,9 @@ FocusScope {
     function onDraftDone(op, result) {
       if (op === "draft-load") {
         if (studio.session === "loading" && !studio.draftReport) {
-          studio.draftReport = result
+          // Lists that come through a `var` signal are Qt sequence wrappers,
+          // which Layout.parseLook rejects: keep a plain copy.
+          studio.draftReport = Draft.copy(result)
           studio.startSession()
         }
       } else if (result && !studio.quitting) {
@@ -443,6 +445,7 @@ FocusScope {
       if (studio.quitting && lockSources.draftIdle) studio.endNow()
     }
     function onApplied(report, entry) {
+      entry = Draft.copy(entry)
       var finish = studio.quitAfterApply
       studio.quitAfterApply = false
       studio.quitAsked = false

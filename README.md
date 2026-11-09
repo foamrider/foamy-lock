@@ -577,8 +577,9 @@ screen would.
   either can be undone.
 - **Preview full screen** shows the look on the lock screen's own preview overlay without
   saving; click or press any key to close it.
-- **Quitting** with changes the lock screen doesn't have asks: **Apply and quit**,
-  **Discard** (deletes the draft) or **Cancel**.
+- **Quitting** (Ctrl+Q) with changes the lock screen doesn't have asks: **Apply and
+  quit**, **Discard** (deletes the draft) or **Cancel**. Closing the window keeps the
+  draft and quits; the next start offers it back.
 
 **Privacy.** The canvas uses a sample account and a sample track, never your name,
 avatar or what is playing. The clock, network and battery are real. The full-screen
