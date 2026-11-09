@@ -358,7 +358,17 @@ Item {
           expect(studio.nameAsked === "new" && find(studio, "studioNameDialog").visible && studio.questionOpen, "the name question")
           expect(field.field.text === expected, "prefilled: " + field.field.text + " vs " + expected)
           expect(field.field.inputActiveFocus, "the name field has the keyboard")
-          expect(find(studio, "studioNamePlain").visible, "Apply without saving a preset is offered")
+          expect(find(studio, "studioNamePlain").visible, "Apply without saving is offered")
+          // The buttons stay inside the card in every language: side by
+          // side when they fit, stacked otherwise.
+          var nameButtons = ["studioNameCancel", "studioNamePlain", "studioNameSave"]
+          for (var nb = 0; nb < nameButtons.length; nb++) {
+            var button = find(studio, nameButtons[nb])
+            var row = button.parent
+            expect(button.x >= -0.5 && button.x + button.width <= row.width + 0.5
+              && button.width >= button.implicitWidth - 0.5,
+              nameButtons[nb] + " fits its row: x " + button.x + " w " + button.width + " (wants " + button.implicitWidth + ") of " + row.width)
+          }
           field.field.text = "   "
           expect(studio.nameProblem !== "" && !find(studio, "studioNameSave").enabled, "an empty name can't be saved")
           field.field.text = expected
@@ -2402,14 +2412,19 @@ Item {
           capture("studio-quit", next)
         })
       } },
-    { name: "quit: cancel, and closing the window asks too", wait: 0, run: function(next) {
+    { name: "quit: cancel, and closing the window keeps the draft and quits", wait: 0, run: function(next) {
         expect(studio.appKey(Qt.Key_Escape, Qt.NoModifier, "") && !studio.quitAsked, "Esc cancels")
         var quits = test.caughtQuits
+        // A closed FloatingWindow doesn't map again, so there is nowhere to ask.
         window.closed()
-        expect(studio.quitAsked && test.caughtQuits === quits, "closing asks")
-        find(studio, "studioQuitCancel").clicked()
-        expect(!studio.quitAsked && window.visible, "cancelled; the window stays")
-        waitFor(function() { return studio.sources.draftIdle && hasDraft() }, "the draft kept", next)
+        expect(!studio.quitAsked, "closing doesn't ask")
+        waitFor(function() { return test.caughtQuits === quits + 1 }, "the quit", function() {
+          expect(studio.sources.draftIdle && hasDraft(), "the draft kept")
+          // Caught, not ended: back to editing for the next steps.
+          studio.quitting = false
+          studio.quitDone = false
+          next()
+        })
       } },
     { name: "quit: apply fails, nothing quits", wait: 0, run: function(next) {
         setMode("locked")

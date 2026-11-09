@@ -21,12 +21,10 @@ ShellRoot {
     color: FoamyPalette.background
     visible: true
 
-    // Closed by the window manager: the same guard as Ctrl+Q. When it asks,
-    // the window comes back to show the question.
-    onClosed: {
-      studio.requestQuit()
-      if (studio.quitAsked) Qt.callLater(function() { app.showWindow() })
-    }
+    // Closed by the window manager: there is no window left to ask in (a
+    // closed FloatingWindow doesn't map again), so keep the draft and quit;
+    // the next start offers it back. Ctrl+Q, with the window open, asks.
+    onClosed: studio.finishQuit()
 
     StudioWindow {
       id: studio
