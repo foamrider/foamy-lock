@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="p-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1f2a44"/><stop offset="1" stop-color="#0b1220"/></linearGradient>
+    <linearGradient id="p-fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d6dce8"/><stop offset="1" stop-color="#b9c2d4"/></linearGradient>
+    <mask id="p-hole">
+      <rect width="128" height="128" fill="#fff"/>
+      <circle cx="50" cy="75" r="8.5" fill="#000"/>
+      <path d="M46 77 42.5 94h15L54 77z" fill="#000"/>
+    </mask>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#p-bg)"/>
+  <path mask="url(#p-hole)" fill="url(#p-fg)" d="M64 22C39 22 20 40 20 63c0 24 18 43 41 43 9 0 11-7 7-12-4-6-2-13 8-13h11c13 0 23-8 23-22 0-21-20-37-46-37z"/>
+  <circle cx="44" cy="46" r="8" fill="#5eead4"/>
+  <circle cx="66" cy="37" r="8" fill="#60a5fa"/>
+  <circle cx="88" cy="46" r="8" fill="#a78bfa"/>
+  <circle cx="94" cy="66" r="7" fill="#f472b6"/>
+</svg>
