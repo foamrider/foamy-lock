@@ -282,7 +282,10 @@ Flow {
         id: reading
         required property var modelData
         required property int index
+        // The icon column, then a gap: the widest icons (Wi-Fi, wired: 22 px
+        // of ink at 19 px) fill most of the column.
         readonly property real iconWidth: Math.round(30 * systemPanel.unit)
+        readonly property real labelStart: iconWidth + Math.round(6 * systemPanel.unit)
         readonly property real gap: Math.round(10 * systemPanel.unit)
         x: systemPanel.padding
         y: systemPanel.padding + index * (systemPanel.rowHeight + systemPanel.rowGap)
@@ -292,24 +295,21 @@ Flow {
         // Plain x, mirrored by hand: the icon at the start, the label after
         // it, the value at the end. The alignments are logical (they mirror
         // with the view).
-        Text {
+        GlyphIcon {
           x: status.view.rightToLeft ? reading.width - width : 0
           width: reading.iconWidth
           height: Math.round(26 * systemPanel.unit)
-          textFormat: Text.PlainText
           text: reading.modelData.icon
           color: status.view.foreground
           opacity: 0.76
           font.family: status.view.iconFontFamily
           font.pixelSize: Math.round(19 * systemPanel.unit)
-          horizontalAlignment: Text.AlignHCenter
-          verticalAlignment: Text.AlignVCenter
         }
 
         Text {
           id: rowLabel
-          x: status.view.rightToLeft ? reading.width - reading.iconWidth - width : reading.iconWidth
-          width: Math.min(implicitWidth, (reading.width - reading.iconWidth) / 2)
+          x: status.view.rightToLeft ? reading.width - reading.labelStart - width : reading.labelStart
+          width: Math.min(implicitWidth, (reading.width - reading.labelStart) / 2)
           height: Math.round(26 * systemPanel.unit)
           textFormat: Text.PlainText
           text: reading.modelData.label
@@ -328,7 +328,7 @@ Flow {
         // long keyboard layout name).
         Text {
           x: status.view.rightToLeft ? 0 : reading.width - width
-          width: Math.max(0, reading.width - reading.iconWidth - rowLabel.width - reading.gap)
+          width: Math.max(0, reading.width - reading.labelStart - rowLabel.width - reading.gap)
           height: Math.round(26 * systemPanel.unit)
           textFormat: Text.PlainText
           text: reading.modelData.value
@@ -343,9 +343,9 @@ Flow {
 
         Rectangle {
           visible: reading.modelData.part >= 0
-          x: status.view.rightToLeft ? 0 : reading.iconWidth
+          x: status.view.rightToLeft ? 0 : reading.labelStart
           y: reading.height - height - Math.round(4 * systemPanel.unit)
-          width: reading.width - reading.iconWidth
+          width: reading.width - reading.labelStart
           height: Math.max(2, Math.round(4 * systemPanel.unit))
           radius: height / 2
           color: Qt.rgba(1, 1, 1, 0.12)
