@@ -569,7 +569,7 @@ screen would.
   be saved). Anything but a save keeps the draft.
 - **Your presets** come first in the preset menu, then the built-in ones. Applying
   changes made on a built-in preset asks for a name (prefilled "Default (mine)"), saves
-  your preset and applies it; **Apply without saving a preset** applies the look as it
+  your preset and applies it; **Apply without saving** applies the look as it
   is. Applying changes on one of your presets updates it. **Save as new…**, rename and
   delete (asked first) are in the menu. They live in `shell.json` with the lock
   screen's other settings (see User presets above).

@@ -358,7 +358,17 @@ Item {
           expect(studio.nameAsked === "new" && find(studio, "studioNameDialog").visible && studio.questionOpen, "the name question")
           expect(field.field.text === expected, "prefilled: " + field.field.text + " vs " + expected)
           expect(field.field.inputActiveFocus, "the name field has the keyboard")
-          expect(find(studio, "studioNamePlain").visible, "Apply without saving a preset is offered")
+          expect(find(studio, "studioNamePlain").visible, "Apply without saving is offered")
+          // The buttons stay inside the card in every language: side by
+          // side when they fit, stacked otherwise.
+          var nameButtons = ["studioNameCancel", "studioNamePlain", "studioNameSave"]
+          for (var nb = 0; nb < nameButtons.length; nb++) {
+            var button = find(studio, nameButtons[nb])
+            var row = button.parent
+            expect(button.x >= -0.5 && button.x + button.width <= row.width + 0.5
+              && button.width >= button.implicitWidth - 0.5,
+              nameButtons[nb] + " fits its row: x " + button.x + " w " + button.width + " (wants " + button.implicitWidth + ") of " + row.width)
+          }
           field.field.text = "   "
           expect(studio.nameProblem !== "" && !find(studio, "studioNameSave").enabled, "an empty name can't be saved")
           field.field.text = expected

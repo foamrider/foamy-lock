@@ -273,7 +273,7 @@ FocusScope {
     nameField.field.focusInput()
   }
 
-  // "save" (the name typed), "plain" (Apply without saving a preset) or
+  // "save" (the name typed), "plain" (Apply without saving) or
   // "cancel" (the draft stays as it is).
   function answerName(answer) {
     var mode = nameAsked
@@ -1207,6 +1207,30 @@ FocusScope {
     property alias content: contentSlot.data
     signal dismissed()
 
+    // The buttons side by side, as wide as they ask to be. The card widens
+    // for them (up to 620); past that, or in a narrow window, they stack,
+    // each as wide as the card.
+    readonly property real buttonsWidth: {
+      var width = 0
+      var shown = 0
+      for (var i = 0; i < buttonRow.children.length; i++) {
+        var child = buttonRow.children[i]
+        if (child === buttonSpacer || !child.visible) continue
+        width += child.implicitWidth
+        shown += 1
+      }
+      return width + Math.max(0, shown - 1) * FoamyStyle.gap
+    }
+    readonly property bool stacked: buttonsWidth > questionColumn.width + 0.5
+    onStackedChanged: fitButtons()
+    Component.onCompleted: fitButtons()
+    function fitButtons() {
+      for (var i = 0; i < buttonRow.children.length; i++) {
+        var child = buttonRow.children[i]
+        if (child !== buttonSpacer) child.Layout.fillWidth = stacked
+      }
+    }
+
     anchors.fill: parent
     color: Qt.alpha(FoamyPalette.background, 0.72)
     z: 30
@@ -1218,7 +1242,8 @@ FocusScope {
 
     Rectangle {
       anchors.centerIn: parent
-      width: Math.min(parent.width - 2 * FoamyStyle.padding, 460)
+      width: Math.min(parent.width - 2 * FoamyStyle.padding,
+        Math.max(460, Math.min(620, question.buttonsWidth + 2 * FoamyStyle.padding)))
       height: questionColumn.implicitHeight + 2 * FoamyStyle.padding
       radius: FoamyStyle.radius
       color: FoamyPalette.background
@@ -1265,11 +1290,17 @@ FocusScope {
           width: parent.width
           visible: children.length > 0
         }
-        RowLayout {
+        GridLayout {
           id: buttonRow
           width: parent.width
-          spacing: FoamyStyle.gap
-          Item { Layout.fillWidth: true }
+          columns: question.stacked ? 1 : -1
+          rowSpacing: FoamyStyle.gap
+          columnSpacing: FoamyStyle.gap
+          Item {
+            id: buttonSpacer
+            visible: !question.stacked
+            Layout.fillWidth: true
+          }
         }
       }
     }
