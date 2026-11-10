@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "foamy.lock",
   "name": "Foamy Lock",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "author": "foamrider",
   "description": "An Omarchy lock screen with account details, clock, media controls, and password or fingerprint authentication.",
   "kinds": [
