@@ -1,9 +1,10 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.6.0
-source 89659cbc1a9b
+version 0.7.0
+source 70c273dec6d6
 components FoamyButton,FoamyDropdown,FoamyI18n,FoamyIcon,FoamyIpc,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyStyle,FoamyWallClock,SafeTextField
+98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
 574d30ef6a5837ee493cea7a7195ca0563b456298d7ecb83f683d3380ab18760  kit/FoamyButton.qml
 b717a528267202710c196f4a67600467b292db64f643a502ea1eebb92df75095  kit/FoamyDropdown.qml
 1823e930a714d5adabc6349dc4e43ca810b971939970c5c503cb219fe96533b9  kit/FoamyI18n.qml
@@ -23,6 +24,8 @@ b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57  kit/LICENSE-LU
 717ba1949502290f8e47688ae2e323acd06c8ca47aec9f7596b15f678c1af4a2  kit/LICENSE-OMARCHY
 c741d6fcac65bfb155c54c3933addc244163c74642ceae4a28b68cec16367abf  kit/SafeTextField.qml
 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118  kit/clipboard.sh
+31cd6228f43b6b189e993ba517cbf8f18c4ba2681a4e71be49b853a39d6114ba  kit/native/build-native.sh
+eb004fb2f3a5ff6bc56fdd1dfba32c3aafcc8905f5f11b53c92370a8e77b9cc4  kit/native/native.py
 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df  kit/node-loader.cjs
 4f1ec25593e26533d81df8bd7ec8dafae76fa1c6e09ff495bf3564c7ec37339e  kit/qmldir
 a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7  kit/rust/foamy-helper/Cargo.toml
@@ -43,4 +46,4 @@ b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy
 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
-59c3505e9a3a16728a521626b705613826f74569871c12b75afa196bcc4af467  tests/kit-check.sh
+dc69e77dff312e43bf037de031f36688aa527c39b07fcdca7affdcc0f99abdae  tests/kit-check.sh
