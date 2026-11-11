@@ -22,8 +22,17 @@ runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
 cache = base / 'cache'
 cache.mkdir()
-for name in ['Artwork.qml', 'Model.js']:
-    shutil.copy(source / name, app)
+shutil.copy(source / 'Model.js', app)
+# The worker's command, switchable to one that can't start (no exited(),
+# only `running` going false).
+controller = (source / 'Artwork.qml').read_text()
+for before, after in [
+    ('  property bool busy: false\n', '  property bool busy: false\n  property bool testUnstartable: false\n'),
+    ('    command: FoamyNative.command(', '    command: root.testUnstartable ? [root.cacheHome + "/no-such-command"] : FoamyNative.command('),
+]:
+    assert controller.count(before) == 1, 'Artwork.qml no longer contains ' + repr(before)
+    controller = controller.replace(before, after)
+(app / 'Artwork.qml').write_text(controller)
 # The plugin's stamped kit (FoamyNative) and a recording stand-in for the
 # helper at bin/<arch>/foamy-lock-helper: it logs each real invocation and
 # execs the real helper. The slow case deliberately returns after SIGTERM to
@@ -72,6 +81,7 @@ ShellRoot {
     }
     function lock(value: bool): string { artwork.locked = value; return "ok" }
     function enabled(value: bool): string { artwork.allowed = value; return "ok" }
+    function unstartable(value: bool): string { artwork.testUnstartable = value; return "ok" }
     function status(): string {
       return JSON.stringify({state: artwork.state, error: artwork.error, path: artwork.path,
         busy: artwork.busy, entries: artwork.entries.length})
@@ -158,6 +168,23 @@ with log_path.open('w') as log:
         ready = wait_for(lambda s: s['state'] == 'ready' and not s['busy'])
         assert ready['path'] != first_path
         assert len(jobs()) == count + 1
+        # A worker that can't start reports no exit: the job still ends (no
+        # busy left behind, well before the 10 s watchdog), and later tracks
+        # still get a worker.
+        for name, color in [('unstartable.png', [9, 99, 199]), ('after.png', [199, 99, 9])]:
+            (cache / name).write_bytes(artwork.encode_png(bytes(color) * 256 * 256))
+        count = len(jobs())
+        ipc('unstartable', 'true')
+        ipc('track', (cache / 'unstartable.png').as_uri(), 'Unstartable')
+        started = time.monotonic()
+        failed = wait_for(lambda s: s['state'] == 'fallback' and not s['busy'])
+        assert failed['error'] == 'helper-exited', failed
+        assert time.monotonic() - started < 5, 'settled by the watchdog, not the failed start'
+        assert len(jobs()) == count
+        ipc('unstartable', 'false')
+        ipc('track', (cache / 'after.png').as_uri(), 'After')
+        ready = wait_for(lambda s: s['state'] == 'ready' and not s['busy'])
+        assert Path(ready['path']).is_file() and len(jobs()) == count + 1
         # No helper for this CPU (bash's exec exits 127): fallback, logged
         # once, and no helper is started for later tracks.
         helper.rename(helper.with_name('moved-away'))
@@ -174,7 +201,7 @@ with log_path.open('w') as log:
         ipc('enabled', 'false')
         assert status()['state'] == 'empty' and not status()['path']
         assert log_path.read_text().count('foamy.lock artwork: helper-unavailable') == 1, 'logged once'
-        print('PASS: real thumbnail, locked cache hit/miss, denied HTTPS, failure backoff, cancellation, stale result, coalescing, unavailable helper, disabled artwork')
+        print('PASS: real thumbnail, locked cache hit/miss, denied HTTPS, failure backoff, cancellation, stale result, coalescing, unstartable worker, unavailable helper, disabled artwork')
     finally:
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)

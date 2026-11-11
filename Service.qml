@@ -186,6 +186,18 @@ Item {
   property bool videoPending: false
   property bool videoHelperUnavailable: false
   property string videoFailure: ""
+  // The display commands run under a deadline in their own process group
+  // (timeout signals all of it), so a step that hangs can't hold back every
+  // later wake or blank. A wake lights the display first (a quick hyprctl
+  // call), then restores the keyboard backlight, which can wait on a
+  // blank's lock for up to that blank's deadline, and checks the clamshell.
+  readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "15s"]
+  readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]
+  // A wake asked for while a blank runs: the blank's display off can land
+  // after the wake's display on, so the wake runs again once the blank is
+  // done (wakeQueued: once the wake still running then is done).
+  property bool wakeAfterBlank: false
+  property bool wakeQueued: false
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -874,6 +886,7 @@ Item {
 
   function runWake() {
     displayBlanked = false
+    if (blankProcess.running) wakeAfterBlank = true
     if (!wakeProcess.running) wakeProcess.running = true
     if (lockRequested) armBlankTimer()
     resumeFingerprint()
@@ -951,6 +964,22 @@ Item {
     displayBlanked = true
     pauseFingerprint()
     if (!blankProcess.running) blankProcess.running = true
+  }
+
+  // blankProcess's end (also when it couldn't start): a wake that came
+  // meanwhile runs again, unless a blank came after it.
+  function blankFinished() {
+    if (!wakeAfterBlank) return
+    wakeAfterBlank = false
+    if (displayBlanked) return
+    if (wakeProcess.running) wakeQueued = true
+    else wakeProcess.running = true
+  }
+
+  function wakeFinished() {
+    if (!wakeQueued) return
+    wakeQueued = false
+    if (!displayBlanked && !wakeProcess.running) wakeProcess.running = true
   }
 
   function submitPassword(value) {
@@ -1412,7 +1441,19 @@ Item {
     clearEnvironment: true
     environment: ({ PATH: "/usr/bin", LANG: "C.UTF-8" })
     stdout: StdioCollector { id: backgroundOutput; waitForEnd: true }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter, and is settled as a failure there.
+    property bool exitSeen: false
     onExited: function(exitCode, exitStatus) {
+      exitSeen = true
+      finish(exitCode, exitStatus)
+    }
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      finish(-1, 1)
+    }
+    // exitCode -1: the probe couldn't start.
+    function finish(exitCode, exitStatus) {
       var data = null
       if (FoamyNative.unavailable(exitCode)) {
         root.wallpaperHelperUnavailable = true
@@ -1434,7 +1475,10 @@ Item {
         root.wallpaperError = ""
         root.refreshPoster()
       }
-      if (root.backgroundProbePending) root.refreshBackground()
+      if (root.backgroundProbePending) {
+        if (exitCode === -1) Qt.callLater(root.refreshBackground)
+        else root.refreshBackground()
+      }
     }
   }
 
@@ -1513,7 +1557,21 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: pictureOutput; waitForEnd: true }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter, and is settled as a failure there.
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      // Asked again by the next refresh, as a key not yet prepared.
+      root.applyPictureResult("")
+      root.pictureRequestKey = ""
+      if (root.picturePending) {
+        root.picturePending = false
+        Qt.callLater(root.refreshPicture)
+      }
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       if (FoamyNative.unavailable(exitCode)) {
         root.pictureHelperUnavailable = true
         root.applyPictureResult('{"ok":false,"error":"helper-unavailable"}')
@@ -1542,7 +1600,20 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: videoOutput; waitForEnd: true }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter, and is settled as a failure there.
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      root.applyVideoResult("", videoProc.request)
+      if (root.videoRequestKey === videoProc.request) root.videoRequestKey = ""
+      if (root.videoPending) {
+        root.videoPending = false
+        Qt.callLater(root.refreshVideo)
+      }
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       if (FoamyNative.unavailable(exitCode)) {
         root.videoHelperUnavailable = true
         root.applyVideoResult('{"ok":false,"error":"helper-unavailable"}', videoProc.request)
@@ -1569,7 +1640,19 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: avatarOutput; waitForEnd: true }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter, and is settled as a failure there.
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      root.applyAvatarResult("")
+      if (root.avatarThumbnailPending) {
+        root.avatarThumbnailPending = false
+        Qt.callLater(root.refreshAvatarThumbnail)
+      }
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       if (FoamyNative.unavailable(exitCode)) {
         root.avatarHelperUnavailable = true
         root.applyAvatarResult('{"ok":false,"error":"helper-unavailable"}')
@@ -1603,12 +1686,15 @@ Item {
     onTriggered: root.refreshFingerprintStatus()
   }
 
+  // bash reads its parent (this shell) and becomes timeout, which runs the
+  // check in its own process group and stops all of it after 10 s.
   Process {
     id: strandedLockCheckProc
-    command: ["bash", "-c", "omarchy-hyprland-session-lock-stranded \"$PPID\""]
+    command: ["bash", "-c", "exec timeout --kill-after=1s 10s omarchy-hyprland-session-lock-stranded \"$PPID\""]
     onExited: function(exitCode) {
-      // No output to read the lock off yet.
-      if (exitCode === 2) return
+      // No output to read the lock off yet, or no answer in time (timeout's
+      // 124 and 137): the retries ask again.
+      if (exitCode === 2 || exitCode === 124 || exitCode === 137) return
 
       root.strandedLockResolved = true
 
@@ -1618,14 +1704,18 @@ Item {
     }
   }
 
+  // Their exit codes don't matter: `running` going false is the one end,
+  // after an exit or a command that couldn't start alike.
   Process {
     id: wakeProcess
-    command: ["bash", "-c", "omarchy-system-wake"]
+    command: root.wakeDeadline.concat(["bash", "-c", "omarchy-system-wake"])
+    onRunningChanged: if (!running) Qt.callLater(root.wakeFinished)
   }
 
   Process {
     id: blankProcess
-    command: ["bash", "-c", "omarchy-brightness-keyboard off; omarchy-brightness-display off"]
+    command: root.blankDeadline.concat(["bash", "-c", "omarchy-brightness-keyboard off; omarchy-brightness-display off"])
+    onRunningChanged: if (!running) Qt.callLater(root.blankFinished)
   }
 
   Timer {

@@ -120,7 +120,10 @@ Item {
 
   // The draft on disk, Apply and Preview.
   // Set when a process is asked to start, cleared when it exits (a
-  // Process reports `running` only once it has started).
+  // Process reports `running` only once it has started). A command that
+  // couldn't start reports no exit, only `running` going false: each
+  // Process below settles that as a failure in onRunningChanged, which
+  // exitSeen keeps from settling an exit twice.
   property bool applying: false
   property bool previewing: false
   property bool draftRunning: false
@@ -653,7 +656,15 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: draftOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.draftRunning = false
+      sources.applyDraft(draftProc.op, -1, "")
+      Qt.callLater(sources.runDraft)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.draftRunning = false
       sources.applyDraft(draftProc.op, exitCode, draftOutput.text)
       sources.runDraft()
@@ -672,7 +683,15 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: applyOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applying = false
+      // Nothing ran: as exit 1, before anything is called.
+      sources.applyApply(1, "", applyProc.entry)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.applying = false
       sources.applyApply(exitCode, applyOutput.text, applyProc.entry)
     }
@@ -690,7 +709,15 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: presetOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.presetBusy = false
+      // Nothing ran: as exit 1, before anything is called.
+      sources.applyPresetReply(presetProc.op, 1, "", presetProc.payload)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.presetBusy = false
       sources.applyPresetReply(presetProc.op, exitCode, presetOutput.text, presetProc.payload)
     }
@@ -706,7 +733,14 @@ Item {
       "foamy-lock-studio-preview", look]
     stdout: StdioCollector { id: previewOutput; waitForEnd: true }
     stderr: StdioCollector { id: previewErrors; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.previewing = false
+      sources.applyPreview(-1, "", "")
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.previewing = false
       sources.applyPreview(exitCode, previewOutput.text, previewErrors.text)
     }
@@ -721,7 +755,14 @@ Item {
       "foamy-lock-studio-cover-art", mode]
     stdout: StdioCollector { id: coverArtOutput; waitForEnd: true }
     stderr: StdioCollector { id: coverArtErrors; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.coverArtBusy = false
+      sources.applyCoverArt(-1, "", "", coverArtProc.mode)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.coverArtBusy = false
       sources.applyCoverArt(exitCode, coverArtOutput.text, coverArtErrors.text, coverArtProc.mode)
     }
@@ -734,7 +775,15 @@ Item {
       'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock catalog',
       "foamy-lock-studio-catalog"]
     stdout: StdioCollector { id: catalogOutput; waitForEnd: true }
-    onExited: function(exitCode) { sources.applyCatalog(exitCode, catalogOutput.text) }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applyCatalog(-1, "")
+    }
+    onExited: function(exitCode) {
+      exitSeen = true
+      sources.applyCatalog(exitCode, catalogOutput.text)
+    }
   }
 
   Timer {
@@ -761,7 +810,19 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: videoProbeOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applyVideoProbe(-1, "", videoProbeProc.request)
+      // Asked again by the next refresh, as a video not yet probed.
+      if (sources.videoProbeKey === videoProbeProc.request) sources.videoProbeKey = ""
+      if (sources.videoProbePending) {
+        sources.videoProbePending = false
+        Qt.callLater(sources.refreshVideo)
+      }
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.applyVideoProbe(exitCode, videoProbeOutput.text, videoProbeProc.request)
       if (sources.videoProbePending) {
         sources.videoProbePending = false
@@ -789,7 +850,15 @@ Item {
         sources.applyConvertLine(data)
       }
     }
-    onExited: function(exitCode) { sources.applyConvert(exitCode, videoConvertProc.lastLine, videoConvertProc.request) }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applyConvert(-1, "", videoConvertProc.request)
+    }
+    onExited: function(exitCode) {
+      exitSeen = true
+      sources.applyConvert(exitCode, videoConvertProc.lastLine, videoConvertProc.request)
+    }
   }
 
   Process {
@@ -799,7 +868,14 @@ Item {
     clearEnvironment: true
     environment: ({ PATH: "/usr/bin", LANG: "C.UTF-8" })
     stdout: StdioCollector { id: wallpaperOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applyWallpaper(-1, "")
+      if (sources.wallpaperPending) Qt.callLater(sources.refreshWallpaper)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.applyWallpaper(exitCode, wallpaperOutput.text)
       if (sources.wallpaperPending) sources.refreshWallpaper()
     }
@@ -821,7 +897,14 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: posterOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.posterBusy = false
+      sources.applyPoster(-1, "", posterProc.sourcePath, posterProc.sourceSignature)
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.posterBusy = false
       sources.applyPoster(exitCode, posterOutput.text, posterProc.sourcePath, posterProc.sourceSignature)
     }
@@ -839,7 +922,19 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: pictureOutput; waitForEnd: true }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applyPicture(-1, "", pictureProc.request)
+      // Asked again by the next refresh, as a picture not yet prepared.
+      if (sources.pictureRequest === pictureProc.request) sources.pictureRequest = ""
+      if (sources.picturePending) {
+        sources.picturePending = false
+        Qt.callLater(sources.refreshPicture)
+      }
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.applyPicture(exitCode, pictureOutput.text, pictureProc.request)
       if (sources.picturePending) {
         sources.picturePending = false
@@ -857,13 +952,28 @@ Item {
       ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter"),
         FoamyI18n.t("studio.pick.media")]))
     stdout: StdioCollector { id: pickOutput; waitForEnd: true }
-    onExited: function(exitCode) { sources.applyPick(exitCode, pickOutput.text) }
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.applyPick(-1, "")
+    }
+    onExited: function(exitCode) {
+      exitSeen = true
+      sources.applyPick(exitCode, pickOutput.text)
+    }
   }
 
   Process {
     id: mugshotProbe
     command: ["test", "-x", sources.mugshotPath]
+    property bool exitSeen: false
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      sources.mugshotAvailable = false
+      sources.mugshotChecking = false
+    }
     onExited: function(exitCode) {
+      exitSeen = true
       sources.mugshotAvailable = exitCode === 0
       sources.mugshotChecking = false
     }

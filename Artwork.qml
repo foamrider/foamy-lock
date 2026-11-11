@@ -113,8 +113,27 @@ Item {
     lastStarted = Date.now()
     busy = true
     worker.stdinEnabled = true
-    worker.running = true
+    // Armed first: a command that can't start reports so inside this call.
     watchdog.start()
+    worker.running = true
+  }
+
+  // The worker's one completion: after its exit, or when it couldn't start
+  // (exitCode -1: no exit is reported then, only `running` going false).
+  function finishJob(exitCode) {
+    watchdog.stop()
+    busy = false
+    if (FoamyNative.unavailable(exitCode)) {
+      helperUnavailable = true
+      acceptResult('{"ok":false,"error":"helper-unavailable"}')
+    }
+    // Stream delivery can precede or follow exit. Defer until both have had
+    // a chance to run, then recover failed starts or schedule the newest track.
+    Qt.callLater(function() {
+      if (root.job && root.job.generation === root.generation && root.state === "loading")
+        root.acceptResult('{"ok":false,"error":"helper-exited"}')
+      root.refresh()
+    })
   }
 
   function acceptResult(text) {
@@ -151,8 +170,12 @@ Item {
     id: watchdog
     interval: 10000
     onTriggered: {
-      worker.signal(9)
+      // A running worker's exit settles the job (busy, the next track); one
+      // that isn't running has no exit to come, so the job ends here.
+      var running = worker.running
+      if (running) worker.signal(9)
       root.acceptResult('{"ok":false,"error":"helper-timeout"}')
+      if (!running) root.finishJob(-1)
     }
   }
   Process {
@@ -167,22 +190,18 @@ Item {
       stdinEnabled = false
     }
     // The helper always prints one line; no output means it never ran or was
-    // killed, which onExited settles (helper-unavailable, helper-exited).
+    // killed, which finishJob settles (helper-unavailable, helper-exited).
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: if (text) root.acceptResult(text) }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter.
+    property bool exitSeen: false
     onExited: function(exitCode) {
-      watchdog.stop()
-      root.busy = false
-      if (FoamyNative.unavailable(exitCode)) {
-        root.helperUnavailable = true
-        root.acceptResult('{"ok":false,"error":"helper-unavailable"}')
-      }
-      // Stream delivery can precede or follow exit. Defer until both have had
-      // a chance to run, then recover failed starts or schedule the newest track.
-      Qt.callLater(function() {
-        if (root.job && root.job.generation === root.generation && root.state === "loading")
-          root.acceptResult('{"ok":false,"error":"helper-exited"}')
-        root.refresh()
-      })
+      exitSeen = true
+      root.finishJob(exitCode)
+    }
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      if (root.busy) root.finishJob(-1)
     }
   }
 }
