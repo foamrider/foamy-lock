@@ -136,6 +136,13 @@ ShellRoot {
     property bool canPause: true
   }
 
+  // Every pending positioner layout, children first (see styles.qml): the
+  // step's timer can come before the frame that would run them.
+  function polishAll(item) {
+    for (var i = 0; i < item.children.length; i++)
+      polishAll(item.children[i])
+    item.ensurePolished()
+  }
   function findNamed(item, name) {
     if (item.objectName === name)
       return item
@@ -171,6 +178,7 @@ ShellRoot {
     repeat: true
     running: true
     onTriggered: {
+      shellRoot.polishAll(view)
       if (index < shellRoot.states.length) {
         var state = shellRoot.states[index]
         if (!applied) {
