@@ -885,6 +885,14 @@ function userPresetNameError(name) {
   return ""
 }
 
+// A name the user gives a preset (saved as new or renamed): the name rule,
+// and no leading "-": a rename passes the name to omarchy-shell as its own
+// argument, which its `qs ipc` fallback could read as an option. Names
+// already saved keep loading (userPresetNameError).
+function userPresetNewNameError(name) {
+  return userPresetNameError(name) || (name.charAt(0) === "-" ? "name must not start with -" : "")
+}
+
 // One item: "" when the lock can use it, else why not.
 function userPresetError(item) {
   if (!isPlainObject(item)) return "a user preset must be an object"
@@ -1034,6 +1042,7 @@ if (typeof module !== "undefined") {
   module.exports.ipcArgumentError = ipcArgumentError
   module.exports.userPresetIdError = userPresetIdError
   module.exports.userPresetNameError = userPresetNameError
+  module.exports.userPresetNewNameError = userPresetNewNameError
   module.exports.userPresetError = userPresetError
   module.exports.parseUserPresets = parseUserPresets
   module.exports.findUserPreset = findUserPreset

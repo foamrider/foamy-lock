@@ -188,5 +188,9 @@ test('items are checked like the lock reads them', () => {
     ['a', /must be an object/]])
     assert.match(Layout.userPresetError(item), pattern, JSON.stringify(item))
   assert.equal(Layout.userPresetNameError('x'.repeat(64)), '')
+  // Saved names starting with "-" keep loading; only new ones are refused.
+  assert.equal(Layout.userPresetNameError('-mine'), '')
+  assert.match(Layout.userPresetNewNameError('-mine'), /must not start with -/)
+  assert.equal(Layout.userPresetNewNameError('mine'), '')
   assert.equal(Layout.userPresetIdError('ok'), '')
 })

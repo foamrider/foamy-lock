@@ -2138,7 +2138,7 @@ Item {
     }
 
     function renamePreset(presetId: string, name: string): string {
-      var problem = Layout.userPresetIdError(presetId) || Layout.userPresetNameError(name)
+      var problem = Layout.userPresetIdError(presetId) || Layout.userPresetNewNameError(name)
       if (problem) return "invalid: " + problem
       if (root.currentlyLocked()) return "locked"
       var base = root.writableEntry()

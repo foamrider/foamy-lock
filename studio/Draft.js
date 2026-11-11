@@ -1143,9 +1143,9 @@ function presetId(now, salt) {
   return "u" + Math.max(0, Math.floor(Number(now) || 0)).toString(36) + (tail ? "-" + tail : "")
 }
 
-// "" when the lock takes `text` (trimmed) as a name, else why not.
+// "" when the lock takes `text` (trimmed) as a new name, else why not.
 function nameProblem(text) {
-  return Layout.userPresetNameError(String(text === undefined ? "" : text).trim())
+  return Layout.userPresetNewNameError(String(text === undefined ? "" : text).trim())
 }
 
 // `name`, or with " 2", " 3", … after it when a preset already has it.

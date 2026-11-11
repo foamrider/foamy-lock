@@ -4,7 +4,8 @@
 //! **stdin** (at most 256 KiB), a JSON object with only these keys:
 //! - `save`: `{"id", "name", "look"}`. `look` is a look (see `check_look`)
 //!   without `userPreset`; at most 64 KiB once compacted.
-//! - `rename`: `{"id", "name"}`.
+//! - `rename`: `{"id", "name"}`. The new name must not start with `-`: it
+//!   is its own argument to omarchy-shell (Layout.userPresetNewNameError).
 //! - `delete`: `{"id"}`.
 //!
 //! `id` is the client's own (1 to 40 lowercase letters, digits and dashes,
@@ -114,6 +115,12 @@ pub fn arguments(op: &str, request: &[u8]) -> Result<Vec<String>, Failure> {
         }
         "rename" => {
             let name = map["name"].as_str().unwrap_or_default().to_string();
+            // The name is an argument of its own here (a save carries it
+            // inside the item's JSON), and `qs ipc`, omarchy-shell's
+            // fallback, could take one starting with `-` for an option.
+            if name.starts_with('-') {
+                return Err(invalid("name must not start with -"));
+            }
             Ok(vec!["renamePreset".into(), id, name])
         }
         _ => Ok(vec!["deletePreset".into(), id]),
@@ -317,6 +324,8 @@ mod tests {
             ("rename", "{\"id\": \"a\", \"name\": \"\"}"),
             ("rename", "{\"id\": \"a\", \"name\": \"a\\nb\"}"),
             ("rename", "{\"id\": \"a\", \"name\": 3}"),
+            ("rename", "{\"id\": \"a\", \"name\": \"--help\"}"),
+            ("rename", "{\"id\": \"a\", \"name\": \"-A\"}"),
             ("rename", long.as_str()),
             ("rename", wide.as_str()),
             ("delete", "{\"id\": \"../a\"}"),
