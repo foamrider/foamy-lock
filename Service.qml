@@ -193,6 +193,13 @@ Item {
   // blank's lock for up to that blank's deadline, and checks the clamshell.
   readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "15s"]
   readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]
+  // The account and fingerprint probes are finite jobs too: getent can hang
+  // on a network NSS, and busctl and fprintd-list wait up to D-Bus's ~25 s
+  // per call. A probe cut off reads as no answer (the name and avatar stay;
+  // the fingerprint state is unknown and asked again), and later refreshes
+  // still run.
+  readonly property var identityDeadline: ["timeout", "--kill-after=1s", "5s"]
+  readonly property var fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "10s"]
   // A wake asked for while a blank runs: the blank's display off can land
   // after the wake's display on, so the wake runs again once the blank is
   // done (wakeQueued: once the wake still running then is done).
@@ -1517,10 +1524,23 @@ Item {
       stdinEnabled = false
     }
     stdout: StdioCollector { id: posterOutput; waitForEnd: true }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter, and is settled as a failure there.
+    property bool exitSeen: false
     onExited: function(exitCode, exitStatus) {
+      exitSeen = true
+      finish(exitCode, exitStatus)
+    }
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      finish(-1, 1)
+    }
+    // exitCode -1: the probe couldn't start.
+    function finish(exitCode, exitStatus) {
       // A theme can change during extraction; never show the previous theme's frame.
       if (sourcePath !== root.backgroundPath || sourceSignature !== root.backgroundSignature) {
-        root.refreshPoster()
+        if (exitCode === -1) Qt.callLater(root.refreshPoster)
+        else root.refreshPoster()
         return
       }
       var result = Model.videoProbeResult(exitCode === 0 && exitStatus === 0 ? posterOutput.text : "", root.videoCacheDirectory)
@@ -1536,13 +1556,15 @@ Item {
 
   Process {
     id: passwdIdentityProc
-    command: ["getent", "passwd", root.userName]
+    command: root.identityDeadline.concat(["getent", "passwd", root.userName])
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyPasswdIdentity(text)
     }
-    onExited: {
-      if (root.userName && !accountsIdentityProc.running) accountsIdentityProc.running = true
+    // `running` going false is the one end, after an exit or a command that
+    // couldn't start alike: AccountsService is asked next either way.
+    onRunningChanged: {
+      if (!running && root.userName && !accountsIdentityProc.running) accountsIdentityProc.running = true
     }
   }
 
@@ -1550,11 +1572,11 @@ Item {
     id: accountsIdentityProc
     // AccountsService owns the desktop-facing real name and avatar. getent and
     // ~/.face remain usable when the service or its optional fields are absent.
-    command: [
+    command: root.identityDeadline.concat([
       "bash", "-c",
       "uid=$(id -u -- \"$1\") || exit 1; exec busctl --system --json=short get-property org.freedesktop.Accounts \"/org/freedesktop/Accounts/User${uid}\" org.freedesktop.Accounts.User RealName IconFile UserName HomeDirectory",
       "lock-identity", root.userName
-    ]
+    ])
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyAccountsIdentity(text)
@@ -1688,11 +1710,21 @@ Item {
   // The probe hands fprintd-list's raw output (errors included) to
   // classifyProbe, which answers yes, no, or unknown; only a definitive
   // answer may change fingerprintConfigured. See applyFingerprintProbe.
+  // A probe cut off at its deadline (timeout's 124 or 137) or one that
+  // couldn't start is no answer: "unknown", asked again.
   Process {
     id: fingerprintCheckProc
-    command: ["bash", "-c", "if [[ -f /etc/pam.d/omarchy-lock-fingerprint ]] && command -v fprintd-list >/dev/null 2>&1; then LC_ALL=C fprintd-list \"$USER\" 2>&1; else echo no; fi"]
+    command: root.fingerprintProbeDeadline.concat(["bash", "-c", "if [[ -f /etc/pam.d/omarchy-lock-fingerprint ]] && command -v fprintd-list >/dev/null 2>&1; then LC_ALL=C fprintd-list \"$USER\" 2>&1; else echo no; fi"])
     stdout: StdioCollector { id: fingerprintCheckStdout; waitForEnd: true }
-    onExited: root.applyFingerprintProbe(fingerprintCheckStdout.text)
+    property bool exitSeen: false
+    onExited: function(exitCode, exitStatus) {
+      exitSeen = true
+      root.applyFingerprintProbe(exitCode === 124 || exitCode === 137 ? "" : fingerprintCheckStdout.text)
+    }
+    onRunningChanged: {
+      if (running || exitSeen) { exitSeen = false; return }
+      root.applyFingerprintProbe("")
+    }
   }
 
   // Retries a probe that could not reach fprintd, paced like the attempt

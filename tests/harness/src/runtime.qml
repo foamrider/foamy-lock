@@ -42,7 +42,7 @@ ShellRoot {
         probing: service.fingerprintProbeStreak,
         probeRetrying: service.testProbeRetry.running,
         backoff: service.fingerprintRetryBackoffMs, due: service.fingerprintRetryDueMs,
-        resumeWatching: service.testResume.running})
+        resumeWatching: service.testResume.running, probeRunning: service.testFingerprintCheck.running})
     }
     function fingerprintFail(): string {
       service.testFingerprintPam.active = false
@@ -61,6 +61,13 @@ ShellRoot {
     function blankNow(): string { service.runBlank(); return displayCommands() }
     // The idle countdown as a suspend leaves it: armed long ago.
     function blankGap(): string { service.testIdleBlank.armedAt -= 60000; return "ok" }
+    function identityRefresh(): string { service.refreshUserIdentity(); return "ok" }
+    function identity(): string {
+      return JSON.stringify({name: service.userDisplayName, passwd: service.testPasswd.running,
+        accounts: service.testAccounts.running})
+    }
+    function posterUnstartable(value: bool): string { service.testPosterUnstartable = value; return "ok" }
+    function posterState(): string { return JSON.stringify({running: service.testPoster.running}) }
     function unpause(): string { service.resumeFingerprint(); return "ok" }
     function sleepGap(): string { service.testResume.lastTickMs -= 10000; return "ok" }
     function strandedCheck(): string { service.strandedLockResolved = false; service.checkStrandedLock(); return "ok" }

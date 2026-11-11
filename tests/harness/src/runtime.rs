@@ -40,15 +40,19 @@ const COMMANDS: [(&str, &str); 9] = [
         "omarchy-shell",
         r#"printf "%s\n" "$*" >> "$HOME/omarchy-shell-calls"; echo "Function not found.""#,
     ),
+    // $HOME/getent-hang and $HOME/fprintd-hang make those probes hang (the
+    // pid in getent-pid, fprintd-pid); $HOME/getent-name is the real name.
     (
         "getent",
-        r#"printf "fixture:x:1000:1000:Foamy User:%s:/bin/sh\n" "$HOME""#,
+        r#"if [ -e "$HOME/getent-hang" ]; then sleep 60 & echo $! > "$HOME/getent-pid"; wait; fi
+printf "fixture:x:1000:1000:%s:%s:/bin/sh\n" "$(cat "$HOME/getent-name" 2>/dev/null || echo "Foamy User")" "$HOME""#,
     ),
     ("busctl", "exit 1"),
     ("magick", "exit 1"),
     (
         "fprintd-list",
-        r#"cat "$HOME/fingerprint-output" 2>/dev/null || echo no"#,
+        r#"if [ -e "$HOME/fprintd-hang" ]; then sleep 60 & echo $! > "$HOME/fprintd-pid"; wait; fi
+cat "$HOME/fingerprint-output" 2>/dev/null || echo no"#,
     ),
     (
         "omarchy-hyprland-session-lock-stranded",
@@ -131,6 +135,11 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testWake: wakeProcess
   property alias testBlank: blankProcess
   property alias testIdleBlank: idleBlankTimer
+  property alias testPasswd: passwdIdentityProc
+  property alias testAccounts: accountsIdentityProc
+  property alias testFingerprintCheck: fingerprintCheckProc
+  property alias testPoster: posterProc
+  property bool testPosterUnstartable: false
   property bool testStaleLocked: false";
     let replacements = [
         ("import Quickshell.Wayland", "import \"mocks\" as Mock"),
@@ -150,6 +159,12 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
         (
             r#"readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"])"#,
             r#"readonly property var posterProbeCommand: ["bash", "-c", "exec \"$0\" video-probe", root.home + "/fake-video-probe"]"#,
+        ),
+        // A poster probe that can't start (no exited(), only `running` going
+        // false), switched on by testPosterUnstartable.
+        (
+            r#"    command: ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)"#,
+            r#"    command: root.testPosterUnstartable ? [root.home + "/no-such-command"] : ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)"#,
         ),
         (
             "    anchors { top: true; bottom: true; left: true; right: true }",
@@ -178,6 +193,16 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
         (
             r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]"#,
             r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#,
+        ),
+        // The identity and fingerprint probes' deadlines: 2 s (probe_deadlines
+        // waits them out).
+        (
+            r#"readonly property var identityDeadline: ["timeout", "--kill-after=1s", "5s"]"#,
+            r#"readonly property var identityDeadline: ["timeout", "--kill-after=1s", "2s"]"#,
+        ),
+        (
+            r#"readonly property var fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "10s"]"#,
+            r#"readonly property var fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "2s"]"#,
         ),
         // Both PAM services are fixtures; enrollment must not depend on host setup.
         ("/etc/pam.d/omarchy-lock-password", &pam),
@@ -475,6 +500,10 @@ impl Test {
         self.ipc("test", method, &[])
     }
 
+    fn test_args(&self, method: &str, args: &[&str]) -> R<String> {
+        self.ipc("test", method, args)
+    }
+
     fn test_json(&self, method: &str) -> R<Value> {
         parse(&self.test(method)?)
     }
@@ -570,6 +599,7 @@ fn scenarios(test: &Test) -> R {
     stranded(test)?;
     display_commands(test)?;
     blank_after_resume(test)?;
+    probe_deadlines(test)?;
     test.test("missingPam")?;
     ensure!(test.lock("lock")? == "missing-pam");
     ensure!(!on(&test.status()?, "locked")?);
@@ -1855,6 +1885,15 @@ fn wallpaper(test: &Test) -> R {
         path()? == "",
         "without the helper a video must never reach Image"
     );
+    // A probe that can't start (no exited(), only `running` going false) is
+    // a failure too, and the next refresh probes again.
+    test.test_args("posterUnstartable", &["true"])?;
+    test.refresh_wallpaper()?;
+    test.wait_for(error_is("video-poster-failed"))?;
+    ensure!(path()? == "" && !on(&test.test_json("posterState")?, "running")?);
+    test.test_args("posterUnstartable", &["false"])?;
+    test.refresh_wallpaper()?;
+    test.wait_for(error_is("video-poster-unavailable"))?;
     probe("exit 1")?;
     test.refresh_wallpaper()?;
     test.wait_for(error_is("video-poster-failed"))?;
@@ -2506,6 +2545,87 @@ fn blank_after_resume(test: &Test) -> R {
     Ok(())
 }
 
+/// The account and fingerprint probes end at their deadlines (2 s here)
+/// with their children; later probes still run.
+fn probe_deadlines(test: &Test) -> R {
+    let identity = || test.test_json("identity");
+    let alive = |file: &str| -> R<bool> {
+        let pid = read(&test.path(file))?;
+        Ok(
+            fs::read_to_string(format!("/proc/{}/stat", pid.trim())).is_ok_and(|stat| {
+                stat.rsplit(')')
+                    .next()
+                    .is_some_and(|rest| !rest.trim_start().starts_with('Z'))
+            }),
+        )
+    };
+    // getent hangs (a network NSS): cut off, the name stays, and the next
+    // refresh reads the new one.
+    let hang = test.path("getent-hang");
+    write(&hang, "")?;
+    write(&test.path("getent-name"), "Renamed User")?;
+    let name = text(&identity()?, "name")?.to_string();
+    test.test("identityRefresh")?;
+    test.wait_for(|_| Ok(test.path("getent-pid").exists() && on(&identity()?, "passwd")?))?;
+    let started = Instant::now();
+    test.wait_for(|_| Ok(!on(&identity()?, "passwd")?))?;
+    ensure!(
+        started.elapsed() < Duration::from_millis(4500),
+        "the identity deadline stops getent: {:?}",
+        started.elapsed()
+    );
+    test.wait_for(|_| Ok(!alive("getent-pid")?))?;
+    ensure!(
+        text(&identity()?, "name")? == name,
+        "a cut-off probe is no answer"
+    );
+    unlink(&hang)?;
+    test.wait_for(|_| Ok(!on(&identity()?, "accounts")?))?;
+    test.test("identityRefresh")?;
+    test.wait_for(|_| Ok(text(&identity()?, "name")? == "Renamed User"))?;
+    unlink(&test.path("getent-name"))?;
+    test.test("identityRefresh")?;
+    test.wait_for(|_| Ok(text(&identity()?, "name")? == name))?;
+
+    // fprintd-list hangs: no answer ("unknown", asked again), not "no".
+    let output = test.path("fingerprint-output");
+    write(&output, "no")?;
+    test.test("fingerprintProbe")?;
+    test.wait_for(|_| {
+        let state = test.fingerprint()?;
+        Ok(!on(&state, "probeRunning")? && num(&state, "probing")? == 0.0)
+    })?;
+    let hang = test.path("fprintd-hang");
+    write(&hang, "")?;
+    test.test("fingerprintProbe")?;
+    test.wait_for(|_| {
+        Ok(test.path("fprintd-pid").exists() && on(&test.fingerprint()?, "probeRunning")?)
+    })?;
+    let started = Instant::now();
+    test.wait_for(|_| Ok(!on(&test.fingerprint()?, "probeRunning")?))?;
+    ensure!(
+        started.elapsed() < Duration::from_millis(4500),
+        "the probe deadline stops fprintd-list: {:?}",
+        started.elapsed()
+    );
+    test.wait_for(|_| Ok(!alive("fprintd-pid")?))?;
+    ensure!(
+        num(&test.fingerprint()?, "probing")? == 1.0,
+        "a cut-off probe is unknown"
+    );
+    unlink(&hang)?;
+    test.test("fingerprintProbe")?;
+    test.wait_for(|_| {
+        let state = test.fingerprint()?;
+        Ok(!on(&state, "probeRunning")? && num(&state, "probing")? == 0.0)
+    })?;
+    unlink(&output)?;
+    println!(
+        "PASS: a hung getent and fprintd-list end at their deadlines with their children; the name stays, the fingerprint is unknown, and later probes run"
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2534,7 +2654,12 @@ Item {
   readonly property int weatherRetryMs: 10000
   readonly property var wakeDeadline: [\"timeout\", \"--kill-after=1s\", \"15s\"]
   readonly property var blankDeadline: [\"timeout\", \"--kill-after=1s\", \"10s\"]
+  readonly property var identityDeadline: [\"timeout\", \"--kill-after=1s\", \"5s\"]
+  readonly property var fingerprintProbeDeadline: [\"timeout\", \"--kill-after=1s\", \"10s\"]
   readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(\".\")), \"foamy-lock-helper\", [\"video-probe\"])
+  Process {
+    command: [\"timeout\", \"--kill-after=1s\", \"65s\"].concat(root.posterProbeCommand)
+  }
 }
 ";
 
@@ -2548,7 +2673,11 @@ Item {
         assert!(
             patched.contains(r#"wakeDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
                 && patched.contains(r#"blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
+                && patched.contains(r#"identityDeadline: ["timeout", "--kill-after=1s", "2s"]"#)
+                && patched
+                    .contains(r#"fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "2s"]"#)
         );
+        assert!(patched.contains("command: root.testPosterUnstartable ? ["));
         assert!(patched.contains("root.home + \"/fake-video-probe\"]"));
         assert_eq!(
             patched
