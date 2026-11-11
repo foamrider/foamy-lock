@@ -1525,7 +1525,7 @@ class FakeDecoder(FakeDecoderBase):
                 timeout=10,
             ).stdout
         )
-        for (roots, source, accepted), verdict in zip(cases, verdicts):
+        for (roots, source, accepted), verdict in zip(cases, verdicts, strict=True):
             with self.subTest(roots=roots, url=source):
                 helper = self.faked({"url": source, "roots": roots})["ok"]
                 self.assertEqual(helper, accepted)
@@ -1586,7 +1586,9 @@ class RealDecoder(Workspace):
                 if extension == "png":
                     self.assertEqual(pixels, bytes([34, 120, 156]) * 65536)
                 else:
-                    self.assertTrue(all(abs(a - b) <= 8 for a, b in zip(pixels[:3000], [34, 120, 156] * 1000)))
+                    self.assertTrue(
+                        all(abs(a - b) <= 8 for a, b in zip(pixels[:3000], [34, 120, 156] * 1000, strict=True))
+                    )
                 self.assertEqual(Path(reply["path"]).stat().st_mode & 0o777, 0o600)
                 self.assertEqual(self.artwork.stat().st_mode & 0o777, 0o700)
         self.assertEqual(self.leftovers(), [])

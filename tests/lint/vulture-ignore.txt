@@ -1,0 +1,15 @@
+# Dynamic entry points Vulture can't see: `<name>  # reason` (foamy-kit tests/validate.sh).
+Requests  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+FakeDecoder  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+Lifecycle  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+RealDecoder  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+Sandbox  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+Https  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+HttpsDecoded  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+HttpsTrickle  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+Wallpaper  # unittest.TestCase in artwork_test.py, found by `unittest discover`
+do_GET  # http.server.BaseHTTPRequestHandler calls it by name for each GET (the test HTTPS server)
+log_message  # BaseHTTPRequestHandler's logging hook, overridden to keep the test output quiet
+protocol_version  # read by BaseHTTPRequestHandler (HTTP/1.1 keep-alive in the test server)
+close_connection  # read by BaseHTTPRequestHandler after each request
+daemon_threads  # read by socketserver.ThreadingMixIn (the test server's threads don't block exit)
