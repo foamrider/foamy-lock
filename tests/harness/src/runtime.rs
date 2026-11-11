@@ -2429,6 +2429,8 @@ Item {
   function screens() { var screens = Quickshell.screens || [] }
   readonly property int weatherPollMs: 900000
   readonly property int weatherRetryMs: 10000
+  readonly property var wakeDeadline: [\"timeout\", \"--kill-after=1s\", \"15s\"]
+  readonly property var blankDeadline: [\"timeout\", \"--kill-after=1s\", \"10s\"]
   readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(\".\")), \"foamy-lock-helper\", [\"video-probe\"])
 }
 ";
@@ -2440,6 +2442,10 @@ Item {
         assert!(patched.contains("property alias testResume: fingerprintResumeTimer\n"));
         assert!(patched.contains("locked: testStaleLocked || lockRequested"));
         assert!(patched.contains("weatherPollMs: 2500") && patched.contains("weatherRetryMs: 200"));
+        assert!(
+            patched.contains(r#"wakeDeadline: ["timeout", "--kill-after=1s", "1s"]"#)
+                && patched.contains(r#"blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
+        );
         assert!(patched.contains("root.home + \"/fake-video-probe\"]"));
         assert_eq!(
             patched
