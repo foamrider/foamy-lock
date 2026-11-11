@@ -1017,4 +1017,4 @@ right-to-left layout for right-to-left languages (media transport buttons keep t
 order). Plugin language overrides are no longer used.
 Missing translations fall back to English.
 
-Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed 4.5 shell. Set `OMARCHY_PATH` to another Omarchy tree to check that one.
+Translation checks: `python3 "$FOAMY_KIT/preview/i18n_runtime.py" .` (foamy-kit's shared check) switches the language live in an isolated shell and checks the catalogs, the English fallback, plurals and right-to-left layout.

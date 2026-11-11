@@ -1,17 +1,13 @@
-// Exercise the kit's real QML substitution code with catalog data in pure model tests.
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '../kit/FoamyI18n.qml'), 'utf8');
-const start = source.indexOf('  function englishText(');
-const end = source.indexOf('\n  // Plural form', start);
-const scope = vm.createContext({backend: null, english: {}, root: {number: value => String(value)}});
-vm.runInContext(source.slice(start, end), scope);
+// Exercise the kit's real substitution code (FoamyI18nText.js, which FoamyI18n
+// calls) with catalog data in pure model tests.
+const I18n = require('../kit/node-loader.cjs').load('FoamyI18nText');
 const en = require('../i18n/en.json');
 const no = require('../i18n/no.json');
+const translators = {
+  no: I18n.translator(no, en, value => String(value)),
+  en: I18n.translator(en, en, value => String(value)),
+};
 function text(key, language, values) {
-  const catalog = language === 'no' || language === 'nb' ? no : en;
-  scope.backend = {t(label, fallback) { return Object.hasOwn(catalog, label) ? catalog[label] : fallback; }};
-  return scope.t(key, values);
+  return translators[language === 'no' || language === 'nb' ? 'no' : 'en'].t(key, values);
 }
 module.exports = {text, no, en, norwegian: no, nb: no};

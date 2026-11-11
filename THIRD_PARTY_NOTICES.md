@@ -12,9 +12,9 @@ How the lists are made:
 
 ## `foamy-lock-helper`
 
-- `bin/aarch64/foamy-lock-helper`: sha256 `738b4739aa59b422d26fb22ad6eec07e331349c8ebbe0fad6d5a78e6f1491c50`
-- `bin/x86_64/foamy-lock-helper`: sha256 `6861a55c1c3ba13fcf9fe268ac5fdb869fff430becbbbc4117571f6ae2cdc4df`
-- `native/native.pin`: source `d1eabcc06037245fe7378944ff21e8e19e582785437526c555ae509be2484335`, toolchain 1.99.1
+- `bin/aarch64/foamy-lock-helper`: sha256 `d92e113a999b8cc78979b0edc79788ef9b2720319a23a3df5a9169e92afe041f`
+- `bin/x86_64/foamy-lock-helper`: sha256 `2a96539b3c3faacb38c964156b6ad6b832835f877986ea0e404f7720f68f4101`
+- `native/native.pin`: source `42c49376390711b79d208479538b3207a5e95ec62694ddb00f52638302202acf`, toolchain 1.99.1
 
 ### Crates linked into `foamy-lock-helper`
 
@@ -59,7 +59,7 @@ First-party crates (not third-party code, listed for completeness):
 
 | Crate | Version | Source | License | Arches | Notices |
 |---|---|---|---|---|---|
-| foamy-helper | 0.1.1 | `kit/rust/foamy-helper/` (foamy-kit, vendored) | MIT | both | [N12](#n12) |
+| foamy-helper | 0.1.2 | `kit/rust/foamy-helper/` (foamy-kit, vendored) | MIT | both | [N12](#n12) |
 | foamy-lock-helper | 0.1.0 | `native/` (this plugin) | MIT | both | `LICENSE` |
 
 ### Toolchain code linked into `foamy-lock-helper`
@@ -811,7 +811,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### N12
 
-Shipped by: foamy-helper 0.1.1 (foamy-kit's LICENSE).
+Shipped by: foamy-helper 0.1.2 (foamy-kit's LICENSE).
 
 ```text
 MIT License
