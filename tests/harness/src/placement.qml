@@ -100,6 +100,11 @@ ShellRoot {
     var file = Qt.resolvedUrl(name + ".ppm").toString().replace("file://", "")
     if (!view.grabToImage(function(result) { if (!result.saveToFile(file)) fail("saving " + file) })) fail("grab " + name)
   }
+  // Every pending positioner layout, children first (see styles.qml).
+  function polishAll(item) {
+    for (var i = 0; i < item.children.length; i++) polishAll(item.children[i])
+    item.ensurePolished()
+  }
   function sameRect(a, b) { return near(a.x, b.x) && near(a.y, b.y) && near(a.width, b.width) && near(a.height, b.height) }
   function expectProblem(code) {
     var problem = view.geometryProblem()
@@ -109,8 +114,8 @@ ShellRoot {
   }
 
   // Each case: a name, the view's state, and one or more phases. A phase
-  // sets the view up (`apply`), and the next tick (after the 300 ms
-  // debounce) checks it (`check`).
+  // sets the view up (`apply`), and a later tick checks it (`check`), once
+  // the view's geometry check has run for what the phase changed.
   readonly property var cases: [
     { name: "every key accepted at its default draws nothing new", phases: [
       { apply: function() { view.look = Layout.defaults() },
@@ -157,6 +162,22 @@ ShellRoot {
         check: function() {
           var date = findNamed(view, "dateLabel")
           if (date.width !== view.width - Math.round(64 * view.uiScale)) fail("date width " + date.width)
+        } }
+    ] },
+    { name: "a check right after a change measures the laid-out view", phases: [
+      { apply: function() { view.width = 1920; view.height = 1080; view.look = Layout.defaults() },
+        check: function() { expectProblem("") } },
+      // In the same turn as the resize, before any frame: the status line's
+      // Flow still has the old scale's layout until checkGeometry lays it out.
+      { apply: function() {
+          view.width = 800; view.height = 1000
+          view.checkGeometry()
+          shellRoot.saved = JSON.stringify(view.elementRects)
+        },
+        check: function() {
+          if (JSON.stringify(view.elementRects) !== shellRoot.saved)
+            fail("the check measured a half-laid-out view: " + shellRoot.saved + " then " + JSON.stringify(view.elementRects))
+          view.width = 1920; view.height = 1080
         } }
     ] },
     { name: "an offset off-screen", phases: [
@@ -542,12 +563,25 @@ ShellRoot {
 
   Timer {
     id: step
-    // Above the view's 300 ms geometry debounce.
+    // Above the view's 300 ms geometry debounce. Its timer restarts on each
+    // geometry change and fires late on a loaded machine, so a check also
+    // waits while view.geometryPending (polled every 50 ms, for at most
+    // 10 s): until then geometryProblemCode is the previous phase's.
     interval: 450
     repeat: true
     running: true
     property bool applied: false
+    property double waitingSince: 0
     onTriggered: {
+      shellRoot.polishAll(view)
+      if (applied && view.geometryPending) {
+        if (!waitingSince) waitingSince = Date.now()
+        else if (Date.now() - waitingSince > 10000) return shellRoot.fail("the geometry never settled")
+        interval = 50
+        return
+      }
+      waitingSince = 0
+      interval = 450
       if (shellRoot.caseAt >= shellRoot.cases.length) {
         console.log("PLACEMENT_PASS: " + shellRoot.cases.length + " cases")
         running = false

@@ -466,6 +466,15 @@ ShellRoot {
     checked++
   }
 
+  // Every pending positioner layout, children first. The step's 30 ms timer
+  // can come before the frame that would run them (a loaded machine), and
+  // a half-laid-out view isn't what is drawn: the status line's parts at
+  // the new scale in its Flow at the old one.
+  function polishAll(item) {
+    for (var i = 0; i < item.children.length; i++) polishAll(item.children[i])
+    item.ensurePolished()
+  }
+
   function grab(name) {
     if (!capture) return
     busy = true
@@ -484,6 +493,7 @@ ShellRoot {
     running: true
     onTriggered: {
       if (shellRoot.busy) return
+      shellRoot.polishAll(view)
       if (shellRoot.caseAt < shellRoot.cases.length) {
         var item = shellRoot.cases[shellRoot.caseAt]
         var state = shellRoot.states[shellRoot.stateAt]

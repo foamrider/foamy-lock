@@ -585,10 +585,27 @@ Item {
     return Layout.lookGeometryError(placed, shownRects(), width, height, Math.round(4 * uiScale))
   }
 
+  // The elements' own positioners (a Row's or Flow's size and places) run at
+  // the next frame's polish, and a timer on a busy machine can come first:
+  // the status line then measures its parts at the new scale but its Flow
+  // at the old one. Lay them out now, children first.
+  function polishElements() {
+    function polish(item) {
+      for (var i = 0; i < item.children.length; i++) polish(item.children[i])
+      item.ensurePolished()
+    }
+    for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+      var item = elementItem(Layout.ELEMENTS[i])
+      if (item) polish(item)
+    }
+  }
+
   // Check the geometry and, unless only reporting (latchFallback false),
-  // fall back a stage on a problem.
+  // fall back a stage on a problem. It measures laid-out elements, so a
+  // fallback is never latched on a half-updated layout.
   function checkGeometry() {
     if (!(width > 0 && height > 0)) return
+    polishElements()
     var error = geometryProblem()
     geometryProblemCode = error
     if (!error || !latchFallback) return
@@ -610,6 +627,10 @@ Item {
   // offset or scale alone counts); any change re-arms the debounce.
   readonly property string geometryKey: [width, height, JSON.stringify(elementRects)].join(",")
   onGeometryKeyChanged: geometryTimer.restart()
+  // From a geometry change until its check has run (geometryProblemCode is
+  // then current). The debounce restarts on every change, and its timer can
+  // fire late on a busy machine, so a fixed wait isn't enough to know.
+  readonly property bool geometryPending: geometryTimer.running
   onLookChanged: {
     fallbackPreset = ""
     layoutError = ""
