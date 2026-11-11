@@ -276,7 +276,7 @@ function auroraCurtains(s, x, aspect, curtains) {
 
 var aurora = {
   fraction: 0.5,
-  prepare: function(s, fw, fh) {
+  prepare: function(s) {
     var aspect = s.w / Math.max(s.h, 1)
     var curtains = [[0, 0, 0, 0], [0, 0, 0, 0]]
     var tint = [0, 0, 0]

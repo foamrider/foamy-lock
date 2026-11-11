@@ -4,5 +4,3 @@
 Model.js: eslint(no-useless-escape): Unnecessary escape character '/' | var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
 Model.js: eslint(no-useless-escape): Unnecessary escape character '/' | var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
 Model.js: eslint(no-useless-escape): Unnecessary escape character '[' | var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
-elements/BackdropStill.js: eslint(no-unused-vars): Parameter 'fh' is declared but never used. | prepare: function(s, fw, fh) {
-elements/BackdropStill.js: eslint(no-unused-vars): Parameter 'fw' is declared but never used. | prepare: function(s, fw, fh) {
