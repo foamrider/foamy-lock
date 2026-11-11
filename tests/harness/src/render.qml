@@ -109,7 +109,8 @@ ShellRoot {
       repeat: false
       running: true
       onTriggered: {
-        var input = view.children[0] // Locate the editor by objectName below.
+        // Locate the editor by objectName below.
+        var input = view.children[0]
         function findNamed(item, name) {
           if (item.objectName === name) return item
           for (var i = 0; i < item.children.length; i++) {
