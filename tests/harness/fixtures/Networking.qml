@@ -1,7 +1,16 @@
 pragma Singleton
 import QtQuick
+
 QtObject {
-  enum State { Full, Portal, Limited, None, Wired }
+  enum State {
+    Full,
+    Portal,
+    Limited,
+    None,
+    Wired
+  }
   property int connectivity: Networking.Full
-  property var devices: ({values: []})
+  property var devices: ({
+      values: []
+    })
 }

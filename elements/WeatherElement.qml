@@ -53,9 +53,7 @@ Item {
   readonly property string temperatureText: report ? FoamyI18n.number(report.temperature) + "°" : ""
   // The condition: with "full", and always in the line, large and card.
   readonly property string conditionText: report && (full || textLine || large) ? String(report.condition || "") : ""
-  readonly property string rangeText: report && full && report.high !== null && report.low !== null
-    ? FoamyI18n.t("High %1", [FoamyI18n.number(report.high) + "°"]) + "  " + FoamyI18n.t("Low %1", [FoamyI18n.number(report.low) + "°"])
-    : ""
+  readonly property string rangeText: report && full && report.high !== null && report.low !== null ? FoamyI18n.t("High %1", [FoamyI18n.number(report.high) + "°"]) + "  " + FoamyI18n.t("Low %1", [FoamyI18n.number(report.low) + "°"]) : ""
   readonly property string locationText: report && showLocation ? String(report.location || "") : ""
   // The widest it grows: the centre column at its scale.
   readonly property real maxWidth: view.contentWidthAt(uiScale)
@@ -65,24 +63,19 @@ Item {
   // are short, so a long condition elides after them); "large", the
   // condition, then the high and low; "detailed" and "card", the condition
   // alone, the high and low on a line of their own.
-  readonly property string detailText: detailed || card ? conditionText
-    : (compact ? [rangeText, conditionText] : [conditionText, rangeText])
-      .filter(function(part) { return part !== "" }).join("  ·  ")
+  readonly property string detailText: detailed || card ? conditionText : (compact ? [rangeText, conditionText] : [conditionText, rangeText]).filter(function (part) {
+    return part !== ""
+  }).join("  ·  ")
   // "line": everything on one line, the condition first.
-  readonly property string lineText: [conditionText, temperatureText, rangeText, locationText]
-    .filter(function(part) { return part !== "" }).join(" · ")
+  readonly property string lineText: [conditionText, temperatureText, rangeText, locationText].filter(function (part) {
+    return part !== ""
+  }).join(" · ")
   readonly property real headWidth: (iconShown && !card ? icon.width + gap : 0) + temperature.implicitWidth
   // The width it needs (and takes: the weather never fills the centre column).
-  readonly property real naturalWidth: detailed ? Math.min(maxWidth, Math.round(300 * unit))
-    : card ? Math.min(maxWidth, Math.round(240 * unit))
-    : pill ? Math.min(maxWidth, line.implicitWidth + 2 * padding)
-    : textLine ? Math.min(maxWidth, lineLabel.implicitWidth)
-    : Math.min(maxWidth, Math.max(headWidth, detailLine.shown ? detailLine.implicitWidth : 0,
-      placeLine.shown ? placeLine.implicitWidth : 0))
+  readonly property real naturalWidth: detailed ? Math.min(maxWidth, Math.round(300 * unit)) : card ? Math.min(maxWidth, Math.round(240 * unit)) : pill ? Math.min(maxWidth, line.implicitWidth + 2 * padding) : textLine ? Math.min(maxWidth, lineLabel.implicitWidth) : Math.min(maxWidth, Math.max(headWidth, detailLine.shown ? detailLine.implicitWidth : 0, placeLine.shown ? placeLine.implicitWidth : 0))
   readonly property real innerWidth: width - 2 * padding
   // The card centres its lines; the others follow the zone.
-  readonly property int textAlignment: card || alignment === "center" ? Text.AlignHCenter
-    : alignment === "end" ? Text.AlignRight : Text.AlignLeft
+  readonly property int textAlignment: card || alignment === "center" ? Text.AlignHCenter : alignment === "end" ? Text.AlignRight : Text.AlignLeft
 
   objectName: "weatherBlock"
   width: naturalWidth
@@ -90,9 +83,7 @@ Item {
   // Where the lines below the temperature end. Each line's own `shown`, not
   // `visible`, which is false in a hidden view (Lock Studio measures and
   // checks looks in views that are never drawn).
-  readonly property real lastLineBottom: placeLine.shown ? placeLine.y + placeLine.height
-    : rangeLine.shown ? rangeLine.y + rangeLine.height
-    : detailLine.shown ? detailLine.y + detailLine.height : head.y + head.height
+  readonly property real lastLineBottom: placeLine.shown ? placeLine.y + placeLine.height : rangeLine.shown ? rangeLine.y + rangeLine.height : detailLine.shown ? detailLine.y + detailLine.height : head.y + head.height
 
   // Where a part of `partWidth` starts inside the element, on screen.
   function startX(partWidth) {
@@ -106,13 +97,20 @@ Item {
     var cloud = "M7 18a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 9.5a4.25 4.25 0 0 1 0 8.5Z"
     var high = "M7 14a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 5.5a4.25 4.25 0 0 1 0 8.5Z"
     switch (group) {
-    case "clear": return "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"
-    case "partly": return "M8 2.5v1.5 M3.2 4.2l1.1 1.1 M12.8 4.2l-1.1 1.1 M2 9h1.5 M4.6 11.6A3.5 3.5 0 1 1 11.4 7.6 M9 20a3.5 3.5 0 0 1-.5-6.96A5 5 0 0 1 18 12.5a3.75 3.75 0 0 1 0 7.5Z"
-    case "fog": return "M5 7h14 M3 11h18 M5 15h14 M8 19h8"
-    case "rain": return high + " M8 17l-1 3 M12 17l-1 3 M16 17l-1 3"
-    case "sleet": return high + " M8 17l-1 3 M16 17l-1 3 M12 18.5h.01"
-    case "snow": return high + " M8 17.5h.01 M12 19.5h.01 M16 17.5h.01 M10 21.5h.01 M14 21.5h.01"
-    case "thunder": return high + " M13 15l-3 4h4l-3 4"
+    case "clear":
+      return "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"
+    case "partly":
+      return "M8 2.5v1.5 M3.2 4.2l1.1 1.1 M12.8 4.2l-1.1 1.1 M2 9h1.5 M4.6 11.6A3.5 3.5 0 1 1 11.4 7.6 M9 20a3.5 3.5 0 0 1-.5-6.96A5 5 0 0 1 18 12.5a3.75 3.75 0 0 1 0 7.5Z"
+    case "fog":
+      return "M5 7h14 M3 11h18 M5 15h14 M8 19h8"
+    case "rain":
+      return high + " M8 17l-1 3 M12 17l-1 3 M16 17l-1 3"
+    case "sleet":
+      return high + " M8 17l-1 3 M16 17l-1 3 M12 18.5h.01"
+    case "snow":
+      return high + " M8 17.5h.01 M12 19.5h.01 M16 17.5h.01 M10 21.5h.01 M14 21.5h.01"
+    case "thunder":
+      return high + " M13 15l-3 4h4l-3 4"
     }
     return cloud
   }
@@ -218,8 +216,7 @@ Item {
     readonly property bool shown: head.shown && weather.locationText !== ""
     visible: shown
     x: weather.padding
-    y: (rangeLine.shown ? rangeLine.y + rangeLine.height : detailLine.shown ? detailLine.y + detailLine.height
-      : head.y + head.height) + Math.round(2 * weather.unit)
+    y: (rangeLine.shown ? rangeLine.y + rangeLine.height : detailLine.shown ? detailLine.y + detailLine.height : head.y + head.height) + Math.round(2 * weather.unit)
     width: weather.innerWidth
     textFormat: Text.PlainText
     text: weather.locationText
@@ -256,11 +253,9 @@ Item {
     id: line
     objectName: "weatherLine"
     visible: weather.pill
-    readonly property real fixedWidth: pillIcon.width + pillTemperature.implicitWidth + pillRange.implicitWidth
-      + (parts - 1) * spacing
+    readonly property real fixedWidth: pillIcon.width + pillTemperature.implicitWidth + pillRange.implicitWidth + (parts - 1) * spacing
     // The parts on the line (not visibleChildren: none are in a hidden view).
-    readonly property int parts: 2 + (weather.conditionText !== "" ? 1 : 0) + (weather.rangeText !== "" ? 1 : 0)
-      + (weather.locationText !== "" ? 1 : 0)
+    readonly property int parts: 2 + (weather.conditionText !== "" ? 1 : 0) + (weather.rangeText !== "" ? 1 : 0) + (weather.locationText !== "" ? 1 : 0)
     readonly property real room: Math.max(0, weather.maxWidth - 2 * weather.padding - fixedWidth)
     x: weather.startX(width)
     anchors.verticalCenter: parent.verticalCenter

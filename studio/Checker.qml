@@ -21,7 +21,11 @@ Item {
   property var sizes: []
   property bool active: true
   // The lock's settings (time format, user info, media), as on the lock.
-  property var settings: ({ timeFormat: "24h", showUserInfo: true, showMedia: true })
+  property var settings: ({
+      timeFormat: "24h",
+      showUserInfo: true,
+      showMedia: true
+    })
   property var problems: []
   // How long the last check took, for the cost note (ms).
   property real lastCheckMs: 0
@@ -46,18 +50,37 @@ Item {
     var found = []
     for (var i = 0; i < views.count; i++) {
       var view = views.itemAt(i)
-      if (!view || !(view.width > 0) || !view.size) continue
+      if (!view || !(view.width > 0) || !view.size)
+        continue
       var code = view.geometryProblem()
       var size = view.size
-      if (code) found.push({ key: size.key, label: size.label, reference: !!size.reference, width: size.width, height: size.height,
-        code: code, names: Draft.problemElements(code, view.placed, view.elementRects, view.width, view.height) })
+      if (code)
+        found.push({
+          key: size.key,
+          label: size.label,
+          reference: !!size.reference,
+          width: size.width,
+          height: size.height,
+          code: code,
+          names: Draft.problemElements(code, view.placed, view.elementRects, view.width, view.height)
+        })
       var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
       for (var a = 0; a < advice.length; a++)
-        found.push({ key: size.key, label: size.label, reference: !!size.reference, width: size.width, height: size.height,
-          code: advice[a].code, names: advice[a].names, advice: true, shape: advice[a].index })
+        found.push({
+          key: size.key,
+          label: size.label,
+          reference: !!size.reference,
+          width: size.width,
+          height: size.height,
+          code: advice[a].code,
+          names: advice[a].names,
+          advice: true,
+          shape: advice[a].index
+        })
     }
     lastCheckMs = Date.now() - started
-    if (!Draft.same(found, problems)) problems = found
+    if (!Draft.same(found, problems))
+      problems = found
   }
 
   Timer {

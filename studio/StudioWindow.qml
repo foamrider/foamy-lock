@@ -56,9 +56,11 @@ FocusScope {
   // preview shows).
   readonly property bool moving: awake && Window.active
   // Everything is saved (or discarded): the app may end now.
-  signal quitConfirmed()
+  signal quitConfirmed
 
-  property var history: Draft.history({ preset: LockLayout.DEFAULT_PRESET })
+  property var history: Draft.history({
+    preset: LockLayout.DEFAULT_PRESET
+  })
   readonly property var draft: history.present
   readonly property var look: Draft.lookOf(draft)
   // A slider's value while it is dragged (shown, not yet committed).
@@ -96,14 +98,18 @@ FocusScope {
   readonly property var lockSettings: lockSources.settings
   readonly property var problems: lockChecker.problems
   // Shape advice (Layout.shapeAdvice) only warns, like a reference size.
-  readonly property bool applyBlocked: problems.some(function(problem) { return !problem.reference && !problem.advice })
+  readonly property bool applyBlocked: problems.some(function (problem) {
+    return !problem.reference && !problem.advice
+  })
   readonly property int changes: Draft.changeCount(draft)
   readonly property var panes: [library, canvasPane, inspectorPane, header]
 
   // --- saving state ----------------------------------------------------------
   // The lock's saved look (a sparse entry): from shell.json, and the applied
   // look after an Apply.
-  property var savedDraft: ({ preset: LockLayout.DEFAULT_PRESET })
+  property var savedDraft: ({
+      preset: LockLayout.DEFAULT_PRESET
+    })
   // "loading" until the draft on disk and shell.json are read, "ask" while
   // the restore question shows, then "ready" (only then is the draft
   // written).
@@ -120,21 +126,23 @@ FocusScope {
   property bool quitAsked: false
   property bool quitAfterApply: false
   property bool quitting: false
-  readonly property bool canApply: session === "ready" && unapplied && !applyBlocked && !lockChecker.pending
-    && !lockSources.applying && !lockSources.presetBusy && !applyAfterPreset && !quitting
+  readonly property bool canApply: session === "ready" && unapplied && !applyBlocked && !lockChecker.pending && !lockSources.applying && !lockSources.presetBusy && !applyAfterPreset && !quitting
   readonly property bool canPreview: session === "ready" && !lockSources.previewing && !quitting
   // Reset can go back to the saved look, or to the preset without changes.
   readonly property bool canReset: session === "ready" && !quitting && (unapplied || presetChanged)
-  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked || resetAsked
-    || nameAsked !== "" || deleteAsked !== ""
+  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked || resetAsked || nameAsked !== "" || deleteAsked !== ""
 
   // Foamy Weather: unless the lock's catalog says it can't reach it, the
   // weather can be shown. Without it a hidden weather can't be shown (its
   // library row is disabled: "Needs Foamy Weather"); a shown one can still
   // be selected, moved and hidden.
   readonly property bool weatherAvailable: lockSources.weatherTarget !== false
-  function canShow(name) { return name !== "weather" || weatherAvailable }
-  function moduleUsable(name) { return canShow(name) || !(look.elements[name] && look.elements[name].hidden) }
+  function canShow(name) {
+    return name !== "weather" || weatherAvailable
+  }
+  function moduleUsable(name) {
+    return canShow(name) || !(look.elements[name] && look.elements[name].hidden)
+  }
 
   // --- user presets ----------------------------------------------------------
   // [{ id, name, look, effective }], newest first (LockSources).
@@ -156,13 +164,15 @@ FocusScope {
   property string deleteAsked: ""
   // Saved as a preset, to apply next: the entry with its link, or null.
   property var applyAfterPreset: null
-  readonly property bool canSavePreset: session === "ready" && !applyBlocked && !lockChecker.pending
-    && !lockSources.applying && !lockSources.presetBusy && !applyAfterPreset && !quitting
+  readonly property bool canSavePreset: session === "ready" && !applyBlocked && !lockChecker.pending && !lockSources.applying && !lockSources.presetBusy && !applyAfterPreset && !quitting
 
   LayoutMirroring.enabled: rightToLeft
   LayoutMirroring.childrenInherit: true
 
-  Keys.onPressed: function(event) { if (studio.appKey(event.key, event.modifiers, event.text)) event.accepted = true }
+  Keys.onPressed: function (event) {
+    if (studio.appKey(event.key, event.modifiers, event.text))
+      event.accepted = true
+  }
 
   // Every edit keeps the draft's link to the user preset it is based on;
   // `link` ("" for none) replaces it (picking a preset, Reset).
@@ -174,16 +184,19 @@ FocusScope {
   // Any change to the draft or its history (edits, undo, redo, presets):
   // written to disk a moment later; the header's last message is out of date.
   onHistoryChanged: {
-    if (session !== "ready") return
+    if (session !== "ready")
+      return
     notice = null
-    if (!quitting) draftTimer.restart()
+    if (!quitting)
+      draftTimer.restart()
   }
 
   // --- the draft on disk ---------------------------------------------------------
 
   // Both the draft and the saved look are known: start, or ask.
   function startSession() {
-    if (session !== "loading" || !draftReport || !lockSources.configKnown) return
+    if (session !== "loading" || !draftReport || !lockSources.configKnown)
+      return
     var report = draftReport
     if (report.status === "loaded" && !Draft.sameLook(report.history.present, savedDraft)) {
       // Shown behind the question, as "Continue editing" keeps it.
@@ -196,13 +209,22 @@ FocusScope {
     // The same look as the lock's keeps its undo steps; nothing to ask.
     history = report.status === "loaded" ? report.history : Draft.history(savedDraft)
     session = "ready"
-    if (report.status === "corrupt") notice = { kind: "warning", text: FoamyI18n.t("studio.draft.corrupt") }
-    else if (report.status === "failed") notice = { kind: "warning", text: FoamyI18n.t("studio.draft.loadFailed", codeText(report.code)) }
+    if (report.status === "corrupt")
+      notice = {
+        kind: "warning",
+        text: FoamyI18n.t("studio.draft.corrupt")
+      }
+    else if (report.status === "failed")
+      notice = {
+        kind: "warning",
+        text: FoamyI18n.t("studio.draft.loadFailed", codeText(report.code))
+      }
   }
 
   // The answer: keep editing the draft, or start from the saved look.
   function answerRestore(keep) {
-    if (session !== "ask") return
+    if (session !== "ask")
+      return
     if (!keep) {
       history = Draft.history(savedDraft)
       lockSources.clearDraft()
@@ -214,9 +236,11 @@ FocusScope {
 
   function writeDraft() {
     draftTimer.stop()
-    if (session !== "ready") return
+    if (session !== "ready")
+      return
     // Nothing to keep: the lock's look, with no steps to undo.
-    if (!unapplied && !Draft.canUndo(history)) return
+    if (!unapplied && !Draft.canUndo(history))
+      return
     lockSources.saveDraft(history)
   }
 
@@ -235,35 +259,50 @@ FocusScope {
   // with changes on a user preset updates it first; one with changes on a
   // built-in preset asks for a name first (not while quitting).
   function apply() {
-    if (!canApply) return
+    if (!canApply)
+      return
     var mode = Draft.saveMode(draft, userPresets)
-    if (mode === "builtin" && !quitAfterApply) askName("new")
-    else if (mode === "user") savePresetThenApply(linkedPreset.id, linkedPreset.name)
-    else applyEntry(Draft.forSaving(draft, userPresets))
+    if (mode === "builtin" && !quitAfterApply)
+      askName("new")
+    else if (mode === "user")
+      savePresetThenApply(linkedPreset.id, linkedPreset.name)
+    else
+      applyEntry(Draft.forSaving(draft, userPresets))
   }
 
   function applyEntry(entry) {
     writeDraft()
-    if (lockSources.applyLook(entry)) notice = { kind: "busy", text: "" }
+    if (lockSources.applyLook(entry))
+      notice = {
+        kind: "busy",
+        text: ""
+      }
   }
 
   // `studio preset save`, then (when the lock has it) Apply with the link.
   function savePresetThenApply(id, name) {
     writeDraft()
     var entry = Draft.carry(draft, id)
-    if (!lockSources.runPreset("save", Draft.presetItem(id, name, draft))) return
+    if (!lockSources.runPreset("save", Draft.presetItem(id, name, draft)))
+      return
     applyAfterPreset = entry
-    notice = { kind: "busy", text: "" }
+    notice = {
+      kind: "busy",
+      text: ""
+    }
   }
 
   // --- user presets: naming, rename, delete ------------------------------------
 
   // `mode` is "new", "copy" or "rename" (with the preset's `id`).
   function askName(mode, id) {
-    if (questionOpen) return
+    if (questionOpen)
+      return
     var preset = id ? LockLayout.findUserPreset(userPresets, id) : null
-    if (mode === "rename" && !preset) return
-    if (mode !== "rename" && !canSavePreset) return
+    if (mode === "rename" && !preset)
+      return
+    if (mode !== "rename" && !canSavePreset)
+      return
     presetMenu.close()
     nameTarget = preset ? preset.id : ""
     nameDefault = preset ? preset.name : Draft.uniqueName(FoamyI18n.t("studio.presetName.default", basisLabel), userPresets)
@@ -277,20 +316,31 @@ FocusScope {
   // "cancel" (the draft stays as it is).
   function answerName(answer) {
     var mode = nameAsked
-    if (!mode) return
-    if (answer === "save" && nameProblem !== "") return
+    if (!mode)
+      return
+    if (answer === "save" && nameProblem !== "")
+      return
     var name = nameField.field.text.trim()
     nameAsked = ""
-    if (answer === "plain" && mode === "new") applyEntry(Draft.forSaving(draft, userPresets))
+    if (answer === "plain" && mode === "new")
+      applyEntry(Draft.forSaving(draft, userPresets))
     else if (answer === "save" && mode === "rename") {
-      if (lockSources.runPreset("rename", { id: nameTarget, name: name }))
-        notice = { kind: "busy", text: "" }
-    } else if (answer === "save") savePresetThenApply(Draft.presetId(Date.now(), Math.random().toString(36).slice(2, 7)), name)
+      if (lockSources.runPreset("rename", {
+        id: nameTarget,
+        name: name
+      }))
+        notice = {
+          kind: "busy",
+          text: ""
+        }
+    } else if (answer === "save")
+      savePresetThenApply(Draft.presetId(Date.now(), Math.random().toString(36).slice(2, 7)), name)
     applyButton.enabled ? applyButton.forceActiveFocus(Qt.OtherFocusReason) : lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
   }
 
   function requestDelete(id) {
-    if (questionOpen || !LockLayout.findUserPreset(userPresets, id) || lockSources.presetBusy) return
+    if (questionOpen || !LockLayout.findUserPreset(userPresets, id) || lockSources.presetBusy)
+      return
     presetMenu.close()
     deleteAsked = id
     deleteCancel.forceActiveFocus(Qt.PopupFocusReason)
@@ -299,8 +349,13 @@ FocusScope {
   function answerDelete(remove) {
     var id = deleteAsked
     deleteAsked = ""
-    if (remove && id && lockSources.runPreset("delete", { id: id }))
-      notice = { kind: "busy", text: "" }
+    if (remove && id && lockSources.runPreset("delete", {
+      id: id
+    }))
+      notice = {
+        kind: "busy",
+        text: ""
+      }
     library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
 
@@ -310,8 +365,13 @@ FocusScope {
   }
 
   function previewFull() {
-    if (!canPreview) return
-    if (lockSources.previewLook(draft)) notice = { kind: "busy", text: "" }
+    if (!canPreview)
+      return
+    if (lockSources.previewLook(draft))
+      notice = {
+        kind: "busy",
+        text: ""
+      }
   }
 
   // One result in words ("" when it went well: nothing to say). `action`
@@ -320,42 +380,65 @@ FocusScope {
   function resultText(report, action) {
     var preset = action === "save" || action === "rename" || action === "delete"
     // A lock from before setCoverArt.
-    if (action === "coverArt" && report.result === "function-not-found") return FoamyI18n.t("studio.coverArt.older")
+    if (action === "coverArt" && report.result === "function-not-found")
+      return FoamyI18n.t("studio.coverArt.older")
     switch (report.result) {
-    case "ok": case "unchanged":
+    case "ok":
+    case "unchanged":
       return ""
-    case "invalid": return FoamyI18n.t("studio.result.invalid", report.reason)
-    case "locked": return FoamyI18n.t("studio.result.locked." + (action === "preview" ? "preview" : "apply"))
+    case "invalid":
+      return FoamyI18n.t("studio.result.invalid", report.reason)
+    case "locked":
+      return FoamyI18n.t("studio.result.locked." + (action === "preview" ? "preview" : "apply"))
     case "not-responding":
-      return FoamyI18n.t(action !== "preview" && !report.confirmed
-        ? (preset ? "studio.result.not-responding.preset" : "studio.result.not-responding.apply") : "studio.result.not-responding")
-    case "helper-unavailable": return FoamyI18n.t("studio.helperUnavailable")
-    case "error": return FoamyI18n.t("studio.result.error", report.code)
-    case "invalid-json": case "unsupported": case "no-entry": case "write-failed": case "full": case "too-large":
-    case "unknown-preset": case "unexpected": case "not-ready": case "not-running":
-    case "target-not-found": case "function-not-found": case "no-omarchy-shell": case "failed":
+      return FoamyI18n.t(action !== "preview" && !report.confirmed ? (preset ? "studio.result.not-responding.preset" : "studio.result.not-responding.apply") : "studio.result.not-responding")
+    case "helper-unavailable":
+      return FoamyI18n.t("studio.helperUnavailable")
+    case "error":
+      return FoamyI18n.t("studio.result.error", report.code)
+    case "invalid-json":
+    case "unsupported":
+    case "no-entry":
+    case "write-failed":
+    case "full":
+    case "too-large":
+    case "unknown-preset":
+    case "unexpected":
+    case "not-ready":
+    case "not-running":
+    case "target-not-found":
+    case "function-not-found":
+    case "no-omarchy-shell":
+    case "failed":
       return FoamyI18n.t("studio.result." + report.result)
     }
     return FoamyI18n.t("studio.result.unexpected")
   }
 
   function resultKind(report) {
-    if (report.saved || report.result === "ok") return "ok"
-    if (report.result === "not-responding" || report.result === "not-ready" || report.result === "locked") return "warning"
+    if (report.saved || report.result === "ok")
+      return "ok"
+    if (report.result === "not-responding" || report.result === "not-ready" || report.result === "locked")
+      return "warning"
     return "error"
   }
 
   // Cover art: a lock screen setting, saved at once (not part of the look,
   // so not in undo); the result shows in the header.
   function setCoverArt(mode) {
-    if (lockSources.setCoverArt(mode)) notice = { kind: "busy", text: "" }
+    if (lockSources.setCoverArt(mode))
+      notice = {
+        kind: "busy",
+        text: ""
+      }
   }
 
   // --- quitting ----------------------------------------------------------------------
 
   // Ctrl+Q or the window closed: ask when the lock doesn't have the look.
   function requestQuit() {
-    if (quitting) return
+    if (quitting)
+      return
     if (session === "ready" && unapplied) {
       quitAsked = true
       quitApply.enabled ? quitApply.forceActiveFocus(Qt.PopupFocusReason) : quitCancel.forceActiveFocus(Qt.PopupFocusReason)
@@ -371,7 +454,8 @@ FocusScope {
       quitAfterApply = false
       lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
     } else if (answer === "apply") {
-      if (!canApply) return
+      if (!canApply)
+        return
       quitAfterApply = true
       apply()
     } else if (answer === "discard") {
@@ -384,18 +468,23 @@ FocusScope {
 
   // Quit once the draft file is written (or deleted); at most 3 s.
   function finishQuit() {
-    if (quitting) return
-    if (draftTimer.running) writeDraft()
+    if (quitting)
+      return
+    if (draftTimer.running)
+      writeDraft()
     quitting = true
     quitAsked = false
-    if (lockSources.draftIdle) endNow()
-    else quitDeadline.start()
+    if (lockSources.draftIdle)
+      endNow()
+    else
+      quitDeadline.start()
   }
 
   // Once.
   property bool quitDone: false
   function endNow() {
-    if (quitDone) return
+    if (quitDone)
+      return
     quitDone = true
     quitDeadline.stop()
     quitConfirmed()
@@ -419,7 +508,11 @@ FocusScope {
     running: studio.session === "loading"
     onTriggered: {
       lockSources.configKnown = true
-      if (!studio.draftReport) studio.draftReport = { status: "failed", code: "FAILED" }
+      if (!studio.draftReport)
+        studio.draftReport = {
+          status: "failed",
+          code: "FAILED"
+        }
       studio.startSession()
     }
   }
@@ -428,9 +521,12 @@ FocusScope {
     target: lockSources
     function onConfigEntryChanged() {
       var saved = Draft.savedEntry(lockSources.configEntry)
-      if (saved && !Draft.same(saved, studio.savedDraft)) studio.savedDraft = saved
+      if (saved && !Draft.same(saved, studio.savedDraft))
+        studio.savedDraft = saved
     }
-    function onConfigKnownChanged() { studio.startSession() }
+    function onConfigKnownChanged() {
+      studio.startSession()
+    }
     function onDraftDone(op, result) {
       if (op === "draft-load") {
         if (studio.session === "loading" && !studio.draftReport) {
@@ -440,9 +536,13 @@ FocusScope {
           studio.startSession()
         }
       } else if (result && !studio.quitting) {
-        studio.notice = { kind: "warning", text: FoamyI18n.t(op === "draft-save" ? "studio.draft.saveFailed" : "studio.draft.clearFailed", studio.codeText(result)) }
+        studio.notice = {
+          kind: "warning",
+          text: FoamyI18n.t(op === "draft-save" ? "studio.draft.saveFailed" : "studio.draft.clearFailed", studio.codeText(result))
+        }
       }
-      if (studio.quitting && lockSources.draftIdle) studio.endNow()
+      if (studio.quitting && lockSources.draftIdle)
+        studio.endNow()
     }
     function onApplied(report, entry) {
       entry = Draft.copy(entry)
@@ -455,16 +555,27 @@ FocusScope {
         if (Draft.sameLook(studio.draft, entry)) {
           draftTimer.stop()
           lockSources.clearDraft()
-        } else studio.writeDraft()
+        } else
+          studio.writeDraft()
       }
-      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "apply") }
-      if (report.saved && finish) studio.finishQuit()
+      studio.notice = {
+        kind: studio.resultKind(report),
+        text: studio.resultText(report, "apply")
+      }
+      if (report.saved && finish)
+        studio.finishQuit()
     }
     function onPreviewed(report) {
-      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "preview") }
+      studio.notice = {
+        kind: studio.resultKind(report),
+        text: studio.resultText(report, "preview")
+      }
     }
     function onCoverArtDone(report, mode) {
-      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, "coverArt") }
+      studio.notice = {
+        kind: studio.resultKind(report),
+        text: studio.resultText(report, "coverArt")
+      }
     }
     // A save that Apply waits for goes on to Apply (the draft is then based
     // on that preset); a refusal stops there, and the draft stays.
@@ -480,10 +591,15 @@ FocusScope {
         studio.quitAfterApply = false
         studio.quitAsked = false
       }
-      studio.notice = { kind: studio.resultKind(report), text: studio.resultText(report, op) }
+      studio.notice = {
+        kind: studio.resultKind(report),
+        text: studio.resultText(report, op)
+      }
     }
   }
-  function preview(next) { previewDraft = Draft.same(next, draft) ? null : next }
+  function preview(next) {
+    previewDraft = Draft.same(next, draft) ? null : next
+  }
   function undo() {
     previewDraft = null
     history = Draft.undo(history)
@@ -494,7 +610,8 @@ FocusScope {
   }
 
   function selectModule(name) {
-    if (!name) return
+    if (!name)
+      return
     selected = name
     page = "module"
   }
@@ -512,7 +629,8 @@ FocusScope {
     var at = Draft.shapeAround(look, name)
     if (at === -1) {
       var next = Draft.addShape(draft, "around", name)
-      if (Draft.same(next, draft)) return false
+      if (Draft.same(next, draft))
+        return false
       at = Draft.shapesOf(look).length
       commit(next)
     }
@@ -529,14 +647,17 @@ FocusScope {
   }
 
   function togglePresetMenu() {
-    if (presetMenu.visible) presetMenu.close()
-    else presetMenu.open()
+    if (presetMenu.visible)
+      presetMenu.close()
+    else
+      presetMenu.open()
   }
 
   // --- reset ----------------------------------------------------------------------
 
   function requestReset() {
-    if (!canReset || questionOpen) return
+    if (!canReset || questionOpen)
+      return
     resetAsked = true
     resetSaved.enabled ? resetSaved.forceActiveFocus(Qt.PopupFocusReason) : resetPreset.forceActiveFocus(Qt.PopupFocusReason)
   }
@@ -545,11 +666,15 @@ FocusScope {
   // based on, a user preset as saved or a built-in one as it comes) or
   // "cancel". Either choice is one undo step.
   function answerReset(answer) {
-    if (!resetAsked) return
+    if (!resetAsked)
+      return
     resetAsked = false
-    if (answer === "saved" && unapplied) commit(Draft.entry(Draft.lookOf(savedDraft)), Draft.linkOf(savedDraft))
-    else if (answer === "preset" && presetChanged && linkedPreset) commit(Draft.presetEntry(linkedPreset), linkedPreset.id)
-    else if (answer === "preset" && presetChanged) commit(Draft.setPreset(draft, draft.preset), "")
+    if (answer === "saved" && unapplied)
+      commit(Draft.entry(Draft.lookOf(savedDraft)), Draft.linkOf(savedDraft))
+    else if (answer === "preset" && presetChanged && linkedPreset)
+      commit(Draft.presetEntry(linkedPreset), linkedPreset.id)
+    else if (answer === "preset" && presetChanged)
+      commit(Draft.setPreset(draft, draft.preset), "")
     canReset ? resetButton.forceActiveFocus(Qt.OtherFocusReason) : lockCanvas.forceActiveFocus(Qt.OtherFocusReason)
   }
 
@@ -558,10 +683,13 @@ FocusScope {
   function requestPreset(name) {
     presetMenu.close()
     var user = String(name).indexOf("user:") === 0 ? LockLayout.findUserPreset(userPresets, String(name).slice(5)) : null
-    if (!user && LockLayout.SELECTABLE_PRESETS.indexOf(name) === -1) return
+    if (!user && LockLayout.SELECTABLE_PRESETS.indexOf(name) === -1)
+      return
     if (!presetChanged) {
-      if (user) commit(Draft.presetEntry(user), user.id)
-      else commit(Draft.setPreset(draft, name), "")
+      if (user)
+        commit(Draft.presetEntry(user), user.id)
+      else
+        commit(Draft.setPreset(draft, name), "")
       return
     }
     pendingPreset = name
@@ -573,12 +701,15 @@ FocusScope {
   function answerPreset(keep) {
     var name = pendingPreset
     pendingPreset = ""
-    if (!name) return
+    if (!name)
+      return
     var user = name.indexOf("user:") === 0 ? LockLayout.findUserPreset(userPresets, name.slice(5)) : null
-    if (user) commit(Draft.presetEntry(user), user.id)
+    if (user)
+      commit(Draft.presetEntry(user), user.id)
     else {
       var next = keep ? Draft.presetKeeping(draft, name) : Draft.setPreset(draft, name)
-      if (next) commit(next, "")
+      if (next)
+        commit(next, "")
     }
     library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
@@ -596,7 +727,8 @@ FocusScope {
   // --- dragging from the library onto the canvas ---------------------------
 
   function libraryDragStart(name) {
-    if (!moduleUsable(name)) return
+    if (!moduleUsable(name))
+      return
     selectModule(name)
     libraryDrag = name
   }
@@ -604,20 +736,25 @@ FocusScope {
   // The pointer is at `scene` (window pixels): over the canvas the module
   // follows it with snapping; elsewhere the canvas shows nothing new.
   function libraryDragMove(scene, modifiers) {
-    if (!libraryDrag) return
+    if (!libraryDrag)
+      return
     libraryDragPoint = scene
     var p = lockCanvas.view.mapFromItem(null, scene.x, scene.y)
     var inside = p.x >= 0 && p.y >= 0 && p.x <= lockCanvas.screenWidth && p.y <= lockCanvas.screenHeight
     var g = lockCanvas.gesture
-    if (inside && !(g && g.insert)) lockCanvas.beginInsert(libraryDrag, p)
-    else if (inside) lockCanvas.moveInsert(p, modifiers)
-    else if (g && g.insert) lockCanvas.cancelGesture()
+    if (inside && !(g && g.insert))
+      lockCanvas.beginInsert(libraryDrag, p)
+    else if (inside)
+      lockCanvas.moveInsert(p, modifiers)
+    else if (g && g.insert)
+      lockCanvas.cancelGesture()
   }
 
   // Released: over the canvas the module is shown (or moved) there.
   function libraryDragEnd() {
     var g = lockCanvas.gesture
-    if (g && g.insert) lockCanvas.finishGesture()
+    if (g && g.insert)
+      lockCanvas.finishGesture()
     libraryDrag = ""
   }
 
@@ -627,35 +764,53 @@ FocusScope {
   // the checker lay out at the size the lock does.
   function monitorList(screens, natives) {
     var screenList = []
-    for (var i = 0; i < screens.length; i++) screenList.push({ name: screens[i].name, width: screens[i].width, height: screens[i].height })
-    return Draft.monitorEntries(screenList, natives || {}).map(function(m) {
+    for (var i = 0; i < screens.length; i++)
+      screenList.push({
+        name: screens[i].name,
+        width: screens[i].width,
+        height: screens[i].height
+      })
+    return Draft.monitorEntries(screenList, natives || {}).map(function (m) {
       if (m.reference) {
         m.label = FoamyI18n.t("studio.monitor.reference", [m.width, m.height])
         return m
       }
       // A screen without a name (a virtual one) goes by its number.
-      if (!m.name) m.name = FoamyI18n.t("studio.monitor.unnamed", m.index + 1)
+      if (!m.name)
+        m.name = FoamyI18n.t("studio.monitor.unnamed", m.index + 1)
       var percent = Draft.scalePercent(m.scale)
-      m.label = percent ? FoamyI18n.t("studio.monitor.screenScaled", [m.name, m.nativeWidth, m.nativeHeight, percent])
-        : FoamyI18n.t("studio.monitor.screen", [m.name, m.nativeWidth, m.nativeHeight])
+      m.label = percent ? FoamyI18n.t("studio.monitor.screenScaled", [m.name, m.nativeWidth, m.nativeHeight, percent]) : FoamyI18n.t("studio.monitor.screen", [m.name, m.nativeWidth, m.nativeHeight])
       return m
     })
   }
 
   function monitorFor(key) {
-    for (var i = 0; i < monitors.length; i++) if (monitors[i].key === key) return monitors[i]
+    for (var i = 0; i < monitors.length; i++)
+      if (monitors[i].key === key)
+        return monitors[i]
     return monitors[0]
   }
 
-  function moduleLabel(name) { return FoamyI18n.t("studio.module." + name) }
-  function zoneLabel(zone) { return FoamyI18n.t("studio.zone." + zone) }
-  function styleLabel(style) { return FoamyI18n.t("studio.style." + style) }
-  function presetLabel(name) { return FoamyI18n.t("studio.preset." + name) }
-  function percent(value) { return FoamyI18n.t("studio.percent", Math.round(value * 100)) }
+  function moduleLabel(name) {
+    return FoamyI18n.t("studio.module." + name)
+  }
+  function zoneLabel(zone) {
+    return FoamyI18n.t("studio.zone." + zone)
+  }
+  function styleLabel(style) {
+    return FoamyI18n.t("studio.style." + style)
+  }
+  function presetLabel(name) {
+    return FoamyI18n.t("studio.preset." + name)
+  }
+  function percent(value) {
+    return FoamyI18n.t("studio.percent", Math.round(value * 100))
+  }
 
   function selectionText(name) {
     var item = look.elements[name]
-    if (!item) return ""
+    if (!item)
+      return ""
     return FoamyI18n.t("studio.tag", [moduleLabel(name), styleLabel(item.style), Math.round(Draft.elementValue(item, "scale") * 100)])
   }
 
@@ -665,8 +820,7 @@ FocusScope {
     var names = problem.names || []
     switch (problem.code) {
     case "password-overlap":
-      return names.length > 1 ? FoamyI18n.t("studio.problem.password-overlap", [moduleLabel(names[1]), where])
-        : FoamyI18n.t("studio.problem.password-covered", where)
+      return names.length > 1 ? FoamyI18n.t("studio.problem.password-overlap", [moduleLabel(names[1]), where]) : FoamyI18n.t("studio.problem.password-covered", where)
     case "element-offscreen":
       return FoamyI18n.t("studio.problem.element-offscreen", [moduleLabel(names[0] || ""), where])
     case "element-overlap":
@@ -688,14 +842,18 @@ FocusScope {
 
   // The modules to outline on the screen shown.
   function problemNamesFor(key) {
-    for (var i = 0; i < problems.length; i++) if (problems[i].key === key && !problems[i].advice) return problems[i].names
+    for (var i = 0; i < problems.length; i++)
+      if (problems[i].key === key && !problems[i].advice)
+        return problems[i].names
     return []
   }
 
   // F6 and Shift+F6: the pane after (or before) the one with the focus.
   function focusPane(step) {
     var current = 0
-    for (var i = 0; i < panes.length; i++) if (panes[i].activeFocus) current = i
+    for (var i = 0; i < panes.length; i++)
+      if (panes[i].activeFocus)
+        current = i
     var next = panes[((current + step) % panes.length + panes.length) % panes.length]
     next.forceActiveFocus(Qt.TabFocusReason)
   }
@@ -705,7 +863,8 @@ FocusScope {
     var ctrl = (modifiers & Qt.ControlModifier) !== 0
     var shift = (modifiers & Qt.ShiftModifier) !== 0
     if (ctrl && key === Qt.Key_Q) {
-      if (!quitAsked) requestQuit()
+      if (!quitAsked)
+        requestQuit()
       return true
     }
     if (key === Qt.Key_Escape && quitAsked) {
@@ -734,10 +893,13 @@ FocusScope {
       return true
     }
     // A question is open: only its own buttons and Esc.
-    if (questionOpen) return false
+    if (questionOpen)
+      return false
     if (ctrl && key === Qt.Key_Z) {
-      if (shift) redo()
-      else undo()
+      if (shift)
+        redo()
+      else
+        undo()
       return true
     }
     if (ctrl && key === Qt.Key_Y) {
@@ -762,7 +924,8 @@ FocusScope {
       deselect()
       return true
     }
-    if (ctrl) return false
+    if (ctrl)
+      return false
     if (text === "?" || key === Qt.Key_Question) {
       shortcutsOpen = !shortcutsOpen
       return true
@@ -785,8 +948,10 @@ FocusScope {
     target: lockSources
     function onPicked(path) {
       var next = Draft.setPicture(studio.draft, path)
-      if (Draft.same(next, studio.draft) && studio.look.background.path !== path) lockSources.pickError = "UNSUPPORTED"
-      else studio.commit(next)
+      if (Draft.same(next, studio.draft) && studio.look.background.path !== path)
+        lockSources.pickError = "UNSUPPORTED"
+      else
+        studio.commit(next)
     }
   }
 
@@ -835,8 +1000,15 @@ FocusScope {
             label: FoamyI18n.t("studio.monitor")
             showLabel: false
             value: studio.monitor.key
-            options: studio.monitors.map(function(m) { return { value: m.key, label: m.label } })
-            onChanged: function(value) { studio.monitorKey = value }
+            options: studio.monitors.map(function (m) {
+              return {
+                value: m.key,
+                label: m.label
+              }
+            })
+            onChanged: function (value) {
+              studio.monitorKey = value
+            }
             Component.onCompleted: triggerItem.focus = true
           }
 
@@ -876,8 +1048,7 @@ FocusScope {
             id: statusText
             objectName: "studioStatus"
             textFormat: Text.PlainText
-            readonly property bool problem: !!studio.notice && (studio.notice.kind === "error" || studio.notice.kind === "warning")
-              && studio.notice.text !== ""
+            readonly property bool problem: !!studio.notice && (studio.notice.kind === "error" || studio.notice.kind === "warning") && studio.notice.text !== ""
             readonly property bool unsaved: studio.session === "ready" && studio.unapplied
             readonly property string kind: problem ? studio.notice.kind : unsaved ? "warning" : ""
             Layout.fillWidth: true
@@ -920,8 +1091,7 @@ FocusScope {
             focusable: true
             text: lockSources.applying ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.apply")
             enabled: studio.canApply
-            Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked")
-              : !studio.unapplied ? FoamyI18n.t("studio.matchesLock") : ""
+            Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked") : !studio.unapplied ? FoamyI18n.t("studio.matchesLock") : ""
             onClicked: studio.apply()
           }
         }
@@ -998,15 +1168,31 @@ FocusScope {
               name: FoamyI18n.t("studio.state")
               caption: FoamyI18n.t("studio.state.caption")
               options: [
-                { value: "idle", label: FoamyI18n.t("studio.state.idle") },
-                { value: "typing", label: FoamyI18n.t("studio.state.typing") },
-                { value: "wrong", label: FoamyI18n.t("studio.state.wrong") },
-                { value: "noMedia", label: FoamyI18n.t("studio.state.noMedia") }
+                {
+                  value: "idle",
+                  label: FoamyI18n.t("studio.state.idle")
+                },
+                {
+                  value: "typing",
+                  label: FoamyI18n.t("studio.state.typing")
+                },
+                {
+                  value: "wrong",
+                  label: FoamyI18n.t("studio.state.wrong")
+                },
+                {
+                  value: "noMedia",
+                  label: FoamyI18n.t("studio.state.noMedia")
+                }
               ]
               value: studio.previewState
-              onPicked: function(value) { studio.previewState = value }
+              onPicked: function (value) {
+                studio.previewState = value
+              }
             }
-            Item { Layout.fillWidth: true }
+            Item {
+              Layout.fillWidth: true
+            }
             StudioToggle {
               objectName: "studioZonesSwitch"
               text: FoamyI18n.t("studio.zones")
@@ -1045,9 +1231,15 @@ FocusScope {
             backgroundVersion: lockSources.backgroundVersion
             lockSettings: studio.lockSettings
             hideArea: libraryPane
-            onEdited: function(next) { studio.commit(next) }
-            onSelectRequested: function(name) { studio.selectModule(name) }
-            onShapeSelectRequested: function(index) { studio.selectShape(index) }
+            onEdited: function (next) {
+              studio.commit(next)
+            }
+            onSelectRequested: function (name) {
+              studio.selectModule(name)
+            }
+            onShapeSelectRequested: function (index) {
+              studio.selectShape(index)
+            }
             onDeselectRequested: studio.deselect()
           }
 
@@ -1069,9 +1261,12 @@ FocusScope {
             Column {
               id: problemColumn
               // Blocking problems first, then reference sizes and shape advice.
-              readonly property var sorted: studio.problems.slice().sort(function(a, b) {
-                return (a.reference || a.advice ? 1 : 0) - (b.reference || b.advice ? 1 : 0) })
-              readonly property string summary: sorted.map(function(p) { return studio.problemText(p) }).join("\n")
+              readonly property var sorted: studio.problems.slice().sort(function (a, b) {
+                return (a.reference || a.advice ? 1 : 0) - (b.reference || b.advice ? 1 : 0)
+              })
+              readonly property string summary: sorted.map(function (p) {
+                return studio.problemText(p)
+              }).join("\n")
               x: FoamyStyle.gapLarge
               y: FoamyStyle.gap
               width: parent.width - 2 * FoamyStyle.gapLarge
@@ -1190,10 +1385,18 @@ FocusScope {
     current: studio.linkedPreset ? "user:" + studio.linkedPreset.id : studio.draft.preset
     userPresets: studio.userPresets
     canSave: studio.canSavePreset
-    onPicked: function(name) { studio.requestPreset(name) }
-    onPickedUser: function(id) { studio.requestPreset("user:" + id) }
-    onRenameRequested: function(id) { studio.askName("rename", id) }
-    onDeleteRequested: function(id) { studio.requestDelete(id) }
+    onPicked: function (name) {
+      studio.requestPreset(name)
+    }
+    onPickedUser: function (id) {
+      studio.requestPreset("user:" + id)
+    }
+    onRenameRequested: function (id) {
+      studio.askName("rename", id)
+    }
+    onDeleteRequested: function (id) {
+      studio.requestDelete(id)
+    }
     onSaveAsNewRequested: studio.askName("copy")
     onClosed: library.presetButton.forceActiveFocus(Qt.OtherFocusReason)
   }
@@ -1208,7 +1411,7 @@ FocusScope {
     property string body: ""
     default property alias buttons: buttonRow.data
     property alias content: contentSlot.data
-    signal dismissed()
+    signal dismissed
 
     // The buttons side by side, as wide as they ask to be. The card widens
     // for them (up to 620); past that, or in a narrow window, they stack,
@@ -1218,7 +1421,8 @@ FocusScope {
       var shown = 0
       for (var i = 0; i < buttonRow.children.length; i++) {
         var child = buttonRow.children[i]
-        if (child === buttonSpacer || !child.visible) continue
+        if (child === buttonSpacer || !child.visible)
+          continue
         width += child.implicitWidth
         shown += 1
       }
@@ -1230,7 +1434,8 @@ FocusScope {
     function fitButtons() {
       for (var i = 0; i < buttonRow.children.length; i++) {
         var child = buttonRow.children[i]
-        if (child !== buttonSpacer) child.Layout.fillWidth = stacked
+        if (child !== buttonSpacer)
+          child.Layout.fillWidth = stacked
       }
     }
 
@@ -1245,8 +1450,7 @@ FocusScope {
 
     Rectangle {
       anchors.centerIn: parent
-      width: Math.min(parent.width - 2 * FoamyStyle.padding,
-        Math.max(460, Math.min(620, question.buttonsWidth + 2 * FoamyStyle.padding)))
+      width: Math.min(parent.width - 2 * FoamyStyle.padding, Math.max(460, Math.min(620, question.buttonsWidth + 2 * FoamyStyle.padding)))
       height: questionColumn.implicitHeight + 2 * FoamyStyle.padding
       radius: FoamyStyle.radius
       color: FoamyPalette.background
@@ -1256,7 +1460,9 @@ FocusScope {
       Accessible.name: question.title
       Accessible.description: question.body
 
-      MouseArea { anchors.fill: parent }
+      MouseArea {
+        anchors.fill: parent
+      }
 
       Column {
         id: questionColumn
@@ -1318,9 +1524,7 @@ FocusScope {
     readonly property string pendingLabel: studio.presetKeyLabel(studio.pendingPreset || studio.draft.preset)
     visible: studio.pendingPreset !== ""
     title: FoamyI18n.t("studio.presetAsk", pendingLabel)
-    body: replaceOnly ? FoamyI18n.t("studio.presetAskReplace", pendingLabel)
-      : FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, pendingLabel])
-        + (studio.pendingPreset && !studio.keptPreset ? "\n" + FoamyI18n.t("studio.presetCantKeep") : "")
+    body: replaceOnly ? FoamyI18n.t("studio.presetAskReplace", pendingLabel) : FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, pendingLabel]) + (studio.pendingPreset && !studio.keptPreset ? "\n" + FoamyI18n.t("studio.presetCantKeep") : "")
     onDismissed: studio.cancelPreset()
 
     FoamyButton {
@@ -1357,11 +1561,8 @@ FocusScope {
     objectName: "studioNameDialog"
     readonly property string mode: studio.nameAsked
     visible: mode !== ""
-    title: mode === "rename" ? FoamyI18n.t("studio.presetName.renameTitle", studio.userPresetName(studio.nameTarget))
-      : mode === "copy" ? FoamyI18n.t("studio.presetName.copyTitle") : FoamyI18n.t("studio.presetName.newTitle")
-    body: mode === "rename" ? FoamyI18n.t("studio.presetName.renameBody")
-      : mode === "copy" ? FoamyI18n.t("studio.presetName.copyBody")
-      : FoamyI18n.t("studio.presetName.newBody", studio.presetLabel(studio.draft.preset))
+    title: mode === "rename" ? FoamyI18n.t("studio.presetName.renameTitle", studio.userPresetName(studio.nameTarget)) : mode === "copy" ? FoamyI18n.t("studio.presetName.copyTitle") : FoamyI18n.t("studio.presetName.newTitle")
+    body: mode === "rename" ? FoamyI18n.t("studio.presetName.renameBody") : mode === "copy" ? FoamyI18n.t("studio.presetName.copyBody") : FoamyI18n.t("studio.presetName.newBody", studio.presetLabel(studio.draft.preset))
     onDismissed: studio.answerName("cancel")
 
     content: FoamyTextSettingField {
@@ -1370,7 +1571,9 @@ FocusScope {
       width: parent ? parent.width : 0
       label: FoamyI18n.t("studio.presetName.label")
       value: studio.nameDefault
-      validate: function(text) { return Draft.nameProblem(text) === "" || FoamyI18n.t("studio.presetName.invalid") }
+      validate: function (text) {
+        return Draft.nameProblem(text) === "" || FoamyI18n.t("studio.presetName.invalid")
+      }
     }
 
     FoamyButton {
@@ -1401,8 +1604,13 @@ FocusScope {
   // the name first).
   Connections {
     target: nameField.field
-    function onAccepted() { studio.answerName("save") }
-    function onKeyPressed(event) { if (event.key === Qt.Key_Escape) studio.answerName("cancel") }
+    function onAccepted() {
+      studio.answerName("save")
+    }
+    function onKeyPressed(event) {
+      if (event.key === Qt.Key_Escape)
+        studio.answerName("cancel")
+    }
   }
 
   // Delete a user preset: asked first.
@@ -1473,8 +1681,7 @@ FocusScope {
     objectName: "studioRestoreDialog"
     visible: studio.session === "ask"
     title: FoamyI18n.t("studio.restore.title")
-    body: studio.restoreReport && studio.savedAtText(studio.restoreReport.savedAt)
-      ? FoamyI18n.t("studio.restore.bodyAt", studio.savedAtText(studio.restoreReport.savedAt)) : FoamyI18n.t("studio.restore.body")
+    body: studio.restoreReport && studio.savedAtText(studio.restoreReport.savedAt) ? FoamyI18n.t("studio.restore.bodyAt", studio.savedAtText(studio.restoreReport.savedAt)) : FoamyI18n.t("studio.restore.body")
     onDismissed: studio.answerRestore(true)
 
     FoamyButton {
@@ -1524,7 +1731,8 @@ FocusScope {
       kind: "primary"
       enabled: studio.canApply || studio.quitAfterApply
       text: studio.quitAfterApply ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.quit.apply")
-      onClicked: if (!studio.quitAfterApply) studio.answerQuit("apply")
+      onClicked: if (!studio.quitAfterApply)
+        studio.answerQuit("apply")
     }
   }
 

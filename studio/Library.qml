@@ -30,7 +30,9 @@ FocusScope {
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.library")
 
-  function rowAt(index) { return modules.itemAt(index) }
+  function rowAt(index) {
+    return modules.itemAt(index)
+  }
 
   // The next usable module up or down (a disabled row is skipped).
   function focusModule(step) {
@@ -42,42 +44,64 @@ FocusScope {
   // A module shown or hidden from the keyboard: one step, only when it
   // changes something (and never shown when it can't be).
   function setHidden(hidden) {
-    if (!hidden && !app.canShow(app.selected)) return
+    if (!hidden && !app.canShow(app.selected))
+      return
     var next = Draft.setHidden(app.draft, app.selected, hidden)
-    if (!Draft.same(next, app.draft)) app.commit(next)
+    if (!Draft.same(next, app.draft))
+      app.commit(next)
   }
 
   // Keys on the library; true when handled.
   function keyPressed(key, modifiers) {
-    if (modifiers & (Qt.ControlModifier | Qt.AltModifier)) return false
+    if (modifiers & (Qt.ControlModifier | Qt.AltModifier))
+      return false
     switch (key) {
-    case Qt.Key_Up: focusModule(-1); break
-    case Qt.Key_Down: focusModule(1); break
-    case Qt.Key_Delete: setHidden(true); break
-    case Qt.Key_Insert: setHidden(false); break
-    default: return false
+    case Qt.Key_Up:
+      focusModule(-1)
+      break
+    case Qt.Key_Down:
+      focusModule(1)
+      break
+    case Qt.Key_Delete:
+      setHidden(true)
+      break
+    case Qt.Key_Insert:
+      setHidden(false)
+      break
+    default:
+      return false
     }
     return true
   }
 
   // Keep the row with the keyboard in view.
   function reveal(target) {
-    if (!target || !visible) return
+    if (!target || !visible)
+      return
     var inside = false
-    for (var p = target; p; p = p.parent) if (p === column) inside = true
-    if (!inside) return
+    for (var p = target; p; p = p.parent)
+      if (p === column)
+        inside = true
+    if (!inside)
+      return
     var top = target.mapToItem(column, 0, 0).y
-    if (top < list.contentY) list.contentY = Math.max(0, top - FoamyStyle.gapSmall)
+    if (top < list.contentY)
+      list.contentY = Math.max(0, top - FoamyStyle.gapSmall)
     else if (top + target.height > list.contentY + list.height)
       list.contentY = Math.min(list.contentHeight - list.height, top + target.height - list.height + FoamyStyle.gapSmall)
   }
 
   Connections {
     target: library.Window.window
-    function onActiveFocusItemChanged() { library.reveal(library.Window.activeFocusItem) }
+    function onActiveFocusItemChanged() {
+      library.reveal(library.Window.activeFocusItem)
+    }
   }
 
-  Keys.onPressed: function(event) { if (library.keyPressed(event.key, event.modifiers)) event.accepted = true }
+  Keys.onPressed: function (event) {
+    if (library.keyPressed(event.key, event.modifiers))
+      event.accepted = true
+  }
 
   // The preset: opens the preset menu (thumbnails; StudioWindow).
   StudioButton {
@@ -120,7 +144,7 @@ FocusScope {
 
     WheelHandler {
       acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-      onWheel: function(event) {
+      onWheel: function (event) {
         var delta = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y / 120 * 3 * FoamyStyle.rowHeight
         list.contentY = Math.max(0, Math.min(Math.max(0, list.contentHeight - list.height), list.contentY - delta))
       }
@@ -131,7 +155,9 @@ FocusScope {
       width: list.width
       spacing: FoamyStyle.gapSmall
 
-      SectionLabel { text: FoamyI18n.t("studio.modules") }
+      SectionLabel {
+        text: FoamyI18n.t("studio.modules")
+      }
 
       Column {
         id: moduleList
@@ -159,8 +185,7 @@ FocusScope {
             horizontalAlignment: Text.AlignLeft
             leading: FoamyStyle.gap + 6
             text: library.app.moduleLabel(modelData)
-            detail: needsWeather ? FoamyI18n.t("studio.needsWeather")
-              : hiddenNow ? FoamyI18n.t("studio.hidden") : library.app.zoneLabel(item.zone)
+            detail: needsWeather ? FoamyI18n.t("studio.needsWeather") : hiddenNow ? FoamyI18n.t("studio.hidden") : library.app.zoneLabel(item.zone)
             enabled: library.app.moduleUsable(modelData)
             checked: library.app.page === "module" && library.app.selected === modelData
             opacity: !enabled ? FoamyStyle.disabledOpacity : dragging ? 0.45 : hiddenNow ? 0.7 : 1
@@ -177,7 +202,12 @@ FocusScope {
               spacing: 2
               Repeater {
                 model: 6
-                Rectangle { width: 2; height: 2; radius: 1; color: FoamyPalette.mutedText }
+                Rectangle {
+                  width: 2
+                  height: 2
+                  radius: 1
+                  color: FoamyPalette.mutedText
+                }
               }
             }
 
@@ -185,10 +215,13 @@ FocusScope {
               target: null
               dragThreshold: 6
               onActiveChanged: {
-                if (active) library.app.libraryDragStart(row.modelData)
-                else library.app.libraryDragEnd()
+                if (active)
+                  library.app.libraryDragStart(row.modelData)
+                else
+                  library.app.libraryDragEnd()
               }
-              onCentroidChanged: if (active) library.app.libraryDragMove(centroid.scenePosition, centroid.modifiers)
+              onCentroidChanged: if (active)
+                library.app.libraryDragMove(centroid.scenePosition, centroid.modifiers)
             }
           }
         }

@@ -1,5 +1,6 @@
 import QtQuick
 import ".." as Fixture
+
 // elements/sources/KeyboardSource.qml without Hyprland or hyprctl.
 Item {
   property bool awake: true

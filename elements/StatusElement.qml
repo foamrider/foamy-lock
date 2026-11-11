@@ -39,7 +39,9 @@ Flow {
   readonly property var lineItems: items ? items : ["network", "battery"]
   // The first part that shows: it holds the pill behind them all.
   readonly property int firstShown: {
-    for (var i = 0; i < lineItems.length; i++) if (available(lineItems[i])) return i
+    for (var i = 0; i < lineItems.length; i++)
+      if (available(lineItems[i]))
+        return i
     return -1
   }
   // Something to show: always without `items` (the network is always known).
@@ -55,7 +57,8 @@ Flow {
     var shown = 0
     for (var i = 0; i < children.length; i++) {
       var child = children[i]
-      if (child["shown"] !== true || !(child.width > 0)) continue
+      if (child["shown"] !== true || !(child.width > 0))
+        continue
       total += child.width
       shown++
     }
@@ -70,30 +73,46 @@ Flow {
   // Whether `item`'s source has something to show.
   function available(item) {
     switch (item) {
-    case "network": return true
-    case "battery": return view.hasBattery === true
-    case "volume": return view.hasVolume === true
-    case "bluetooth": return view.hasBluetooth === true
-    case "keyboard": return String(view.keyboardLayout || "") !== ""
-    case "uptime": return view.systemUptime >= 0
-    case "load": return loadParts(view.systemLoad).length === 3
-    case "memory": return view.memoryTotal > 0
+    case "network":
+      return true
+    case "battery":
+      return view.hasBattery === true
+    case "volume":
+      return view.hasVolume === true
+    case "bluetooth":
+      return view.hasBluetooth === true
+    case "keyboard":
+      return String(view.keyboardLayout || "") !== ""
+    case "uptime":
+      return view.systemUptime >= 0
+    case "load":
+      return loadParts(view.systemLoad).length === 3
+    case "memory":
+      return view.memoryTotal > 0
     }
     return false
   }
 
   function icon(item) {
     switch (item) {
-    case "network": return view.networkIcon
-    case "battery": return view.batteryIcon(view.batteryPercentage)
+    case "network":
+      return view.networkIcon
+    case "battery":
+      return view.batteryIcon(view.batteryPercentage)
     case "volume":
-      if (view.volumeMuted || view.volumePercent <= 0) return "\u{f075f}"
+      if (view.volumeMuted || view.volumePercent <= 0)
+        return "\u{f075f}"
       return view.volumePercent < 34 ? "\u{f057f}" : view.volumePercent < 67 ? "\u{f0580}" : "\u{f057e}"
-    case "bluetooth": return !view.bluetoothEnabled ? "\u{f00b2}" : view.bluetoothConnected > 0 ? "\u{f00b1}" : "\u{f00af}"
-    case "keyboard": return "\u{f030c}"
-    case "uptime": return "\u{f0150}"
-    case "load": return "\u{f04c5}"
-    case "memory": return "\u{f035b}"
+    case "bluetooth":
+      return !view.bluetoothEnabled ? "\u{f00b2}" : view.bluetoothConnected > 0 ? "\u{f00b1}" : "\u{f00af}"
+    case "keyboard":
+      return "\u{f030c}"
+    case "uptime":
+      return "\u{f0150}"
+    case "load":
+      return "\u{f04c5}"
+    case "memory":
+      return "\u{f035b}"
     }
     return ""
   }
@@ -101,14 +120,22 @@ Flow {
   // The row label in the system panel.
   function label(item) {
     switch (item) {
-    case "network": return FoamyI18n.t("Network")
-    case "battery": return FoamyI18n.t("Battery")
-    case "volume": return FoamyI18n.t("Volume")
-    case "bluetooth": return FoamyI18n.t("Bluetooth")
-    case "keyboard": return FoamyI18n.t("Keyboard")
-    case "uptime": return FoamyI18n.t("Uptime")
-    case "load": return FoamyI18n.t("Load")
-    case "memory": return FoamyI18n.t("Memory")
+    case "network":
+      return FoamyI18n.t("Network")
+    case "battery":
+      return FoamyI18n.t("Battery")
+    case "volume":
+      return FoamyI18n.t("Volume")
+    case "bluetooth":
+      return FoamyI18n.t("Bluetooth")
+    case "keyboard":
+      return FoamyI18n.t("Keyboard")
+    case "uptime":
+      return FoamyI18n.t("Uptime")
+    case "load":
+      return FoamyI18n.t("Load")
+    case "memory":
+      return FoamyI18n.t("Memory")
     }
     return ""
   }
@@ -116,16 +143,24 @@ Flow {
   // The reading in full: the "text" style and the panel.
   function value(item) {
     switch (item) {
-    case "network": return FoamyI18n.t(view.networkLabel)
-    case "battery": return FoamyI18n.number(view.batteryPercentage) + "%"
-    case "volume": return view.volumeMuted ? FoamyI18n.t("Muted") : FoamyI18n.number(view.volumePercent) + "%"
+    case "network":
+      return FoamyI18n.t(view.networkLabel)
+    case "battery":
+      return FoamyI18n.number(view.batteryPercentage) + "%"
+    case "volume":
+      return view.volumeMuted ? FoamyI18n.t("Muted") : FoamyI18n.number(view.volumePercent) + "%"
     case "bluetooth":
-      if (!view.bluetoothEnabled) return FoamyI18n.t("Off")
+      if (!view.bluetoothEnabled)
+        return FoamyI18n.t("Off")
       return view.bluetoothConnected > 0 ? FoamyI18n.t("%1 connected", [FoamyI18n.number(view.bluetoothConnected)]) : FoamyI18n.t("On")
-    case "keyboard": return String(view.keyboardLayout || "")
-    case "uptime": return uptimeText(view.systemUptime)
-    case "load": return system ? loadText(view.systemLoad) : FoamyI18n.number(Number(loadParts(view.systemLoad)[0]), 2)
-    case "memory": return memoryText()
+    case "keyboard":
+      return String(view.keyboardLayout || "")
+    case "uptime":
+      return uptimeText(view.systemUptime)
+    case "load":
+      return system ? loadText(view.systemLoad) : FoamyI18n.number(Number(loadParts(view.systemLoad)[0]), 2)
+    case "memory":
+      return memoryText()
     }
     return ""
   }
@@ -133,14 +168,21 @@ Flow {
   // The reading beside the icon in a line: in full for "text"; short, or
   // none where the icon says it, for "pill" and "icons".
   function lineValue(item) {
-    if (styleName === "text") return value(item)
+    if (styleName === "text")
+      return value(item)
     switch (item) {
-    case "network": return ""
-    case "battery": return pill ? value(item) : ""
-    case "volume": return pill && !view.volumeMuted ? value(item) : ""
-    case "bluetooth": return pill && view.bluetoothConnected > 0 ? FoamyI18n.number(view.bluetoothConnected) : ""
-    case "keyboard": return keyboardShort(view.keyboardLayout)
-    case "memory": return FoamyI18n.number(Math.round(memoryPart() * 100)) + "%"
+    case "network":
+      return ""
+    case "battery":
+      return pill ? value(item) : ""
+    case "volume":
+      return pill && !view.volumeMuted ? value(item) : ""
+    case "bluetooth":
+      return pill && view.bluetoothConnected > 0 ? FoamyI18n.number(view.bluetoothConnected) : ""
+    case "keyboard":
+      return keyboardShort(view.keyboardLayout)
+    case "memory":
+      return FoamyI18n.number(Math.round(memoryPart() * 100)) + "%"
     }
     return value(item)
   }
@@ -148,9 +190,12 @@ Flow {
   // The bar under a panel row (-1: none).
   function part(item) {
     switch (item) {
-    case "battery": return view.batteryPercentage / 100
-    case "volume": return view.volumeMuted ? 0 : Math.min(1, view.volumePercent / 100)
-    case "memory": return memoryPart()
+    case "battery":
+      return view.batteryPercentage / 100
+    case "volume":
+      return view.volumeMuted ? 0 : Math.min(1, view.volumePercent / 100)
+    case "memory":
+      return memoryPart()
     }
     return -1
   }
@@ -164,7 +209,8 @@ Flow {
   }
 
   function memoryText() {
-    if (!(view.memoryTotal > 0)) return "—"
+    if (!(view.memoryTotal > 0))
+      return "—"
     return FoamyI18n.t("%1 / %2 GB", [FoamyI18n.number(memoryUsed() / 1048576, 1), FoamyI18n.number(view.memoryTotal / 1048576, 1)])
   }
 
@@ -251,19 +297,45 @@ Flow {
         for (var i = 0; i < status.items.length; i++) {
           var item = status.items[i]
           if (status.available(item))
-            out.push({ icon: status.icon(item), label: status.label(item), value: status.value(item), part: status.part(item) })
+            out.push({
+              icon: status.icon(item),
+              label: status.label(item),
+              value: status.value(item),
+              part: status.part(item)
+            })
         }
         return out
       }
       return [
-        { icon: "\u{f0150}", label: FoamyI18n.t("Uptime"), value: status.uptimeText(status.view.systemUptime), part: -1 },
-        { icon: "\u{f035b}", label: FoamyI18n.t("Memory"), value: status.memoryText(), part: status.memoryPart() },
-        { icon: "\u{f04c5}", label: FoamyI18n.t("Load"), value: status.loadText(status.view.systemLoad), part: -1 },
-        status.view.hasBattery
-          ? { icon: status.view.batteryIcon(status.view.batteryPercentage), label: FoamyI18n.t("Battery"),
-            value: FoamyI18n.number(status.view.batteryPercentage) + "%", part: status.view.batteryPercentage / 100 }
-          : { icon: status.view.networkIcon, label: FoamyI18n.t("Network"), value: FoamyI18n.t(status.view.networkLabel), part: -1 }
-      ]
+        {
+          icon: "\u{f0150}",
+          label: FoamyI18n.t("Uptime"),
+          value: status.uptimeText(status.view.systemUptime),
+          part: -1
+        },
+        {
+          icon: "\u{f035b}",
+          label: FoamyI18n.t("Memory"),
+          value: status.memoryText(),
+          part: status.memoryPart()
+        },
+        {
+          icon: "\u{f04c5}",
+          label: FoamyI18n.t("Load"),
+          value: status.loadText(status.view.systemLoad),
+          part: -1
+        },
+        status.view.hasBattery ? {
+          icon: status.view.batteryIcon(status.view.batteryPercentage),
+          label: FoamyI18n.t("Battery"),
+          value: FoamyI18n.number(status.view.batteryPercentage) + "%",
+          part: status.view.batteryPercentage / 100
+        } : {
+          icon: status.view.networkIcon,
+          label: FoamyI18n.t("Network"),
+          value: FoamyI18n.t(status.view.networkLabel),
+          part: -1
+        }]
     }
 
     readonly property bool shown: status.system && rows.length > 0
@@ -364,25 +436,33 @@ Flow {
 
   // "3 d 4 h", "4 h 12 min", "12 min"; a dash until known.
   function uptimeText(seconds) {
-    if (!(seconds >= 0)) return "—"
+    if (!(seconds >= 0))
+      return "—"
     var days = Math.floor(seconds / 86400)
     var hours = Math.floor(seconds % 86400 / 3600)
     var minutes = Math.floor(seconds % 3600 / 60)
-    if (days > 0) return FoamyI18n.t("%1 d %2 h", [days, hours])
-    if (hours > 0) return FoamyI18n.t("%1 h %2 min", [hours, minutes])
+    if (days > 0)
+      return FoamyI18n.t("%1 d %2 h", [days, hours])
+    if (hours > 0)
+      return FoamyI18n.t("%1 h %2 min", [hours, minutes])
     return FoamyI18n.t("%1 min", [minutes])
   }
 
   // The three load averages, or [] until they are known.
   function loadParts(load) {
     var parts = String(load || "").trim().split(/\s+/).slice(0, 3)
-    return parts.length < 3 || parts.some(function(part) { return !isFinite(Number(part)) }) ? [] : parts
+    return parts.length < 3 || parts.some(function (part) {
+      return !isFinite(Number(part))
+    }) ? [] : parts
   }
 
   // The 1, 5 and 15 minute load averages in the locale's numbers.
   function loadText(load) {
     var parts = loadParts(load)
-    if (parts.length < 3) return "—"
-    return parts.map(function(part) { return FoamyI18n.number(Number(part), 2) }).join("  ")
+    if (parts.length < 3)
+      return "—"
+    return parts.map(function (part) {
+      return FoamyI18n.number(Number(part), 2)
+    }).join("  ")
   }
 }

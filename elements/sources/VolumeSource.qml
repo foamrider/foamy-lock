@@ -12,5 +12,7 @@ Item {
   readonly property int percent: available ? Math.max(0, Math.round(Number(sink.audio.volume || 0) * 100)) : 0
   readonly property bool muted: available && sink.audio.muted === true
 
-  PwObjectTracker { objects: volume.sink ? [volume.sink] : [] }
+  PwObjectTracker {
+    objects: volume.sink ? [volume.sink] : []
+  }
 }

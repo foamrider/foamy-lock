@@ -1,5 +1,6 @@
 import QtQuick
 import ".." as Fixture
+
 // elements/sources/VolumeSource.qml without PipeWire.
 Item {
   readonly property bool available: Fixture.Sources.volumeAvailable

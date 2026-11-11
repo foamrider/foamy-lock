@@ -27,7 +27,10 @@ FocusScope {
   readonly property var limits: name === "password" ? LockLayout.PASSWORD_LIMITS : LockLayout.LIMITS
   readonly property int screenWidth: app ? app.monitor.width : 1920
   readonly property int screenHeight: app ? app.monitor.height : 1080
-  readonly property var offsetPx: item ? Draft.offsetPixels(Draft.elementValue(item, "offset"), screenWidth, screenHeight) : ({ x: 0, y: 0 })
+  readonly property var offsetPx: item ? Draft.offsetPixels(Draft.elementValue(item, "offset"), screenWidth, screenHeight) : ({
+      x: 0,
+      y: 0
+    })
   readonly property alias flickable: flick
   // What each element takes (its own keys' values and defaults).
   readonly property var options: LockLayout.elementLimits()
@@ -37,32 +40,48 @@ FocusScope {
   readonly property string coverArt: app ? Model.coverArtMode(app.lockSettings) : "player"
   readonly property bool coverStyle: !!item && name === "media" && LockLayout.ARTWORK_STYLES.indexOf(item.style) !== -1
   // Its place in its zone's stack: { at, count } (at -1 while hidden).
-  readonly property var zonePlace: item ? Draft.placeInZone(look, name) : ({ at: -1, count: 0 })
+  readonly property var zonePlace: item ? Draft.placeInZone(look, name) : ({
+      at: -1,
+      count: 0
+    })
   // The shape around exactly this module, or -1.
   readonly property int ownShape: item ? Draft.shapeAround(look, name) : -1
 
   Accessible.role: Accessible.Pane
   Accessible.name: FoamyI18n.t("studio.inspector")
 
-  function commit(next) { app.commit(next) }
-  function preview(next) { app.preview(next) }
-  function px(value) { return FoamyI18n.t("studio.px", FoamyI18n.number(value, 0)) }
+  function commit(next) {
+    app.commit(next)
+  }
+  function preview(next) {
+    app.preview(next)
+  }
+  function px(value) {
+    return FoamyI18n.t("studio.px", FoamyI18n.number(value, 0))
+  }
 
   // Keep the control with the keyboard in view.
   function reveal(target) {
-    if (!target || !visible) return
+    if (!target || !visible)
+      return
     var inside = false
-    for (let p = target; p; p = p.parent) if (p === column) inside = true
-    if (!inside) return
+    for (let p = target; p; p = p.parent)
+      if (p === column)
+        inside = true
+    if (!inside)
+      return
     var top = target.mapToItem(column, 0, 0).y
-    if (top < flick.contentY) flick.contentY = Math.max(0, top - FoamyStyle.gap)
+    if (top < flick.contentY)
+      flick.contentY = Math.max(0, top - FoamyStyle.gap)
     else if (top + target.height > flick.contentY + flick.height)
       flick.contentY = Math.min(flick.contentHeight - flick.height, top + target.height - flick.height + FoamyStyle.gap)
   }
 
   Connections {
     target: inspector.Window.window
-    function onActiveFocusItemChanged() { inspector.reveal(inspector.Window.activeFocusItem) }
+    function onActiveFocusItemChanged() {
+      inspector.reveal(inspector.Window.activeFocusItem)
+    }
   }
 
   Flickable {
@@ -104,18 +123,14 @@ FocusScope {
           enabled: checked || !inspector.app || inspector.app.canShow(inspector.name)
           opacity: enabled ? 1 : FoamyStyle.disabledOpacity
           checked: inspector.item ? !inspector.item.hidden : false
-          onToggled: if (enabled) inspector.commit(Draft.setHidden(inspector.app.draft, inspector.name, !inspector.item.hidden))
+          onToggled: if (enabled)
+            inspector.commit(Draft.setHidden(inspector.app.draft, inspector.name, !inspector.item.hidden))
         }
       }
 
       PaneNote {
         objectName: "studioModuleNote"
-        text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways")
-          : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? FoamyI18n.t("studio.needsWeather.hint")
-          : inspector.name === "account" && inspector.app && !inspector.app.lockSettings.showUserInfo ? FoamyI18n.t("studio.settingHidesAccount")
-          : inspector.name === "media" && inspector.app && !inspector.app.lockSettings.showMedia ? FoamyI18n.t("studio.settingHidesMedia")
-          : inspector.item && inspector.item.hidden ? FoamyI18n.t("studio.hiddenHint")
-          : ""
+        text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways") : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? FoamyI18n.t("studio.needsWeather.hint") : inspector.name === "account" && inspector.app && !inspector.app.lockSettings.showUserInfo ? FoamyI18n.t("studio.settingHidesAccount") : inspector.name === "media" && inspector.app && !inspector.app.lockSettings.showMedia ? FoamyI18n.t("studio.settingHidesMedia") : inspector.item && inspector.item.hidden ? FoamyI18n.t("studio.hiddenHint") : ""
       }
 
       SectionLabel {
@@ -129,8 +144,12 @@ FocusScope {
         title: FoamyI18n.t("studio.style")
         options: LockLayout.STYLES[inspector.name] || []
         value: inspector.item ? inspector.item.style : ""
-        labelFor: function(style) { return FoamyI18n.t("studio.style." + style) }
-        onPicked: function(style) { inspector.commit(Draft.setStyle(inspector.app.draft, inspector.name, style)) }
+        labelFor: function (style) {
+          return FoamyI18n.t("studio.style." + style)
+        }
+        onPicked: function (style) {
+          inspector.commit(Draft.setStyle(inspector.app.draft, inspector.name, style))
+        }
       }
 
       // The element's own keys (Layout.elementLimits()[name].options).
@@ -149,9 +168,16 @@ FocusScope {
         label: FoamyI18n.t("studio.coverArt")
         value: inspector.coverArt
         enabled: !inspector.app || !inspector.app.sources.coverArtBusy
-        options: Model.COVER_ART_MODES.concat(inspector.coverArt === "custom" ? ["custom"] : [])
-          .map(function(mode) { return { value: mode, label: FoamyI18n.t("studio.coverArt." + mode) } })
-        onChanged: function(mode) { if (mode !== "custom" && mode !== inspector.coverArt) inspector.app.setCoverArt(mode) }
+        options: Model.COVER_ART_MODES.concat(inspector.coverArt === "custom" ? ["custom"] : []).map(function (mode) {
+          return {
+            value: mode,
+            label: FoamyI18n.t("studio.coverArt." + mode)
+          }
+        })
+        onChanged: function (mode) {
+          if (mode !== "custom" && mode !== inspector.coverArt)
+            inspector.app.setCoverArt(mode)
+        }
         Accessible.name: FoamyI18n.t("studio.coverArt")
       }
       PaneNote {
@@ -167,13 +193,13 @@ FocusScope {
         opacity: enabled ? 1 : FoamyStyle.disabledOpacity
         text: FoamyI18n.t("studio.artwork")
         checked: Draft.optionOf(inspector.look, "media", "artwork") === true
-        onToggled: if (enabled) inspector.commit(Draft.setOption(inspector.app.draft, "media", "artwork", !checked))
+        onToggled: if (enabled)
+          inspector.commit(Draft.setOption(inspector.app.draft, "media", "artwork", !checked))
       }
       PaneNote {
         objectName: "studioArtworkNote"
         visible: inspector.name === "media"
-        text: !inspector.coverStyle && inspector.item ? FoamyI18n.t("studio.artwork.noCover", inspector.app ? inspector.app.styleLabel(inspector.item.style) : "")
-          : FoamyI18n.t("studio.artwork.hint")
+        text: !inspector.coverStyle && inspector.item ? FoamyI18n.t("studio.artwork.noCover", inspector.app ? inspector.app.styleLabel(inspector.item.style) : "") : FoamyI18n.t("studio.artwork.hint")
       }
 
       // password.reveal, for every field style; absent, the style's own
@@ -194,9 +220,16 @@ FocusScope {
         Segmented {
           objectName: "studioReveal"
           name: FoamyI18n.t("studio.reveal")
-          options: inspector.options.password.options.reveal.values.map(function(v) { return { value: v, label: FoamyI18n.t("studio.reveal." + v) } })
+          options: inspector.options.password.options.reveal.values.map(function (v) {
+            return {
+              value: v,
+              label: FoamyI18n.t("studio.reveal." + v)
+            }
+          })
           value: Draft.optionOf(inspector.look, "password", "reveal")
-          onPicked: function(value) { inspector.commit(Draft.setOption(inspector.app.draft, "password", "reveal", value)) }
+          onPicked: function (value) {
+            inspector.commit(Draft.setOption(inspector.app.draft, "password", "reveal", value))
+          }
         }
       }
       PaneNote {
@@ -241,9 +274,16 @@ FocusScope {
           name: FoamyI18n.t("studio.details")
           enabled: !inspector.item || inspector.item.style !== "card"
           opacity: enabled ? 1 : FoamyStyle.disabledOpacity
-          options: inspector.options.weather.options.details.values.map(function(v) { return { value: v, label: FoamyI18n.t("studio.details." + v) } })
+          options: inspector.options.weather.options.details.values.map(function (v) {
+            return {
+              value: v,
+              label: FoamyI18n.t("studio.details." + v)
+            }
+          })
           value: Draft.optionOf(inspector.look, "weather", "details")
-          onPicked: function(value) { inspector.commit(Draft.setOption(inspector.app.draft, "weather", "details", value)) }
+          onPicked: function (value) {
+            inspector.commit(Draft.setOption(inspector.app.draft, "weather", "details", value))
+          }
         }
       }
       PaneNote {
@@ -283,8 +323,12 @@ FocusScope {
         stepSize: inspector.limits.scale.step
         value: inspector.item ? Draft.elementValue(inspector.item, "scale") : 1
         valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
-        onMoved: function(v) { inspector.preview(Draft.setScale(inspector.app.draft, inspector.name, v)) }
-        onCommitted: function(v) { inspector.commit(Draft.setScale(inspector.app.draft, inspector.name, v)) }
+        onMoved: function (v) {
+          inspector.preview(Draft.setScale(inspector.app.draft, inspector.name, v))
+        }
+        onCommitted: function (v) {
+          inspector.commit(Draft.setScale(inspector.app.draft, inspector.name, v))
+        }
       }
       StudioSlider {
         objectName: "studioOpacity"
@@ -295,8 +339,12 @@ FocusScope {
         stepSize: 0.05
         value: inspector.item ? Draft.elementValue(inspector.item, "opacity") : 1
         valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
-        onMoved: function(v) { inspector.preview(Draft.setOpacity(inspector.app.draft, inspector.name, v)) }
-        onCommitted: function(v) { inspector.commit(Draft.setOpacity(inspector.app.draft, inspector.name, v)) }
+        onMoved: function (v) {
+          inspector.preview(Draft.setOpacity(inspector.app.draft, inspector.name, v))
+        }
+        onCommitted: function (v) {
+          inspector.commit(Draft.setOpacity(inspector.app.draft, inspector.name, v))
+        }
       }
       // Only the styles that draw a glass surface take one.
       StudioSlider {
@@ -309,8 +357,12 @@ FocusScope {
         stepSize: 0.05
         value: Draft.glassOf(inspector.look, inspector.name)
         valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
-        onMoved: function(v) { inspector.preview(Draft.setGlass(inspector.app.draft, inspector.name, v)) }
-        onCommitted: function(v) { inspector.commit(Draft.setGlass(inspector.app.draft, inspector.name, v)) }
+        onMoved: function (v) {
+          inspector.preview(Draft.setGlass(inspector.app.draft, inspector.name, v))
+        }
+        onCommitted: function (v) {
+          inspector.commit(Draft.setGlass(inspector.app.draft, inspector.name, v))
+        }
       }
       PaneNote {
         width: parent.width
@@ -334,7 +386,9 @@ FocusScope {
           name: FoamyI18n.t("studio.zone")
           zone: inspector.item ? inspector.item.zone : ""
           allowed: Draft.zonesFor(inspector.name)
-          onPicked: function(zone) { inspector.commit(Draft.setZone(inspector.app.draft, inspector.name, zone)) }
+          onPicked: function (zone) {
+            inspector.commit(Draft.setZone(inspector.app.draft, inspector.name, zone))
+          }
         }
         ColumnLayout {
           Layout.fillWidth: true
@@ -345,9 +399,11 @@ FocusScope {
             name: FoamyI18n.t("studio.offsetX")
             value: Draft.pixelsToSteps(inspector.offsetPx.x, inspector.screenHeight)
             detail: inspector.px(inspector.offsetPx.x)
-            onCommitted: function(steps) {
-              inspector.commit(inspector.app.canvas.offsetTo(inspector.name,
-                { x: Draft.stepsToPixels(steps, inspector.screenHeight), y: inspector.offsetPx.y }))
+            onCommitted: function (steps) {
+              inspector.commit(inspector.app.canvas.offsetTo(inspector.name, {
+                x: Draft.stepsToPixels(steps, inspector.screenHeight),
+                y: inspector.offsetPx.y
+              }))
             }
           }
           StepField {
@@ -356,16 +412,17 @@ FocusScope {
             name: FoamyI18n.t("studio.offsetY")
             value: Draft.pixelsToSteps(inspector.offsetPx.y, inspector.screenHeight)
             detail: inspector.px(inspector.offsetPx.y)
-            onCommitted: function(steps) {
-              inspector.commit(inspector.app.canvas.offsetTo(inspector.name,
-                { x: inspector.offsetPx.x, y: Draft.stepsToPixels(steps, inspector.screenHeight) }))
+            onCommitted: function (steps) {
+              inspector.commit(inspector.app.canvas.offsetTo(inspector.name, {
+                x: inspector.offsetPx.x,
+                y: Draft.stepsToPixels(steps, inspector.screenHeight)
+              }))
             }
           }
         }
       }
       PaneNote {
-        text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone))
-          + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(Draft.gridStep(inspector.screenHeight), 1)) : ""
+        text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone)) + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(Draft.gridStep(inspector.screenHeight), 1)) : ""
       }
       // The order in the zone's stack, directly (a drop puts it last).
       RowLayout {
@@ -412,9 +469,16 @@ FocusScope {
         Segmented {
           objectName: "studioScreens"
           name: FoamyI18n.t("studio.screens")
-          options: LockLayout.SCREENS.map(function(s) { return { value: s, label: FoamyI18n.t("studio.screens." + s) } })
+          options: LockLayout.SCREENS.map(function (s) {
+            return {
+              value: s,
+              label: FoamyI18n.t("studio.screens." + s)
+            }
+          })
           value: inspector.item ? Draft.elementValue(inspector.item, "screens") : "all"
-          onPicked: function(value) { inspector.commit(Draft.setScreens(inspector.app.draft, inspector.name, value)) }
+          onPicked: function (value) {
+            inspector.commit(Draft.setScreens(inspector.app.draft, inspector.name, value))
+          }
         }
       }
       PaneNote {
@@ -439,7 +503,10 @@ FocusScope {
         text: FoamyI18n.t("studio.shape.full")
       }
 
-      Item { width: 1; height: FoamyStyle.gap }
+      Item {
+        width: 1
+        height: FoamyStyle.gap
+      }
     }
   }
 
@@ -454,7 +521,9 @@ FocusScope {
     property var app: null
     property string title: ""
     readonly property var rows: app ? Draft.statusRows(app.look) : []
-    readonly property int shownCount: rows.filter(function(row) { return row.on }).length
+    readonly property int shownCount: rows.filter(function (row) {
+      return row.on
+    }).length
     readonly property real rowHeight: FoamyStyle.rowHeight
     // The row with the keyboard while the list has it.
     property int cursor: -1
@@ -466,23 +535,29 @@ FocusScope {
 
     implicitHeight: rows.length * rowHeight
     activeFocusOnTab: true
-    onActiveFocusChanged: if (activeFocus && cursor < 0) cursor = 0
+    onActiveFocusChanged: if (activeFocus && cursor < 0)
+      cursor = 0
 
     Accessible.role: Accessible.List
     Accessible.name: title
     Accessible.description: FoamyI18n.t("studio.items.keys")
 
-    function label(name) { return FoamyI18n.t("studio.item." + name) }
+    function label(name) {
+      return FoamyI18n.t("studio.item." + name)
+    }
 
     function commitIfChanged(next) {
-      if (!Draft.same(next, app.draft)) app.commit(next)
-      else app.preview(app.draft)
+      if (!Draft.same(next, app.draft))
+        app.commit(next)
+      else
+        app.preview(app.draft)
     }
 
     // Switch the item in row `index`.
     function toggle(index) {
       var row = rows[index]
-      if (!row) return
+      if (!row)
+        return
       commitIfChanged(Draft.toggleItem(app.draft, row.name, !row.on))
     }
 
@@ -491,7 +566,8 @@ FocusScope {
     function move(index, step) {
       var row = rows[index]
       var to = index + step
-      if (!row || !row.on || to < 0 || to >= shownCount) return
+      if (!row || !row.on || to < 0 || to >= shownCount)
+        return
       commitIfChanged(Draft.moveItem(app.draft, row.name, to))
       cursor = to
     }
@@ -499,31 +575,47 @@ FocusScope {
     // Keys on the list; true when handled.
     function keyPressed(key, modifiers) {
       var alt = (modifiers & Qt.AltModifier) !== 0
-      if (modifiers & Qt.ControlModifier) return false
+      if (modifiers & Qt.ControlModifier)
+        return false
       var at = Math.max(0, cursor)
       switch (key) {
       case Qt.Key_Up:
-        if (alt) move(at, -1)
-        else cursor = Math.max(0, at - 1)
+        if (alt)
+          move(at, -1)
+        else
+          cursor = Math.max(0, at - 1)
         break
       case Qt.Key_Down:
-        if (alt) move(at, 1)
-        else cursor = Math.min(rows.length - 1, at + 1)
+        if (alt)
+          move(at, 1)
+        else
+          cursor = Math.min(rows.length - 1, at + 1)
         break
-      case Qt.Key_Home: cursor = 0; break
-      case Qt.Key_End: cursor = rows.length - 1; break
+      case Qt.Key_Home:
+        cursor = 0
+        break
+      case Qt.Key_End:
+        cursor = rows.length - 1
+        break
       case Qt.Key_Space:
       case Qt.Key_Return:
-      case Qt.Key_Enter: toggle(at); break
-      default: return false
+      case Qt.Key_Enter:
+        toggle(at)
+        break
+      default:
+        return false
       }
       return true
     }
-    Keys.onPressed: function(event) { if (checklist.keyPressed(event.key, event.modifiers)) event.accepted = true }
+    Keys.onPressed: function (event) {
+      if (checklist.keyPressed(event.key, event.modifiers))
+        event.accepted = true
+    }
 
     // The drag (the grip's handler, and a test hook): rows in view pixels.
     function dragStart(index) {
-      if (!rows[index] || !rows[index].on) return false
+      if (!rows[index] || !rows[index].on)
+        return false
       dragFrom = index
       dragTo = index
       dragOffset = 0
@@ -531,15 +623,18 @@ FocusScope {
       return true
     }
     function dragMove(offset) {
-      if (dragFrom < 0) return
+      if (dragFrom < 0)
+        return
       dragOffset = Math.max(-dragFrom * rowHeight, Math.min((shownCount - 1 - dragFrom) * rowHeight, offset))
       var to = Math.max(0, Math.min(shownCount - 1, Math.round(dragFrom + dragOffset / rowHeight)))
-      if (to === dragTo) return
+      if (to === dragTo)
+        return
       dragTo = to
       app.preview(Draft.moveItem(app.draft, rows[dragFrom].name, to))
     }
     function dragEnd() {
-      if (dragFrom < 0) return
+      if (dragFrom < 0)
+        return
       var from = dragFrom, to = dragTo
       dragFrom = -1
       dragTo = -1
@@ -550,10 +645,13 @@ FocusScope {
 
     // Where row `index` sits while a drag moves another past it.
     function rowY(index) {
-      if (index === dragFrom) return dragFrom * rowHeight + dragOffset
+      if (index === dragFrom)
+        return dragFrom * rowHeight + dragOffset
       var at = index
-      if (dragFrom >= 0 && dragFrom < index && index <= dragTo) at--
-      else if (dragFrom >= 0 && dragTo <= index && index < dragFrom) at++
+      if (dragFrom >= 0 && dragFrom < index && index <= dragTo)
+        at--
+      else if (dragFrom >= 0 && dragTo <= index && index < dragFrom)
+        at++
       return at * rowHeight
     }
 
@@ -611,10 +709,17 @@ FocusScope {
             spacing: 2
             Repeater {
               model: 6
-              Rectangle { width: 2; height: 2; radius: 1; color: FoamyPalette.mutedText }
+              Rectangle {
+                width: 2
+                height: 2
+                radius: 1
+                color: FoamyPalette.mutedText
+              }
             }
           }
-          HoverHandler { cursorShape: Qt.SizeVerCursor }
+          HoverHandler {
+            cursorShape: Qt.SizeVerCursor
+          }
           DragHandler {
             target: null
             yAxis.enabled: true
@@ -624,9 +729,11 @@ FocusScope {
               if (active) {
                 checklist.forceActiveFocus(Qt.MouseFocusReason)
                 checklist.dragStart(row.index)
-              } else checklist.dragEnd()
+              } else
+                checklist.dragEnd()
             }
-            onTranslationChanged: if (active) checklist.dragMove(translation.y)
+            onTranslationChanged: if (active)
+              checklist.dragMove(translation.y)
           }
         }
 

@@ -46,9 +46,7 @@ Item {
   readonly property color themeText: Commons.Color.foreground
   readonly property bool lightText: lightness(view.foreground) >= 0.5
   readonly property bool themeDark: lightness(themeBase) < 0.5
-  readonly property color base: lightText === themeDark ? themeBase
-    : lightText ? scaled(themeText, Math.min(0.55, 0.12 / Math.max(0.01, lightness(themeText))))
-    : Qt.rgba(1 - (1 - themeText.r) * 0.25, 1 - (1 - themeText.g) * 0.25, 1 - (1 - themeText.b) * 0.25, 1)
+  readonly property color base: lightText === themeDark ? themeBase : lightText ? scaled(themeText, Math.min(0.55, 0.12 / Math.max(0.01, lightness(themeText)))) : Qt.rgba(1 - (1 - themeText.r) * 0.25, 1 - (1 - themeText.g) * 0.25, 1 - (1 - themeText.b) * 0.25, 1)
   readonly property color accent: view.accent
   readonly property color green: FoamyPalette.success
   readonly property color cyan: FoamyPalette.info
@@ -135,9 +133,14 @@ Item {
     active: backdrop.painted && backdrop.visible
     sourceComponent: Item {
       id: still
-      readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop,
-        backdrop.unit, backdrop.glow, { base: backdrop.base, accent: backdrop.accent, green: backdrop.green,
-          cyan: backdrop.cyan, ink: backdrop.ink, warm: backdrop.warm })
+      readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+        base: backdrop.base,
+        accent: backdrop.accent,
+        green: backdrop.green,
+        cyan: backdrop.cyan,
+        ink: backdrop.ink,
+        warm: backdrop.warm
+      })
       // The scene by value: a binding that recomputes the same scene paints nothing.
       readonly property string key: JSON.stringify(scene)
       readonly property real pointScale: Math.min(1, 1920 / Math.max(1, backdrop.width))
@@ -148,17 +151,22 @@ Item {
         width: Math.max(1, Math.round(backdrop.width * fraction))
         height: Math.max(1, Math.round(backdrop.height * fraction))
         smooth: true
-        transform: Scale { xScale: backdrop.width / field.width; yScale: backdrop.height / field.height }
+        transform: Scale {
+          xScale: backdrop.width / field.width
+          yScale: backdrop.height / field.height
+        }
         // Painted once per scene (a threaded renderer makes the canvas
         // available a frame late, and a request before that is dropped).
         readonly property string want: still.key
         property string done: ""
         onWantChanged: requestPaint()
-        onAvailableChanged: if (available && done !== want) requestPaint()
+        onAvailableChanged: if (available && done !== want)
+          requestPaint()
         // Qt asks again for the same scene (a grab, an expose); the picture is
         // still there.
         onPaint: {
-          if (done === want) return
+          if (done === want)
+            return
           done = want
           Still.paintField(getContext("2d"), width, height, still.scene)
         }
@@ -169,13 +177,18 @@ Item {
         width: Math.max(1, Math.round(backdrop.width * still.pointScale))
         height: Math.max(1, Math.round(backdrop.height * still.pointScale))
         smooth: true
-        transform: Scale { xScale: 1 / still.pointScale; yScale: 1 / still.pointScale }
+        transform: Scale {
+          xScale: 1 / still.pointScale
+          yScale: 1 / still.pointScale
+        }
         readonly property string want: still.key
         property string done: ""
         onWantChanged: requestPaint()
-        onAvailableChanged: if (available && done !== want) requestPaint()
+        onAvailableChanged: if (available && done !== want)
+          requestPaint()
         onPaint: {
-          if (done === want) return
+          if (done === want)
+            return
           done = want
           Still.paintPoints(getContext("2d"), width, height, still.scene)
         }
@@ -195,7 +208,10 @@ Item {
     readonly property var figure: {
       var points = []
       for (var i = 0; i < figureSize; i++)
-        points.push({ x: 0.1 + 0.8 * (i + 0.5 * backdrop.noise(i, 11)) / figureSize, y: 0.14 + 0.32 * backdrop.noise(i, 12) })
+        points.push({
+          x: 0.1 + 0.8 * (i + 0.5 * backdrop.noise(i, 11)) / figureSize,
+          y: 0.14 + 0.32 * backdrop.noise(i, 12)
+        })
       return points
     }
 

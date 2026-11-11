@@ -22,7 +22,7 @@ Item {
   property bool checked: false
   // The label on the reading start (false: the switch alone).
   property bool showLabel: true
-  signal toggled()
+  signal toggled
 
   readonly property bool mirrored: LayoutMirroring.enabled
   readonly property color foreground: FoamyPalette.text

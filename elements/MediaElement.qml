@@ -72,19 +72,8 @@ Rectangle {
   readonly property string artist: view.activePlayer ? String(view.activePlayer.trackArtist || "") : ""
 
   objectName: "mediaRow"
-  width: line ? Math.min(mediaLine.implicitWidth, contentWidth)
-    : minimal ? minimalWidth
-    : pill ? Math.min(contentWidth, pillPadding + albumArt.width + Math.round(12 * uiScale) + pillTitleWidth
-      + Math.round(6 * uiScale) + mediaControls.width + pillPadding)
-    : art ? artWidth
-    : hero ? heroWidth
-    : disc ? Math.min(contentWidth, discSize + discGap + discTextWidth + Math.round(8 * uiScale) + mediaControls.width)
-    : Math.min(Math.round(470 * uiScale), view.width - 48 * view.uiScale)
-  height: pill ? Math.round(46 * uiScale)
-    : art ? artControlsY + Math.round(54 * uiScale)
-    : hero ? heroArtistY + Math.round(24 * uiScale)
-    : disc ? discSize
-    : Math.round((line || minimal ? 30 : 92) * uiScale)
+  width: line ? Math.min(mediaLine.implicitWidth, contentWidth) : minimal ? minimalWidth : pill ? Math.min(contentWidth, pillPadding + albumArt.width + Math.round(12 * uiScale) + pillTitleWidth + Math.round(6 * uiScale) + mediaControls.width + pillPadding) : art ? artWidth : hero ? heroWidth : disc ? Math.min(contentWidth, discSize + discGap + discTextWidth + Math.round(8 * uiScale) + mediaControls.width) : Math.min(Math.round(470 * uiScale), view.width - 48 * view.uiScale)
+  height: pill ? Math.round(46 * uiScale) : art ? artControlsY + Math.round(54 * uiScale) : hero ? heroArtistY + Math.round(24 * uiScale) : disc ? discSize : Math.round((line || minimal ? 30 : 92) * uiScale)
   // The line, minimal, hero and disc have no surface.
   readonly property bool surface: cardStyle || pill || art
   // Its surface's corner radius (a shape's "auto" radius), -1 without one.
@@ -119,7 +108,8 @@ Rectangle {
       textFormat: Text.PlainText
       text: {
         var player = media.view.activePlayer
-        if (!player) return ""
+        if (!player)
+          return ""
         var title = String(player.trackTitle || "")
         var artist = String(player.trackArtist || "")
         return title && artist ? title + " · " + artist : title || artist
@@ -142,7 +132,9 @@ Rectangle {
     width: media.minimalWidth
     textFormat: Text.PlainText
     text: {
-      var parts = [media.title, media.artist].filter(function(part) { return part !== "" })
+      var parts = [media.title, media.artist].filter(function (part) {
+        return part !== ""
+      })
       return parts.length > 0 ? "\u266a " + parts.join(" \u2014 ") : ""
     }
     color: media.view.foreground
@@ -158,16 +150,12 @@ Rectangle {
     visible: media.coverShown
     // The card's thumbnail, the pill's round one, the art square, the
     // hero's cover or the disc.
-    readonly property real inset: media.pill ? media.pillPadding : media.art ? media.artPadding
-      : media.hero || media.disc ? 0 : Math.round(14 * media.uiScale)
-    width: media.pill ? media.height - 2 * media.pillPadding : media.art ? media.artSize
-      : media.hero ? media.heroWidth : media.disc ? media.discSize
-      : Math.round(64 * media.uiScale)
+    readonly property real inset: media.pill ? media.pillPadding : media.art ? media.artPadding : media.hero || media.disc ? 0 : Math.round(14 * media.uiScale)
+    width: media.pill ? media.height - 2 * media.pillPadding : media.art ? media.artSize : media.hero ? media.heroWidth : media.disc ? media.discSize : Math.round(64 * media.uiScale)
     height: width
     // Round in the pill and the disc where the GPU masks the artwork;
     // without the mask a rounded square matches the clipped picture.
-    radius: media.pill || media.disc ? (GraphicsInfo.api !== GraphicsInfo.Software ? width / 2 : Math.round((media.disc ? 12 : 7) * media.uiScale))
-      : Math.round((media.art ? 14 : media.hero ? 18 : 9) * media.uiScale)
+    radius: media.pill || media.disc ? (GraphicsInfo.api !== GraphicsInfo.Software ? width / 2 : Math.round((media.disc ? 12 : 7) * media.uiScale)) : Math.round((media.art ? 14 : media.hero ? 18 : 9) * media.uiScale)
     x: media.art ? media.artPadding : media.hero ? 0 : media.mirrored ? media.width - inset - width : inset
     y: media.art ? media.artPadding : media.hero ? 0 : (media.height - height) / 2
     color: Qt.rgba(0.025, 0.035, 0.065, 0.55)
@@ -197,7 +185,8 @@ Rectangle {
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
       visible: status === Image.Ready
-      onStatusChanged: if (status === Image.Error) media.view.artworkFailed(media.view.artworkPath)
+      onStatusChanged: if (status === Image.Error)
+        media.view.artworkFailed(media.view.artworkPath)
     }
 
     Rectangle {
@@ -248,7 +237,8 @@ Rectangle {
     loops: Animation.Infinite
     running: media.discMotion && !media.view.reduceMotion
     paused: running && !media.playing
-    onRunningChanged: if (!running) albumArt.rotation = 0
+    onRunningChanged: if (!running)
+      albumArt.rotation = 0
   }
 
   // "pill" and "art": the title (and, for art, the artist below).
@@ -258,14 +248,9 @@ Rectangle {
     visible: media.pill || media.art || media.hero || media.disc
     readonly property real pillStart: media.pillPadding + albumArt.width + Math.round(12 * media.uiScale)
     readonly property real discStart: media.discSize + media.discGap
-    x: media.art ? media.artPadding : media.hero ? 0
-      : media.disc ? (media.mirrored ? media.width - discStart - width : discStart)
-      : media.mirrored ? media.width - pillStart - width : pillStart
-    y: media.art ? media.artTitleY : media.hero ? media.heroTitleY
-      : media.disc ? Math.round(media.height / 2 - height) : (media.height - height) / 2
-    width: media.art ? media.width - 2 * media.artPadding : media.hero ? media.width
-      : media.disc ? Math.max(0, Math.min(media.discTextWidth, media.width - discStart - Math.round(8 * media.uiScale) - mediaControls.width))
-      : media.pillTitleWidth
+    x: media.art ? media.artPadding : media.hero ? 0 : media.disc ? (media.mirrored ? media.width - discStart - width : discStart) : media.mirrored ? media.width - pillStart - width : pillStart
+    y: media.art ? media.artTitleY : media.hero ? media.heroTitleY : media.disc ? Math.round(media.height / 2 - height) : (media.height - height) / 2
+    width: media.art ? media.width - 2 * media.artPadding : media.hero ? media.width : media.disc ? Math.max(0, Math.min(media.discTextWidth, media.width - discStart - Math.round(8 * media.uiScale) - mediaControls.width)) : media.pillTitleWidth
     height: Math.round((media.hero ? 28 : media.art ? 24 : 22) * media.uiScale)
     textFormat: Text.PlainText
     text: media.pill ? media.title || media.artist : media.title
@@ -356,9 +341,7 @@ Rectangle {
       Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: previousMouse.containsMouse && previousMouse.enabled
-          ? Qt.rgba(1, 1, 1, 0.1)
-          : "transparent"
+        color: previousMouse.containsMouse && previousMouse.enabled ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
       }
 
       LineIcon {
@@ -382,15 +365,12 @@ Rectangle {
     Item {
       width: Math.round((media.pill ? 36 : 46) * media.uiScale)
       height: width
-      opacity: media.view.activePlayer
-        && (media.view.activePlayer.canTogglePlaying || media.view.activePlayer.canPlay || media.view.activePlayer.canPause) ? 1 : 0.38
+      opacity: media.view.activePlayer && (media.view.activePlayer.canTogglePlaying || media.view.activePlayer.canPlay || media.view.activePlayer.canPause) ? 1 : 0.38
 
       Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: playMouse.containsMouse && playMouse.enabled
-          ? Qt.rgba(1, 1, 1, 0.1)
-          : "transparent"
+        color: playMouse.containsMouse && playMouse.enabled ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
       }
 
       LineIcon {
@@ -405,8 +385,7 @@ Rectangle {
         id: playMouse
         anchors.fill: parent
         hoverEnabled: true
-        enabled: media.view.activePlayer
-          && (media.view.activePlayer.canTogglePlaying || media.view.activePlayer.canPlay || media.view.activePlayer.canPause)
+        enabled: media.view.activePlayer && (media.view.activePlayer.canTogglePlaying || media.view.activePlayer.canPlay || media.view.activePlayer.canPause)
         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: media.view.runMediaAction("playPause")
       }
@@ -421,9 +400,7 @@ Rectangle {
       Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: nextMouse.containsMouse && nextMouse.enabled
-          ? Qt.rgba(1, 1, 1, 0.1)
-          : "transparent"
+        color: nextMouse.containsMouse && nextMouse.enabled ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
       }
 
       LineIcon {

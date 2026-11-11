@@ -63,18 +63,13 @@ Item {
   property bool onBattery: UPower.onBattery
   property bool videoGaveUp: false
   property string videoFailure: ""
-  readonly property bool videoWanted: videoPath !== "" && loadBackground && gpuRendering && !videoGaveUp
-    && Layout.playsVideo(effectiveLook.background)
-    && ["omarchy", "picture"].indexOf(effectiveLook.background.source) !== -1
-  readonly property bool videoPlaying: videoWanted && visible && displayAwake && !reduceMotion
-    && !(onBattery && Layout.pausesOnBattery(effectiveLook.background))
-  readonly property bool videoShown: videoLoader.status === Loader.Ready && videoLoader.item !== null
-    && videoLoader.item.frameSeen
+  readonly property bool videoWanted: videoPath !== "" && loadBackground && gpuRendering && !videoGaveUp && Layout.playsVideo(effectiveLook.background) && ["omarchy", "picture"].indexOf(effectiveLook.background.source) !== -1
+  readonly property bool videoPlaying: videoWanted && visible && displayAwake && !reduceMotion && !(onBattery && Layout.pausesOnBattery(effectiveLook.background))
+  readonly property bool videoShown: videoLoader.status === Loader.Ready && videoLoader.item !== null && videoLoader.item.frameSeen
   readonly property var effectiveLook: fallbackPreset ? Layout.preset(fallbackPreset) : look
   readonly property var placed: effectiveLook.elements
 
-  readonly property string displayName: String(userDisplayName || "").trim()
-    || String(userName || "").trim()
+  readonly property string displayName: String(userDisplayName || "").trim() || String(userName || "").trim()
   // The lock is an art-directed surface: its own typefaces and white glass
   // over the wallpaper scrim. Missing typefaces fall back to the foamy body
   // and Omarchy fonts; a theme that styles the lock ([lock] in shell.toml)
@@ -103,18 +98,13 @@ Item {
   // The last geometry check's result: "" or a code (see Layout.lookGeometryError).
   property string geometryProblemCode: ""
   readonly property color glassEdge: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
-  readonly property color glassBorder: glassTint === "accent" ? Qt.rgba(accent.r, accent.g, accent.b, 0.9)
-    : glassTint === "solid" ? Qt.rgba(glassEdge.r, glassEdge.g, glassEdge.b, 0) : glassEdge
+  readonly property color glassBorder: glassTint === "accent" ? Qt.rgba(accent.r, accent.g, accent.b, 0.9) : glassTint === "solid" ? Qt.rgba(glassEdge.r, glassEdge.g, glassEdge.b, 0) : glassEdge
   // Drawn lines (the outline clock): the accent with the accent tint.
   readonly property color lineColor: glassTint === "accent" ? accent : foreground
   readonly property color selection: themeLock("selection", Commons.Color.lock.selection, Qt.rgba(1, 1, 1, 0.25))
-  readonly property bool hasMedia: activePlayer !== null
-    && (String(activePlayer.trackTitle || "") !== "" || String(activePlayer.trackArtist || "") !== "")
+  readonly property bool hasMedia: activePlayer !== null && (String(activePlayer.trackTitle || "") !== "" || String(activePlayer.trackArtist || "") !== "")
   readonly property var batteryDevice: UPower.displayDevice
-  readonly property bool hasBattery: batteryDevice
-    && batteryDevice.ready
-    && batteryDevice.isPresent
-    && batteryDevice.isLaptopBattery
+  readonly property bool hasBattery: batteryDevice && batteryDevice.ready && batteryDevice.isPresent && batteryDevice.isLaptopBattery
   readonly property int batteryPercentage: hasBattery ? Math.round(Number(batteryDevice.percentage || 0) * 100) : 0
   readonly property bool wiredConnected: hasConnectedDevice(DeviceType.Wired)
   readonly property string networkLabel: networkStatusLabel()
@@ -131,8 +121,7 @@ Item {
   readonly property bool reduceMotion: Commons.Style.reduceMotion === true
   // A drawn background moves only while it can be seen: the view is shown,
   // the display awake, animations on and the GPU renders.
-  readonly property bool motionAllowed: visible && loadBackground && displayAwake && !reduceMotion
-    && GraphicsInfo.api !== GraphicsInfo.Software
+  readonly property bool motionAllowed: visible && loadBackground && displayAwake && !reduceMotion && GraphicsInfo.api !== GraphicsInfo.Software
   readonly property Item wallpaperItem: wallpaper
   // The background is a picture (the Omarchy wallpaper or a chosen one).
   readonly property bool pictureBackground: ["omarchy", "picture"].indexOf(effectiveLook.background.source) !== -1
@@ -146,8 +135,7 @@ Item {
   property bool liveSources: true
   // The status is placed and could show (whether or not its items have
   // read anything yet: they read only while this holds).
-  readonly property bool statusLive: !placed.status.hidden && (placed.status.screens !== "primary" || primary)
-    && visible && loadBackground
+  readonly property bool statusLive: !placed.status.hidden && (placed.status.screens !== "primary" || primary) && visible && loadBackground
   // /proc, read every few seconds while awake; procRoot is for the tests.
   property string procRoot: "/proc"
   // Listed: the status shows the reading. Wanted: it is also read now. A
@@ -185,8 +173,8 @@ Item {
 
   signal submitPassword(string password)
   signal passwordTextEdited(string password)
-  signal clearFailureRequested()
-  signal wakeRequested()
+  signal clearFailureRequested
+  signal wakeRequested
   signal artworkFailed(string path)
   // The geometry check replaced the look: `error` is the reason, `preset` the
   // one now shown.
@@ -211,7 +199,8 @@ Item {
 
   // Cache-bust profile and wallpaper images when their files change in place.
   function fileUrl(path, version) {
-    if (!path) return ""
+    if (!path)
+      return ""
     return Model.fileUrl(path, version)
   }
 
@@ -225,28 +214,35 @@ Item {
   }
 
   function syncPasswordText() {
-    if (inputField.input.text === passwordText) return
+    if (inputField.input.text === passwordText)
+      return
     syncingPasswordText = true
     inputField.input.text = passwordText
     syncingPasswordText = false
   }
 
   function submitCurrentPassword() {
-    if (!inputEnabled || authenticatingPassword || passwordText.length === 0) return
+    if (!inputEnabled || authenticatingPassword || passwordText.length === 0)
+      return
     var submitted = passwordText
     passwordTextEdited("")
     submitPassword(submitted)
   }
 
   function networkStatusLabel() {
-    if (Networking.connectivity === NetworkConnectivity.Full) return "Connected"
-    if (Networking.connectivity === NetworkConnectivity.Portal) return "Sign-in required"
-    if (Networking.connectivity === NetworkConnectivity.Limited) return "Limited connection"
-    if (Networking.connectivity === NetworkConnectivity.None) return "Offline"
+    if (Networking.connectivity === NetworkConnectivity.Full)
+      return "Connected"
+    if (Networking.connectivity === NetworkConnectivity.Portal)
+      return "Sign-in required"
+    if (Networking.connectivity === NetworkConnectivity.Limited)
+      return "Limited connection"
+    if (Networking.connectivity === NetworkConnectivity.None)
+      return "Offline"
 
     var devices = Networking.devices ? Networking.devices.values : []
     for (var i = 0; i < devices.length; i++) {
-      if (devices[i] && devices[i].connected) return "Connected"
+      if (devices[i] && devices[i].connected)
+        return "Connected"
     }
     return "Offline"
   }
@@ -254,27 +250,31 @@ Item {
   function hasConnectedDevice(deviceType) {
     var devices = Networking.devices ? Networking.devices.values : []
     for (var i = 0; i < devices.length; i++) {
-      if (devices[i] && devices[i].type === deviceType && devices[i].connected) return true
+      if (devices[i] && devices[i].type === deviceType && devices[i].connected)
+        return true
     }
     return false
   }
 
   function batteryIcon(level) {
     var device = root.batteryDevice
-    if (!device) return ""
+    if (!device)
+      return ""
 
     var index = Math.max(0, Math.min(9, Math.floor(level / 10)))
     var chargingIcons = ["\u{f089c}", "\u{f0086}", "\u{f0087}", "\u{f0088}", "\u{f089d}", "\u{f0089}", "\u{f089e}", "\u{f008a}", "\u{f008b}", "\u{f0085}"]
     var defaultIcons = ["\u{f007a}", "\u{f007b}", "\u{f007c}", "\u{f007d}", "\u{f007e}", "\u{f007f}", "\u{f0080}", "\u{f0081}", "\u{f0082}", "\u{f0079}"]
 
-    if (!UPower.onBattery && device.state === UPowerDeviceState.Charging) return chargingIcons[index]
-    if (!UPower.onBattery
-        && (device.state === UPowerDeviceState.FullyCharged || device.state === UPowerDeviceState.PendingCharge)) return "\u{f17e2}"
+    if (!UPower.onBattery && device.state === UPowerDeviceState.Charging)
+      return chargingIcons[index]
+    if (!UPower.onBattery && (device.state === UPowerDeviceState.FullyCharged || device.state === UPowerDeviceState.PendingCharge))
+      return "\u{f17e2}"
     return defaultIcons[index]
   }
 
   function runMediaAction(action) {
-    if (!activePlayer) return
+    if (!activePlayer)
+      return
     Model.runMediaAction(activePlayer, action)
     wakeRequested()
     forcePasswordFocus()
@@ -286,28 +286,42 @@ Item {
 
   function elementItem(name) {
     switch (name) {
-    case "weather": return weatherBlock
-    case "calendar": return calendarBlock
-    case "date": return dateLabel
-    case "clock": return clockLabel
-    case "account": return identityBlock
-    case "password": return inputField
-    case "media": return mediaRow
-    case "status": return statusFooter
+    case "weather":
+      return weatherBlock
+    case "calendar":
+      return calendarBlock
+    case "date":
+      return dateLabel
+    case "clock":
+      return clockLabel
+    case "account":
+      return identityBlock
+    case "password":
+      return inputField
+    case "media":
+      return mediaRow
+    case "status":
+      return statusFooter
     }
     return null
   }
 
   function elementShown(name) {
     var item = placed[name]
-    if (!item || item.hidden) return name === "password"
+    if (!item || item.hidden)
+      return name === "password"
     // "primary": only on the screen that gets the keys (see `primary`).
-    if (item.screens === "primary" && !primary) return false
-    if (name === "account") return showUserInfo && primary
-    if (name === "media") return hasMedia
-    if (name === "weather") return weather !== null && weather !== undefined
+    if (item.screens === "primary" && !primary)
+      return false
+    if (name === "account")
+      return showUserInfo && primary
+    if (name === "media")
+      return hasMedia
+    if (name === "weather")
+      return weather !== null && weather !== undefined
     // Items whose sources have nothing yet leave the status empty.
-    if (name === "status") return statusFooter.hasContent
+    if (name === "status")
+      return statusFooter.hasContent
     return true
   }
 
@@ -315,7 +329,8 @@ Item {
   // "system" style's own rows without them.
   function statusShows(item) {
     var status = placed.status
-    if (status.items) return status.items.indexOf(item) !== -1
+    if (status.items)
+      return status.items.indexOf(item) !== -1
     return status.style === "system" && ["uptime", "memory", "load"].indexOf(item) !== -1
   }
 
@@ -331,7 +346,8 @@ Item {
 
   function shownMap() {
     var shown = {}
-    for (var i = 0; i < Layout.ELEMENTS.length; i++) shown[Layout.ELEMENTS[i]] = elementShown(Layout.ELEMENTS[i])
+    for (var i = 0; i < Layout.ELEMENTS.length; i++)
+      shown[Layout.ELEMENTS[i]] = elementShown(Layout.ELEMENTS[i])
     return shown
   }
 
@@ -350,14 +366,16 @@ Item {
   // hidden one keeps the place it would take (as the 1.2.0 anchors did).
   function zoneStack(zone, self) {
     var shown = shownMap()
-    if (self) shown[self] = true
+    if (self)
+      shown[self] = true
     return Layout.stack(placed, zone, shown)
   }
 
   function stackHeight(zone, self) {
     var names = zoneStack(zone, self)
     var total = 0
-    for (var i = 0; i < names.length; i++) total += (i > 0 ? gapBefore(names[i]) : 0) + elementItem(names[i]).height
+    for (var i = 0; i < names.length; i++)
+      total += (i > 0 ? gapBefore(names[i]) : 0) + elementItem(names[i]).height
     return total
   }
 
@@ -398,17 +416,21 @@ Item {
     var center = Layout.zoneColumn(zone) === "center"
     var total = stackHeight(zone, name)
     var top
-    if (row === "top") top = center ? Math.max(Math.round(42 * uiScale), Math.round(height * 0.09)) : edgeMargin(row)
+    if (row === "top")
+      top = center ? Math.max(Math.round(42 * uiScale), Math.round(height * 0.09)) : edgeMargin(row)
     else if (row === "middle" && !center && middleStacked()) {
       var own = Layout.zoneColumn(zone)
       var above = stackHeight("middle-start", own === "start" ? name : undefined)
       var first = Math.round((height - above - 2 * zoneGap - stackHeight("middle-end", own === "end" ? name : undefined)) / 2)
       top = own === "start" ? first : first + above + 2 * zoneGap
-    } else if (row === "middle") top = Math.round((height - total) / 2)
+    } else if (row === "middle")
+      top = Math.round((height - total) / 2)
     else if (center && bottomBand)
       top = height - total - (compactLayout ? bottomReserve() : edgeMargin(row))
-    else if (center) top = Math.min(height * 0.65, height - total - bottomReserve())
-    else if (!compactLayout || Layout.zoneColumn(zone) === "start") top = height - edgeMargin(row) - total
+    else if (center)
+      top = Math.min(height * 0.65, height - total - bottomReserve())
+    else if (!compactLayout || Layout.zoneColumn(zone) === "start")
+      top = height - edgeMargin(row) - total
     else {
       // Narrow: the end zone sits above the start zone, both centred.
       var below = stackHeight("bottom-start")
@@ -430,14 +452,24 @@ Item {
     var w = item.width
     if (item.naturalWidth !== undefined && Layout.zoneColumn(placed[name].zone) === "center")
       w = Math.min(item.width, Math.ceil(item.naturalWidth))
-    return { x: item.x + (item.width - w) / 2, y: item.y, width: w, height: item.height }
+    return {
+      x: item.x + (item.width - w) / 2,
+      y: item.y,
+      width: w,
+      height: item.height
+    }
   }
 
   // The drawn rectangle where the zone puts it, without its offset: what the
   // decorations fit and the zone keeps.
   function reservedRect(name) {
     var r = drawnRect(name)
-    return { x: r.x - offsetX(name), y: r.y - offsetY(name), width: r.width, height: r.height }
+    return {
+      x: r.x - offsetX(name),
+      y: r.y - offsetY(name),
+      width: r.width,
+      height: r.height
+    }
   }
 
   // The union of the shown elements' reserved (un-offset) rectangles in
@@ -450,18 +482,27 @@ Item {
     var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
     for (var i = 0; i < Layout.ELEMENTS.length; i++) {
       var name = Layout.ELEMENTS[i]
-      if (!shown[name] || zones.indexOf(placed[name].zone) === -1) continue
+      if (!shown[name] || zones.indexOf(placed[name].zone) === -1)
+        continue
       var r = reservedRect(name)
-      left = Math.min(left, r.x); top = Math.min(top, r.y)
-      right = Math.max(right, r.x + r.width); bottom = Math.max(bottom, r.y + r.height)
+      left = Math.min(left, r.x)
+      top = Math.min(top, r.y)
+      right = Math.max(right, r.x + r.width)
+      bottom = Math.max(bottom, r.y + r.height)
     }
-    return left === Infinity ? null : { x: left, y: top, width: right - left, height: bottom - top }
+    return left === Infinity ? null : {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top
+    }
   }
 
   // The space the bottom-center stack keeps free below it. Narrow screens
   // stack the bottom corners under it (1.2.0 reserved 140 for the media card).
   function bottomReserve() {
-    if (!compactLayout) return 36 * uiScale
+    if (!compactLayout)
+      return 36 * uiScale
     var start = stackHeight("bottom-start")
     var end = stackHeight("bottom-end")
     var corners = start + end + (start > 0 && end > 0 ? 2 * zoneGap : 0)
@@ -488,10 +529,10 @@ Item {
   // The glass colour at `opacity` (which scales the theme's or the default
   // glass alpha), in the look's tint.
   function glassAt(opacity) {
-    if (glassTint === "solid") return Qt.rgba(glassBase.r, glassBase.g, glassBase.b, Math.min(1, 0.9 * opacity))
+    if (glassTint === "solid")
+      return Qt.rgba(glassBase.r, glassBase.g, glassBase.b, Math.min(1, 0.9 * opacity))
     if (glassTint === "accent")
-      return Qt.rgba(glassBase.r * 0.9 + accent.r * 0.1, glassBase.g * 0.9 + accent.g * 0.1, glassBase.b * 0.9 + accent.b * 0.1,
-        Math.max(glassBase.a, 0.55) * opacity)
+      return Qt.rgba(glassBase.r * 0.9 + accent.r * 0.1, glassBase.g * 0.9 + accent.g * 0.1, glassBase.b * 0.9 + accent.b * 0.1, Math.max(glassBase.a, 0.55) * opacity)
     return Qt.rgba(glassBase.r, glassBase.g, glassBase.b, glassBase.a * opacity)
   }
 
@@ -526,7 +567,8 @@ Item {
     var shown = shownMap()
     for (var i = 0; i < Layout.ELEMENTS.length; i++) {
       var name = Layout.ELEMENTS[i]
-      if (shown[name]) rects[name] = drawnRect(name)
+      if (shown[name])
+        rects[name] = drawnRect(name)
     }
     return rects
   }
@@ -546,18 +588,36 @@ Item {
       var r = rects[name]
       var item = elementItem(name)
       var dx = offsetX(name), dy = offsetY(name)
-      elements[name] = { zone: placed[name].zone, style: placed[name].style, drawn: r,
-        reserved: { x: r.x - dx, y: r.y - dy, width: r.width, height: r.height },
-        radius: item.surfaceRadius !== undefined ? item.surfaceRadius : -1, glass: elementGlass(name) }
+      elements[name] = {
+        zone: placed[name].zone,
+        style: placed[name].style,
+        drawn: r,
+        reserved: {
+          x: r.x - dx,
+          y: r.y - dy,
+          width: r.width,
+          height: r.height
+        },
+        radius: item.surfaceRadius !== undefined ? item.surfaceRadius : -1,
+        glass: elementGlass(name)
+      }
     }
-    return { width: width, height: height, uiScale: uiScale, rightToLeft: rightToLeft, compact: compactLayout,
-      middleStacked: middleStacked(), tint: glassTint, glass: effectiveLook.glass.opacity, elements: elements }
+    return {
+      width: width,
+      height: height,
+      uiScale: uiScale,
+      rightToLeft: rightToLeft,
+      compact: compactLayout,
+      middleStacked: middleStacked(),
+      tint: glassTint,
+      glass: effectiveLook.glass.opacity,
+      elements: elements
+    }
   }
   // The shapes' geometry (Layout.shapeRects): one binding over the element
   // rectangles, so a shape around modules follows an offset, a scale and
   // content that arrives late, in the same frame. Elements never read it.
-  readonly property var shapeGeometry: width > 0 && height > 0
-    ? Layout.shapeRects(effectiveLook.background.shapes, shapeFrame()) : []
+  readonly property var shapeGeometry: width > 0 && height > 0 ? Layout.shapeRects(effectiveLook.background.shapes, shapeFrame()) : []
   // The modules a shape is the background of (`absorb`): from the data and
   // what is shown, so their own surface goes without reading geometry.
   readonly property var absorbed: {
@@ -565,10 +625,16 @@ Item {
     var map = shownMap()
     for (var i = 0; i < Layout.ELEMENTS.length; i++) {
       var name = Layout.ELEMENTS[i]
-      if (map[name]) shown[name] = { zone: placed[name].zone, style: placed[name].style }
+      if (map[name])
+        shown[name] = {
+          zone: placed[name].zone,
+          style: placed[name].style
+        }
     }
-    return Layout.absorbedModules(effectiveLook.background.shapes, shown,
-      { compact: compactLayout, middleStacked: middleStacked() })
+    return Layout.absorbedModules(effectiveLook.background.shapes, shown, {
+      compact: compactLayout,
+      middleStacked: middleStacked()
+    })
   }
   // Whether an element draws its own surface (false under an absorbing shape).
   function surfaceShown(name) {
@@ -581,7 +647,8 @@ Item {
   // changes nothing.
   function geometryProblem() {
     // Nothing to judge before the surface has its size.
-    if (!(width > 0 && height > 0)) return ""
+    if (!(width > 0 && height > 0))
+      return ""
     return Layout.lookGeometryError(placed, shownRects(), width, height, Math.round(4 * uiScale))
   }
 
@@ -591,12 +658,14 @@ Item {
   // at the old one. Lay them out now, children first.
   function polishElements() {
     function polish(item) {
-      for (var i = 0; i < item.children.length; i++) polish(item.children[i])
+      for (var i = 0; i < item.children.length; i++)
+        polish(item.children[i])
       item.ensurePolished()
     }
     for (var i = 0; i < Layout.ELEMENTS.length; i++) {
       var item = elementItem(Layout.ELEMENTS[i])
-      if (item) polish(item)
+      if (item)
+        polish(item)
     }
   }
 
@@ -604,19 +673,23 @@ Item {
   // fall back a stage on a problem. It measures laid-out elements, so a
   // fallback is never latched on a half-updated layout.
   function checkGeometry() {
-    if (!(width > 0 && height > 0)) return
+    if (!(width > 0 && height > 0))
+      return
     polishElements()
     var error = geometryProblem()
     geometryProblemCode = error
-    if (!error || !latchFallback) return
+    if (!error || !latchFallback)
+      return
     // The user's look falls back to plain foamy (unless it is plain foamy),
     // then to the field-only layout, then nothing more.
     var next
     if (!fallbackPreset) {
       var plainFoamy = JSON.stringify(Layout.canonical(look)) === JSON.stringify(Layout.defaults())
       next = plainFoamy ? Layout.FALLBACK_PRESET : Layout.DEFAULT_PRESET
-    } else next = Layout.fallbackAfter(fallbackPreset)
-    if (!next) return
+    } else
+      next = Layout.fallbackAfter(fallbackPreset)
+    if (!next)
+      return
     layoutError = error
     fallbackPreset = next
     layoutFellBack(error, next)
@@ -636,10 +709,13 @@ Item {
     layoutError = ""
   }
 
-  onUptimeListedChanged: if (!uptimeListed) systemUptime = -1
-  onLoadListedChanged: if (!loadListed) systemLoad = ""
+  onUptimeListedChanged: if (!uptimeListed)
+    systemUptime = -1
+  onLoadListedChanged: if (!loadListed)
+    systemLoad = ""
   onMemoryListedChanged: {
-    if (memoryListed) return
+    if (memoryListed)
+      return
     memoryTotal = 0
     memoryAvailable = 0
   }
@@ -677,9 +753,12 @@ Item {
     repeat: true
     running: root.systemShown
     onTriggered: {
-      if (root.uptimeWanted) uptimeFile.reload()
-      if (root.loadWanted) loadFile.reload()
-      if (root.memoryWanted) memoryFile.reload()
+      if (root.uptimeWanted)
+        uptimeFile.reload()
+      if (root.loadWanted)
+        loadFile.reload()
+      if (root.memoryWanted)
+        memoryFile.reload()
     }
   }
 
@@ -725,11 +804,13 @@ Item {
 
   onPasswordTextChanged: syncPasswordText()
   onInputEnabledChanged: {
-    if (inputEnabled) Qt.callLater(forcePasswordFocus)
+    if (inputEnabled)
+      Qt.callLater(forcePasswordFocus)
   }
   Component.onCompleted: {
     syncPasswordText()
-    if (inputEnabled) Qt.callLater(forcePasswordFocus)
+    if (inputEnabled)
+      Qt.callLater(forcePasswordFocus)
   }
 
   Rectangle {
@@ -744,11 +825,7 @@ Item {
       anchors.fill: parent
       readonly property string spec: Layout.solidColor(root.effectiveLook.background)
       visible: spec !== ""
-      color: spec === "background" ? Commons.Color.background
-        : spec === "accent" ? Commons.Color.accent
-        : spec === "muted" ? Commons.Color.muted
-        : spec === "urgent" ? Commons.Color.urgent
-        : spec !== "" ? spec : "transparent"
+      color: spec === "background" ? Commons.Color.background : spec === "accent" ? Commons.Color.accent : spec === "muted" ? Commons.Color.muted : spec === "urgent" ? Commons.Color.urgent : spec !== "" ? spec : "transparent"
     }
 
     Image {
@@ -835,14 +912,16 @@ Item {
       // The same holds for a field shown only while typing (password.reveal
       // "typing" on a style whose default is "always"; the pill's own
       // "typing" keeps its 1.2.0 scrim).
-      color: Qt.rgba(0.005, 0.01, 0.025, Math.max(root.effectiveLook.background.dim,
-        ["underline", "dots"].indexOf(root.placed.password.style) !== -1 || root.placed.password.reveal === "typing" ? 0.15 : 0))
+      color: Qt.rgba(0.005, 0.01, 0.025, Math.max(root.effectiveLook.background.dim, ["underline", "dots"].indexOf(root.placed.password.style) !== -1 || root.placed.password.reveal === "typing" ? 0.15 : 0))
     }
 
     MouseArea {
       anchors.fill: parent
       hoverEnabled: true
-      onClicked: { root.wakeRequested(); root.forcePasswordFocus() }
+      onClicked: {
+        root.wakeRequested()
+        root.forcePasswordFocus()
+      }
       onPositionChanged: root.wakeRequested()
     }
 

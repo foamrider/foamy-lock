@@ -41,26 +41,31 @@ Item {
   // Stacked under another element, the numerals' top bearing would leave a
   // gap: pull the clock up instead of the zone's usual spacing. The drawn
   // faces have no bearing and keep a small gap.
-  readonly property real stackGap: Math.round((bold ? -12 : styleName === "thin" ? -20 : mono ? -14
-    : styleName === "stacked" ? -14 : styleName === "outline" ? -8 : small ? 2 : styleName === "poster" ? -10 : serif ? -16 : 10) * uiScale)
+  readonly property real stackGap: Math.round((bold ? -12 : styleName === "thin" ? -20 : mono ? -14 : styleName === "stacked" ? -14 : styleName === "outline" ? -8 : small ? 2 : styleName === "poster" ? -10 : serif ? -16 : 10) * uiScale)
   // The main line, as the tests read it.
   readonly property alias text: label.text
   readonly property alias font: label.font
-  readonly property int textAlignment: alignment === "start" ? Text.AlignLeft
-    : alignment === "end" ? Text.AlignRight : Text.AlignHCenter
+  readonly property int textAlignment: alignment === "start" ? Text.AlignLeft : alignment === "end" ? Text.AlignRight : Text.AlignHCenter
   readonly property string hours: hourText()
   readonly property string minutes: view.userLocale.toString(view.now, "mm")
   readonly property string meridiem: twelveHour ? view.userLocale.toString(view.now, "AP") : ""
   // The width it needs outside the center column.
   readonly property real naturalWidth: {
     switch (styleName) {
-    case "stacked": return Math.max(stacked.implicitWidth, stackedMeridiem.visible ? stackedMeridiem.implicitWidth : 0)
-    case "outline": return outline.naturalWidth
-    case "dots": return dots.naturalWidth
-    case "flip": return flip.naturalWidth
-    case "analog": return analog.diameter
-    case "poster": return poster.naturalWidth
-    case "ring": return ring.diameter
+    case "stacked":
+      return Math.max(stacked.implicitWidth, stackedMeridiem.visible ? stackedMeridiem.implicitWidth : 0)
+    case "outline":
+      return outline.naturalWidth
+    case "dots":
+      return dots.naturalWidth
+    case "flip":
+      return flip.naturalWidth
+    case "analog":
+      return analog.diameter
+    case "poster":
+      return poster.naturalWidth
+    case "ring":
+      return ring.diameter
     }
     return label.implicitWidth
   }
@@ -68,13 +73,20 @@ Item {
   objectName: "clockLabel"
   height: {
     switch (styleName) {
-    case "stacked": return stackedMeridiem.visible ? stackedMeridiem.y + stackedMeridiem.height : stacked.height
-    case "outline": return outline.height
-    case "dots": return dots.height
-    case "flip": return flip.height
-    case "analog": return analog.height
-    case "poster": return poster.height
-    case "ring": return ring.height
+    case "stacked":
+      return stackedMeridiem.visible ? stackedMeridiem.y + stackedMeridiem.height : stacked.height
+    case "outline":
+      return outline.height
+    case "dots":
+      return dots.height
+    case "flip":
+      return flip.height
+    case "analog":
+      return analog.height
+    case "poster":
+      return poster.height
+    case "ring":
+      return ring.height
     }
     return label.height
   }
@@ -82,14 +94,16 @@ Item {
   // Two-digit hours (12- or 24-hour) in the locale's digits.
   function hourText() {
     var at = new Date(view.now.getTime())
-    if (twelveHour) at.setHours(at.getHours() % 12 || 12)
+    if (twelveHour)
+      at.setHours(at.getHours() % 12 || 12)
     return view.userLocale.toString(at, "HH")
   }
 
   // The x of a block `blockWidth` wide inside the clock, by alignment;
   // mirrored by hand (plain x, no anchors switched at runtime).
   function blockX(blockWidth) {
-    if (alignment === "center") return Math.round((width - blockWidth) / 2)
+    if (alignment === "center")
+      return Math.round((width - blockWidth) / 2)
     return (alignment === "start") !== view.rightToLeft ? 0 : Math.round(width - blockWidth)
   }
 
@@ -106,12 +120,10 @@ Item {
     fontSizeMode: labelMetrics.advanceWidth > width - 1 ? Text.Fit : Text.FixedSize
     minimumPixelSize: Math.round((clock.small ? 18 : 48) * clock.uiScale)
     color: clock.view.foreground
-    font.family: clock.mono ? FoamyStyle.monoFamily : clock.serif ? clock.serifFamily
-      : clock.bold || clock.small ? clock.view.textFontFamily : clock.view.displayFontFamily
+    font.family: clock.mono ? FoamyStyle.monoFamily : clock.serif ? clock.serifFamily : clock.bold || clock.small ? clock.view.textFontFamily : clock.view.displayFontFamily
     font.pixelSize: Math.round((clock.bold ? 150 : clock.mono ? 140 : clock.small ? 34 : clock.serif ? 168 : 192) * clock.uiScale)
     font.weight: clock.bold ? Font.Bold : clock.mono ? Font.Medium : clock.small ? Font.DemiBold : clock.serif ? Font.Light : Font.Normal
-    font.letterSpacing: clock.bold ? Math.round(-4 * clock.uiScale) : clock.mono ? Math.round(-6 * clock.uiScale)
-      : clock.serif ? Math.round(-3 * clock.uiScale) : 0
+    font.letterSpacing: clock.bold ? Math.round(-4 * clock.uiScale) : clock.mono ? Math.round(-6 * clock.uiScale) : clock.serif ? Math.round(-3 * clock.uiScale) : 0
     horizontalAlignment: clock.textAlignment
 
     TextMetrics {
@@ -165,10 +177,7 @@ Item {
     readonly property real baseSize: Math.round(176 * clock.uiScale)
     readonly property real naturalWidth: Math.ceil(outlineMetrics.advanceWidth + 2 * stroke)
     // Shrinks to fit the width, like the text styles.
-    readonly property real fontSize: outlineMetrics.advanceWidth > 0
-      ? Math.max(Math.round(48 * clock.uiScale),
-        Math.min(baseSize, Math.floor(baseSize * (clock.width - 2 * stroke) / outlineMetrics.advanceWidth)))
-      : baseSize
+    readonly property real fontSize: outlineMetrics.advanceWidth > 0 ? Math.max(Math.round(48 * clock.uiScale), Math.min(baseSize, Math.floor(baseSize * (clock.width - 2 * stroke) / outlineMetrics.advanceWidth))) : baseSize
     readonly property string family: clock.view.displayFontFamily
     readonly property string time: label.text
     readonly property real textWidth: outlineMetrics.advanceWidth * fontSize / baseSize
@@ -180,7 +189,8 @@ Item {
     height: Math.ceil(outlineFont.height + 2 * stroke)
     antialiasing: true
     onPaintKeyChanged: requestPaint()
-    onVisibleChanged: if (visible) requestPaint()
+    onVisibleChanged: if (visible)
+      requestPaint()
 
     TextMetrics {
       id: outlineMetrics
@@ -217,28 +227,30 @@ Item {
     objectName: "clockDots"
     // Each glyph: 7 rows of columns, "#" lit.
     readonly property var glyphs: ({
-      "0": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
-      "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
-      "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
-      "3": ["#####", "...#.", "..#..", "...#.", "....#", "#...#", ".###."],
-      "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
-      "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
-      "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
-      "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
-      "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
-      "9": [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
-      ":": [".", ".", "#", ".", "#", ".", "."]
-    })
+        "0": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+        "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
+        "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+        "3": ["#####", "...#.", "..#..", "...#.", "....#", "#...#", ".###."],
+        "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+        "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+        "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
+        "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+        "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+        "9": [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
+        ":": [".", ".", "#", ".", "#", ".", "."]
+      })
     // ASCII digits from the time itself: the dot font has no other script.
     readonly property string time: {
       var hour = clock.view.now.getHours()
-      if (clock.twelveHour) hour = hour % 12 || 12
+      if (clock.twelveHour)
+        hour = hour % 12 || 12
       var minute = clock.view.now.getMinutes()
       return (hour < 10 && !clock.twelveHour ? "0" : "") + hour + ":" + (minute < 10 ? "0" : "") + minute
     }
     readonly property int columns: {
       var total = 0
-      for (var i = 0; i < time.length; i++) total += (i > 0 ? 1 : 0) + glyphs[time[i]][0].length
+      for (var i = 0; i < time.length; i++)
+        total += (i > 0 ? 1 : 0) + glyphs[time[i]][0].length
       return total
     }
     readonly property real basePitch: Math.round(16 * clock.uiScale)
@@ -259,7 +271,8 @@ Item {
       height: dots.height
       antialiasing: true
       onPaintKeyChanged: requestPaint()
-      onVisibleChanged: if (visible) requestPaint()
+      onVisibleChanged: if (visible)
+        requestPaint()
       onPaint: {
         var context = getContext("2d")
         context.reset()
@@ -377,8 +390,7 @@ Item {
     objectName: "clockAnalog"
     readonly property real diameter: Math.round(220 * clock.uiScale)
     readonly property real faceSize: Math.min(diameter, clock.width)
-    readonly property string paintKey: [clock.view.now.getHours(), clock.view.now.getMinutes(), faceSize,
-      clock.view.foreground, clock.glassFill, clock.view.glassBorder].join("|")
+    readonly property string paintKey: [clock.view.now.getHours(), clock.view.now.getMinutes(), faceSize, clock.view.foreground, clock.glassFill, clock.view.glassBorder].join("|")
 
     visible: clock.styleName === "analog"
     x: clock.blockX(width)
@@ -386,7 +398,8 @@ Item {
     height: faceSize
     antialiasing: true
     onPaintKeyChanged: requestPaint()
-    onVisibleChanged: if (visible) requestPaint()
+    onVisibleChanged: if (visible)
+      requestPaint()
     onPaint: {
       var context = getContext("2d")
       context.reset()
@@ -396,7 +409,8 @@ Item {
       var radius = center - 1
       // Before the face has a size there is nothing to draw, and a
       // negative radius only makes the canvas warn.
-      if (radius <= 0) return
+      if (radius <= 0)
+        return
       context.fillStyle = clock.glassFill
       context.strokeStyle = clock.view.glassBorder
       context.lineWidth = 1
@@ -513,12 +527,12 @@ Item {
 
     Canvas {
       id: ringFace
-      readonly property string paintKey: [clock.view.now.getMinutes(), ring.size, clock.view.accent,
-        clock.view.foreground, clock.glassFill].join("|")
+      readonly property string paintKey: [clock.view.now.getMinutes(), ring.size, clock.view.accent, clock.view.foreground, clock.glassFill].join("|")
       anchors.fill: parent
       antialiasing: true
       onPaintKeyChanged: requestPaint()
-      onVisibleChanged: if (visible) requestPaint()
+      onVisibleChanged: if (visible)
+        requestPaint()
       onPaint: {
         var context = getContext("2d")
         context.reset()
@@ -526,7 +540,8 @@ Item {
         var center = ring.size / 2
         var line = Math.max(3, 9 * ring.unit)
         var radius = center - line / 2 - 1
-        if (radius - line / 2 <= 0) return
+        if (radius - line / 2 <= 0)
+          return
         context.fillStyle = clock.glassFill
         context.beginPath()
         context.arc(center, center, radius - line / 2, 0, Math.PI * 2)

@@ -33,11 +33,14 @@ Item {
   Connections {
     target: Hyprland
     function onRawEvent(event) {
-      if (!event || !event.name) return
+      if (!event || !event.name)
+        return
       var name = String(event.name)
       var named = name === "activelayout" ? Model.eventKeyboardName(event.data) : ""
-      if (named) source.typedKeyboard = named
-      if (name.indexOf("activelayout") !== -1 || name === "configreloaded") source.refresh()
+      if (named)
+        source.typedKeyboard = named
+      if (name.indexOf("activelayout") !== -1 || name === "configreloaded")
+        source.refresh()
     }
   }
 
@@ -50,7 +53,8 @@ Item {
         return
       }
       stall.stop()
-      if (source.again) source.refresh()
+      if (source.again)
+        source.refresh()
     }
     stdout: StdioCollector {
       waitForEnd: true

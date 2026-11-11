@@ -7,6 +7,7 @@ import QtQuick
 import Quickshell
 import qs.Commons as Commons
 import "Layout.js" as Layout
+
 ShellRoot {
   id: shellRoot
   readonly property var presets: __PRESETS__
@@ -19,11 +20,13 @@ ShellRoot {
 
   FloatingWindow {
     visible: true
-    implicitWidth: 1920; implicitHeight: 1080
+    implicitWidth: 1920
+    implicitHeight: 1080
     color: "black"
     LockView {
       id: view
-      width: 1920; height: 1080
+      width: 1920
+      height: 1080
       userName: "foamy"
       userDisplayName: "Foamy User"
       backgroundPath: Qt.resolvedUrl("wallpaper.svg").toString().replace("file://", "")
@@ -33,7 +36,9 @@ ShellRoot {
       avatarPath: ""
       fingerprintConfigured: true
       look: Layout.defaults()
-      onPasswordTextEdited: function(value) { passwordText = value }
+      onPasswordTextEdited: function (value) {
+        passwordText = value
+      }
     }
   }
   QtObject {
@@ -54,13 +59,22 @@ ShellRoot {
 
   function grab(file, size) {
     pending++
-    var ok = size ? view.grabToImage(function(result) { save(result, file) }, size)
-      : view.grabToImage(function(result) { save(result, file) })
-    if (!ok) { console.error("THUMBNAILS_FAIL: capture of " + file); Qt.exit(1) }
+    var ok = size ? view.grabToImage(function (result) {
+      save(result, file)
+    }, size) : view.grabToImage(function (result) {
+      save(result, file)
+    })
+    if (!ok) {
+      console.error("THUMBNAILS_FAIL: capture of " + file)
+      Qt.exit(1)
+    }
   }
 
   function save(result, file) {
-    if (!result.saveToFile(path(file))) { console.error("THUMBNAILS_FAIL: saving " + file); Qt.exit(1) }
+    if (!result.saveToFile(path(file))) {
+      console.error("THUMBNAILS_FAIL: saving " + file)
+      Qt.exit(1)
+    }
     pending--
   }
 
@@ -70,7 +84,8 @@ ShellRoot {
     repeat: true
     running: true
     onTriggered: {
-      if (shellRoot.pending > 0) return
+      if (shellRoot.pending > 0)
+        return
       if (shellRoot.at >= shellRoot.presets.length) {
         console.log("THUMBNAILS_PASS: " + shellRoot.presets.length + " presets")
         Qt.quit()
@@ -78,8 +93,7 @@ ShellRoot {
       }
       var name = shellRoot.presets[shellRoot.at]
       if (shellRoot.at === 0 && shellRoot.phase === 0)
-        console.log("thumbnails: renderer " + (view.GraphicsInfo.api === GraphicsInfo.Software ? "software" : "gpu")
-          + ", motion " + (view.motionAllowed ? "on" : "off"))
+        console.log("thumbnails: renderer " + (view.GraphicsInfo.api === GraphicsInfo.Software ? "software" : "gpu") + ", motion " + (view.motionAllowed ? "on" : "off"))
       if (shellRoot.phase === 0) {
         view.look = Layout.preset(name)
         shellRoot.phase = 1
@@ -91,7 +105,8 @@ ShellRoot {
         return
       }
       shellRoot.grab("thumb-" + name + ".png", Qt.size(480, 270))
-      if (shellRoot.full) shellRoot.grab("capture-" + name + ".png", null)
+      if (shellRoot.full)
+        shellRoot.grab("capture-" + name + ".png", null)
       console.log("thumbnail: " + name)
       shellRoot.phase = 0
       shellRoot.at++

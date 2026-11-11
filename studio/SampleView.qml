@@ -46,13 +46,15 @@ LockView {
   // Model.parseWeather's shape. The widest: the reply's limits (-150°, a
   // 64-character condition, an 80-character place).
   weather: ({
-    temperature: widest ? -150 : 12, unit: "C", code: widest ? "heavyrainandthunder" : "partlycloudy_day",
-    condition: widest ? FoamyI18n.t("studio.sample.conditionLong") : FoamyI18n.t("studio.sample.condition"),
-    high: widest ? -150 : 14, low: widest ? -150 : 7,
-    location: widest ? "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru (UK)"
-      : FoamyI18n.t("studio.sample.place"),
-    updatedAtMs: Date.now()
-  })
+      temperature: widest ? -150 : 12,
+      unit: "C",
+      code: widest ? "heavyrainandthunder" : "partlycloudy_day",
+      condition: widest ? FoamyI18n.t("studio.sample.conditionLong") : FoamyI18n.t("studio.sample.condition"),
+      high: widest ? -150 : 14,
+      low: widest ? -150 : 7,
+      location: widest ? "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru (UK)" : FoamyI18n.t("studio.sample.place"),
+      updatedAtMs: Date.now()
+    })
 
   QtObject {
     id: samplePlayer

@@ -36,7 +36,8 @@ FocusScope {
   // The typed text as steps (one decimal), or NaN.
   function parse(text) {
     var cleaned = String(text).trim().replace(/\u2212/g, "-").replace(",", ".")
-    if (!/^[-+]?\d{1,3}(\.\d*)?$/.test(cleaned)) return NaN
+    if (!/^[-+]?\d{1,3}(\.\d*)?$/.test(cleaned))
+      return NaN
     return Math.round(Number(cleaned) * 10) / 10
   }
 
@@ -45,12 +46,13 @@ FocusScope {
   }
 
   function keyStep(event) {
-    var steps = { }
+    var steps = {}
     steps[Qt.Key_Up] = 1
     steps[Qt.Key_Down] = -1
     steps[Qt.Key_PageUp] = 5
     steps[Qt.Key_PageDown] = -5
-    if (steps[event.key] === undefined) return false
+    if (steps[event.key] === undefined)
+      return false
     stepBy(steps[event.key])
     return true
   }
@@ -72,7 +74,11 @@ FocusScope {
       font.pixelSize: FoamyStyle.font.body
     }
 
-    StepButton { text: "\u2212"; steps: -1; name: FoamyI18n.t("studio.less", field.name) }
+    StepButton {
+      text: "\u2212"
+      steps: -1
+      name: FoamyI18n.t("studio.less", field.name)
+    }
 
     Rectangle {
       width: 44
@@ -106,22 +112,25 @@ FocusScope {
           value: field.format(field.value)
           when: !input.activeFocus
         }
-        onActiveFocusChanged: if (activeFocus) selectAll()
+        onActiveFocusChanged: if (activeFocus)
+          selectAll()
         onEditingFinished: {
           var steps = field.parse(text)
-          if (!isNaN(steps) && steps !== field.value) field.committed(steps)
-          else text = field.format(field.value)
+          if (!isNaN(steps) && steps !== field.value)
+            field.committed(steps)
+          else
+            text = field.format(field.value)
         }
-        Keys.onEscapePressed: function(event) {
+        Keys.onEscapePressed: function (event) {
           text = field.format(field.value)
           selectAll()
           event.accepted = true
         }
-        Keys.onPressed: function(event) {
+        Keys.onPressed: function (event) {
           if (field.keyStep(event)) {
             event.accepted = true
             // After the caller has taken the new value.
-            Qt.callLater(function() {
+            Qt.callLater(function () {
               input.text = field.format(field.value)
               input.selectAll()
             })
@@ -130,7 +139,11 @@ FocusScope {
       }
     }
 
-    StepButton { text: "+"; steps: 1; name: FoamyI18n.t("studio.more", field.name) }
+    StepButton {
+      text: "+"
+      steps: 1
+      name: FoamyI18n.t("studio.more", field.name)
+    }
 
     Text {
       textFormat: Text.PlainText

@@ -11,6 +11,7 @@ import QtQuick
 import Quickshell
 import "fixtures" as Fixture
 import "Layout.js" as Layout
+
 ShellRoot {
   id: shellRoot
   readonly property string presetName: "__PRESET__"
@@ -28,10 +29,17 @@ ShellRoot {
   property int cycleAt: -1
   property var reference: null
   readonly property var tracked: ["dateLabel", "clockLabel", "identityBlock", "avatar", "nameLabel", "inputField", "fingerprintNotice", "mediaRow", "statusFooter", "calendarBlock", "weatherBlock"]
-  readonly property var elementNames: ["dateLabel", "clockLabel", "identityBlock", "inputField", "mediaRow", "statusFooter", "calendarBlock",
-    "weatherBlock"]
-  readonly property var modelNames: ({ dateLabel: "date", clockLabel: "clock", identityBlock: "account", inputField: "password",
-    mediaRow: "media", statusFooter: "status", calendarBlock: "calendar", weatherBlock: "weather" })
+  readonly property var elementNames: ["dateLabel", "clockLabel", "identityBlock", "inputField", "mediaRow", "statusFooter", "calendarBlock", "weatherBlock"]
+  readonly property var modelNames: ({
+      dateLabel: "date",
+      clockLabel: "clock",
+      identityBlock: "account",
+      inputField: "password",
+      mediaRow: "media",
+      statusFooter: "status",
+      calendarBlock: "calendar",
+      weatherBlock: "weather"
+    })
 
   function geometry() {
     var out = {}
@@ -47,11 +55,13 @@ ShellRoot {
     var account = findNamed(view, "identityBlock")
     var avatar = findNamed(view, "avatar")
     var name = findNamed(view, "nameLabel")
-    if (Math.abs(avatar.width - avatar.height) > 1) return fail(label + ": avatar " + avatar.width + "x" + avatar.height)
+    if (Math.abs(avatar.width - avatar.height) > 1)
+      return fail(label + ": avatar " + avatar.width + "x" + avatar.height)
     var parts = [avatar, name]
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i]
-      if (!p.visible) continue
+      if (!p.visible)
+        continue
       if (p.x < -1 || p.y < -1 || p.x + p.width > account.width + 1 || p.y + p.height > account.height + 1)
         return fail(label + ": " + p.objectName + " outside the account box: " + [p.x, p.y, p.width, p.height] + " in " + [account.width, account.height])
     }
@@ -63,14 +73,16 @@ ShellRoot {
     var shapes = JSON.stringify(view.effectiveLook.background.shapes.map(Layout.canonicalShape))
     for (var i = 0; i < Layout.DECORATIONS.length; i++) {
       var kind = Layout.DECORATIONS[i]
-      if (JSON.stringify(Layout.legacyShapes(kind, view.glassTint).map(Layout.canonicalShape)) === shapes) return kind
+      if (JSON.stringify(Layout.legacyShapes(kind, view.glassTint).map(Layout.canonicalShape)) === shapes)
+        return kind
     }
     return ""
   }
 
   FloatingWindow {
     visible: true
-    implicitWidth: 3440; implicitHeight: 1440
+    implicitWidth: 3440
+    implicitHeight: 1440
     color: "black"
     LockView {
       id: view
@@ -83,12 +95,24 @@ ShellRoot {
       // Start on foamy and switch at the first state, as previewPreset does.
       look: Layout.defaults()
       // The widest weather, for any preset that would show it (none does).
-      weather: ({ temperature: -12, unit: "C", code: "heavyrainandthunder", high: -3, low: -18,
-        condition: "Heavy rain and thunder with strong gusts along the coast tonight",
-        location: "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru", updatedAtMs: 1 })
+      weather: ({
+          temperature: -12,
+          unit: "C",
+          code: "heavyrainandthunder",
+          high: -3,
+          low: -18,
+          condition: "Heavy rain and thunder with strong gusts along the coast tonight",
+          location: "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru",
+          updatedAtMs: 1
+        })
       avatarPath: Qt.resolvedUrl("artwork.svg").toString().replace("file://", "")
-      onPasswordTextEdited: function(value) { passwordText = value }
-      onLayoutFellBack: function(error, preset) { shellRoot.fellBack++; shellRoot.fellBackTo.push(preset + ":" + error) }
+      onPasswordTextEdited: function (value) {
+        passwordText = value
+      }
+      onLayoutFellBack: function (error, preset) {
+        shellRoot.fellBack++
+        shellRoot.fellBackTo.push(preset + ":" + error)
+      }
     }
     // The decorations as they were, for the same view (never shown).
     OldDecoration {
@@ -113,10 +137,12 @@ ShellRoot {
   }
 
   function findNamed(item, name) {
-    if (item.objectName === name) return item
+    if (item.objectName === name)
+      return item
     for (var i = 0; i < item.children.length; i++) {
       var found = findNamed(item.children[i], name)
-      if (found) return found
+      if (found)
+        return found
     }
     return null
   }
@@ -148,47 +174,63 @@ ShellRoot {
       if (index < shellRoot.states.length) {
         var state = shellRoot.states[index]
         if (!applied) {
-          label = state[0] + "x" + state[1] + (state[2] ? " 12h" : "") + (state[3] ? " typing" : "") + (state[4] ? "" : " secondary")
-            + (state[5] ? " right-to-left" : "")
+          label = state[0] + "x" + state[1] + (state[2] ? " 12h" : "") + (state[3] ? " typing" : "") + (state[4] ? "" : " secondary") + (state[5] ? " right-to-left" : "")
           view.rightToLeft = state[5]
-          view.width = state[0]; view.height = state[1]
+          view.width = state[0]
+          view.height = state[1]
           view.timeFormat = state[2] ? "12h" : "24h"
           view.passwordText = state[3] ? "example" : ""
           view.primary = state[4]
-          if (index === 0) view.look = Layout.preset(shellRoot.presetName)
+          if (index === 0)
+            view.look = Layout.preset(shellRoot.presetName)
           applied = true
           return
         }
         shellRoot.check(state)
-        if (index === 0) shellRoot.leftToRight = shellRoot.layoutRects()
-        if (state[5]) shellRoot.checkMirror(shellRoot.leftToRight)
+        if (index === 0)
+          shellRoot.leftToRight = shellRoot.layoutRects()
+        if (state[5])
+          shellRoot.checkMirror(shellRoot.leftToRight)
         var capture = Qt.resolvedUrl("capture-" + shellRoot.presetName + "-" + index + ".png").toString().replace("file://", "")
-        if (!view.grabToImage(function(result) { result.saveToFile(capture) })) shellRoot.fail("capture failed")
+        if (!view.grabToImage(function (result) {
+          result.saveToFile(capture)
+        }))
+          shellRoot.fail("capture failed")
         console.log("layout ok: " + presetName + " " + label)
         applied = false
         index++
         return
       }
-      if (presetName !== "foamy") { shellRoot.finish(); return }
+      if (presetName !== "foamy") {
+        shellRoot.finish()
+        return
+      }
       if (shellRoot.cycleAt < shellRoot.cycle.length) {
         if (shellRoot.cycleAt === -1) {
-          view.width = 1920; view.height = 1080
-          view.timeFormat = "24h"; view.passwordText = ""; view.primary = true; view.rightToLeft = false
+          view.width = 1920
+          view.height = 1080
+          view.timeFormat = "24h"
+          view.passwordText = ""
+          view.primary = true
+          view.rightToLeft = false
           view.look = Layout.defaults()
           shellRoot.cycleAt = 0
           return
         }
-        if (shellRoot.reference === null) shellRoot.reference = shellRoot.geometry()
+        if (shellRoot.reference === null)
+          shellRoot.reference = shellRoot.geometry()
         if (applied) {
           var name = shellRoot.cycle[shellRoot.cycleAt]
           label = "cycle " + shellRoot.cycleAt + " " + name
           shellRoot.checkAccountShape(label)
-          if (view.fallbackPreset !== "") shellRoot.fail("fell back: " + view.layoutError)
+          if (view.fallbackPreset !== "")
+            shellRoot.fail("fell back: " + view.layoutError)
           shellRoot.checkBackground()
           if (shellRoot.cycleAt === shellRoot.cycle.length - 1) {
             var now = shellRoot.geometry()
             for (var key in now)
-              if (now[key] !== shellRoot.reference[key]) shellRoot.fail("after the cycle " + key + " is " + now[key] + ", was " + shellRoot.reference[key])
+              if (now[key] !== shellRoot.reference[key])
+                shellRoot.fail("after the cycle " + key + " is " + now[key] + ", was " + shellRoot.reference[key])
             console.log("layout ok: preset cycle back to foamy")
           }
           applied = false
@@ -207,16 +249,26 @@ ShellRoot {
         view.primary = true
         view.passwordText = ""
         view.rightToLeft = false
-        view.look = Layout.parseLook({ preset: "corner", layout: { media: { zone: "bottom-center" } } }).look
-        view.width = 320; view.height = 240
+        view.look = Layout.parseLook({
+          preset: "corner",
+          layout: {
+            media: {
+              zone: "bottom-center"
+            }
+          }
+        }).look
+        view.width = 320
+        view.height = 240
         applied = true
         interval = 1600
         return
       }
-      if (view.fallbackPreset !== "field-only") shellRoot.fail("expected field-only, got " + JSON.stringify(view.fallbackPreset))
+      if (view.fallbackPreset !== "field-only")
+        shellRoot.fail("expected field-only, got " + JSON.stringify(view.fallbackPreset))
       if (shellRoot.fellBack !== 2 || shellRoot.fellBackTo[0].indexOf("foamy:") !== 0)
         shellRoot.fail("expected corner -> foamy -> field-only, got " + JSON.stringify(shellRoot.fellBackTo))
-      if (!view.layoutError) shellRoot.fail("no layoutError after a fallback")
+      if (!view.layoutError)
+        shellRoot.fail("no layoutError after a fallback")
       shellRoot.checkField(true)
       console.log("layout ok: fallback " + JSON.stringify(shellRoot.fellBackTo))
       shellRoot.finish()
@@ -225,10 +277,14 @@ ShellRoot {
 
   // Visible elements and decoration surfaces, in view coordinates.
   function layoutRects() {
-    var out = { elements: {}, surfaces: findNamed(view, "decoration").surfaces }
+    var out = {
+      elements: {},
+      surfaces: findNamed(view, "decoration").surfaces
+    }
     for (var i = 0; i < elementNames.length; i++) {
       var item = findNamed(view, elementNames[i])
-      if (item.visible) out.elements[elementNames[i]] = [item.x, item.y, item.width, item.height]
+      if (item.visible)
+        out.elements[elementNames[i]] = [item.x, item.y, item.width, item.height]
     }
     return out
   }
@@ -237,14 +293,18 @@ ShellRoot {
   // left-to-right twin is, mirrored (within a pixel).
   function checkMirror(ltr) {
     var rtl = layoutRects()
-    function near(a, b) { return Math.abs(a - b) <= 1 }
+    function near(a, b) {
+      return Math.abs(a - b) <= 1
+    }
     for (var name in ltr.elements) {
       var l = ltr.elements[name], r = rtl.elements[name]
-      if (!r) return fail(name + " vanished in right-to-left")
+      if (!r)
+        return fail(name + " vanished in right-to-left")
       if (!near(r[0], view.width - l[0] - l[2]) || !near(r[1], l[1]) || !near(r[2], l[2]) || !near(r[3], l[3]))
         return fail(name + " doesn't mirror: " + r + " for " + l)
     }
-    if (rtl.surfaces.length !== ltr.surfaces.length) return fail("decoration surfaces differ in right-to-left")
+    if (rtl.surfaces.length !== ltr.surfaces.length)
+      return fail("decoration surfaces differ in right-to-left")
     for (var i = 0; i < ltr.surfaces.length; i++) {
       var a = ltr.surfaces[i], b = rtl.surfaces[i]
       if (!near(b.x, view.width - a.x - a.width) || !near(b.y, a.y) || !near(b.width, a.width) || !near(b.height, a.height))
@@ -253,8 +313,7 @@ ShellRoot {
   }
 
   function contains(outer, inner) {
-    return inner.x >= outer.x - 1 && inner.y >= outer.y - 1 && inner.x + inner.width <= outer.x + outer.width + 1
-      && inner.y + inner.height <= outer.y + outer.height + 1
+    return inner.x >= outer.x - 1 && inner.y >= outer.y - 1 && inner.x + inner.width <= outer.x + outer.width + 1 && inner.y + inner.height <= outer.y + outer.height + 1
   }
 
   // Decorations are background: on screen, and each shown element (the
@@ -267,21 +326,25 @@ ShellRoot {
     // A template draws what its older decoration drew; a preset's own
     // shapes (no template) have no older drawing to match.
     var decor = shellRoot.legacyKind || "own shapes"
-    if (decoration.visible !== (shapes.length > 0)) return fail("decoration " + decor + " visible: " + decoration.visible)
+    if (decoration.visible !== (shapes.length > 0))
+      return fail("decoration " + decor + " visible: " + decoration.visible)
     var surfaces = decoration.surfaces
-    if (shapes.length > 0 && surfaces.length === 0) return fail("decoration " + decor + " draws nothing")
-    if (shellRoot.legacyKind !== "") checkOld(surfaces, decor)
+    if (shapes.length > 0 && surfaces.length === 0)
+      return fail("decoration " + decor + " draws nothing")
+    if (shellRoot.legacyKind !== "")
+      checkOld(surfaces, decor)
     checkUnder(decoration, surfaces)
     for (var s = 0; s < surfaces.length; s++) {
       var surface = surfaces[s]
-      if (!(surface.width > 0 && surface.height > 0) || surface.x < -1 || surface.y < -1
-          || surface.x + surface.width > view.width + 1 || surface.y + surface.height > view.height + 1)
+      if (!(surface.width > 0 && surface.height > 0) || surface.x < -1 || surface.y < -1 || surface.x + surface.width > view.width + 1 || surface.y + surface.height > view.height + 1)
         return fail(decor + " surface outside the view: " + JSON.stringify(surface))
       for (var i = 0; i < elementNames.length; i++) {
         var item = findNamed(view, elementNames[i])
-        if (!item.visible) continue
+        if (!item.visible)
+          continue
         // Decorations fit the zones, so an offset element may cross them.
-        if (Layout.isOffset(view.placed[modelNames[elementNames[i]]])) continue
+        if (Layout.isOffset(view.placed[modelNames[elementNames[i]]]))
+          continue
         // What draws: centred text is narrower than its full-width item.
         var r = view.drawnRect(modelNames[elementNames[i]])
         var inside = contains(surface, r)
@@ -291,11 +354,11 @@ ShellRoot {
     }
     var backdrop = findNamed(view, "backdrop")
     var drawn = Layout.DRAWN_SOURCES.indexOf(view.effectiveLook.background.source) !== -1
-    if (backdrop.visible !== drawn) return fail("backdrop visible: " + backdrop.visible + " for " + view.effectiveLook.background.source)
+    if (backdrop.visible !== drawn)
+      return fail("backdrop visible: " + backdrop.visible + " for " + view.effectiveLook.background.source)
     if (drawn && (backdrop.moving || backdrop.phase !== backdrop.stillPhase))
       return fail("the drawn background moves under the software renderer: " + [backdrop.moving, backdrop.phase, backdrop.stillPhase, backdrop.source])
-    if (view.placed.status.style === "system" && findNamed(view, "statusFooter").visible
-        && !(view.systemUptime > 0 && view.memoryTotal > 0 && view.systemLoad !== ""))
+    if (view.placed.status.style === "system" && findNamed(view, "statusFooter").visible && !(view.systemUptime > 0 && view.memoryTotal > 0 && view.systemLoad !== ""))
       return fail("the system panel has no readings: " + [view.systemUptime, view.memoryTotal, view.systemLoad])
   }
 
@@ -304,11 +367,11 @@ ShellRoot {
   // where split and sheet rounded to the nearest).
   function checkOld(surfaces, decor) {
     var old = oldDecoration.surfaces
-    if (old.length !== surfaces.length) return fail(decor + ": " + surfaces.length + " surfaces, the decoration drew " + old.length)
+    if (old.length !== surfaces.length)
+      return fail(decor + ": " + surfaces.length + " surfaces, the decoration drew " + old.length)
     for (var i = 0; i < old.length; i++) {
       var a = old[i], b = surfaces[i]
-      if (Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1 || Math.abs(a.width - b.width) > 1 || Math.abs(a.height - b.height) > 1
-          || !!a.frame !== !!b.frame)
+      if (Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1 || Math.abs(a.width - b.width) > 1 || Math.abs(a.height - b.height) > 1 || !!a.frame !== !!b.frame)
         return fail(decor + " surface " + i + " is " + JSON.stringify(b) + ", the decoration drew " + JSON.stringify(a))
     }
   }
@@ -318,11 +381,15 @@ ShellRoot {
   function checkUnder(decoration, surfaces) {
     var parent = decoration.parent
     var at = -1
-    for (var c = 0; c < parent.children.length; c++) if (parent.children[c] === decoration) at = c
+    for (var c = 0; c < parent.children.length; c++)
+      if (parent.children[c] === decoration)
+        at = c
     for (var i = 0; i < elementNames.length; i++) {
       var item = findNamed(view, elementNames[i])
       var index = -1
-      for (var k = 0; k < parent.children.length; k++) if (parent.children[k] === item) index = k
+      for (var k = 0; k < parent.children.length; k++)
+        if (parent.children[k] === item)
+          index = k
       if (item.parent !== parent || item.z < decoration.z || index < at)
         return fail(elementNames[i] + " isn't above the shapes: " + [item.z, decoration.z, index, at])
     }
@@ -330,8 +397,10 @@ ShellRoot {
     var seenPlain = false
     for (var s = 0; s < surfaces.length; s++) {
       var frosted = Layout.isFrosted(shapes[surfaces[s].index])
-      if (frosted && seenPlain) return fail("a frosted shape is drawn after another: " + JSON.stringify(surfaces))
-      if (!frosted) seenPlain = true
+      if (frosted && seenPlain)
+        return fail("a frosted shape is drawn after another: " + JSON.stringify(surfaces))
+      if (!frosted)
+        seenPlain = true
     }
   }
 
@@ -343,15 +412,18 @@ ShellRoot {
   function checkField(primary) {
     var field = findNamed(view, "inputField")
     var input = findNamed(view, "passwordInput")
-    if (!field || !input) return fail("no password field")
-    if (!field.visible || !input.enabled) return fail("the password field must stay live")
-    if (!input.activeFocus) return fail("the password input lost focus")
+    if (!field || !input)
+      return fail("no password field")
+    if (!field.visible || !input.enabled)
+      return fail("the password field must stay live")
+    if (!input.activeFocus)
+      return fail("the password input lost focus")
     var margin = Math.round(4 * view.uiScale)
-    if (field.x < margin || field.y < margin || field.x + field.width > view.width - margin
-        || field.y + field.height > view.height - margin)
+    if (field.x < margin || field.y < margin || field.x + field.width > view.width - margin || field.y + field.height > view.height - margin)
       return fail("field outside the view: " + [field.x, field.y, field.width, field.height] + " in " + view.width + "x" + view.height)
     var hint = findNamed(view, "unlockHint")
-    if (primary && view.passwordText === "" && !hint.visible) return fail("primary view without the unlock hint")
+    if (primary && view.passwordText === "" && !hint.visible)
+      return fail("primary view without the unlock hint")
   }
 
   function check(state) {
@@ -360,7 +432,8 @@ ShellRoot {
     // No geometry problem at all (the field, every element on screen, no
     // overlap between zones), whether or not it would fall back.
     var problem = view.geometryProblem()
-    if (problem !== "" || view.geometryProblemCode !== "") return fail("geometry problem: " + problem + " " + view.geometryProblemCode)
+    if (problem !== "" || view.geometryProblemCode !== "")
+      return fail("geometry problem: " + problem + " " + view.geometryProblemCode)
     checkField(state[4])
     var account = findNamed(view, "identityBlock")
     var avatar = findNamed(view, "avatar")
@@ -368,16 +441,21 @@ ShellRoot {
       return fail("the avatar isn't round: " + avatar.width + "x" + avatar.height)
     var hint = findNamed(view, "unlockHint")
     var shown = view.placed.account.hidden === false
-    if (!state[4] && account.visible) return fail("the account shows on a secondary screen")
-    if (state[4] && shown && !account.visible) return fail("the account is missing on the primary screen")
-    if (!state[4] && !state[3] && hint.visible) return fail("field chrome shows on a secondary screen while nothing is typed")
+    if (!state[4] && account.visible)
+      return fail("the account shows on a secondary screen")
+    if (state[4] && shown && !account.visible)
+      return fail("the account is missing on the primary screen")
+    if (!state[4] && !state[3] && hint.visible)
+      return fail("field chrome shows on a secondary screen while nothing is typed")
     checkBackground()
     // Whatever else is on screen stays inside it.
     var names = ["dateLabel", "clockLabel", "identityBlock", "mediaRow", "statusFooter", "calendarBlock", "weatherBlock"]
-    if (findNamed(view, "weatherBlock").visible) return fail("a built-in preset shows the weather")
+    if (findNamed(view, "weatherBlock").visible)
+      return fail("a built-in preset shows the weather")
     for (var i = 0; i < names.length; i++) {
       var item = findNamed(view, names[i])
-      if (!item.visible) continue
+      if (!item.visible)
+        continue
       if (item.x < -1 || item.y < -1 || item.x + item.width > view.width + 1 || item.y + item.height > view.height + 1)
         return fail(names[i] + " outside the view: " + [item.x, item.y, item.width, item.height])
     }

@@ -49,7 +49,8 @@ FocusScope {
 
   function stepBy(steps) {
     var next = clean(value + steps * stepSize)
-    if (next !== value) committed(next)
+    if (next !== value)
+      committed(next)
   }
 
   // The value at x (pixels in the track).
@@ -58,18 +59,37 @@ FocusScope {
     return clean(from + (mirrored ? 1 - f : f) * (to - from))
   }
 
-  Keys.onPressed: function(event) {
+  Keys.onPressed: function (event) {
     var forward = slider.mirrored ? -1 : 1
     switch (event.key) {
-    case Qt.Key_Right: stepBy(forward); break
-    case Qt.Key_Left: stepBy(-forward); break
-    case Qt.Key_Up: stepBy(1); break
-    case Qt.Key_Down: stepBy(-1); break
-    case Qt.Key_PageUp: stepBy(10); break
-    case Qt.Key_PageDown: stepBy(-10); break
-    case Qt.Key_Home: if (value !== from) committed(from); break
-    case Qt.Key_End: if (value !== to) committed(to); break
-    default: return
+    case Qt.Key_Right:
+      stepBy(forward)
+      break
+    case Qt.Key_Left:
+      stepBy(-forward)
+      break
+    case Qt.Key_Up:
+      stepBy(1)
+      break
+    case Qt.Key_Down:
+      stepBy(-1)
+      break
+    case Qt.Key_PageUp:
+      stepBy(10)
+      break
+    case Qt.Key_PageDown:
+      stepBy(-10)
+      break
+    case Qt.Key_Home:
+      if (value !== from)
+        committed(from)
+      break
+    case Qt.Key_End:
+      if (value !== to)
+        committed(to)
+      break
+    default:
+      return
     }
     event.accepted = true
   }
@@ -151,13 +171,14 @@ FocusScope {
       enabled: slider.enabled
       cursorShape: Qt.PointingHandCursor
       preventStealing: true
-      onPressed: function(mouse) {
+      onPressed: function (mouse) {
         slider.forceActiveFocus(Qt.MouseFocusReason)
         slider.dragValue = slider.valueAt(mouse.x)
         slider.moved(slider.dragValue)
       }
-      onPositionChanged: function(mouse) {
-        if (!pressed) return
+      onPositionChanged: function (mouse) {
+        if (!pressed)
+          return
         var next = slider.valueAt(mouse.x)
         if (next !== slider.dragValue) {
           slider.dragValue = next
@@ -167,7 +188,8 @@ FocusScope {
       onReleased: {
         var final = slider.dragValue
         slider.dragValue = NaN
-        if (!isNaN(final)) slider.committed(final)
+        if (!isNaN(final))
+          slider.committed(final)
       }
       onCanceled: {
         slider.dragValue = NaN

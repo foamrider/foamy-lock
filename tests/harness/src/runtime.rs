@@ -168,7 +168,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
             r#"    command: root.testPosterUnstartable ? [root.home + "/no-such-command"] : ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)"#,
         ),
         (
-            "    anchors { top: true; bottom: true; left: true; right: true }",
+            "    anchors {\n      top: true\n      bottom: true\n      left: true\n      right: true\n    }",
             "    width: 800; height: 600",
         ),
         (
@@ -2651,7 +2651,12 @@ Item {
   PamContext { config: \"/etc/pam.d/omarchy-lock-password\" }
   PamContext { config: \"/etc/pam.d/omarchy-lock-fingerprint\" }
   PanelWindow {
-    anchors { top: true; bottom: true; left: true; right: true }
+    anchors {
+      top: true
+      bottom: true
+      left: true
+      right: true
+    }
     WlrLayershell.layer: WlrLayer.Overlay
     exclusionMode: ExclusionMode.Ignore
       WlrLayershell.deeper: kept
