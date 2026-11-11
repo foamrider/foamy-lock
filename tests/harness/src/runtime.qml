@@ -52,6 +52,9 @@ ShellRoot {
     }
     function blank(): string { service.runBlank(); return "ok" }
     function wake(): string { service.runWake(); return "ok" }
+    function displayCommands(): string {
+      return JSON.stringify({wake: service.testWake.running, blank: service.testBlank.running, blanked: service.displayBlanked})
+    }
     function unpause(): string { service.resumeFingerprint(); return "ok" }
     function sleepGap(): string { service.testResume.lastTickMs -= 10000; return "ok" }
     function strandedCheck(): string { service.strandedLockResolved = false; service.checkStrandedLock(); return "ok" }
