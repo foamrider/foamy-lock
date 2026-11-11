@@ -929,8 +929,7 @@ still require supervised validation after installation.
 
 The harness tests run on Omarchy 4.5: `FOAMY_HOST_45` (a
 `shell` directory), else `$OMARCHY_TEST_ROOT/shell`, else the installed
-`/usr/share/omarchy/shell`. `--host 4.0` and `--host both` run 4.0 only when
-`FOAMY_HOST_40` names a 4.0 shell; otherwise they print a SKIP line for it.
+`/usr/share/omarchy/shell`.
 The runtime suite supplies both PAM-file fixtures and simulated authentication;
 it does not require an enrolled fingerprint or change the host session.
 

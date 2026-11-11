@@ -72,7 +72,7 @@ Item {
   // No helper binary for this CPU (exit 126/127): the plain themed background
   // stays, wallpaperError is helper-unavailable and the probe is not run again.
   property bool wallpaperHelperUnavailable: false
-  readonly property bool videoBackground: Model.isVideoPath(backgroundPath)
+  readonly property bool videoBackground: Commons.Util.isVideoPath(backgroundPath)
   readonly property string lockWallpaperPath: videoBackground ? videoPosterPath : backgroundPath
   readonly property string lockWallpaperUrl: Model.fileUrl(lockWallpaperPath, backgroundVersion)
   property string userDisplayName: ""
@@ -310,7 +310,7 @@ Item {
   // the lock the user enabled, so the request and the pre-suspend status poll
   // always reach the same session lock; status then reports the conflict.
   // It only reorders the registry's list: no other handler is removed,
-  // disabled or called. 4.0 has no registry: nothing happens there.
+  // disabled or called.
   function checkLockRoute() {
     lockRoute.recheck()
     var reasons = conflictReasons()

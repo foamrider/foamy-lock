@@ -2,53 +2,39 @@
 
 use std::path::{Path, PathBuf};
 
-pub const CHOICES: [&str; 3] = ["4.5", "4.0", "both"];
+pub const CHOICES: [&str; 1] = ["4.5"];
 const INSTALLED: &str = "/usr/share/omarchy/shell";
 
-fn shell(name: &str) -> Option<PathBuf> {
+/// The Omarchy 4.5 shell: `FOAMY_HOST_45`, else `$OMARCHY_TEST_ROOT/shell`,
+/// else the installed one.
+fn shell() -> PathBuf {
     let var = |key: &str| std::env::var_os(key).filter(|value| !value.is_empty());
-    if name == "4.0" {
-        return var("FOAMY_HOST_40").map(PathBuf::from);
-    }
     if let Some(path) = var("FOAMY_HOST_45") {
-        return Some(PathBuf::from(path));
+        return PathBuf::from(path);
     }
     if let Some(root) = var("OMARCHY_TEST_ROOT") {
-        return Some(PathBuf::from(root).join("shell"));
+        return PathBuf::from(root).join("shell");
     }
-    Some(PathBuf::from(INSTALLED))
+    PathBuf::from(INSTALLED)
 }
 
-/// The (name, shell directory) pairs to test. Prints a SKIP line for 4.0
-/// without `FOAMY_HOST_40`.
+/// The (name, shell directory) pairs to test: Omarchy 4.5, the only
+/// supported host.
 pub fn selected(choice: &str) -> Result<Vec<(String, PathBuf)>, String> {
-    let names: &[&str] = match choice {
-        "both" => &["4.5", "4.0"],
-        "4.5" => &["4.5"],
-        "4.0" => &["4.0"],
-        other => {
-            return Err(format!(
-                "unknown host {other:?}; use {}",
-                CHOICES.join(", ")
-            ));
-        }
-    };
-    let mut chosen = Vec::new();
-    for name in names {
-        let Some(path) = shell(name) else {
-            println!("SKIP: host 4.0 (set FOAMY_HOST_40 to an Omarchy 4.0 shell directory)");
-            continue;
-        };
-        if !path.join("Commons").is_dir() {
-            return Err(format!(
-                "host {name} not found at {} (set FOAMY_HOST_{})",
-                path.display(),
-                name.replace('.', "")
-            ));
-        }
-        chosen.push((name.to_string(), path));
+    if !CHOICES.contains(&choice) {
+        return Err(format!(
+            "unknown host {choice:?}; use {} (Omarchy 4.0 is no longer supported)",
+            CHOICES.join(", ")
+        ));
     }
-    Ok(chosen)
+    let path = shell();
+    if !path.join("Commons").is_dir() {
+        return Err(format!(
+            "host {choice} not found at {} (set FOAMY_HOST_45)",
+            path.display()
+        ));
+    }
+    Ok(vec![(choice.to_string(), path)])
 }
 
 /// The current environment without the desktop's XDG, display, language and

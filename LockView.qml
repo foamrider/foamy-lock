@@ -127,7 +127,7 @@ Item {
   // Keep the editor focused while invisible so the first character is retained.
   readonly property bool compactLayout: width < 1100 * uiScale
   readonly property bool showPassword: passwordText.length > 0 || authenticatingPassword || errorState
-  // Omarchy's animations switch (reduced motion, CPU rendering); 4.0 has none.
+  // Omarchy's animations switch (reduced motion, CPU rendering).
   readonly property bool reduceMotion: Commons.Style.reduceMotion === true
   // A drawn background moves only while it can be seen: the view is shown,
   // the display awake, animations on and the GPU renders.

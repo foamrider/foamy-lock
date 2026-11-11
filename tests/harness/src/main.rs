@@ -2,15 +2,15 @@
 //! in bin/ and the shell never runs it.
 //!
 //! ```text
-//! foamy-lock-harness render [--host 4.5|4.0|both] [--language CODE]
-//! foamy-lock-harness parity [--host 4.5|4.0|both] [--baseline REV]
-//! foamy-lock-harness layout [--host 4.5|4.0|both] [--preset NAME]
-//! foamy-lock-harness styles [--host 4.5|4.0|both]
-//! foamy-lock-harness placement [--host 4.5|4.0|both]
-//! foamy-lock-harness runtime [--host 4.5|4.0|both]
-//! foamy-lock-harness thumbnails [--host 4.5|4.0] [--preset NAME]... [--out DIR]
-//! foamy-lock-harness studio [--host 4.5|4.0|both] [--language CODE]
-//! foamy-lock-harness video [--host 4.5|4.0|both]
+//! foamy-lock-harness render [--host 4.5] [--language CODE]
+//! foamy-lock-harness parity [--host 4.5] [--baseline REV]
+//! foamy-lock-harness layout [--host 4.5] [--preset NAME]
+//! foamy-lock-harness styles [--host 4.5]
+//! foamy-lock-harness placement [--host 4.5]
+//! foamy-lock-harness runtime [--host 4.5]
+//! foamy-lock-harness thumbnails [--host 4.5] [--preset NAME]... [--out DIR]
+//! foamy-lock-harness studio [--host 4.5] [--language CODE]
+//! foamy-lock-harness video [--host 4.5]
 //! ```
 //!
 //! `render` drives the real LockView through wide, narrow, failure, busy,
@@ -78,9 +78,8 @@
 //! problem checker, captures (paths printed), costs, and `studio raise` over
 //! IPC.
 //!
-//! Hosts: 4.5 is `FOAMY_HOST_45`,
-//! else `$OMARCHY_TEST_ROOT/shell`, else `/usr/share/omarchy/shell`; 4.0 runs
-//! only when `FOAMY_HOST_40` names a 4.0 shell directory.
+//! Host: Omarchy 4.5, the only supported one: `FOAMY_HOST_45`, else
+//! `$OMARCHY_TEST_ROOT/shell`, else `/usr/share/omarchy/shell`.
 
 mod app;
 mod host;
