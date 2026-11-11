@@ -441,7 +441,10 @@ Item {
   }
 
   // The union of the shown elements' reserved (un-offset) rectangles in
-  // `zones`, or null (what a zone shape wraps; see shapeGeometry).
+  // `zones`, or null. The view's own shapes no longer use it (Layout.shapeRects
+  // measures them from shapeFrame); the layout harness's oracle does: the
+  // fixed decorations' Decoration.qml at its DECORATION_BASELINE calls it,
+  // so keep it while that comparison stays.
   function zonesRect(zones) {
     var shown = shownMap()
     var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
