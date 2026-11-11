@@ -132,6 +132,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testResume: fingerprintResumeTimer
   property alias testWeatherRetry: weatherRetryTimer
   property alias testFoamyIpc: foamyLockIpc
+  property alias testLockIpc: lockIpc
   property alias testWake: wakeProcess
   property alias testBlank: blankProcess
   property alias testIdleBlank: idleBlankTimer
@@ -724,13 +725,17 @@ fn preview(test: &Test) -> R {
     // Any key closes it; for previewHoldMs after, keys are still swallowed
     // (accepted, the overlay stays closed) and the view and banner are gone.
     let closed = Instant::now();
-    ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
-    let parts = parse(&test.test("previewParts")?)?;
+    let keys = test.test_json("previewKeyTwice")?;
+    let parts = at(&keys, "parts")?;
     ensure!(
-        on(&parts, "holding")? && !on(&parts, "banner")? && !on(&parts, "view")?,
+        on(&keys, "first")? && on(&keys, "second")? && on(&keys, "closed")?,
+        "a key closes it and the next is swallowed: {keys}"
+    );
+    ensure!(
+        on(parts, "holding")? && !on(parts, "banner")? && !on(parts, "view")?,
         "holding the keyboard after closing: {parts}"
     );
-    ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
+    ensure!(test.test("previewState")? == "false");
     loop {
         let parts = parse(&test.test("previewParts")?)?;
         if !on(&parts, "holding")? {
@@ -746,8 +751,7 @@ fn preview(test: &Test) -> R {
     ensure!(held >= Duration::from_millis(450), "held only {held:?}");
     // Opening it again during a hold ends the hold.
     ensure!(test.lock("preview")? == "ok");
-    ensure!(test.lock("hidePreview")? == "ok");
-    ensure!(on(&parse(&test.test("previewParts")?)?, "holding")?);
+    ensure!(on(&test.test_json("hidePreviewParts")?, "holding")?);
     ensure!(test.lock("preview")? == "ok");
     let parts = parse(&test.test("previewParts")?)?;
     ensure!(
@@ -2040,8 +2044,12 @@ fn settings_and_password(test: &Test) -> R {
     ensure!(test.lock("isLocked")? == "false");
     // A preview just closed by a key holds the keyboard; a real lock ends
     // the hold at once.
-    ensure!(test.lock("preview")? == "ok" && test.test("previewKey")? == "true");
-    ensure!(on(&parse(&test.test("previewParts")?)?, "holding")?);
+    ensure!(test.lock("preview")? == "ok");
+    let keys = test.test_json("previewKeyTwice")?;
+    ensure!(
+        on(&keys, "first")? && on(at(&keys, "parts")?, "holding")?,
+        "{keys}"
+    );
     ensure!(test.lock("lock")? == "ok");
     test.wait_for(|s| Ok(on(s, "requested")? && on(s, "secure")?))?;
     ensure!(

@@ -95,7 +95,20 @@ ShellRoot {
     function missingPam(): string { service.passwordPamConfigured = false; return "ok" }
     function doubleReport(value: bool): string { service.testPasswordPam.doubleReport = value; return "ok" }
     function previewState(): string { return String(service.previewVisible) }
-    function previewKey(): string { var event = { accepted: false }; service.previewKeyPressed(event); return String(event.accepted) }
+    // A key, the overlay's parts and a second key in one call: the hold
+    // after a close lasts previewHoldMs, less than an IPC round trip can
+    // take on a loaded machine.
+    function previewKeyTwice(): string {
+      var first = { accepted: false }
+      service.previewKeyPressed(first)
+      var closed = !service.previewVisible
+      var parts = JSON.parse(previewParts())
+      var second = { accepted: false }
+      service.previewKeyPressed(second)
+      return JSON.stringify({ first: first.accepted, second: second.accepted, closed: closed && !service.previewVisible, parts: parts })
+    }
+    // The lock target's hidePreview and the parts right after it, in one call.
+    function hidePreviewParts(): string { service.testLockIpc.hidePreview(); return previewParts() }
     // The overlay's parts: the banner, the hint, the keyboard hold.
     // foamy.lock's JSON calls with arguments just over and at 64 KiB.
     function bigArguments(): string {
