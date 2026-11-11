@@ -254,6 +254,13 @@ pub fn run_quickshell_with(
         std::thread::sleep(Duration::from_millis(100));
     };
     let output = fs::read_to_string(&log_path).map_err(io(log_path.display()))?;
+    // A host command no test faked is a failure, not a call to the desktop.
+    let unfaked = host::host_commands(&home);
+    if !unfaked.is_empty() {
+        return Err(format!(
+            "host commands ran without a fake:\n{unfaked}\n{output}"
+        ));
+    }
     match status {
         Some(status) => Ok((status.success(), output)),
         None => Err(format!("quickshell timed out after {timeout:?}:\n{output}")),

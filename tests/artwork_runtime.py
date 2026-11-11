@@ -7,10 +7,17 @@ import platform
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 source = Path(__file__).resolve().parents[1]
+# foamy-kit's test helpers (the harness's isolation and condition waits).
+KIT = Path(os.environ.get('FOAMY_KIT', Path.home() / 'GitHub/Personal/foamy-kit'))
+sys.path.insert(0, str(KIT / 'preview'))
+import harness  # noqa: E402
+import hostenv  # noqa: E402
+
 # Fixture images (the helper itself is tested in artwork_test.py).
 spec = importlib.util.spec_from_file_location('png_fixture', source / 'tests' / 'png_fixture.py')
 artwork = importlib.util.module_from_spec(spec)
@@ -91,8 +98,10 @@ ShellRoot {
 ''')
 env = dict(os.environ, HOME=str(base), XDG_RUNTIME_DIR=str(runtime), XDG_CACHE_HOME=str(cache),
            QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion')
-env.pop('DISPLAY', None)
-env.pop('WAYLAND_DISPLAY', None)
+for name in ('DISPLAY', 'WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE', 'DBUS_SESSION_BUS_ADDRESS'):
+    env.pop(name, None)
+# No Omarchy command, audio server or system bus: the controller runs only the helper.
+hostenv.isolate(env, base)
 
 
 def ipc(method, *args):
@@ -105,16 +114,17 @@ def status():
 
 
 def wait_for(predicate):
-    deadline = time.monotonic() + 7
-    while time.monotonic() < deadline:
+    def matching():
         try:
             value = status()
-            if predicate(value):
-                return value
         except (ValueError, subprocess.SubprocessError):
-            pass
-        time.sleep(0.04)
-    raise AssertionError('Artwork state timed out: ' + repr(status()))
+            return None
+        return value if predicate(value) else None
+
+    value = harness.wait_for(matching, 7, interval=0.04)
+    if value is None:
+        raise AssertionError('Artwork state timed out: ' + repr(status()))
+    return value
 
 
 def jobs():

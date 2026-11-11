@@ -367,11 +367,7 @@ impl Test {
                 .into_iter()
                 .filter(|(key, _)| key != "OMARCHY_LANGUAGE_FILE")
                 .collect();
-        let path = format!(
-            "{}:{}",
-            bin.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
+        let path = format!("{}:{}", bin.display(), env["PATH"]);
         for (key, value) in [
             ("USER", "fixture".to_string()),
             ("LOGNAME", "fixture".to_string()),
@@ -549,7 +545,14 @@ fn run_host(shell: &Path) -> R {
     }
     print!("{}", fs::read_to_string(&log_path).unwrap_or_default());
     println!("Runtime evidence: {}", base.display());
-    result
+    result?;
+    // Every host command the Service runs has a fake in `bin`.
+    let unfaked = host::host_commands(&base);
+    ensure!(
+        unfaked.is_empty(),
+        "host commands ran without a fake:\n{unfaked}"
+    );
+    Ok(())
 }
 
 fn scenarios(test: &Test) -> R {
