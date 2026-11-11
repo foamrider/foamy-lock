@@ -329,7 +329,7 @@ Item {
       wallpaperError = helperUnavailable ? "helper-unavailable" : data && typeof data.error === "string" ? data.error : "wallpaper-unavailable"
       return
     }
-    if (Model.isVideoPath(data.path)) {
+    if (Commons.Util.isVideoPath(data.path)) {
       // Its still frame, made as the lock makes it (until then, the theme
       // colour). "video" while there is none.
       wallpaperError = "video"
