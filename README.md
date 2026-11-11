@@ -476,8 +476,8 @@ Open **Lock Studio** from the app launcher, or run the helper:
 Opening it again brings the open window to the front.
 
 **The launcher entry.**
-- **Added automatically:** about 20 seconds after the shell starts, the lock adds the entry (`studio ensure`). It writes `~/.local/share/applications/foamy-lock-studio.desktop` and the icon under `~/.local/share/icons/hicolor/`, and it rewrites them only when they've changed, for example after the plugin moves.
-- **Removed with the plugin:** the entry's command starts the helper while the helper is there. Once the plugin is gone, choosing the entry removes it and its icon. Omarchy has no removal hook, and its launcher ignores `TryExec`.
+- **Added automatically:** about 20 seconds after the shell starts, the lock adds the entry (`studio ensure`). It writes `~/.local/share/applications/foamy-lock-studio.desktop` and the icon under `~/.local/share/icons/hicolor/`, and it rewrites them only when they've changed, for example after the plugin moves. It records what it wrote (`~/.local/state/foamy-lock/launcher-files`, SHA-256 only) and never replaces a file you edited, such as an entry with `NoDisplay=true` or your own icon; `studio install` replaces both.
+- **Removed with the plugin:** the entry's command starts the helper while the helper is there, waiting 2 seconds for one that is briefly missing during an update. Once the plugin is gone (no `manifest.json`), choosing the entry removes it and its icon, unless you edited them. Omarchy has no removal hook, and its launcher ignores `TryExec`.
 - **Turning it off:** `studio uninstall` removes the entry and keeps it off. `studio install` adds it again.
 
 **Editing.** Drag an element on the canvas; it snaps to where it would sit in each

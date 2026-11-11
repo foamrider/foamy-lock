@@ -160,6 +160,13 @@ fn install_and_open_use_the_plugin_dir() {
     );
     let (reply, code) = home.run(&["studio", "ensure"], "");
     assert_eq!((reply["action"].as_str(), code), (Some("current"), 0));
+    // An entry the user edited is theirs: ensure leaves it as it is.
+    let edited = text.clone() + "NoDisplay=true\n";
+    fs::write(&desktop, &edited).unwrap();
+    let (reply, code) = home.run(&["studio", "ensure"], "");
+    assert_eq!((reply["action"].as_str(), code), (Some("modified"), 0));
+    assert_eq!(reply["modified"], json!([desktop]));
+    assert_eq!(fs::read_to_string(&desktop).unwrap(), edited);
     let (reply, code) = home.run(&["studio", "uninstall"], "");
     assert_eq!(
         (reply["removed"].as_array().map(Vec::len), code),

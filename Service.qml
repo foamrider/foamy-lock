@@ -1836,7 +1836,8 @@ Item {
   // Lock Studio's launcher entry: once per shell start, a while after it so
   // it doesn't add to the start, the helper adds or refreshes the entry
   // (`studio ensure`: nothing after `studio uninstall`, no write when it is
-  // current). The entry removes itself once the plugin is gone.
+  // current, and a file the user edited is left as it is: "modified"). The
+  // entry removes itself once the plugin is gone.
   property string launcherAction: ""
   Timer {
     id: launcherTimer
