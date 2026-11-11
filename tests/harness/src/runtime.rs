@@ -55,8 +55,9 @@ const COMMANDS: [(&str, &str); 9] = [
         "printf \"%s\\n\" \"$1\" > \"$HOME/stranded-parent\"\nexit \"$(cat \"$HOME/stranded-result\" 2>/dev/null || echo 1)\"",
     ),
     // $HOME/wake-hang makes the wake hang (its pid in wake-pid);
-    // $HOME/blank-slow holds the display-off step for that many seconds
-    // (its pid in blank-pid).
+    // $HOME/blank-slow holds the display-off step for that many seconds,
+    // and $HOME/blank-hold holds it until the file is removed (either one's
+    // pid in blank-pid).
     (
         "omarchy-system-wake",
         r#"printf "%s\n" "omarchy-system-wake" >> "$HOME/calls"
@@ -69,7 +70,8 @@ if [ -e "$HOME/wake-hang" ]; then sleep 60 & echo $! > "$HOME/wake-pid"; wait; f
     (
         "omarchy-brightness-display",
         r#"printf "%s\n" "omarchy-brightness-display" >> "$HOME/calls"
-if [ -e "$HOME/blank-slow" ]; then sleep "$(cat "$HOME/blank-slow")" & echo $! > "$HOME/blank-pid"; wait; fi"#,
+if [ -e "$HOME/blank-slow" ]; then sleep "$(cat "$HOME/blank-slow")" & echo $! > "$HOME/blank-pid"; wait; fi
+if [ -e "$HOME/blank-hold" ]; then (while [ -e "$HOME/blank-hold" ]; do sleep 0.05; done) & echo $! > "$HOME/blank-pid"; wait; fi"#,
     ),
 ];
 
@@ -165,14 +167,16 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
             "readonly property int weatherRetryMs: 10000",
             "readonly property int weatherRetryMs: 200",
         ),
-        // The wake and blank deadlines: 1 s (display_commands waits them out).
+        // The wake and blank deadlines: 1 s and 3 s (display_commands waits
+        // them out). The blank's leaves the overlap cases, which hold a blank
+        // while several IPC calls run, room on a loaded machine.
         (
             r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "15s"]"#,
             r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "1s"]"#,
         ),
         (
             r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]"#,
-            r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "1s"]"#,
+            r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#,
         ),
         // Both PAM services are fixtures; enrollment must not depend on host setup.
         ("/etc/pam.d/omarchy-lock-password", &pam),
@@ -2335,7 +2339,7 @@ fn display_commands(test: &Test) -> R {
     let started = Instant::now();
     test.wait_for(|_| Ok(!running("blank")?))?;
     ensure!(
-        started.elapsed() < Duration::from_millis(3500),
+        started.elapsed() < Duration::from_millis(5000),
         "the blank deadline stops it: {:?}",
         started.elapsed()
     );
@@ -2346,14 +2350,22 @@ fn display_commands(test: &Test) -> R {
     test.test("blank")?;
     test.wait_for(|_| Ok(!running("blank")? && count("omarchy-brightness-display") == blanks + 1))?;
 
+    // The overlap cases hold the blank's display-off step until the case has
+    // made its calls (blank-hold), not for a fixed time: a blank that ended
+    // early would be no overlap at all, and its re-run wake was miscounted
+    // on a loaded machine.
+    let hold = test.path("blank-hold");
+    let displays = || count("omarchy-brightness-display");
+
     // A wake while a blank runs: it runs then, and once more after the blank.
-    write(&slow, "0.8")?;
+    write(&hold, "")?;
     let before = wakes();
     test.test("blank")?;
     test.wait_for(|_| Ok(test.path("blank-pid").exists() && running("blank")?))?;
     test.test("wake")?;
     test.wait_for(|_| Ok(wakes() == before + 1))?;
     ensure!(running("blank")?, "the wake came during the blank");
+    unlink(&hold)?;
     test.wait_for(|_| Ok(!running("blank")? && !running("wake")? && wakes() == before + 2))?;
     ms(400);
     ensure!(wakes() == before + 2, "one wake again, not more");
@@ -2361,17 +2373,23 @@ fn display_commands(test: &Test) -> R {
 
     // A blank after that wake, still during the first blank: no wake again.
     unlink(&test.path("blank-pid"))?;
+    write(&hold, "")?;
     let before = wakes();
+    let blanks = displays();
     test.test("blank")?;
     test.wait_for(|_| Ok(test.path("blank-pid").exists() && running("blank")?))?;
     test.test("wake")?;
     test.wait_for(|_| Ok(wakes() == before + 1 && !running("wake")?))?;
     test.test("blank")?;
+    ensure!(
+        running("blank")? && displays() == blanks + 1,
+        "the second blank came while the first still ran"
+    );
+    unlink(&hold)?;
     test.wait_for(|_| Ok(!running("blank")?))?;
     ms(400);
     ensure!(wakes() == before + 1, "a later blank stands");
     ensure!(on(&test.test_json("displayCommands")?, "blanked")?);
-    unlink(&slow)?;
 
     // Without overlap a wake runs once.
     let before = wakes();
