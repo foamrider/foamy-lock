@@ -1,0 +1,1470 @@
+# qmllint findings accepted when the check was adopted. tests/validate.sh fails on any
+# finding not listed here. Regenerate with `tests/validate.sh --update-baseline qmllint`
+# only to drop fixed entries or after reviewing every added one; never to pass a check.
+Artwork.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < entries.length; i++) {
+Artwork.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var key in loggedErrors)
+Artwork.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var code = typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "invalid-helper-result"
+Artwork.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: Quickshell.env("HOME"),
+Artwork.qml: property-override: Property "state" already exists in base type "QQuickItem", use a different name. | property string state: "empty"
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < devices.length; i++) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < devices.length; i++) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < item.children.length; i++)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < names.length && names[i] !== name; i++)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < names.length; i++)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var name in rects) {
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var above = stackHeight("middle-start", own === "start" ? name : undefined)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var below = stackHeight("bottom-start")
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var dx = offsetX(name), dy = offsetY(name)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var dx = offsetX(name), dy = offsetY(name)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var first = Math.round((height - above - 2 * zoneGap - stackHeight("middle-end", own === "end" ? name : undefined)) / 2)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var item = elementItem(Layout.ELEMENTS[i])
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var item = elementItem(name)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.ELEMENTS[i]
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.ELEMENTS[i]
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.ELEMENTS[i]
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var own = Layout.zoneColumn(zone)
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var plainFoamy = JSON.stringify(Layout.canonical(look)) === JSON.stringify(Layout.defaults())
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var r = rects[name]
+LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var r = reservedRect(name)
+LockView.qml: missing-property: Member "available" not found on type "QObject" | property bool hasBluetooth: bluetoothLoader.item ? bluetoothLoader.item.available : false
+LockView.qml: missing-property: Member "available" not found on type "QObject" | property bool hasVolume: volumeLoader.item ? volumeLoader.item.available : false
+LockView.qml: missing-property: Member "background" not found on type "QObject" | readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
+LockView.qml: missing-property: Member "border" not found on type "QObject" | readonly property color glassEdge: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
+LockView.qml: missing-property: Member "connected" not found on type "QObject" | property int bluetoothConnected: bluetoothLoader.item ? bluetoothLoader.item.connected : 0
+LockView.qml: missing-property: Member "enabled" not found on type "QObject" | property bool bluetoothEnabled: bluetoothLoader.item ? bluetoothLoader.item.enabled : false
+LockView.qml: missing-property: Member "frameSeen" not found on type "QObject" | readonly property bool videoShown: videoLoader.status === Loader.Ready && videoLoader.item !== null && videoLoader.item.frameSeen
+LockView.qml: missing-property: Member "layout" not found on type "QObject" | property string keyboardLayout: keyboardLoader.item ? keyboardLoader.item.layout : ""
+LockView.qml: missing-property: Member "muted" not found on type "QObject" | property bool volumeMuted: volumeLoader.item ? volumeLoader.item.muted : false
+LockView.qml: missing-property: Member "percent" not found on type "QObject" | property int volumePercent: volumeLoader.item ? volumeLoader.item.percent : 0
+LockView.qml: missing-property: Member "placeholder" not found on type "QObject" | readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
+LockView.qml: missing-property: Member "selection" not found on type "QObject" | readonly property color selection: themeLock("selection", Commons.Color.lock.selection, Qt.rgba(1, 1, 1, 0.25))
+LockView.qml: missing-property: Member "text" not found on type "QObject" | readonly property color foreground: themeLock("text", Commons.Color.lock.text, Qt.rgba(0.98, 0.98, 1, 0.96))
+LockView.qml: unqualified: Unqualified access | blur: wallpaper.blurAmount
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var e = 0; e < Layout.ELEMENTS.length; e++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var existing in base)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.SELECTABLE_PRESETS.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < keys.length; i++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < lines.length; i++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < monitors.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < screens.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < screens.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var key in base)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var key in next)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var key in request)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var code = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "avatar-helper-failed"
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var crossed = !FingerprintModel.isUnavailable(previousStreak) && FingerprintModel.isUnavailable(fingerprintUnreachedStreak)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var ipc = monitors[i].lastIpcObject
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.SELECTABLE_PRESETS[i]
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var now = Date.now()
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var parsed = Layout.parseLook(result.entry)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var screen = screens[i]
+Service.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: root.home,
+Service.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: root.home,
+Service.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: root.home,
+Service.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: root.home,
+Service.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: root.home,
+Service.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | environment: ({
+Service.qml: uncreatable-type: Type PanelWindow is not creatable. | PanelWindow {
+Service.qml: unqualified: Unqualified access | activePlayer: root.activePlayer
+Service.qml: unqualified: Unqualified access | artwork.invalidate(path)
+Service.qml: unqualified: Unqualified access | artworkPath: artwork.path
+Service.qml: unqualified: Unqualified access | authenticatingPassword: root.authenticatingPassword
+Service.qml: unqualified: Unqualified access | avatarPath: root.userAvatarRenderPath
+Service.qml: unqualified: Unqualified access | avatarThumbnailPending = false
+Service.qml: unqualified: Unqualified access | avatarVersion: root.userAvatarVersion
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWal
+Service.qml: unqualified: Unqualified access | backgroundPrepared: root.pictureWanted
+Service.qml: unqualified: Unqualified access | backgroundVersion: root.backgroundVersion
+Service.qml: unqualified: Unqualified access | displayAwake: !root.displayBlanked
+Service.qml: unqualified: Unqualified access | failedAttempts: root.failedAttempts
+Service.qml: unqualified: Unqualified access | failureMessage: root.failureMessage
+Service.qml: unqualified: Unqualified access | fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
+Service.qml: unqualified: Unqualified access | fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
+Service.qml: unqualified: Unqualified access | fingerprintUnavailable: root.fingerprintUnavailable
+Service.qml: unqualified: Unqualified access | if (avatarThumbnailPending) {
+Service.qml: unqualified: Unqualified access | inputEnabled: root.lockRequested
+Service.qml: unqualified: Unqualified access | loadBackground: root.locked
+Service.qml: unqualified: Unqualified access | look: root.look
+Service.qml: unqualified: Unqualified access | onClearFailureRequested: root.failureMessage = ""
+Service.qml: unqualified: Unqualified access | onSurfaceActiveChanged: root.activeSurfaces = Math.max(0, root.activeSurfaces + (surfaceActive ? 1 : -1))
+Service.qml: unqualified: Unqualified access | onSurfaceActiveChanged: root.activeSurfaces = Math.max(0, root.activeSurfaces + (surfaceActive ? 1 : -1))
+Service.qml: unqualified: Unqualified access | onWakeRequested: root.runWake()
+Service.qml: unqualified: Unqualified access | passwordText: root.enteredPassword
+Service.qml: unqualified: Unqualified access | primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
+Service.qml: unqualified: Unqualified access | refreshAvatarThumbnail()
+Service.qml: unqualified: Unqualified access | root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
+Service.qml: unqualified: Unqualified access | root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
+Service.qml: unqualified: Unqualified access | root.enteredPassword = password
+Service.qml: unqualified: Unqualified access | root.noteLayoutFallback(error, preset)
+Service.qml: unqualified: Unqualified access | root.noteVideoFailure(reason)
+Service.qml: unqualified: Unqualified access | root.submitPassword(password)
+Service.qml: unqualified: Unqualified access | showUserInfo: root.settings.showUserInfo
+Service.qml: unqualified: Unqualified access | source: width > 0 && height > 0 ? root.lockWallpaperUrl : ""
+Service.qml: unqualified: Unqualified access | timeFormat: root.settings.timeFormat
+Service.qml: unqualified: Unqualified access | userDisplayName: root.userDisplayName
+Service.qml: unqualified: Unqualified access | userName: root.userName
+Service.qml: unqualified: Unqualified access | videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
+Service.qml: unqualified: Unqualified access | videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
+Service.qml: unqualified: Unqualified access | videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
+Service.qml: unqualified: Unqualified access | videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
+Service.qml: unqualified: Unqualified access | weather: root.weather
+elements/Backdrop.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < figureSize; i++)
+elements/Backdrop.qml: unqualified: Unqualified access | accent: backdrop.accent,
+elements/Backdrop.qml: unqualified: Unqualified access | backdrop.shaderFailed = true
+elements/Backdrop.qml: unqualified: Unqualified access | base: backdrop.base,
+elements/Backdrop.qml: unqualified: Unqualified access | border.color: Qt.rgba(backdrop.accent.r, backdrop.accent.g, backdrop.accent.b, 0.35)
+elements/Backdrop.qml: unqualified: Unqualified access | border.color: Qt.rgba(backdrop.accent.r, backdrop.accent.g, backdrop.accent.b, 0.35)
+elements/Backdrop.qml: unqualified: Unqualified access | border.color: Qt.rgba(backdrop.accent.r, backdrop.accent.g, backdrop.accent.b, 0.35)
+elements/Backdrop.qml: unqualified: Unqualified access | border.width: on ? Math.max(1, Math.round(3 * backdrop.unit)) : 0
+elements/Backdrop.qml: unqualified: Unqualified access | color: on ? backdrop.accent : backdrop.ink
+elements/Backdrop.qml: unqualified: Unqualified access | color: on ? backdrop.accent : backdrop.ink
+elements/Backdrop.qml: unqualified: Unqualified access | color: on ? backdrop.accent : backdrop.ink
+elements/Backdrop.qml: unqualified: Unqualified access | color: on ? backdrop.accent : backdrop.ink
+elements/Backdrop.qml: unqualified: Unqualified access | console.warn("The " + backdrop.kind + " background's shader failed; showing its still frame:", log)
+elements/Backdrop.qml: unqualified: Unqualified access | cyan: backdrop.cyan,
+elements/Backdrop.qml: unqualified: Unqualified access | fragmentShader: "shaders/" + backdrop.kind + ".frag.qsb"
+elements/Backdrop.qml: unqualified: Unqualified access | green: backdrop.green,
+elements/Backdrop.qml: unqualified: Unqualified access | height: Math.max(1, Math.round(1.2 * backdrop.unit))
+elements/Backdrop.qml: unqualified: Unqualified access | height: Math.max(1, Math.round(backdrop.height * fraction))
+elements/Backdrop.qml: unqualified: Unqualified access | height: Math.max(1, Math.round(backdrop.height * still.pointScale))
+elements/Backdrop.qml: unqualified: Unqualified access | ink: backdrop.ink,
+elements/Backdrop.qml: unqualified: Unqualified access | property color u_accent: backdrop.accent
+elements/Backdrop.qml: unqualified: Unqualified access | property color u_base: backdrop.base
+elements/Backdrop.qml: unqualified: Unqualified access | property color u_cyan: backdrop.cyan
+elements/Backdrop.qml: unqualified: Unqualified access | property color u_green: backdrop.green
+elements/Backdrop.qml: unqualified: Unqualified access | property color u_ink: backdrop.ink
+elements/Backdrop.qml: unqualified: Unqualified access | property color u_warm: backdrop.warm
+elements/Backdrop.qml: unqualified: Unqualified access | property real u_glow: backdrop.glow
+elements/Backdrop.qml: unqualified: Unqualified access | property real u_loop: backdrop.loop
+elements/Backdrop.qml: unqualified: Unqualified access | property real u_time: backdrop.phase
+elements/Backdrop.qml: unqualified: Unqualified access | property real u_unit: backdrop.unit
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property bool on: index + 1 < sky.lit
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property bool on: index < sky.lit
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property real dx: (to.x - from.x) * backdrop.width
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property real dy: (to.y - from.y) * backdrop.height
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property real fraction: Still.fieldFraction(backdrop.kind)
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property real pointScale: Math.min(1, 1920 / Math.max(1, backdrop.width))
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property real size: Math.round((on ? 7 : 4) * backdrop.unit)
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var from: sky.figure[index]
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var scene: Still.scene(backdrop.kind, backdrop.width, backdrop.height, backdrop.phase, backdrop.loop, backdrop.unit, backdrop.glow, {
+elements/Backdrop.qml: unqualified: Unqualified access | readonly property var to: sky.figure[index + 1]
+elements/Backdrop.qml: unqualified: Unqualified access | warm: backdrop.warm
+elements/Backdrop.qml: unqualified: Unqualified access | width: Math.max(1, Math.round(backdrop.width * fraction))
+elements/Backdrop.qml: unqualified: Unqualified access | width: Math.max(1, Math.round(backdrop.width * still.pointScale))
+elements/Backdrop.qml: unqualified: Unqualified access | x: from.x * backdrop.width
+elements/Backdrop.qml: unqualified: Unqualified access | x: sky.figure[index].x * backdrop.width - size / 2
+elements/Backdrop.qml: unqualified: Unqualified access | x: sky.figure[index].x * backdrop.width - size / 2
+elements/Backdrop.qml: unqualified: Unqualified access | xScale: backdrop.width / field.width
+elements/Backdrop.qml: unqualified: Unqualified access | y: from.y * backdrop.height
+elements/Backdrop.qml: unqualified: Unqualified access | y: sky.figure[index].y * backdrop.height - size / 2
+elements/Backdrop.qml: unqualified: Unqualified access | y: sky.figure[index].y * backdrop.height - size / 2
+elements/Backdrop.qml: unqualified: Unqualified access | yScale: backdrop.height / field.height
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var c = 0; c < span; c++) {
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < dots.time.length; i++) {
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < hands.length; i++) {
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < time.length; i++)
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var mark = 0; mark < 12; mark++) {
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var r = 0; r < 7; r++) {
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var tick = 0; tick < 12; tick++) {
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var angle = mark * Math.PI / 6
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var angle = tick * Math.PI / 6
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var glyph = dots.glyphs[dots.time[i]]
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var inner = outer - (major ? 16 : 8) * unit
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var inner = outer - (mark % 3 === 0 ? 10 : 5) * ring.unit
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var lit = c < glyph[r].length && glyph[r][c] === "#"
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var major = tick % 3 === 0
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var outer = radius - 14 * unit
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var outer = radius - line - 6 * ring.unit
+elements/ClockElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var span = glyph[0].length + (i < dots.time.length - 1 ? 1 : 0)
+elements/ClockElement.qml: unqualified: Unqualified access | border.color: clock.view.glassBorder
+elements/ClockElement.qml: unqualified: Unqualified access | color: clock.view.foreground
+elements/ClockElement.qml: unqualified: Unqualified access | color: clock.view.foreground
+elements/ClockElement.qml: unqualified: Unqualified access | font.family: clock.view.textFontFamily
+elements/ClockElement.qml: unqualified: Unqualified access | font.family: clock.view.textFontFamily
+elements/ClockElement.qml: unqualified: Unqualified access | font.letterSpacing: Math.round(-2 * clock.uiScale)
+elements/ClockElement.qml: unqualified: Unqualified access | font.letterSpacing: Math.round(1 * clock.uiScale)
+elements/ClockElement.qml: unqualified: Unqualified access | font.pixelSize: Math.round(14 * clock.uiScale)
+elements/ClockElement.qml: unqualified: Unqualified access | height: Math.max(2, Math.round(3 * clock.uiScale))
+elements/ClockElement.qml: unqualified: Unqualified access | height: flip.height
+elements/ClockElement.qml: unqualified: Unqualified access | radius: Math.round(16 * clock.uiScale)
+elements/ClockElement.qml: unqualified: Unqualified access | text: clock.meridiem
+elements/ClockElement.qml: unqualified: Unqualified access | text: parent.index === 0 ? clock.hours : clock.minutes
+elements/ClockElement.qml: unqualified: Unqualified access | text: parent.index === 0 ? clock.hours : clock.minutes
+elements/ClockElement.qml: unqualified: Unqualified access | visible: parent.index === 0 && clock.twelveHour
+elements/ClockElement.qml: unqualified: Unqualified access | width: flip.cardWidth
+elements/ClockElement.qml: unqualified: Unqualified access | x: Math.round(12 * clock.uiScale)
+elements/ClockElement.qml: unqualified: Unqualified access | x: index * (flip.cardWidth + flip.gap)
+elements/ClockElement.qml: unqualified: Unqualified access | x: index * (flip.cardWidth + flip.gap)
+elements/ClockElement.qml: unqualified: Unqualified access | y: parent.height - height - Math.round(8 * clock.uiScale)
+elements/MediaElement.qml: unqualified: Unqualified access | maskSource: artworkMask
+elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | border.color: field.view.errorState ? Commons.Color.lock.borderError : field.view.glassBorder
+elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
+elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+elements/PasswordElement.qml: missing-property: Member "textError" not found on type "QObject" | color: field.view.authenticatingPassword ? field.view.foreground : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
+elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.foreground
+elements/PasswordElement.qml: unqualified: Unqualified access | opacity: field.terminal ? 0.7 : 1
+elements/PasswordElement.qml: unqualified: Unqualified access | opacity: field.view.errorState ? 1 : field.view.showPassword ? 0.6 : 0.38
+elements/PasswordElement.qml: unqualified: Unqualified access | opacity: field.view.errorState ? 1 : field.view.showPassword ? 0.6 : 0.38
+elements/PasswordElement.qml: unqualified: Unqualified access | visible: passwordInput.cursorVisible
+elements/PasswordElement.qml: unqualified: Unqualified access | width: dotsTrack.dot
+elements/PasswordElement.qml: unqualified: Unqualified access | width: field.terminal ? Math.round(10 * field.uiScale) : 2
+elements/PasswordElement.qml: unqualified: Unqualified access | width: field.terminal ? Math.round(10 * field.uiScale) : 2
+elements/PreviewBanner.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+elements/PreviewBanner.qml: missing-property: Member "heading" not found on type "QObject" | font.pixelSize: FoamyStyle.font.heading
+elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < children.length; i++) {
+elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < lineItems.length; i++)
+elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < status.items.length; i++) {
+elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var child = children[i]
+elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var item = status.items[i]
+elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var out = []
+elements/sources/BluetoothSource.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < devices.length; i++)
+elements/sources/BluetoothSource.qml: property-override: Member "enabled" shadows member "enabled" from base type "QQuickItem", use a different name or add a final or override specifier. | readonly property bool enabled: available && adapter.enabled === true
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < all.length; i++)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < anchors.length; i++)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < anchors.length; i++)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < zones.length; i++) {
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = all.length - 1; i >= 0; i--) {
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var name in rects) {
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var other in rects)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var other in rects)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var across = direction === "left" || direction === "right"
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var delta = (modifiers & Qt.ShiftModifier) ? sign : across ? Draft.gridMove(rect.x + rect.width / 2, anchor.x + anchor.width / 2, sign, step) : Draft.gridMove(r
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var hidden = Draft.setHidden(draft, selected, true)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var inside = x >= s.x && y >= s.y && x <= s.x + s.width && y <= s.y + s.height
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var moved = Draft.nudge(draft, selected, across ? delta : 0, across ? 0 : delta, rect, anchor, geometry())
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = canvas.hit(press.x / canvas.zoom, press.y / canvas.zoom)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var next = Draft.neighbourZone(zone, direction, rightToLeft, selected)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var placed = Draft.drop(g.result.rect, snapInput(g))
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var press = centroid.pressPosition
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var r = probe.drawnRect(name)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var r = rects[name]
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var reach = s.inset + Math.round(16 * view.uiScale)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var rect = view.drawnRect(selected), anchor = view.reservedRect(selected)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var rect = view.drawnRect(selected), anchor = view.reservedRect(selected)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var removed = Draft.removeShape(draft, selectedShape)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var s = all[i]
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var scaled = Draft.scaleBy(draft, selected, key === Qt.Key_Minus ? -1 : 1)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var sign = direction === "left" || direction === "up" ? -1 : 1
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var step = Draft.gridStep(screenHeight)
+studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var zone = look.elements[selected].zone
+studio/Canvas.qml: id-shadows-member: Id for object SampleView shadows property "view". Rename one or the other. | readonly property bool rightToLeft: view.rightToLeft
+studio/Canvas.qml: id-shadows-member: Note: Id defined here | id: view
+studio/Canvas.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as Layout
+studio/Canvas.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/Canvas.qml: import: LockView was not found. Did you add all imports and dependencies? | // own zone; the drop picks the zone (Draft.drop) and emits `edited` once.
+studio/Canvas.qml: missing-property: Member "look" not found on type | probe.look = Draft.probeLook(look, name, zones[i])
+studio/Canvas.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.canvas")
+studio/Canvas.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | border.color: FoamyPalette.error
+studio/Canvas.qml: unqualified: Unqualified access | border.color: Qt.alpha(FoamyPalette.accent, 0.7)
+studio/Canvas.qml: unqualified: Unqualified access | color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | color: FoamyPalette.accent
+studio/Canvas.qml: unqualified: Unqualified access | color: FoamyPalette.onAccent
+studio/Canvas.qml: unqualified: Unqualified access | color: FoamyPalette.onAccent
+studio/Canvas.qml: unqualified: Unqualified access | color: Qt.alpha(FoamyPalette.accent, 0.08)
+studio/Canvas.qml: unqualified: Unqualified access | color: Qt.alpha(FoamyPalette.accent, 0.14)
+studio/Canvas.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Canvas.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/Canvas.qml: unqualified: Unqualified access | height: tagLabel.implicitHeight + FoamyStyle.gapTiny * 2
+studio/Canvas.qml: unqualified: Unqualified access | preset: Layout.DEFAULT_PRESET
+studio/Canvas.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/Canvas.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall / 2
+studio/Canvas.qml: unqualified: Unqualified access | rightToLeft: FoamyI18n.rightToLeft
+studio/Canvas.qml: unqualified: Unqualified access | rightToLeft: FoamyI18n.rightToLeft
+studio/Canvas.qml: unqualified: Unqualified access | row: ["top", "middle", "bottom"].indexOf(Layout.zoneRow(zone))
+studio/Canvas.qml: unqualified: Unqualified access | text: targetZone.zone ? FoamyI18n.t("studio.zone." + targetZone.zone) : ""
+studio/Canvas.qml: unqualified: Unqualified access | var column = Layout.screenColumn(zone, rightToLeft)
+studio/Canvas.qml: unqualified: Unqualified access | width: tagLabel.implicitWidth + 2 * FoamyStyle.gapSmall + 4
+studio/Canvas.qml: unqualified: Unqualified access | x: FoamyStyle.gap
+studio/Canvas.qml: unqualified: Unqualified access | y: FoamyStyle.gap
+studio/Canvas.qml: unresolved-type: Type SampleView is used but it is not resolved | SampleView {
+studio/Canvas.qml: unresolved-type: Type SampleView is used but it is not resolved | SampleView {
+studio/Checker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var a = 0; a < advice.length; a++)
+studio/Checker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < views.count; i++) {
+studio/Checker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
+studio/Checker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var code = view.geometryProblem()
+studio/Checker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var size = view.size
+studio/Checker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var view = views.itemAt(i)
+studio/Checker.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as Layout
+studio/Checker.qml: import: LockView was not found. Did you add all imports and dependencies? | // with `advice: true` and the shape's index: a warning, never a block.
+studio/Checker.qml: missing-property: Member "effectiveLook" not found on type "QQuickItem" | var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
+studio/Checker.qml: missing-property: Member "elementRects" not found on type "QQuickItem" | names: Draft.problemElements(code, view.placed, view.elementRects, view.width, view.height)
+studio/Checker.qml: missing-property: Member "elementRects" not found on type "QQuickItem" | var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
+studio/Checker.qml: missing-property: Member "geometryProblem" not found on type "QQuickItem" | var code = view.geometryProblem()
+studio/Checker.qml: missing-property: Member "placed" not found on type "QQuickItem" | names: Draft.problemElements(code, view.placed, view.elementRects, view.width, view.height)
+studio/Checker.qml: missing-property: Member "shapeGeometry" not found on type "QQuickItem" | var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
+studio/Checker.qml: missing-property: Member "size" not found on type "QQuickItem" | if (!view || !(view.width > 0) || !view.size)
+studio/Checker.qml: missing-property: Member "size" not found on type "QQuickItem" | var size = view.size
+studio/Checker.qml: required: Component is missing required property modelData from SampleView | Repeater {
+studio/Checker.qml: required: Component is missing required property modelData from SampleView | SampleView {
+studio/Checker.qml: unqualified: Unqualified access | var advice = Layout.shapeAdvice(view.effectiveLook, view.elementRects, view.shapeGeometry)
+studio/Checker.qml: unresolved-type: Type SampleView is used but it is not resolved | SampleView {
+studio/IconButton.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/IconButton.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/IconButton.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | FoamyIcon {
+studio/IconButton.qml: unqualified: Unqualified access | anchors.centerIn: parent
+studio/IconButton.qml: unqualified: Unqualified access | height: width
+studio/IconButton.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.controlHeight
+studio/IconButton.qml: unqualified: Unqualified access | implicitWidth: FoamyStyle.controlHeight
+studio/IconButton.qml: unqualified: Unqualified access | mirror: (FoamyI18n.rightToLeft && glyph.directional.indexOf(glyph.name) !== -1) !== button.flipped
+studio/IconButton.qml: unqualified: Unqualified access | tooltipText: keys !== "" ? FoamyI18n.t("studio.withKeys", [name, keys]) : name
+studio/IconButton.qml: unqualified: Unqualified access | width: FoamyStyle.iconSize
+studio/IconButton.qml: unqualified: unknown grouped property scope anchors. | anchors.centerIn: parent
+studio/IconButton.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.centerIn: parent
+studio/Inspector.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as LockLayout
+studio/Inspector.qml: import: File or directory you are trying to import does not exist: studio/Model.js. | import "Model.js" as Model
+studio/Inspector.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/Inspector.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | // shows, its style (drawn tiles), size, opacity and glass, its zone, its
+studio/Inspector.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/Inspector.qml: import: FoamyDropdown was not found. Did you add all imports and dependencies? | FoamyDropdown {
+studio/Inspector.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | FoamyIcon {
+studio/Inspector.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.items.keys")
+studio/Inspector.qml: unqualified: Unqualified access | Accessible.description: last ? FoamyI18n.t("studio.items.last") : ""
+studio/Inspector.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.coverArt")
+studio/Inspector.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.inspector")
+studio/Inspector.qml: unqualified: Unqualified access | Accessible.name: text
+studio/Inspector.qml: unqualified: Unqualified access | anchors.centerIn: parent
+studio/Inspector.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Inspector.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/Inspector.qml: unqualified: Unqualified access | border.width: row.modelData.on ? 0 : FoamyStyle.borderWidth
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.onAccent
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/Inspector.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/Inspector.qml: unqualified: Unqualified access | color: index === checklist.dragFrom ? FoamyPalette.selectedFill : rowMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/Inspector.qml: unqualified: Unqualified access | color: index === checklist.dragFrom ? FoamyPalette.selectedFill : rowMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/Inspector.qml: unqualified: Unqualified access | color: row.modelData.on ? FoamyPalette.accent : FoamyPalette.fieldFill
+studio/Inspector.qml: unqualified: Unqualified access | color: row.modelData.on ? FoamyPalette.accent : FoamyPalette.fieldFill
+studio/Inspector.qml: unqualified: Unqualified access | color: row.modelData.on ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/Inspector.qml: unqualified: Unqualified access | color: row.modelData.on ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/Inspector.qml: unqualified: Unqualified access | flick.contentY = Math.max(0, top - FoamyStyle.gap)
+studio/Inspector.qml: unqualified: Unqualified access | flick.contentY = Math.min(flick.contentHeight - flick.height, top + target.height - flick.height + FoamyStyle.gap)
+studio/Inspector.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Inspector.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Inspector.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Inspector.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Inspector.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Inspector.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Inspector.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Inspector.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Inspector.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Inspector.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Inspector.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Inspector.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.heading
+studio/Inspector.qml: unqualified: Unqualified access | height: FoamyStyle.gap
+studio/Inspector.qml: unqualified: Unqualified access | height: width
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.coverArt")
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.coverArt." + mode)
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.details." + v)
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.glass")
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.opacity")
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.reveal." + v)
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.screens." + s)
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.size")
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.x")
+studio/Inspector.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.y")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.details")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.moveDown")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.moveUp")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.offsetX")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.offsetY")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.reveal")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.screens")
+studio/Inspector.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.zone")
+studio/Inspector.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/Inspector.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/Inspector.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/Inspector.qml: unqualified: Unqualified access | opacity: row.last ? FoamyStyle.disabledOpacity : 1
+studio/Inspector.qml: unqualified: Unqualified access | options: LockLayout.SCREENS.map(function (s) {
+studio/Inspector.qml: unqualified: Unqualified access | options: LockLayout.STYLES[inspector.name] || []
+studio/Inspector.qml: unqualified: Unqualified access | options: Model.COVER_ART_MODES.concat(inspector.coverArt === "custom" ? ["custom"] : []).map(function (mode) {
+studio/Inspector.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/Inspector.qml: unqualified: Unqualified access | radius: Math.max(2, FoamyStyle.radiusSmall / 2)
+studio/Inspector.qml: unqualified: Unqualified access | readonly property bool coverStyle: !!item && name === "media" && LockLayout.ARTWORK_STYLES.indexOf(item.style) !== -1
+studio/Inspector.qml: unqualified: Unqualified access | readonly property real rowHeight: FoamyStyle.rowHeight
+studio/Inspector.qml: unqualified: Unqualified access | readonly property string coverArt: app ? Model.coverArtMode(app.lockSettings) : "player"
+studio/Inspector.qml: unqualified: Unqualified access | readonly property var limits: name === "password" ? LockLayout.PASSWORD_LIMITS : LockLayout.LIMITS
+studio/Inspector.qml: unqualified: Unqualified access | readonly property var limits: name === "password" ? LockLayout.PASSWORD_LIMITS : LockLayout.LIMITS
+studio/Inspector.qml: unqualified: Unqualified access | readonly property var look: app ? app.look : LockLayout.defaults()
+studio/Inspector.qml: unqualified: Unqualified access | readonly property var options: LockLayout.elementLimits()
+studio/Inspector.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.item." + name)
+studio/Inspector.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.px", FoamyI18n.number(value, 0))
+studio/Inspector.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.px", FoamyI18n.number(value, 0))
+studio/Inspector.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.style." + style)
+studio/Inspector.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/Inspector.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/Inspector.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapLarge
+studio/Inspector.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/Inspector.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/Inspector.qml: unqualified: Unqualified access | text: !inspector.coverStyle && inspector.item ? FoamyI18n.t("studio.artwork.noCover", inspector.app ? inspector.app.styleLabel(inspector.item.style) : "") : Foa
+studio/Inspector.qml: unqualified: Unqualified access | text: !inspector.coverStyle && inspector.item ? FoamyI18n.t("studio.artwork.noCover", inspector.app ? inspector.app.styleLabel(inspector.item.style) : "") : Foa
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.adjust")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.artwork")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.coverArt.note." + inspector.coverArt) + " " + FoamyI18n.t("studio.coverArt.setting")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.coverArt.note." + inspector.coverArt) + " " + FoamyI18n.t("studio.coverArt.setting")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.details")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.details.card")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.items.hint")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.location")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.location.note")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.placement")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.reveal")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.reveal.hint")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.screens")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.screensHint")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.full")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shown")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.style")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.weather.sample")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.zoneOrder")
+studio/Inspector.qml: unqualified: Unqualified access | text: FoamyI18n.t(inspector.name === "password" ? "studio.field" : inspector.name === "media" ? "studio.cover" : "studio.shows")
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.item && inspector.item.glass !== undefined ? FoamyI18n.t("studio.glassOwn") : FoamyI18n.t("studio.glassLook")
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.item && inspector.item.glass !== undefined ? FoamyI18n.t("studio.glassOwn") : FoamyI18n.t("studio.glassLook")
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone)) + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(D
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone)) + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(D
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.item ? FoamyI18n.t("studio.zoneValue", inspector.app.zoneLabel(inspector.item.zone)) + " · " + FoamyI18n.t("studio.gridStep", FoamyI18n.number(D
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways") : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? 
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways") : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? 
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways") : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? 
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways") : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? 
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.name === "password" ? FoamyI18n.t("studio.passwordAlways") : inspector.name === "weather" && inspector.app && !inspector.app.weatherAvailable ? 
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.ownShape !== -1 ? FoamyI18n.t("studio.shape.editOwn") : FoamyI18n.t("studio.shape.wrapIn")
+studio/Inspector.qml: unqualified: Unqualified access | text: inspector.ownShape !== -1 ? FoamyI18n.t("studio.shape.editOwn") : FoamyI18n.t("studio.shape.wrapIn")
+studio/Inspector.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.shows")
+studio/Inspector.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.style")
+studio/Inspector.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/Inspector.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/Inspector.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/Inspector.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gapSmall
+studio/Inspector.qml: unqualified: Unqualified access | valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
+studio/Inspector.qml: unqualified: Unqualified access | valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
+studio/Inspector.qml: unqualified: Unqualified access | valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
+studio/Inspector.qml: unqualified: Unqualified access | visible: LockLayout.SCREENS_ELEMENTS.indexOf(inspector.name) !== -1
+studio/Inspector.qml: unqualified: Unqualified access | visible: LockLayout.SCREENS_ELEMENTS.indexOf(inspector.name) !== -1
+studio/Inspector.qml: unqualified: Unqualified access | width: FoamyStyle.gap * 2 + 4
+studio/Inspector.qml: unqualified: Unqualified access | width: FoamyStyle.iconSize + 3
+studio/Inspector.qml: unqualified: Unqualified access | width: FoamyStyle.iconSize - 2
+studio/Inspector.qml: unqualified: Unqualified access | width: parent.width
+studio/Inspector.qml: unqualified: Unqualified access | width: parent.width
+studio/Inspector.qml: unqualified: unknown grouped property scope anchors. | anchors.centerIn: parent
+studio/Inspector.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/Inspector.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/Inspector.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.centerIn: parent
+studio/Library.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var p = target; p; p = p.parent)
+studio/Library.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as Layout
+studio/Library.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/Library.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | FoamyIcon {
+studio/Library.qml: unqualified: Unqualified access | Accessible.description: detail + " · " + FoamyI18n.t("studio.dragHint")
+studio/Library.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.library")
+studio/Library.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.modules")
+studio/Library.qml: unqualified: Unqualified access | anchors.leftMargin: FoamyStyle.gap
+studio/Library.qml: unqualified: Unqualified access | anchors.margins: -FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | anchors.right: parent.right
+studio/Library.qml: unqualified: Unqualified access | anchors.rightMargin: FoamyStyle.controlPaddingX
+studio/Library.qml: unqualified: Unqualified access | anchors.topMargin: FoamyStyle.gapLarge
+studio/Library.qml: unqualified: Unqualified access | anchors.verticalCenter: parent.verticalCenter
+studio/Library.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Library.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/Library.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/Library.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/Library.qml: unqualified: Unqualified access | color: Qt.alpha(FoamyPalette.background, 0.82)
+studio/Library.qml: unqualified: Unqualified access | detail: FoamyI18n.t("studio.percent", Math.round(library.app.look.background.dim * 100))
+studio/Library.qml: unqualified: Unqualified access | detail: FoamyI18n.t("studio.source." + library.app.look.background.source)
+studio/Library.qml: unqualified: Unqualified access | detail: count > 0 ? FoamyI18n.tn("studio.shapes.count", count) : FoamyI18n.t("studio.shapes.none")
+studio/Library.qml: unqualified: Unqualified access | detail: count > 0 ? FoamyI18n.tn("studio.shapes.count", count) : FoamyI18n.t("studio.shapes.none")
+studio/Library.qml: unqualified: Unqualified access | detail: library.app.presetChanged ? FoamyI18n.t("studio.edited") : ""
+studio/Library.qml: unqualified: Unqualified access | detail: needsWeather ? FoamyI18n.t("studio.needsWeather") : hiddenNow ? FoamyI18n.t("studio.hidden") : library.app.zoneLabel(item.zone)
+studio/Library.qml: unqualified: Unqualified access | detail: needsWeather ? FoamyI18n.t("studio.needsWeather") : hiddenNow ? FoamyI18n.t("studio.hidden") : library.app.zoneLabel(item.zone)
+studio/Library.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Library.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | leading: FoamyStyle.gap + 6
+studio/Library.qml: unqualified: Unqualified access | list.contentY = Math.max(0, top - FoamyStyle.gapSmall)
+studio/Library.qml: unqualified: Unqualified access | list.contentY = Math.min(list.contentHeight - list.height, top + target.height - list.height + FoamyStyle.gapSmall)
+studio/Library.qml: unqualified: Unqualified access | opacity: !enabled ? FoamyStyle.disabledOpacity : dragging ? 0.45 : hiddenNow ? 0.7 : 1
+studio/Library.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/Library.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.background")
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.dropToHide", library.app.moduleLabel(library.app.selected))
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.glassDim")
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.modules")
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.preset", library.app.basisLabel)
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.scene")
+studio/Library.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shapes")
+studio/Library.qml: unqualified: Unqualified access | topPadding: FoamyStyle.sectionGap
+studio/Library.qml: unqualified: Unqualified access | trailing: FoamyStyle.iconSize + FoamyStyle.gap
+studio/Library.qml: unqualified: Unqualified access | trailing: FoamyStyle.iconSize + FoamyStyle.gap
+studio/Library.qml: unqualified: Unqualified access | var delta = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y / 120 * 3 * FoamyStyle.rowHeight
+studio/Library.qml: unqualified: Unqualified access | width: parent.width - 2 * FoamyStyle.gapLarge
+studio/Library.qml: unqualified: unknown grouped property scope anchors. | anchors.right: parent.right
+studio/Library.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.right: parent.right
+studio/LockSources.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < monitors.length; i++) {
+studio/LockSources.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var name in nativeMonitors)
+studio/LockSources.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var ipc = monitors[i].lastIpcObject
+studio/LockSources.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as Layout
+studio/LockSources.qml: import: File or directory you are trying to import does not exist: studio/Model.js. | import "Model.js" as Model
+studio/LockSources.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/LockSources.qml: import: File or directory you are trying to import does not exist: studio/kit/FoamyNative.js. | import "kit/FoamyNative.js" as FoamyNative
+studio/LockSources.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: sources.home,
+studio/LockSources.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: sources.home,
+studio/LockSources.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: sources.home,
+studio/LockSources.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: sources.home,
+studio/LockSources.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | environment: ({
+studio/LockSources.qml: property-override: Property "clip" already exists in base type "QQuickItem", use a different name. | readonly property string clip: videoProbe && videoProbeKey === clipKey && videoProbe.clip ? videoProbe.clip : convertKey === clipKey && convertedClip ? converte
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", op]))
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=1s", "12s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["artwork"]))
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=1s", "20s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "apply"]))
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=1s", "20s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "preset", op]))
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["wallpaper", sources.wallpaperLink]))
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "pick-picture", FoamyI18n.t("stud
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "pick-picture", FoamyI18n.t("stud
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "pick-picture", FoamyI18n.t("stud
+studio/LockSources.qml: unqualified: Unqualified access | command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "pick-picture", FoamyI18n.t("stud
+studio/LockSources.qml: unqualified: Unqualified access | if (FoamyNative.unavailable(exitCode))
+studio/LockSources.qml: unqualified: Unqualified access | if (FoamyNative.unavailable(exitCode))
+studio/LockSources.qml: unqualified: Unqualified access | if (FoamyNative.unavailable(exitCode)) {
+studio/LockSources.qml: unqualified: Unqualified access | if (FoamyNative.unavailable(exitCode)) {
+studio/LockSources.qml: unqualified: Unqualified access | if (coverArtBusy || Model.COVER_ART_MODES.indexOf(mode) === -1)
+studio/LockSources.qml: unqualified: Unqualified access | property var settings: Model.defaults()
+studio/LockSources.qml: unqualified: Unqualified access | readonly property bool pictureIsVideo: !!look && look.background.source === "picture" && Layout.isVideoPath(look.background.path)
+studio/LockSources.qml: unqualified: Unqualified access | readonly property string pluginDir: FoamyNative.localPath(Qt.resolvedUrl("."))
+studio/LockSources.qml: unqualified: Unqualified access | readonly property string wantedPicture: look && look.background.source === "picture" && !Layout.isVideoPath(look.background.path) ? String(look.background.path 
+studio/LockSources.qml: unqualified: Unqualified access | return Model.videoScreenSize(natives, Quickshell.screens || [])
+studio/LockSources.qml: unqualified: Unqualified access | return videoHelper ? [videoHelper, kind] : FoamyNative.command(pluginDir, "foamy-lock-helper", [kind])
+studio/LockSources.qml: unqualified: Unqualified access | var result = Model.parseConfig(text())
+studio/LockSources.qml: unqualified: Unqualified access | var result = Model.videoProbeResult(exitCode === 0 ? text : "", videoDirectory)
+studio/LockSources.qml: unqualified: Unqualified access | videoProbe = Model.videoProbeResult('{"ok":false,"error":"helper-unavailable"}', videoDirectory)
+studio/LockSources.qml: unqualified: Unqualified access | videoProbe = Model.videoProbeResult(exitCode === 0 ? text : "", videoDirectory)
+studio/PaneNote.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/PaneNote.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/PaneNote.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/PaneNote.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/PresetMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < count; i++)
+studio/PresetMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var preset = userPresets[index]
+studio/PresetMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var rowEnd = Math.min(rowStart + columns, cursor < userCount ? userCount : count)
+studio/PresetMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var rowStart = cursor - columnOf(cursor)
+studio/PresetMenu.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as LockLayout
+studio/PresetMenu.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/PresetMenu.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/PresetMenu.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | FoamyIcon {
+studio/PresetMenu.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.presets")
+studio/PresetMenu.qml: unqualified: Unqualified access | anchors.centerIn: parent
+studio/PresetMenu.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/PresetMenu.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/PresetMenu.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : FoamyPalette.accent
+studio/PresetMenu.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : FoamyPalette.accent
+studio/PresetMenu.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/PresetMenu.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/PresetMenu.qml: unqualified: Unqualified access | color: FoamyPalette.background
+studio/PresetMenu.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/PresetMenu.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/PresetMenu.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/PresetMenu.qml: unqualified: Unqualified access | color: actionMouse.containsMouse ? FoamyPalette.hoverFill : FoamyPalette.background
+studio/PresetMenu.qml: unqualified: Unqualified access | color: actionMouse.containsMouse ? FoamyPalette.hoverFill : FoamyPalette.background
+studio/PresetMenu.qml: unqualified: Unqualified access | color: chosen ? FoamyPalette.selectedFill : cursorHere ? FoamyPalette.hoverFill : "transparent"
+studio/PresetMenu.qml: unqualified: Unqualified access | color: chosen ? FoamyPalette.selectedFill : cursorHere ? FoamyPalette.hoverFill : "transparent"
+studio/PresetMenu.qml: unqualified: Unqualified access | color: tile.chosen ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/PresetMenu.qml: unqualified: Unqualified access | color: tile.chosen ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/PresetMenu.qml: unqualified: Unqualified access | columnSpacing: FoamyStyle.gap
+studio/PresetMenu.qml: unqualified: Unqualified access | columnSpacing: FoamyStyle.gap
+studio/PresetMenu.qml: unqualified: Unqualified access | description: FoamyI18n.t("studio.presets.basedOn", FoamyI18n.t("studio.preset." + thumbnail))
+studio/PresetMenu.qml: unqualified: Unqualified access | description: FoamyI18n.t("studio.presets.basedOn", FoamyI18n.t("studio.preset." + thumbnail))
+studio/PresetMenu.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/PresetMenu.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/PresetMenu.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/PresetMenu.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/PresetMenu.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/PresetMenu.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/PresetMenu.qml: unqualified: Unqualified access | height: Math.min(menu.height - y - FoamyStyle.gapLarge, content.implicitHeight + 2 * FoamyStyle.gapLarge)
+studio/PresetMenu.qml: unqualified: Unqualified access | height: Math.min(menu.height - y - FoamyStyle.gapLarge, content.implicitHeight + 2 * FoamyStyle.gapLarge)
+studio/PresetMenu.qml: unqualified: Unqualified access | height: parent.height - 2 * FoamyStyle.gapLarge
+studio/PresetMenu.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.preset." + modelData)
+studio/PresetMenu.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.presets.delete", userTile.modelData.name)
+studio/PresetMenu.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.presets.rename", userTile.modelData.name)
+studio/PresetMenu.qml: unqualified: Unqualified access | radius: FoamyStyle.radius
+studio/PresetMenu.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/PresetMenu.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/PresetMenu.qml: unqualified: Unqualified access | readonly property var presets: LockLayout.SELECTABLE_PRESETS
+studio/PresetMenu.qml: unqualified: Unqualified access | rowSpacing: FoamyStyle.gap
+studio/PresetMenu.qml: unqualified: Unqualified access | rowSpacing: FoamyStyle.gap
+studio/PresetMenu.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/PresetMenu.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/PresetMenu.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presets.builtin")
+studio/PresetMenu.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presets.empty")
+studio/PresetMenu.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presets.mine")
+studio/PresetMenu.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presets.saveNew")
+studio/PresetMenu.qml: unqualified: Unqualified access | top = Math.max(0, top - FoamyStyle.controlHeight - FoamyStyle.gap)
+studio/PresetMenu.qml: unqualified: Unqualified access | top = Math.max(0, top - FoamyStyle.controlHeight - FoamyStyle.gap)
+studio/PresetMenu.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gapSmall
+studio/PresetMenu.qml: unqualified: Unqualified access | width: menu.columns * menu.tileWidth + (menu.columns - 1) * FoamyStyle.gap + 2 * FoamyStyle.gapLarge
+studio/PresetMenu.qml: unqualified: Unqualified access | width: menu.columns * menu.tileWidth + (menu.columns - 1) * FoamyStyle.gap + 2 * FoamyStyle.gapLarge
+studio/PresetMenu.qml: unqualified: Unqualified access | width: parent.width - 2 * FoamyStyle.gapLarge
+studio/PresetMenu.qml: unqualified: Unqualified access | x: FoamyStyle.gapLarge
+studio/PresetMenu.qml: unqualified: Unqualified access | x: Math.max(FoamyStyle.gap, Math.min(menu.width - width - FoamyStyle.gap, menu.LayoutMirroring.enabled && menu.anchorItem ? menu.origin.x + menu.anchorItem.widt
+studio/PresetMenu.qml: unqualified: Unqualified access | x: Math.max(FoamyStyle.gap, Math.min(menu.width - width - FoamyStyle.gap, menu.LayoutMirroring.enabled && menu.anchorItem ? menu.origin.x + menu.anchorItem.widt
+studio/PresetMenu.qml: unqualified: Unqualified access | y: FoamyStyle.gapLarge
+studio/PresetMenu.qml: unqualified: Unqualified access | y: menu.origin.y + FoamyStyle.gapSmall
+studio/PresetMenu.qml: unqualified: unknown grouped property scope anchors. | anchors.centerIn: parent
+studio/PresetMenu.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.centerIn: parent
+studio/SampleView.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/SampleView.qml: import: LockView was not found. Did you add all imports and dependencies? | LockView {
+studio/SampleView.qml: unqualified: Unqualified access | condition: widest ? FoamyI18n.t("studio.sample.conditionLong") : FoamyI18n.t("studio.sample.condition"),
+studio/SampleView.qml: unqualified: Unqualified access | condition: widest ? FoamyI18n.t("studio.sample.conditionLong") : FoamyI18n.t("studio.sample.condition"),
+studio/SampleView.qml: unqualified: Unqualified access | keyboardLayout: widest ? FoamyI18n.t("studio.sample.keyboardLong") : FoamyI18n.t("studio.sample.keyboard")
+studio/SampleView.qml: unqualified: Unqualified access | keyboardLayout: widest ? FoamyI18n.t("studio.sample.keyboardLong") : FoamyI18n.t("studio.sample.keyboard")
+studio/SampleView.qml: unqualified: Unqualified access | location: widest ? "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Ynys Môn, Cymru (UK)" : FoamyI18n.t("studio.sample.place"),
+studio/SampleView.qml: unqualified: Unqualified access | readonly property string trackArtist: FoamyI18n.t("studio.sample.artist")
+studio/SampleView.qml: unqualified: Unqualified access | readonly property string trackTitle: FoamyI18n.t("studio.sample.track")
+studio/SampleView.qml: unqualified: Unqualified access | userDisplayName: FoamyI18n.t("studio.sample.user")
+studio/ScenePage.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < children.length; i++)
+studio/ScenePage.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as LockLayout
+studio/ScenePage.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/ScenePage.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | // - "background": the source (Wallpaper, Custom image, Solid colour or
+studio/ScenePage.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/ScenePage.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/ScenePage.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/ScenePage.qml: import: FoamyTextSettingField was not found. Did you add all imports and dependencies? | FoamyTextSettingField {
+studio/ScenePage.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.color.swatches")
+studio/ScenePage.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.shape.modules")
+studio/ScenePage.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.shapes")
+studio/ScenePage.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.source")
+studio/ScenePage.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.video.poster")
+studio/ScenePage.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.video.progress")
+studio/ScenePage.qml: unqualified: Unqualified access | Layout.preferredHeight: FoamyStyle.actionSize
+studio/ScenePage.qml: unqualified: Unqualified access | Layout.preferredWidth: FoamyStyle.actionSize
+studio/ScenePage.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/ScenePage.qml: unqualified: Unqualified access | border.color: Qt.alpha(FoamyPalette.text, 0.18)
+studio/ScenePage.qml: unqualified: Unqualified access | border.color: activeFocus ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+studio/ScenePage.qml: unqualified: Unqualified access | border.color: activeFocus ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+studio/ScenePage.qml: unqualified: Unqualified access | border.color: activeFocus ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+studio/ScenePage.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/ScenePage.qml: unqualified: Unqualified access | border.width: activeFocus ? 2 : chosen ? 2 : FoamyStyle.borderWidth
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.accent
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.fieldFill
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.fieldFill
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.onSurface(FoamyPalette.error)
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.onSurface(FoamyPalette.error)
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.onSurface(FoamyPalette.error)
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.onSurface(FoamyPalette.error)
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/ScenePage.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/ScenePage.qml: unqualified: Unqualified access | detail: modelData === "picture" && !scene.pictureChosen ? FoamyI18n.t("studio.picture.choose") : ""
+studio/ScenePage.qml: unqualified: Unqualified access | enabled: scene.shapes.length < LockLayout.SHAPE_LIMITS.count
+studio/ScenePage.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/ScenePage.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/ScenePage.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/ScenePage.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/ScenePage.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/ScenePage.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/ScenePage.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/ScenePage.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.heading
+studio/ScenePage.qml: unqualified: Unqualified access | height: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.blur")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.color.custom")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.dim")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.motion." + m)
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.opacity")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.opacity")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.border." + color)
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.edge." + edge)
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.fill." + color)
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.off")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.radius")
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.style." + style)
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.shape.wrap." + mode)
+studio/ScenePage.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.tint." + t)
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.motion")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape." + boundRow.modelData)
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape." + boundRow.modelData)
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.border")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.borderWidth")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.down")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.edge")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.fill")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.inset")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.pad")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.padX")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.padY")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.remove")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.style")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.up")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.wraps")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.shape.zones")
+studio/ScenePage.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.tint")
+studio/ScenePage.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/ScenePage.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/ScenePage.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/ScenePage.qml: unqualified: Unqualified access | options: LockLayout.DRAWN_SOURCES
+studio/ScenePage.qml: unqualified: Unqualified access | options: LockLayout.FRAME_STYLES.map(function (style) {
+studio/ScenePage.qml: unqualified: Unqualified access | options: LockLayout.GLASS_TINTS.map(function (t) {
+studio/ScenePage.qml: unqualified: Unqualified access | options: LockLayout.MOTIONS.map(function (m) {
+studio/ScenePage.qml: unqualified: Unqualified access | options: LockLayout.SHAPE_EDGES.map(function (edge) {
+studio/ScenePage.qml: unqualified: Unqualified access | options: LockLayout.SHAPE_FILLS.map(function (color) {
+studio/ScenePage.qml: unqualified: Unqualified access | options: ["none"].concat(LockLayout.SHAPE_BORDERS).map(function (color) {
+studio/ScenePage.qml: unqualified: Unqualified access | parts.push(FoamyI18n.t("studio.video.size", [reply.width, reply.height]))
+studio/ScenePage.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/ScenePage.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/ScenePage.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property string colorValue: LockLayout.solidColor(background) || LockLayout.BACKGROUND_DEFAULTS.color
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property string colorValue: LockLayout.solidColor(background) || LockLayout.BACKGROUND_DEFAULTS.color
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property var look: app ? app.look : LockLayout.defaults()
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property var shapeDefaults: shape ? LockLayout.SHAPE_DEFAULTS[shape.kind] : ({})
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property var swatches: LockLayout.THEME_COLORS.concat([LockLayout.BLACK])
+studio/ScenePage.qml: unqualified: Unqualified access | readonly property var swatches: LockLayout.THEME_COLORS.concat([LockLayout.BLACK])
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.number(value, Math.abs(value - Math.round(value)) < 0.005 ? 0 : 2)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.decor." + choice)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.helperUnavailable")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.helperUnavailable")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.helperUnavailable")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.helperUnavailable")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.percent", Math.round(value * 100))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.picture.choosing")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.picture.failed", sources.pictureError)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.picture.missing")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.picture.preparing")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.alone", [kindLabel(item.kind), FoamyI18n.t("studio.shape.edge." + item.edge).toLowerCase()])
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.alone", [kindLabel(item.kind), FoamyI18n.t("studio.shape.edge." + item.edge).toLowerCase()])
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.around", [kindLabel(item.kind), names.map(function (name) {
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.aroundNothing", kindLabel(item.kind))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.frameText", FoamyI18n.t("studio.shape.style." + (item.style || "auto")))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.frameText", FoamyI18n.t("studio.shape.style." + (item.style || "auto")))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.shape.kind." + kind)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.source." + name)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.cancelled")
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.failed", failed)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.failed." + failed)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.limit." + code)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.limit.unsupported-codec", Draft.codecLabel(probeReply ? probeReply.codec : ""))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.megabytes", FoamyI18n.number(size.value, size.decimals))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.megabytes", FoamyI18n.number(size.value, size.decimals))
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.problem", code)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.problem", code)
+studio/ScenePage.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.video.problem." + code)
+studio/ScenePage.qml: unqualified: Unqualified access | return app && app.selected ? FoamyI18n.t("studio.decor.aroundModule", app.moduleLabel(app.selected)) : FoamyI18n.t("studio.decor.around")
+studio/ScenePage.qml: unqualified: Unqualified access | return app && app.selected ? FoamyI18n.t("studio.decor.aroundModule", app.moduleLabel(app.selected)) : FoamyI18n.t("studio.decor.around")
+studio/ScenePage.qml: unqualified: Unqualified access | return border[key] !== undefined ? border[key] : LockLayout.SHAPE_BORDER_DEFAULTS[key]
+studio/ScenePage.qml: unqualified: Unqualified access | return cardState === "checking" ? FoamyI18n.t("studio.video.checking") : ""
+studio/ScenePage.qml: unqualified: Unqualified access | return fill[key] !== undefined ? fill[key] : LockLayout.SHAPE_FILL_DEFAULTS[key]
+studio/ScenePage.qml: unqualified: Unqualified access | return known.indexOf(sources.pickError) !== -1 ? FoamyI18n.t("studio.pick." + sources.pickError) : FoamyI18n.t("studio.pick.failed", sources.pickError)
+studio/ScenePage.qml: unqualified: Unqualified access | return known.indexOf(sources.pickError) !== -1 ? FoamyI18n.t("studio.pick." + sources.pickError) : FoamyI18n.t("studio.pick.failed", sources.pickError)
+studio/ScenePage.qml: unqualified: Unqualified access | return length.minutes > 0 ? FoamyI18n.t("studio.video.minutes", [length.minutes, length.seconds]) : FoamyI18n.t("studio.video.seconds", length.seconds)
+studio/ScenePage.qml: unqualified: Unqualified access | return length.minutes > 0 ? FoamyI18n.t("studio.video.minutes", [length.minutes, length.seconds]) : FoamyI18n.t("studio.video.seconds", length.seconds)
+studio/ScenePage.qml: unqualified: Unqualified access | return output.cut ? FoamyI18n.t("studio.video.planCut", [60, output.width, output.height, rateText(output.fps)]) : FoamyI18n.t("studio.video.plan", [output.widt
+studio/ScenePage.qml: unqualified: Unqualified access | return output.cut ? FoamyI18n.t("studio.video.planCut", [60, output.width, output.height, rateText(output.fps)]) : FoamyI18n.t("studio.video.plan", [output.widt
+studio/ScenePage.qml: unqualified: Unqualified access | return probeReply && typeof probeReply.estimate === "number" ? FoamyI18n.t("studio.video.estimate", lengthText(probeReply.estimate)) : ""
+studio/ScenePage.qml: unqualified: Unqualified access | return text === "" || Draft.hexColor(text) !== "" || FoamyI18n.t("studio.color.invalid")
+studio/ScenePage.qml: unqualified: Unqualified access | return value === LockLayout.BLACK ? FoamyI18n.t("studio.color.black") : FoamyI18n.t("studio.color." + value)
+studio/ScenePage.qml: unqualified: Unqualified access | return value === LockLayout.BLACK ? FoamyI18n.t("studio.color.black") : FoamyI18n.t("studio.color." + value)
+studio/ScenePage.qml: unqualified: Unqualified access | return value === LockLayout.BLACK ? FoamyI18n.t("studio.color.black") : FoamyI18n.t("studio.color." + value)
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapTiny
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapTiny
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapTiny
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapTiny
+studio/ScenePage.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapTiny
+studio/ScenePage.qml: unqualified: Unqualified access | text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)]) : FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)]) : FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)]) : FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)]) : FoamyI18n
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.animation")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.background")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.color")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.glass")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.glassDim")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.lookHint")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.motion")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.pauseOnBattery")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.picture")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.picture.chooseButton")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape." + boundRow.modelData)
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.absorb")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.absorbNote")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.across")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.add")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.band")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.border")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.borderWidth")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.edge")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.fill")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.fill.autoHint")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.frost")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.frostNote")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.inner")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.inset")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.pad")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.padX")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.padY")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.radiusAuto")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.shape")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.style")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shape.wraps")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shapes.empty")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.source")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.source." + modelData)
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.tint")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.video")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.video.cancel")
+studio/ScenePage.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.video.convert")
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.choice !== "omarchy" || !scene.sources ? "" : scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo") : scene.sources.wallpa
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.choice !== "omarchy" || !scene.sources ? "" : scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo") : scene.sources.wallpa
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.estimateText() + " " + FoamyI18n.t("studio.video.why")
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.motionEnabled ? FoamyI18n.t("studio.motion.hint") : FoamyI18n.t("studio.motion.needsClip")
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.motionEnabled ? FoamyI18n.t("studio.motion.hint") : FoamyI18n.t("studio.motion.needsClip")
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.pictureChosen ? scene.background.path : FoamyI18n.t("studio.picture.none")
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full") : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickMo
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full") : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickMo
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full") : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickMo
+studio/ScenePage.qml: unqualified: Unqualified access | text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full") : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickMo
+studio/ScenePage.qml: unqualified: Unqualified access | text: visible ? FoamyI18n.t("studio.video.ready", scene.sizeText(scene.sources.clipBytes)) : ""
+studio/ScenePage.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.animation")
+studio/ScenePage.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.shape.add")
+studio/ScenePage.qml: unqualified: Unqualified access | to: scene.shape ? LockLayout.SHAPE_LIMITS.radius[scene.shapeKind].max : 1
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.sectionGap
+studio/ScenePage.qml: unqualified: Unqualified access | topPadding: FoamyStyle.sectionGap
+studio/ScenePage.qml: unqualified: Unqualified access | valueText: FoamyI18n.t("studio.px", FoamyI18n.number(shown, 0))
+studio/ScenePage.qml: unqualified: Unqualified access | valueText: FoamyI18n.t("studio.px", FoamyI18n.number(shown, 0))
+studio/ScenePage.qml: unqualified: Unqualified access | visible: scene.shape !== null && LockLayout.bottomBand([scene.shape])
+studio/ScenePage.qml: unqualified: Unqualified access | width: FoamyStyle.actionSize + FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: Unqualified access | width: FoamyStyle.actionSize + FoamyStyle.gapSmall
+studio/ScenePage.qml: unqualified: unknown grouped property scope field. | field.maximumLength: 7
+studio/ScenePage.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/ScenePage.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/ScenePage.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/ScenePage.qml: unresolved-type: Type field is used but it is not resolved | field.maximumLength: 7
+studio/SectionLabel.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/SectionLabel.qml: unqualified: Unqualified access | bottomPadding: FoamyStyle.gapTiny
+studio/SectionLabel.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/SectionLabel.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/SectionLabel.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/Segmented.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < options.length; i++)
+studio/Segmented.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/Segmented.qml: unqualified: Unqualified access | border.color: activeFocus ? FoamyPalette.accent : FoamyPalette.border
+studio/Segmented.qml: unqualified: Unqualified access | border.color: activeFocus ? FoamyPalette.accent : FoamyPalette.border
+studio/Segmented.qml: unqualified: Unqualified access | border.width: activeFocus ? 2 : FoamyStyle.borderWidth
+studio/Segmented.qml: unqualified: Unqualified access | color: FoamyPalette.fieldFill
+studio/Segmented.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/Segmented.qml: unqualified: Unqualified access | color: segment.selected ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/Segmented.qml: unqualified: Unqualified access | color: segment.selected ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/Segmented.qml: unqualified: Unqualified access | color: selected ? FoamyPalette.selectedFill : segmentMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/Segmented.qml: unqualified: Unqualified access | color: selected ? FoamyPalette.selectedFill : segmentMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/Segmented.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Segmented.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Segmented.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/Segmented.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/Segmented.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.controlHeight
+studio/Segmented.qml: unqualified: Unqualified access | leftPadding: FoamyStyle.controlPaddingX
+studio/Segmented.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/Segmented.qml: unqualified: Unqualified access | radius: Math.max(0, FoamyStyle.radiusSmall - 2)
+studio/Segmented.qml: unqualified: Unqualified access | rightPadding: FoamyStyle.gap
+studio/Segmented.qml: unqualified: Unqualified access | width: segmentLabel.implicitWidth + 2 * FoamyStyle.controlPaddingX
+studio/StepField.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StepField.qml: unqualified: Unqualified access | anchors.leftMargin: FoamyStyle.gapSmall
+studio/StepField.qml: unqualified: Unqualified access | anchors.rightMargin: FoamyStyle.gapSmall
+studio/StepField.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/StepField.qml: unqualified: Unqualified access | border.color: input.activeFocus ? FoamyPalette.accent : FoamyPalette.border
+studio/StepField.qml: unqualified: Unqualified access | border.color: input.activeFocus ? FoamyPalette.accent : FoamyPalette.border
+studio/StepField.qml: unqualified: Unqualified access | border.width: input.activeFocus ? 2 : FoamyStyle.borderWidth
+studio/StepField.qml: unqualified: Unqualified access | color: FoamyPalette.fieldFill
+studio/StepField.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/StepField.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/StepField.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StepField.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StepField.qml: unqualified: Unqualified access | color: buttonMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/StepField.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StepField.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StepField.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StepField.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StepField.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StepField.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StepField.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/StepField.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.subtitle
+studio/StepField.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.controlHeight - 6
+studio/StepField.qml: unqualified: Unqualified access | leftPadding: FoamyStyle.gapSmall
+studio/StepField.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.less", field.name)
+studio/StepField.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.more", field.name)
+studio/StepField.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/StepField.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/StepField.qml: unqualified: Unqualified access | return FoamyI18n.number(v, Math.round(v) === v ? 0 : 1)
+studio/StepField.qml: unqualified: Unqualified access | selectedTextColor: FoamyPalette.text
+studio/StepField.qml: unqualified: Unqualified access | selectionColor: FoamyPalette.selectedFill
+studio/StepField.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapTiny
+studio/StepField.qml: unqualified: Unqualified access | width: FoamyStyle.unitWidthCompact
+studio/StudioButton.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StudioButton.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/StudioButton.qml: unqualified: Unqualified access | border.color: activeFocus || checked ? FoamyPalette.accent : FoamyPalette.border
+studio/StudioButton.qml: unqualified: Unqualified access | border.color: activeFocus || checked ? FoamyPalette.accent : FoamyPalette.border
+studio/StudioButton.qml: unqualified: Unqualified access | border.width: primary ? 0 : activeFocus ? 2 : FoamyStyle.borderWidth
+studio/StudioButton.qml: unqualified: Unqualified access | color: button.primary ? FoamyPalette.onAccent : FoamyPalette.mutedText
+studio/StudioButton.qml: unqualified: Unqualified access | color: button.primary ? FoamyPalette.onAccent : FoamyPalette.mutedText
+studio/StudioButton.qml: unqualified: Unqualified access | color: button.primary ? FoamyPalette.onAccent : FoamyPalette.text
+studio/StudioButton.qml: unqualified: Unqualified access | color: button.primary ? FoamyPalette.onAccent : FoamyPalette.text
+studio/StudioButton.qml: unqualified: Unqualified access | color: primary ? FoamyPalette.accent : checked ? FoamyPalette.selectedFill : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StudioButton.qml: unqualified: Unqualified access | color: primary ? FoamyPalette.accent : checked ? FoamyPalette.selectedFill : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StudioButton.qml: unqualified: Unqualified access | color: primary ? FoamyPalette.accent : checked ? FoamyPalette.selectedFill : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StudioButton.qml: unqualified: Unqualified access | color: primary ? FoamyPalette.accent : checked ? FoamyPalette.selectedFill : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StudioButton.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioButton.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioButton.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioButton.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/StudioButton.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.controlHeight
+studio/StudioButton.qml: unqualified: Unqualified access | implicitWidth: row.implicitWidth + 2 * FoamyStyle.controlPaddingX
+studio/StudioButton.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/StudioButton.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/StudioButton.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/StudioButton.qml: unqualified: Unqualified access | width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth : button.width - 2 * FoamyStyle.controlPaddingX - button.leading - button.trailing
+studio/StudioButton.qml: unqualified: Unqualified access | x: button.horizontalAlignment === Text.AlignHCenter ? (button.width - width) / 2 : FoamyStyle.controlPaddingX + (button.LayoutMirroring.enabled ? button.trailin
+studio/StudioSlider.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StudioSlider.qml: unqualified: Unqualified access | anchors.leftMargin: FoamyStyle.gap
+studio/StudioSlider.qml: unqualified: Unqualified access | anchors.rightMargin: FoamyStyle.gap
+studio/StudioSlider.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/StudioSlider.qml: unqualified: Unqualified access | border.color: slider.activeFocus ? FoamyPalette.accent : FoamyPalette.border
+studio/StudioSlider.qml: unqualified: Unqualified access | border.color: slider.activeFocus ? FoamyPalette.accent : FoamyPalette.border
+studio/StudioSlider.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/StudioSlider.qml: unqualified: Unqualified access | border.width: slider.activeFocus ? 3 : FoamyStyle.borderWidth
+studio/StudioSlider.qml: unqualified: Unqualified access | color: FoamyPalette.fieldFill
+studio/StudioSlider.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/StudioSlider.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StudioSlider.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StudioSlider.qml: unqualified: Unqualified access | color: slider.activeFocus || drag.pressed ? FoamyPalette.accent : Qt.alpha(FoamyPalette.accent, 0.7)
+studio/StudioSlider.qml: unqualified: Unqualified access | color: slider.activeFocus || drag.pressed ? FoamyPalette.accent : Qt.alpha(FoamyPalette.accent, 0.7)
+studio/StudioSlider.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioSlider.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioSlider.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioSlider.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioSlider.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.controlHeight
+studio/StudioSlider.qml: unqualified: Unqualified access | opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+studio/StudioSlider.qml: unqualified: Unqualified access | radius: FoamyStyle.rounded ? 2 : 0
+studio/StudioSlider.qml: unqualified: Unqualified access | radius: FoamyStyle.rounded ? width / 2 : 2
+studio/StudioToggle.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StudioToggle.qml: missing-property: Member "controlHeight" not found on type "QObject" | readonly property int trackHeight: Math.max(18, Math.round(Style.spacing.controlHeight * 0.55))
+studio/StudioToggle.qml: unqualified: Unqualified access | anchors.rightMargin: FoamyStyle.gap
+studio/StudioToggle.qml: unqualified: Unqualified access | border.color: toggle.activeFocus ? toggle.accent : FoamyPalette.border
+studio/StudioToggle.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/StudioToggle.qml: unqualified: Unqualified access | color: toggle.checked ? FoamyPalette.onAccent : Qt.darker(toggle.foreground, 1.25)
+studio/StudioToggle.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioToggle.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioToggle.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.controlHeight
+studio/StudioToggle.qml: unqualified: Unqualified access | implicitWidth: (showLabel ? label.implicitWidth + FoamyStyle.gap : 0) + trackWidth + 6
+studio/StudioToggle.qml: unqualified: Unqualified access | readonly property color accent: FoamyPalette.accent
+studio/StudioToggle.qml: unqualified: Unqualified access | readonly property color foreground: FoamyPalette.text
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < buttonRow.children.length; i++) {
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < buttonRow.children.length; i++) {
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < monitors.length; i++)
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < panes.length; i++)
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < problems.length; i++)
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < screens.length; i++)
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var child = buttonRow.children[i]
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var child = buttonRow.children[i]
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var next = Draft.addShape(draft, "around", name)
+studio/StudioWindow.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var next = keep ? Draft.presetKeeping(draft, name) : Draft.setPreset(draft, name)
+studio/StudioWindow.qml: id-shadows-member: Id for object Studio.Library shadows property "library". Rename one or the other. | readonly property var panes: [library, canvasPane, inspectorPane, header]
+studio/StudioWindow.qml: id-shadows-member: Id for object Studio.PresetMenu shadows property "presetMenu". Rename one or the other. | presetMenu.close()
+studio/StudioWindow.qml: id-shadows-member: Note: Id defined here | id: library
+studio/StudioWindow.qml: id-shadows-member: Note: Id defined here | id: presetMenu
+studio/StudioWindow.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as LockLayout
+studio/StudioWindow.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | // Lock Studio's window content (mockup A, "Canvas"): a header (the screen
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyButton was not found. Did you add all imports and dependencies? | FoamyButton {
+studio/StudioWindow.qml: import: FoamyDropdown was not found. Did you add all imports and dependencies? | FoamyDropdown {
+studio/StudioWindow.qml: import: FoamyTextSettingField was not found. Did you add all imports and dependencies? | content: FoamyTextSettingField {
+studio/StudioWindow.qml: import: Found incomplete composite type IconButton. Do not use qmlplugindump. | import "." as Studio
+studio/StudioWindow.qml: import: Found incomplete composite type SampleView. Do not use qmlplugindump. | import "." as Studio
+studio/StudioWindow.qml: import: Warnings occurred while importing path ".": | import "." as Studio
+studio/StudioWindow.qml: renamed-type: "Checker" is explicitly renamed to "Studio.Checker" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.Checker" instead. | Checker {
+studio/StudioWindow.qml: renamed-type: "IconButton" is explicitly renamed to "Studio.IconButton" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.IconButton" instead. | IconButton {
+studio/StudioWindow.qml: renamed-type: "IconButton" is explicitly renamed to "Studio.IconButton" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.IconButton" instead. | IconButton {
+studio/StudioWindow.qml: renamed-type: "IconButton" is explicitly renamed to "Studio.IconButton" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.IconButton" instead. | IconButton {
+studio/StudioWindow.qml: renamed-type: "IconButton" is explicitly renamed to "Studio.IconButton" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.IconButton" instead. | IconButton {
+studio/StudioWindow.qml: renamed-type: "IconButton" is explicitly renamed to "Studio.IconButton" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.IconButton" instead. | IconButton {
+studio/StudioWindow.qml: renamed-type: "LockSources" is explicitly renamed to "Studio.LockSources" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.LockSources" instead. | LockSources {
+studio/StudioWindow.qml: renamed-type: "Segmented" is explicitly renamed to "Studio.Segmented" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.Segmented" instead. | Segmented {
+studio/StudioWindow.qml: renamed-type: "StudioToggle" is explicitly renamed to "Studio.StudioToggle" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.StudioToggle" instead. | StudioToggle {
+studio/StudioWindow.qml: renamed-type: "StudioToggle" is explicitly renamed to "Studio.StudioToggle" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Studio.StudioToggle" instead. | StudioToggle {
+studio/StudioWindow.qml: required: Component is missing required property modelData from SampleView | Checker {
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.presetName.plainHint")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.previewHint")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.quit.discardHint")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.reset.presetHint")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.reset.savedHint")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: FoamyI18n.t("studio.restore.savedHint")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked") : !studio.unapplied ? FoamyI18n.t("studio.matchesLock") : ""
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.description: studio.applyBlocked ? FoamyI18n.t("studio.applyBlocked") : !studio.unapplied ? FoamyI18n.t("studio.matchesLock") : ""
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.shortcuts")
+studio/StudioWindow.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.toolbar")
+studio/StudioWindow.qml: unqualified: Unqualified access | Component.onCompleted: triggerItem.focus = true
+studio/StudioWindow.qml: unqualified: Unqualified access | Layout.leftMargin: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | Layout.leftMargin: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | Layout.leftMargin: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | Layout.leftMargin: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | Layout.rightMargin: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | anchors.leftMargin: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | anchors.margins: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | anchors.margins: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | anchors.margins: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | anchors.rightMargin: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | body: FoamyI18n.t("studio.presets.deleteBody")
+studio/StudioWindow.qml: unqualified: Unqualified access | body: FoamyI18n.t("studio.quit.body") + (studio.applyBlocked ? "\n" + FoamyI18n.t("studio.applyBlocked") : "")
+studio/StudioWindow.qml: unqualified: Unqualified access | body: FoamyI18n.t("studio.quit.body") + (studio.applyBlocked ? "\n" + FoamyI18n.t("studio.applyBlocked") : "")
+studio/StudioWindow.qml: unqualified: Unqualified access | body: FoamyI18n.t("studio.reset.body", studio.basisLabel)
+studio/StudioWindow.qml: unqualified: Unqualified access | body: mode === "rename" ? FoamyI18n.t("studio.presetName.renameBody") : mode === "copy" ? FoamyI18n.t("studio.presetName.copyBody") : FoamyI18n.t("studio.preset
+studio/StudioWindow.qml: unqualified: Unqualified access | body: mode === "rename" ? FoamyI18n.t("studio.presetName.renameBody") : mode === "copy" ? FoamyI18n.t("studio.presetName.copyBody") : FoamyI18n.t("studio.preset
+studio/StudioWindow.qml: unqualified: Unqualified access | body: mode === "rename" ? FoamyI18n.t("studio.presetName.renameBody") : mode === "copy" ? FoamyI18n.t("studio.presetName.copyBody") : FoamyI18n.t("studio.preset
+studio/StudioWindow.qml: unqualified: Unqualified access | body: replaceOnly ? FoamyI18n.t("studio.presetAskReplace", pendingLabel) : FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, pendingLabel]) 
+studio/StudioWindow.qml: unqualified: Unqualified access | body: replaceOnly ? FoamyI18n.t("studio.presetAskReplace", pendingLabel) : FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, pendingLabel]) 
+studio/StudioWindow.qml: unqualified: Unqualified access | body: replaceOnly ? FoamyI18n.t("studio.presetAskReplace", pendingLabel) : FoamyI18n.tn("studio.presetAskBody", studio.changes, [studio.changes, pendingLabel]) 
+studio/StudioWindow.qml: unqualified: Unqualified access | body: studio.restoreReport && studio.savedAtText(studio.restoreReport.savedAt) ? FoamyI18n.t("studio.restore.bodyAt", studio.savedAtText(studio.restoreReport.sa
+studio/StudioWindow.qml: unqualified: Unqualified access | body: studio.restoreReport && studio.savedAtText(studio.restoreReport.savedAt) ? FoamyI18n.t("studio.restore.bodyAt", studio.savedAtText(studio.restoreReport.sa
+studio/StudioWindow.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/StudioWindow.qml: unqualified: Unqualified access | border.color: FoamyPalette.border
+studio/StudioWindow.qml: unqualified: Unqualified access | border.color: studio.applyBlocked ? FoamyPalette.error : FoamyPalette.warning
+studio/StudioWindow.qml: unqualified: Unqualified access | border.color: studio.applyBlocked ? FoamyPalette.error : FoamyPalette.warning
+studio/StudioWindow.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/StudioWindow.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/StudioWindow.qml: unqualified: Unqualified access | border.width: FoamyStyle.borderWidth
+studio/StudioWindow.qml: unqualified: Unqualified access | bottomPadding: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | caption: FoamyI18n.t("studio.state.caption")
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.accent
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.background
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.background
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.divider
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.divider
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.divider
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.menuFill
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.menuFill
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.menuFill
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.noteFill
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.onAccent
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StudioWindow.qml: unqualified: Unqualified access | color: FoamyPalette.text
+studio/StudioWindow.qml: unqualified: Unqualified access | color: Qt.alpha(FoamyPalette.background, 0.72)
+studio/StudioWindow.qml: unqualified: Unqualified access | color: Qt.alpha(FoamyPalette.background, 0.72)
+studio/StudioWindow.qml: unqualified: Unqualified access | color: kind === "error" ? FoamyPalette.error : FoamyPalette.warning
+studio/StudioWindow.qml: unqualified: Unqualified access | color: kind === "error" ? FoamyPalette.error : FoamyPalette.warning
+studio/StudioWindow.qml: unqualified: Unqualified access | color: modelData.reference || modelData.advice ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
+studio/StudioWindow.qml: unqualified: Unqualified access | color: modelData.reference || modelData.advice ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
+studio/StudioWindow.qml: unqualified: Unqualified access | color: modelData.reference || modelData.advice ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
+studio/StudioWindow.qml: unqualified: Unqualified access | color: modelData.reference || modelData.advice ? FoamyPalette.onSurface(FoamyPalette.warning) : FoamyPalette.onSurface(FoamyPalette.error)
+studio/StudioWindow.qml: unqualified: Unqualified access | columnSpacing: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | enabled: visible && studio.keptPreset !== null
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.family: FoamyStyle.monoFamily
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.heading
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.heading
+studio/StudioWindow.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.title
+studio/StudioWindow.qml: unqualified: Unqualified access | height: ghostLabel.implicitHeight + FoamyStyle.gapSmall * 2
+studio/StudioWindow.qml: unqualified: Unqualified access | height: questionColumn.implicitHeight + 2 * FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | height: shortcutColumn.implicitHeight + 2 * FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | if (!user && LockLayout.SELECTABLE_PRESETS.indexOf(name) === -1)
+studio/StudioWindow.qml: unqualified: Unqualified access | if (questionOpen || !LockLayout.findUserPreset(userPresets, id) || lockSources.presetBusy)
+studio/StudioWindow.qml: unqualified: Unqualified access | implicitHeight: problemColumn.implicitHeight + 2 * FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | keys: FoamyI18n.t("studio.key.help.keys")
+studio/StudioWindow.qml: unqualified: Unqualified access | keys: FoamyI18n.t("studio.key.redo.keys")
+studio/StudioWindow.qml: unqualified: Unqualified access | keys: FoamyI18n.t("studio.key.undo.keys")
+studio/StudioWindow.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.monitor")
+studio/StudioWindow.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.presetName.label")
+studio/StudioWindow.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.state.idle")
+studio/StudioWindow.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.state.noMedia")
+studio/StudioWindow.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.state.typing")
+studio/StudioWindow.qml: unqualified: Unqualified access | label: FoamyI18n.t("studio.state.wrong")
+studio/StudioWindow.qml: unqualified: Unqualified access | m.label = FoamyI18n.t("studio.monitor.reference", [m.width, m.height])
+studio/StudioWindow.qml: unqualified: Unqualified access | m.label = percent ? FoamyI18n.t("studio.monitor.screenScaled", [m.name, m.nativeWidth, m.nativeHeight, percent]) : FoamyI18n.t("studio.monitor.screen", [m.name,
+studio/StudioWindow.qml: unqualified: Unqualified access | m.label = percent ? FoamyI18n.t("studio.monitor.screenScaled", [m.name, m.nativeWidth, m.nativeHeight, percent]) : FoamyI18n.t("studio.monitor.screen", [m.name,
+studio/StudioWindow.qml: unqualified: Unqualified access | m.name = FoamyI18n.t("studio.monitor.unnamed", m.index + 1)
+studio/StudioWindow.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.help")
+studio/StudioWindow.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.preview")
+studio/StudioWindow.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.redo")
+studio/StudioWindow.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.reset")
+studio/StudioWindow.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.state")
+studio/StudioWindow.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.undo")
+studio/StudioWindow.qml: unqualified: Unqualified access | nameDefault = preset ? preset.name : Draft.uniqueName(FoamyI18n.t("studio.presetName.default", basisLabel), userPresets)
+studio/StudioWindow.qml: unqualified: Unqualified access | preset: LockLayout.DEFAULT_PRESET
+studio/StudioWindow.qml: unqualified: Unqualified access | preset: LockLayout.DEFAULT_PRESET
+studio/StudioWindow.qml: unqualified: Unqualified access | radius: FoamyStyle.radius
+studio/StudioWindow.qml: unqualified: Unqualified access | radius: FoamyStyle.radius
+studio/StudioWindow.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/StudioWindow.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/StudioWindow.qml: unqualified: Unqualified access | readonly property bool rightToLeft: FoamyI18n.rightToLeft
+studio/StudioWindow.qml: unqualified: Unqualified access | return Draft.nameProblem(text) === "" || FoamyI18n.t("studio.presetName.invalid")
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.coverArt.older")
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.helperUnavailable")
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.module." + name)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.percent", Math.round(value * 100))
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.preset." + name)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.problem." + problem.code, [moduleLabel(names[0] || ""), problem.shape + 1, where])
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.problem." + problem.code, [problem.shape + 1, where])
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.problem." + problem.code, where)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.problem.element-offscreen", [moduleLabel(names[0] || ""), where])
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.problem.element-overlap", [moduleLabel(names[0] || ""), moduleLabel(names[1] || ""), where])
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.problem.other", [problem.code, where])
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.result." + report.result)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.result.error", report.code)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.result.invalid", report.reason)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.result.locked." + (action === "preview" ? "preview" : "apply"))
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.result.unexpected")
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.style." + style)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.tag", [moduleLabel(name), styleLabel(item.style), Math.round(Draft.elementValue(item, "scale") * 100)])
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.zone." + zone)
+studio/StudioWindow.qml: unqualified: Unqualified access | return FoamyI18n.t(action !== "preview" && !report.confirmed ? (preset ? "studio.result.not-responding.preset" : "studio.result.not-responding.apply") : "studio
+studio/StudioWindow.qml: unqualified: Unqualified access | return code === "helper-unavailable" ? FoamyI18n.t("studio.helperUnavailable") : code
+studio/StudioWindow.qml: unqualified: Unqualified access | return isNaN(at.getTime()) ? "" : Qt.locale(FoamyI18n.formatLocale).toString(at, Locale.ShortFormat)
+studio/StudioWindow.qml: unqualified: Unqualified access | return names.length > 1 ? FoamyI18n.t("studio.problem.password-overlap", [moduleLabel(names[1]), where]) : FoamyI18n.t("studio.problem.password-covered", where)
+studio/StudioWindow.qml: unqualified: Unqualified access | return names.length > 1 ? FoamyI18n.t("studio.problem.password-overlap", [moduleLabel(names[1]), where]) : FoamyI18n.t("studio.problem.password-covered", where)
+studio/StudioWindow.qml: unqualified: Unqualified access | return width + Math.max(0, shown - 1) * FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | rowSpacing: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/StudioWindow.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.cancel")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.cancel")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.cancel")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.cancel")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.cancel")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.draft.corrupt")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.draft.loadFailed", codeText(report.code))
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.key." + parent.modelData + ".keys")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.key." + parent.modelData)
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presetKeep")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presetName.plain")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presetReplace")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.presets.deleteConfirm")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.quit.discard")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.reset.preset", studio.basisLabel)
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.reset.saved")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.restore.continue")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.restore.saved")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.shortcuts")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.snap")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.title")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.zones")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.t(op === "draft-save" ? "studio.draft.saveFailed" : "studio.draft.clearFailed", studio.codeText(result))
+studio/StudioWindow.qml: unqualified: Unqualified access | text: FoamyI18n.tn("studio.problem.more", problemColumn.sorted.length - 3)
+studio/StudioWindow.qml: unqualified: Unqualified access | text: lockSources.applying ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.apply")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: lockSources.applying ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.apply")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: nameDialog.mode === "rename" ? FoamyI18n.t("studio.presetName.rename") : FoamyI18n.t("studio.presetName.save")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: nameDialog.mode === "rename" ? FoamyI18n.t("studio.presetName.rename") : FoamyI18n.t("studio.presetName.save")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: problem ? studio.notice.text : unsaved ? FoamyI18n.t("studio.unsaved") : ""
+studio/StudioWindow.qml: unqualified: Unqualified access | text: studio.quitAfterApply ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.quit.apply")
+studio/StudioWindow.qml: unqualified: Unqualified access | text: studio.quitAfterApply ? FoamyI18n.t("studio.applying") : FoamyI18n.t("studio.quit.apply")
+studio/StudioWindow.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.presetAsk", pendingLabel)
+studio/StudioWindow.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.presets.deleteTitle", studio.userPresetName(studio.deleteAsked))
+studio/StudioWindow.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.quit.title")
+studio/StudioWindow.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.reset.title")
+studio/StudioWindow.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.restore.title")
+studio/StudioWindow.qml: unqualified: Unqualified access | title: mode === "rename" ? FoamyI18n.t("studio.presetName.renameTitle", studio.userPresetName(studio.nameTarget)) : mode === "copy" ? FoamyI18n.t("studio.preset
+studio/StudioWindow.qml: unqualified: Unqualified access | title: mode === "rename" ? FoamyI18n.t("studio.presetName.renameTitle", studio.userPresetName(studio.nameTarget)) : mode === "copy" ? FoamyI18n.t("studio.preset
+studio/StudioWindow.qml: unqualified: Unqualified access | title: mode === "rename" ? FoamyI18n.t("studio.presetName.renameTitle", studio.userPresetName(studio.nameTarget)) : mode === "copy" ? FoamyI18n.t("studio.preset
+studio/StudioWindow.qml: unqualified: Unqualified access | var preset = LockLayout.findUserPreset(userPresets, id)
+studio/StudioWindow.qml: unqualified: Unqualified access | var preset = id ? LockLayout.findUserPreset(userPresets, id) : null
+studio/StudioWindow.qml: unqualified: Unqualified access | var user = String(name).indexOf("user:") === 0 ? LockLayout.findUserPreset(userPresets, String(name).slice(5)) : null
+studio/StudioWindow.qml: unqualified: Unqualified access | var user = name.indexOf("user:") === 0 ? LockLayout.findUserPreset(userPresets, name.slice(5)) : null
+studio/StudioWindow.qml: unqualified: Unqualified access | var where = problem.reference ? FoamyI18n.t("studio.problem.reference", problem.label) : problem.label
+studio/StudioWindow.qml: unqualified: Unqualified access | width: Math.min(parent.width - 2 * FoamyStyle.padding, 460)
+studio/StudioWindow.qml: unqualified: Unqualified access | width: Math.min(parent.width - 2 * FoamyStyle.padding, Math.max(460, Math.min(620, question.buttonsWidth + 2 * FoamyStyle.padding)))
+studio/StudioWindow.qml: unqualified: Unqualified access | width: Math.min(parent.width - 2 * FoamyStyle.padding, Math.max(460, Math.min(620, question.buttonsWidth + 2 * FoamyStyle.padding)))
+studio/StudioWindow.qml: unqualified: Unqualified access | width: ghostLabel.implicitWidth + 2 * FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | width: parent ? parent.width : 0
+studio/StudioWindow.qml: unqualified: Unqualified access | width: parent ? parent.width : 0
+studio/StudioWindow.qml: unqualified: Unqualified access | width: parent.width - 2 * FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | width: parent.width - 2 * FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | width: parent.width - 2 * FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | x: FoamyStyle.gapLarge
+studio/StudioWindow.qml: unqualified: Unqualified access | x: FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | x: FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | y: FoamyStyle.gap
+studio/StudioWindow.qml: unqualified: Unqualified access | y: FoamyStyle.padding
+studio/StudioWindow.qml: unqualified: Unqualified access | y: FoamyStyle.padding
+studio/StudioWindow.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/StudioWindow.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/StudioWindow.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/StudioWindow.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/StudioWindow.qml: unresolved-type: Type IconButton is used but it is not resolved | IconButton {
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var c = 0; c < text.length; c++)
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var col = 0; col < glyph[row].length; col++) {
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < text.length; i++) {
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 2; i < points.length; i += 2)
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var p = 0.38; p < 0.7; p += 0.24) {
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var row = 0; row < 7; row++)
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var t = 0; t < 12; t += 3) {
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var a = t / 12 * Math.PI * 2
+studio/StyleArt.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var glyph = glyphs[text[i]]
+studio/StyleArt.qml: import: Elements.Backdrop was not found. Did you add all imports and dependencies? | Elements.Backdrop {
+studio/StyleArt.qml: import: File or directory you are trying to import does not exist: studio/elements. | import "elements" as Elements
+studio/StyleArt.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StyleArt.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | component WeatherIcon: FoamyIcon {
+studio/StyleArt.qml: missing-property: Member "background" not found on type "QObject" | color: Commons.Color.popups.background
+studio/StyleArt.qml: missing-property: Member "size" not found on type "Repeater" | width: parent.size
+studio/StyleArt.qml: unqualified: Unqualified access | LayoutMirroring.enabled: element === "decor" && FoamyI18n.rightToLeft
+studio/StyleArt.qml: unqualified: Unqualified access | anchors.horizontalCenter: parent.horizontalCenter
+studio/StyleArt.qml: unqualified: Unqualified access | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unqualified: Unqualified access | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unqualified: Unqualified access | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unqualified: Unqualified access | ctx.font = "bold " + size + "px \"" + FoamyStyle.fontFamily + "\""
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.monoFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.monoFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.family: FoamyStyle.monoFamily
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.body
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.display
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.display
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.display
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.display
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.display
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.heading
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.heading
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.iconLarge
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.subtitle
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.subtitle
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.subtitle
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.subtitle
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.title
+studio/StyleArt.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.title
+studio/StyleArt.qml: unqualified: Unqualified access | height: width
+studio/StyleArt.qml: unqualified: Unqualified access | height: width
+studio/StyleArt.qml: unqualified: Unqualified access | height: width
+studio/StyleArt.qml: unqualified: Unqualified access | height: width
+studio/StyleArt.qml: unqualified: Unqualified access | property color ink: FoamyPalette.text
+studio/StyleArt.qml: unqualified: Unqualified access | readonly property var locale: Qt.locale(FoamyI18n.formatLocale)
+studio/StyleArt.qml: unqualified: Unqualified access | text: FoamyI18n.number(12) + "°"
+studio/StyleArt.qml: unqualified: Unqualified access | text: FoamyI18n.number(root.sampleDate.getDate())
+studio/StyleArt.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.art.greeting")
+studio/StyleArt.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.art.week", FoamyI18n.number(45)) + " · " + root.dateText("d MMMM")
+studio/StyleArt.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.art.week", FoamyI18n.number(45)) + " · " + root.dateText("d MMMM")
+studio/StyleArt.qml: unqualified: Unqualified access | xScale: animationScreen.width / 480
+studio/StyleArt.qml: unqualified: Unqualified access | yScale: animationScreen.height / 300
+studio/StyleArt.qml: unqualified: unknown grouped property scope anchors. | anchors.horizontalCenter: parent.horizontalCenter
+studio/StyleArt.qml: unqualified: unknown grouped property scope anchors. | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unqualified: unknown grouped property scope anchors. | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unqualified: unknown grouped property scope anchors. | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unresolved-type: Type WeatherIcon is used but it is not resolved | WeatherIcon {
+studio/StyleArt.qml: unresolved-type: Type WeatherIcon is used but it is not resolved | WeatherIcon {
+studio/StyleArt.qml: unresolved-type: Type WeatherIcon is used but it is not resolved | WeatherIcon {
+studio/StyleArt.qml: unresolved-type: Type WeatherIcon is used but it is not resolved | WeatherIcon {
+studio/StyleArt.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.horizontalCenter: parent.horizontalCenter
+studio/StyleArt.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.verticalCenter: parent.verticalCenter
+studio/StyleArt.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.verticalCenter: parent.verticalCenter
+studio/StyleTiles.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/StyleTiles.qml: unqualified: Unqualified access | anchors.topMargin: FoamyStyle.gapTiny
+studio/StyleTiles.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+studio/StyleTiles.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+studio/StyleTiles.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : chosen ? FoamyPalette.accent : FoamyPalette.border
+studio/StyleTiles.qml: unqualified: Unqualified access | border.width: cursorHere ? 2 : FoamyStyle.borderWidth
+studio/StyleTiles.qml: unqualified: Unqualified access | color: chosen ? FoamyPalette.selectedFill : mouse.containsMouse ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StyleTiles.qml: unqualified: Unqualified access | color: chosen ? FoamyPalette.selectedFill : mouse.containsMouse ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StyleTiles.qml: unqualified: Unqualified access | color: chosen ? FoamyPalette.selectedFill : mouse.containsMouse ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/StyleTiles.qml: unqualified: Unqualified access | color: tile.chosen ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/StyleTiles.qml: unqualified: Unqualified access | color: tile.chosen ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/StyleTiles.qml: unqualified: Unqualified access | columnSpacing: FoamyStyle.gapSmall
+studio/StyleTiles.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/StyleTiles.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/StyleTiles.qml: unqualified: Unqualified access | height: art.height + name.implicitHeight + FoamyStyle.gapSmall * 2 + FoamyStyle.gapTiny
+studio/StyleTiles.qml: unqualified: Unqualified access | height: art.height + name.implicitHeight + FoamyStyle.gapSmall * 2 + FoamyStyle.gapTiny
+studio/StyleTiles.qml: unqualified: Unqualified access | ink: tile.chosen ? FoamyPalette.accent : FoamyPalette.text
+studio/StyleTiles.qml: unqualified: Unqualified access | ink: tile.chosen ? FoamyPalette.accent : FoamyPalette.text
+studio/StyleTiles.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/StyleTiles.qml: unqualified: Unqualified access | rowSpacing: FoamyStyle.gapSmall
+studio/StyleTiles.qml: unqualified: Unqualified access | width: parent.width - FoamyStyle.gapSmall * 2
+studio/StyleTiles.qml: unqualified: Unqualified access | width: parent.width - FoamyStyle.gapTiny * 2
+studio/StyleTiles.qml: unqualified: Unqualified access | x: FoamyStyle.gapSmall
+studio/StyleTiles.qml: unqualified: Unqualified access | x: FoamyStyle.gapTiny
+studio/StyleTiles.qml: unqualified: Unqualified access | y: FoamyStyle.gapSmall
+studio/Tips.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/Tips.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | FoamyIcon {
+studio/Tips.qml: import: FoamyIcon was not found. Did you add all imports and dependencies? | FoamyIcon {
+studio/Tips.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.tips")
+studio/Tips.qml: unqualified: Unqualified access | Layout.preferredHeight: FoamyStyle.iconSize
+studio/Tips.qml: unqualified: Unqualified access | Layout.preferredWidth: FoamyStyle.iconSize
+studio/Tips.qml: unqualified: Unqualified access | anchors.centerIn: parent
+studio/Tips.qml: unqualified: Unqualified access | border.color: FoamyPalette.accent
+studio/Tips.qml: unqualified: Unqualified access | color: FoamyPalette.accent
+studio/Tips.qml: unqualified: Unqualified access | color: FoamyPalette.divider
+studio/Tips.qml: unqualified: Unqualified access | color: FoamyPalette.menuFill
+studio/Tips.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/Tips.qml: unqualified: Unqualified access | color: FoamyPalette.mutedText
+studio/Tips.qml: unqualified: Unqualified access | color: FoamyPalette.secondaryText
+studio/Tips.qml: unqualified: Unqualified access | color: ghostMouse.containsMouse || ghost.activeFocus ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/Tips.qml: unqualified: Unqualified access | color: ghostMouse.containsMouse || ghost.activeFocus ? FoamyPalette.text : FoamyPalette.secondaryText
+studio/Tips.qml: unqualified: Unqualified access | color: ghostMouse.pressed ? FoamyPalette.selectedFill : ghostMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/Tips.qml: unqualified: Unqualified access | color: ghostMouse.pressed ? FoamyPalette.selectedFill : ghostMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
+studio/Tips.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Tips.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Tips.qml: unqualified: Unqualified access | font.family: FoamyStyle.fontFamily
+studio/Tips.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.bodySmall
+studio/Tips.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/Tips.qml: unqualified: Unqualified access | font.pixelSize: FoamyStyle.font.caption
+studio/Tips.qml: unqualified: Unqualified access | height: width
+studio/Tips.qml: unqualified: Unqualified access | implicitHeight: FoamyStyle.actionSize
+studio/Tips.qml: unqualified: Unqualified access | implicitHeight: column.implicitHeight + 2 * FoamyStyle.gapLarge
+studio/Tips.qml: unqualified: Unqualified access | implicitWidth: FoamyStyle.actionSize
+studio/Tips.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.tip.next")
+studio/Tips.qml: unqualified: Unqualified access | name: FoamyI18n.t("studio.tip.previous")
+studio/Tips.qml: unqualified: Unqualified access | radius: FoamyStyle.radiusSmall
+studio/Tips.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.tip." + id)
+studio/Tips.qml: unqualified: Unqualified access | return FoamyI18n.t("studio.tip.mugshotMissing")
+studio/Tips.qml: unqualified: Unqualified access | spacing: FoamyStyle.gap
+studio/Tips.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/Tips.qml: unqualified: Unqualified access | spacing: FoamyStyle.gapSmall
+studio/Tips.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.tip")
+studio/Tips.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.tip.count", [FoamyI18n.number(tips.index + 1, 0), FoamyI18n.number(tips.ids.length, 0)])
+studio/Tips.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.tip.count", [FoamyI18n.number(tips.index + 1, 0), FoamyI18n.number(tips.ids.length, 0)])
+studio/Tips.qml: unqualified: Unqualified access | text: FoamyI18n.t("studio.tip.count", [FoamyI18n.number(tips.index + 1, 0), FoamyI18n.number(tips.ids.length, 0)])
+studio/Tips.qml: unqualified: Unqualified access | width: FoamyStyle.iconSize
+studio/Tips.qml: unqualified: Unqualified access | width: parent.width - 2 * FoamyStyle.gapLarge
+studio/Tips.qml: unqualified: Unqualified access | x: FoamyStyle.gapLarge
+studio/Tips.qml: unqualified: Unqualified access | y: FoamyStyle.gapLarge
+studio/Tips.qml: unqualified: unknown grouped property scope anchors. | anchors.centerIn: parent
+studio/Tips.qml: unresolved-type: Type anchors is used but it is not resolved | anchors.centerIn: parent
+studio/ZonePicker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var tries = 0; tries < 3; tries++) {
+studio/ZonePicker.qml: import: File or directory you are trying to import does not exist: studio/Layout.js. | import "Layout.js" as Layout
+studio/ZonePicker.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/ZonePicker.qml: unqualified: Unqualified access | Accessible.name: FoamyI18n.t("studio.zone." + modelData)
+studio/ZonePicker.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : current ? FoamyPalette.accent : FoamyPalette.border
+studio/ZonePicker.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : current ? FoamyPalette.accent : FoamyPalette.border
+studio/ZonePicker.qml: unqualified: Unqualified access | border.color: cursorHere ? FoamyPalette.text : current ? FoamyPalette.accent : FoamyPalette.border
+studio/ZonePicker.qml: unqualified: Unqualified access | border.width: cursorHere ? 2 : FoamyStyle.borderWidth
+studio/ZonePicker.qml: unqualified: Unqualified access | color: current ? FoamyPalette.accent : mouse.containsMouse && open ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/ZonePicker.qml: unqualified: Unqualified access | color: current ? FoamyPalette.accent : mouse.containsMouse && open ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/ZonePicker.qml: unqualified: Unqualified access | color: current ? FoamyPalette.accent : mouse.containsMouse && open ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+studio/ZonePicker.qml: unqualified: Unqualified access | cursor = Math.max(0, Layout.ZONES.indexOf(multiple && zones.length > 0 ? zones[0] : zone))
+studio/ZonePicker.qml: unqualified: Unqualified access | if (cursor >= 0 && usable(Layout.ZONES[cursor]))
+studio/ZonePicker.qml: unqualified: Unqualified access | if (usable(Layout.ZONES[row * 3 + column])) {
+studio/ZonePicker.qml: unqualified: Unqualified access | model: Layout.ZONES
+studio/ZonePicker.qml: unqualified: Unqualified access | opacity: open ? 1 : FoamyStyle.disabledOpacity
+studio/ZonePicker.qml: unqualified: Unqualified access | picked(Layout.ZONES[cursor])
+studio/ZonePicker.qml: unqualified: Unqualified access | property var allowed: Layout.ZONES
+studio/ZonePicker.qml: unqualified: Unqualified access | radius: Math.min(3, FoamyStyle.radiusSmall)
+studio/ZonePicker.qml: unqualified: Unqualified access | var from = cursor >= 0 ? cursor : Math.max(0, Layout.ZONES.indexOf(zone))
+studio/shell.qml: import: File or directory you are trying to import does not exist: studio/kit. | import "kit"
+studio/shell.qml: missing-property: Member "catchQuit" not found on type "QObject" | if (testDriver.item && typeof testDriver.item.catchQuit === "function")
+studio/shell.qml: missing-property: Member "catchQuit" not found on type "QObject" | testDriver.item.catchQuit()
+studio/shell.qml: unqualified: Unqualified access | color: FoamyPalette.background
+studio/shell.qml: unqualified: Unqualified access | title: FoamyI18n.t("studio.title")

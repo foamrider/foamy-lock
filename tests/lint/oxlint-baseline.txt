@@ -1,0 +1,8 @@
+# oxlint findings accepted when the check was adopted. tests/validate.sh fails on any
+# finding not listed here. Regenerate with `tests/validate.sh --update-baseline oxlint`
+# only to drop fixed entries or after reviewing every added one; never to pass a check.
+Model.js: eslint(no-useless-escape): Unnecessary escape character '/' | var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
+Model.js: eslint(no-useless-escape): Unnecessary escape character '/' | var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
+Model.js: eslint(no-useless-escape): Unnecessary escape character '[' | var match = /^https:\/\/([^\/?#@:\[\]]+)(?::443)?(?:[\/?#]|$)/i.exec(text)
+elements/BackdropStill.js: eslint(no-unused-vars): Parameter 'fh' is declared but never used. | prepare: function(s, fw, fh) {
+elements/BackdropStill.js: eslint(no-unused-vars): Parameter 'fw' is declared but never used. | prepare: function(s, fw, fh) {
