@@ -46,7 +46,9 @@ if ((fast)); then
   skip "artwork_runtime.py, the i18n check, tests/harness.sh: offscreen Quickshell (--fast)"
   exit $status
 fi
-TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/foamy-lock-suite-XXXXXXXX") || exit 1
+# A short name: Quickshell's IPC socket lies four levels below each run's
+# tree, and a Unix socket path has room for 107 bytes.
+TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/fls-XXXX") || exit 1
 export TMPDIR
 unset LD_LIBRARY_PATH
 # Both use foamy-kit's preview helpers (harness, hostenv, i18n_runtime).
