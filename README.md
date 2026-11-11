@@ -333,7 +333,8 @@ native size up to 3840 x 2160, at most 150 MiB, without sound or metadata.
 The helper decodes the file and encodes the clip in two separate sandboxes,
 at idle priority with up to 16 threads (one conversion at a time, cancel any
 time, 10 minutes at most). It keeps at most three clips in
-`/omarchy/foamy.lock/video/`, the oldest evicted.
+`$XDG_CACHE_HOME/omarchy/foamy.lock/video/` (`~/.cache/omarchy/foamy.lock/video/`
+by default), the oldest evicted.
 
 **Shapes.** `background.shapes` is a list of at most four shapes (at most two
 of them frosted), drawn over the background and under every element, frosted
