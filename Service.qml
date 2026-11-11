@@ -198,6 +198,10 @@ Item {
   // done (wakeQueued: once the wake still running then is done).
   property bool wakeAfterBlank: false
   property bool wakeQueued: false
+  // A blank asked for while a wake runs: the wake's keyboard restore can land
+  // after the blank's keyboard off, leaving the backlight lit under a dark
+  // display, so the blank waits for the wake (unless a wake comes first).
+  property bool blankAfterWake: false
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -878,14 +882,18 @@ Item {
     runWake()
   }
 
-  function armBlankTimer() {
+  // `runUpMs`: the least time before the display blanks (a resume's
+  // idleBlankTimer.resumeMs); blankAfterSec when it is longer.
+  function armBlankTimer(runUpMs) {
     idleBlankTimer.armedAt = Date.now()
+    idleBlankTimer.runUpMs = runUpMs || 0
     if (settings.blankAfterSec === null) idleBlankTimer.stop()
     else idleBlankTimer.restart()
   }
 
   function runWake() {
     displayBlanked = false
+    blankAfterWake = false
     if (blankProcess.running) wakeAfterBlank = true
     if (!wakeProcess.running) wakeProcess.running = true
     if (lockRequested) armBlankTimer()
@@ -963,7 +971,8 @@ Item {
   function runBlank() {
     displayBlanked = true
     pauseFingerprint()
-    if (!blankProcess.running) blankProcess.running = true
+    if (wakeProcess.running) blankAfterWake = true
+    else if (!blankProcess.running) blankProcess.running = true
   }
 
   // blankProcess's end (also when it couldn't start): a wake that came
@@ -976,10 +985,19 @@ Item {
     else wakeProcess.running = true
   }
 
+  // wakeProcess's end (also when it couldn't start): a wake queued behind a
+  // blank runs again, or a blank that waited for this wake runs now.
   function wakeFinished() {
-    if (!wakeQueued) return
-    wakeQueued = false
-    if (!displayBlanked && !wakeProcess.running) wakeProcess.running = true
+    if (wakeQueued) {
+      wakeQueued = false
+      if (!displayBlanked && !wakeProcess.running) {
+        wakeProcess.running = true
+        return
+      }
+    }
+    if (!blankAfterWake) return
+    blankAfterWake = false
+    if (displayBlanked && !blankProcess.running) blankProcess.running = true
   }
 
   function submitPassword(value) {
@@ -1399,7 +1417,7 @@ Item {
         stop()
         root.fingerprintSleptWhilePaused = true
         root.resumeFingerprint()
-        root.armBlankTimer()
+        root.armBlankTimer(idleBlankTimer.resumeMs)
       } else if (slept || !root.fingerprintPaused || --ticksLeft <= 0) {
         stop()
       }
@@ -1720,7 +1738,13 @@ Item {
 
   Timer {
     id: idleBlankTimer
-    interval: root.settings.blankAfterSec === null ? 30000 : root.settings.blankAfterSec * 1000
+    // A resume reaches the lock as soon as the kernel thaws, seconds before
+    // the panel lights (on NVIDIA it waits out a VT switch and a modeset),
+    // so after one the display gets at least this run-up, as Omarchy's own
+    // lock gives it, even with a shorter blankAfterSec.
+    readonly property int resumeMs: 15000
+    property int runUpMs: 0
+    interval: Math.max(root.settings.blankAfterSec === null ? 30000 : root.settings.blankAfterSec * 1000, runUpMs)
     repeat: false
     property double armedAt: 0
     onTriggered: {
@@ -1728,7 +1752,7 @@ Item {
       // blank the freshly woken unlock screen under the user. Wall-clock time
       // exposes the gap: take a fresh run-up instead of blanking.
       if (Date.now() - armedAt > interval + 2000) {
-        root.armBlankTimer()
+        root.armBlankTimer(resumeMs)
         return
       }
       // Only a password check in flight should hold the display up. The

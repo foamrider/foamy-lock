@@ -130,6 +130,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testFoamyIpc: foamyLockIpc
   property alias testWake: wakeProcess
   property alias testBlank: blankProcess
+  property alias testIdleBlank: idleBlankTimer
   property bool testStaleLocked: false";
     let replacements = [
         ("import Quickshell.Wayland", "import \"mocks\" as Mock"),
@@ -167,12 +168,12 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
             "readonly property int weatherRetryMs: 10000",
             "readonly property int weatherRetryMs: 200",
         ),
-        // The wake and blank deadlines: 1 s and 3 s (display_commands waits
-        // them out). The blank's leaves the overlap cases, which hold a blank
+        // The wake and blank deadlines: 3 s each (display_commands waits
+        // them out). They leave the overlap cases, which hold one of them
         // while several IPC calls run, room on a loaded machine.
         (
             r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "15s"]"#,
-            r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "1s"]"#,
+            r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "3s"]"#,
         ),
         (
             r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]"#,
@@ -568,6 +569,7 @@ fn scenarios(test: &Test) -> R {
     fingerprint(test)?;
     stranded(test)?;
     display_commands(test)?;
+    blank_after_resume(test)?;
     test.test("missingPam")?;
     ensure!(test.lock("lock")? == "missing-pam");
     ensure!(!on(&test.status()?, "locked")?);
@@ -2323,7 +2325,7 @@ fn display_commands(test: &Test) -> R {
     let started = Instant::now();
     test.wait_for(|_| Ok(!running("wake")?))?;
     ensure!(
-        started.elapsed() < Duration::from_millis(3500),
+        started.elapsed() < Duration::from_millis(5000),
         "the wake deadline stops it: {:?}",
         started.elapsed()
     );
@@ -2394,6 +2396,50 @@ fn display_commands(test: &Test) -> R {
     ensure!(wakes() == before + 1, "a later blank stands");
     ensure!(on(&test.test_json("displayCommands")?, "blanked")?);
 
+    // A blank while a wake runs waits for it: the wake's keyboard restore
+    // would land after the blank's keyboard off. The wake is held (its sleep
+    // in wake-pid) until the case has made its calls.
+    let release = |file: &str| -> R {
+        let pid = read(&test.path(file))?;
+        let _ = Command::new("kill").arg(pid.trim()).status();
+        Ok(())
+    };
+    test.test("wake")?;
+    test.wait_for(|_| Ok(!running("wake")? && !running("blank")?))?;
+    let _ = fs::remove_file(test.path("wake-pid"));
+    write(&hang, "")?;
+    let blanks = displays();
+    test.test("wake")?;
+    test.wait_for(|_| Ok(test.path("wake-pid").exists() && running("wake")?))?;
+    let state = test.test_json("blankNow")?;
+    ensure!(
+        on(&state, "wake")? && !on(&state, "blank")? && on(&state, "blankQueued")?,
+        "the blank waits for the wake: {state}"
+    );
+    ensure!(displays() == blanks, "no display off while the wake runs");
+    unlink(&hang)?;
+    release("wake-pid")?;
+    test.wait_for(|_| Ok(!running("wake")? && displays() == blanks + 1))?;
+    test.wait_for(|_| Ok(!running("blank")?))?;
+    ensure!(on(&test.test_json("displayCommands")?, "blanked")?);
+    // A wake in between drops the waiting blank.
+    unlink(&test.path("wake-pid"))?;
+    write(&hang, "")?;
+    let blanks = displays();
+    test.test("wake")?;
+    test.wait_for(|_| Ok(test.path("wake-pid").exists() && running("wake")?))?;
+    ensure!(on(&test.test_json("blankNow")?, "blankQueued")?);
+    test.test("wake")?;
+    unlink(&hang)?;
+    release("wake-pid")?;
+    test.wait_for(|_| Ok(!running("wake")?))?;
+    ms(400);
+    let state = test.test_json("displayCommands")?;
+    ensure!(
+        displays() == blanks && !on(&state, "blanked")? && !on(&state, "blankQueued")?,
+        "a later wake stands: {state}"
+    );
+
     // Without overlap a wake runs once.
     let before = wakes();
     test.test("wake")?;
@@ -2401,7 +2447,61 @@ fn display_commands(test: &Test) -> R {
     ms(400);
     ensure!(wakes() == before + 1);
     println!(
-        "PASS: hung wake and blank stopped at their deadlines with their children, later ones still run, a wake during a blank runs again after it"
+        "PASS: hung wake and blank stopped at their deadlines with their children, later ones still run, a wake during a blank runs again after it, a blank during a wake runs after it unless a wake came"
+    );
+    Ok(())
+}
+
+/// After a resume the display gets Omarchy's 15 s run-up before it blanks,
+/// even with a shorter blankAfterSec: the panel lights seconds after the
+/// lock hears of the resume.
+fn blank_after_resume(test: &Test) -> R {
+    let calls = test.path("calls");
+    let displays = || {
+        fs::read_to_string(&calls)
+            .map(|text| {
+                text.lines()
+                    .filter(|line| *line == "omarchy-brightness-display")
+                    .count()
+            })
+            .unwrap_or(0)
+    };
+    let display = || test.test_json("displayCommands");
+    test.write_config(STOCK_OFF, json!({"blankAfterSec": 2}))?;
+    test.wait_for(|s| Ok(num(s, "settings.blankAfterSec")? == 2.0))?;
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|s| on(s, "secure"))?;
+    ensure!(num(&display()?, "blankInterval")? == 2000.0);
+
+    // The idle countdown froze through a suspend: it fires late, and takes
+    // the resume run-up instead of blanking.
+    let blanks = displays();
+    test.test("blankGap")?;
+    test.wait_for(|_| Ok(num(&display()?, "blankInterval")? == 15000.0))?;
+    ensure!(on(&display()?, "blankArmed")?);
+    ms(3000);
+    ensure!(
+        displays() == blanks && !on(&display()?, "blanked")?,
+        "no blank 2 s after a resume"
+    );
+    // Input is the user back: blankAfterSec again.
+    test.test("wake")?;
+    ensure!(num(&display()?, "blankInterval")? == 2000.0);
+    test.wait_for(|_| Ok(displays() == blanks + 1))?;
+
+    // A resume the fingerprint's watch sees (the lock asked for again
+    // while blanked, before a suspend): the same run-up.
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|_| on(&test.fingerprint()?, "resumeWatching"))?;
+    test.test("sleepGap")?;
+    test.wait_for(|_| Ok(num(&display()?, "blankInterval")? == 15000.0))?;
+
+    test.submit("test-password")?;
+    test.wait_for(|s| Ok(!on(s, "locked")?))?;
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(num(s, "settings.blankAfterSec")? == 30.0))?;
+    println!(
+        "PASS: after a resume (a late idle countdown, the fingerprint's resume watch) the display gets the 15 s run-up, and blankAfterSec again after input"
     );
     Ok(())
 }
@@ -2446,7 +2546,7 @@ Item {
         assert!(patched.contains("locked: testStaleLocked || lockRequested"));
         assert!(patched.contains("weatherPollMs: 2500") && patched.contains("weatherRetryMs: 200"));
         assert!(
-            patched.contains(r#"wakeDeadline: ["timeout", "--kill-after=1s", "1s"]"#)
+            patched.contains(r#"wakeDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
                 && patched.contains(r#"blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
         );
         assert!(patched.contains("root.home + \"/fake-video-probe\"]"));
