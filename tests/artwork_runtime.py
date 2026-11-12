@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import platform
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -32,10 +31,15 @@ cache = base / "cache"
 cache.mkdir()
 shutil.copy(source / "Model.js", app)
 # The worker's command, switchable to one that can't start (no exited(),
-# only `running` going false).
+# only `running` going false), and a count of started jobs (the helper's own
+# record misses a job cancelled before the helper read its request).
 controller = (source / "Artwork.qml").read_text()
 for before, after in [
-    ("  property bool busy: false\n", "  property bool busy: false\n  property bool testUnstartable: false\n"),
+    (
+        "  property bool busy: false\n",
+        "  property bool busy: false\n  property bool testUnstartable: false\n  property int testStarts: 0\n",
+    ),
+    ("    lastStarted = Date.now()\n", "    lastStarted = Date.now()\n    testStarts += 1\n"),
     (
         "    command: FoamyNative.command(",
         '    command: root.testUnstartable ? [root.cacheHome + "/no-such-command"] : FoamyNative.command(',
@@ -46,8 +50,10 @@ for before, after in [
 (app / "Artwork.qml").write_text(controller)
 # The plugin's stamped kit (FoamyNative) and a recording stand-in for the
 # helper at bin/<arch>/foamy-lock-helper: it logs each real invocation and
-# execs the real helper. The slow case deliberately returns after SIGTERM to
-# prove that generation checks reject results from a cancelled job.
+# execs the real helper. The slow case ignores SIGTERM and answers only once
+# the test creates $HOME/release-slow (or after 20 s), so the test cancels it
+# while it surely runs and proves that generation checks reject the late
+# result of a cancelled job.
 (app / "kit").symlink_to(source / "kit", target_is_directory=True)
 machine = platform.machine()
 helper = app / "bin" / machine / "foamy-lock-helper"
@@ -62,7 +68,10 @@ with open(os.environ["HOME"] + "/jobs", "a") as record:
     record.write(request["url"] + "\\n")
 if request["url"].endswith("slow.png"):
     signal.signal(signal.SIGTERM, lambda *_: None)
-    time.sleep(0.8)
+    release = os.environ["HOME"] + "/release-slow"
+    deadline = time.monotonic() + 20
+    while not os.path.exists(release) and time.monotonic() < deadline:
+        time.sleep(0.02)
     print(json.dumps({"ok": True, "path": os.environ["XDG_CACHE_HOME"] + "/omarchy/foamy.lock/artwork/" + "a" * 64 + ".png"}))
 else:
     read, write = os.pipe()
@@ -93,12 +102,22 @@ ShellRoot {
     function track(url: string, title: string): string {
       fixturePlayer.trackTitle = title; fixturePlayer.trackArtUrl = url; return "ok"
     }
+    // A burst of track changes in one call ("url<TAB>title" lines): separate
+    // IPC calls can land further apart than the debounce window on a busy
+    // machine. Not JSON: qs ipc reads a JSON array as several arguments.
+    function tracks(list: string): string {
+      for (const line of list.split("\n")) {
+        const [url, title] = line.split("\t")
+        fixturePlayer.trackTitle = title; fixturePlayer.trackArtUrl = url
+      }
+      return "ok"
+    }
     function lock(value: bool): string { artwork.locked = value; return "ok" }
     function enabled(value: bool): string { artwork.allowed = value; return "ok" }
     function unstartable(value: bool): string { artwork.testUnstartable = value; return "ok" }
     function status(): string {
       return JSON.stringify({state: artwork.state, error: artwork.error, path: artwork.path,
-        busy: artwork.busy, entries: artwork.entries.length})
+        busy: artwork.busy, entries: artwork.entries.length, starts: artwork.testStarts})
     }
   }
 }
@@ -112,9 +131,8 @@ env = dict(
     QT_QPA_PLATFORMTHEME="basic",
     QT_STYLE_OVERRIDE="Fusion",
 )
-for name in ("DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DBUS_SESSION_BUS_ADDRESS"):
-    env.pop(name, None)
-# No Omarchy command, audio server or system bus: the controller runs only the helper.
+# No Omarchy command, audio server, display or desktop bus: the controller
+# runs only the helper (qs gets dbus-run-session's private bus).
 hostenv.isolate(env, base)
 
 
@@ -152,12 +170,12 @@ def jobs():
 
 log_path = base / "runtime.log"
 with log_path.open("w") as log:
-    process = subprocess.Popen(
+    # The group takes dbus-run-session, its bus, qs and the helpers qs started.
+    shell = hostenv.ProcessGroup(
         ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
         env=env,
         stdout=log,
         stderr=log,
-        start_new_session=True,
     )
     try:
         wait_for(lambda s: s["state"] == "empty")
@@ -191,17 +209,21 @@ with log_path.open("w") as log:
         ipc("track", (cache / "slow.png").as_uri(), "Slow")
         wait_for(lambda s: s["busy"] and len(jobs()) > count)
         ipc("lock", "true")
+        (base / "release-slow").touch()
         wait_for(lambda s: not s["busy"])
         assert status()["state"] == "locked-miss" and not status()["path"], "late cancelled result was accepted"
+        # Unlocking retries the cancelled track (released, so it answers at
+        # once); let it settle so its job can't count towards the burst.
         ipc("lock", "false")
+        wait_for(lambda s: s["state"] == "ready" and not s["busy"])
         # Several changes inside the debounce window should launch only the last.
-        count = len(jobs())
-        ipc("track", first, "Changing 1")
-        ipc("track", first, "Changing 2")
-        ipc("track", second, "Final")
+        count, starts = len(jobs()), status()["starts"]
+        burst = [(first, "Changing 1"), (first, "Changing 2"), (second, "Final")]
+        # qs ipc exits 0 when a call is refused; only the answer says it ran.
+        assert ipc("tracks", "\n".join(url + "\t" + title for url, title in burst)) == "ok"
         ready = wait_for(lambda s: s["state"] == "ready" and not s["busy"])
-        assert ready["path"] != first_path
-        assert len(jobs()) == count + 1
+        assert ready["path"] != first_path and Path(ready["path"]).is_file()
+        assert ready["starts"] == starts + 1 and len(jobs()) == count + 1, "a burst started more than one job"
         # A worker that can't start reports no exit: the job still ends (no
         # busy left behind, well before the 10 s watchdog), and later tracks
         # still get a worker.
@@ -239,8 +261,6 @@ with log_path.open("w") as log:
             "PASS: real thumbnail, locked cache hit/miss, denied HTTPS, failure backoff, cancellation, stale result, coalescing, unstartable worker, unavailable helper, disabled artwork"
         )
     finally:
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
-            process.wait(timeout=3)
+        shell.stop()
         print(log_path.read_text())
         print("Artwork runtime evidence:", base)
