@@ -28,7 +28,6 @@ and FOAMY_LOCK_TEST_CONNECT (the checked address -> a loopback endpoint).
 import fcntl
 import hashlib
 import http.server
-import ipaddress
 import json
 import os
 from pathlib import Path
@@ -687,20 +686,6 @@ def respond(status, headers=(), body=b"", chunked=False, delay=0):
     return route
 
 
-def public(address):
-    """The helper's address rule, as artwork.py had it (Python 3.14 ipaddress)."""
-    ip = ipaddress.ip_address(address)
-    return not (
-        not ip.is_global
-        or ip.is_multicast
-        or ip.is_unspecified
-        or getattr(ip, "ipv4_mapped", None) is not None
-        or getattr(ip, "sixtofour", None) is not None
-        or getattr(ip, "teredo", None) is not None
-        or (ip.version == 6 and ip in ipaddress.ip_network("64:ff9b::/96"))
-    )
-
-
 class HttpsBase(Workspace):
     @classmethod
     def setUpClass(cls):
@@ -773,6 +758,10 @@ class Https(HttpsBase):
         self.assertEqual(self.server.requests, [])
 
     def test_dns_rejects_nonpublic_and_mixed_answers(self):
+        # Expectations are fixed here, not derived from the running Python's
+        # ipaddress: its special-purpose tables change between releases and
+        # distribution builds (3fff::/20 and the CVE-2024-4032 ranges are
+        # missing from some 3.12 builds), and the helper follows Python 3.14.
         refused = [
             "127.0.0.1",
             "10.0.0.1",
@@ -785,19 +774,13 @@ class Https(HttpsBase):
             "::ffff:8.8.8.8",
             "2002:0808:0808::1",
             "64:ff9b::7f00:1",
-        ]
-        more = [
             "100.64.0.1",
             "100.127.255.255",
             "172.16.0.1",
             "172.31.255.255",
-            "172.32.0.1",
             "192.0.0.8",
-            "192.0.0.9",
-            "192.0.0.10",
             "192.0.0.170",
             "192.0.2.1",
-            "192.88.99.1",
             "192.168.1.1",
             "198.18.0.1",
             "198.51.100.1",
@@ -805,40 +788,43 @@ class Https(HttpsBase):
             "240.0.0.1",
             "255.255.255.255",
             "239.255.255.255",
+            "2001:db8::1",
+            "2001::1",
+            "2001:1::3",
+            "3fff::1",
+            "ff02::1",
+            "::",
+            "100::1",
+            "64:ff9b:1::1",
+        ]
+        allowed = [
+            "172.32.0.1",
+            "192.0.0.9",
+            "192.0.0.10",
+            "192.88.99.1",
             "1.1.1.1",
             "9.9.9.9",
             "11.0.0.1",
             "2606:4700::1111",
-            "2001:db8::1",
-            "2001::1",
             "2001:1::1",
-            "2001:1::3",
             "2001:3::1",
             "2001:4:112::1",
             "2001:20::1",
             "2001:30::1",
             "2001:200::1",
-            "3fff::1",
             "4000::1",
             "fec0::1",
-            "ff02::1",
-            "::",
             "::2",
-            "100::1",
-            "64:ff9b:1::1",
             "64:ff9b::1:0:0",
             "::8.8.8.8",
             "2a00:1450:4001::200e",
         ]
-        for address in refused + more:
+        for address in refused + allowed:
             with self.subTest(address=address):
                 error = self.fetch(
                     "https://images.example.com/a", resolve={"images.example.com": ["8.8.8.8", address]}
                 )["error"]
-                if address in refused or not public(address):
-                    self.assertEqual(error, "non-public-address")
-                else:
-                    self.assertEqual(error, "http-error")
+                self.assertEqual(error, "non-public-address" if address in refused else "http-error")
         self.assertEqual(
             self.fetch("https://images.example.com/a", resolve={"images.example.com": []})["error"], "dns-failed"
         )
