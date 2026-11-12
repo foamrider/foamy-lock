@@ -333,7 +333,8 @@ native size up to 3840 x 2160, at most 150 MiB, without sound or metadata.
 The helper decodes the file and encodes the clip in two separate sandboxes,
 at idle priority with up to 16 threads (one conversion at a time, cancel any
 time, 10 minutes at most). It keeps at most three clips in
-`/omarchy/foamy.lock/video/`, the oldest evicted.
+`$XDG_CACHE_HOME/omarchy/foamy.lock/video/` (`~/.cache/omarchy/foamy.lock/video/`
+by default), the oldest evicted.
 
 **Shapes.** `background.shapes` is a list of at most four shapes (at most two
 of them frosted), drawn over the background and under every element, frosted
@@ -475,8 +476,8 @@ Open **Lock Studio** from the app launcher, or run the helper:
 Opening it again brings the open window to the front.
 
 **The launcher entry.**
-- **Added automatically:** about 20 seconds after the shell starts, the lock adds the entry (`studio ensure`). It writes `~/.local/share/applications/foamy-lock-studio.desktop` and the icon under `~/.local/share/icons/hicolor/`, and it rewrites them only when they've changed, for example after the plugin moves.
-- **Removed with the plugin:** the entry's command starts the helper while the helper is there. Once the plugin is gone, choosing the entry removes it and its icon. Omarchy has no removal hook, and its launcher ignores `TryExec`.
+- **Added automatically:** about 20 seconds after the shell starts, the lock adds the entry (`studio ensure`). It writes `~/.local/share/applications/foamy-lock-studio.desktop` and the icon under `~/.local/share/icons/hicolor/`, and it rewrites them only when they've changed, for example after the plugin moves. It records what it wrote (`~/.local/state/foamy-lock/launcher-files`, SHA-256 only) and never replaces a file you edited, such as an entry with `NoDisplay=true` or your own icon; `studio install` replaces both.
+- **Removed with the plugin:** the entry's command starts the helper while the helper is there, waiting 2 seconds for one that is briefly missing during an update. Once the plugin is gone (no `manifest.json`), choosing the entry removes it and its icon, unless you edited them. Omarchy has no removal hook, and its launcher ignores `TryExec`.
 - **Turning it off:** `studio uninstall` removes the entry and keeps it off. `studio install` adds it again.
 
 **Editing.** Drag an element on the canvas; it snaps to where it would sit in each
@@ -928,8 +929,7 @@ still require supervised validation after installation.
 
 The harness tests run on Omarchy 4.5: `FOAMY_HOST_45` (a
 `shell` directory), else `$OMARCHY_TEST_ROOT/shell`, else the installed
-`/usr/share/omarchy/shell`. `--host 4.0` and `--host both` run 4.0 only when
-`FOAMY_HOST_40` names a 4.0 shell; otherwise they print a SKIP line for it.
+`/usr/share/omarchy/shell`.
 The runtime suite supplies both PAM-file fixtures and simulated authentication;
 it does not require an enrolled fingerprint or change the host session.
 
@@ -1016,4 +1016,4 @@ right-to-left layout for right-to-left languages (media transport buttons keep t
 order). Plugin language overrides are no longer used.
 Missing translations fall back to English.
 
-Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed 4.5 shell. Set `OMARCHY_PATH` to another Omarchy tree to check that one.
+Translation checks: `python3 "$FOAMY_KIT/preview/i18n_runtime.py" .` (foamy-kit's shared check) switches the language live in an isolated shell and checks the catalogs, the English fallback, plurals and right-to-left layout.

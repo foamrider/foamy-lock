@@ -31,12 +31,15 @@ FocusScope {
   implicitWidth: grid.implicitWidth
   implicitHeight: grid.implicitHeight
   activeFocusOnTab: true
-  onActiveFocusChanged: if (activeFocus) cursor = Math.max(0, Layout.ZONES.indexOf(multiple && zones.length > 0 ? zones[0] : zone))
+  onActiveFocusChanged: if (activeFocus)
+    cursor = Math.max(0, Layout.ZONES.indexOf(multiple && zones.length > 0 ? zones[0] : zone))
 
   Accessible.role: Accessible.List
   Accessible.name: name
 
-  function usable(zone) { return allowed.indexOf(zone) !== -1 }
+  function usable(zone) {
+    return allowed.indexOf(zone) !== -1
+  }
 
   // Move by dx columns (on screen) and dy rows to the next usable cell.
   function step(dx, dy) {
@@ -46,7 +49,8 @@ FocusScope {
     for (var tries = 0; tries < 3; tries++) {
       row += dy
       column += across
-      if (row < 0 || row > 2 || column < 0 || column > 2) return
+      if (row < 0 || row > 2 || column < 0 || column > 2)
+        return
       if (usable(Layout.ZONES[row * 3 + column])) {
         cursor = row * 3 + column
         return
@@ -54,18 +58,28 @@ FocusScope {
     }
   }
 
-  Keys.onPressed: function(event) {
+  Keys.onPressed: function (event) {
     switch (event.key) {
-    case Qt.Key_Left: step(-1, 0); break
-    case Qt.Key_Right: step(1, 0); break
-    case Qt.Key_Up: step(0, -1); break
-    case Qt.Key_Down: step(0, 1); break
+    case Qt.Key_Left:
+      step(-1, 0)
+      break
+    case Qt.Key_Right:
+      step(1, 0)
+      break
+    case Qt.Key_Up:
+      step(0, -1)
+      break
+    case Qt.Key_Down:
+      step(0, 1)
+      break
     case Qt.Key_Return:
     case Qt.Key_Enter:
     case Qt.Key_Space:
-      if (cursor >= 0 && usable(Layout.ZONES[cursor])) picked(Layout.ZONES[cursor])
+      if (cursor >= 0 && usable(Layout.ZONES[cursor]))
+        picked(Layout.ZONES[cursor])
       break
-    default: return
+    default:
+      return
     }
     event.accepted = true
   }
@@ -99,7 +113,8 @@ FocusScope {
         Accessible.checkable: true
         Accessible.checked: current
         Accessible.focused: cursorHere
-        Accessible.onPressAction: if (open) picker.picked(modelData)
+        Accessible.onPressAction: if (open)
+          picker.picked(modelData)
 
         MouseArea {
           id: mouse

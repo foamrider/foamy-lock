@@ -40,13 +40,18 @@
 //!     `{"ok": true, "clip": "<cache>/video/<sha256 of the input>-<W>x<H>.mp4",
 //!     "bytes", "frames", "output"}` (at once when that clip exists). One
 //!     conversion at a time (`busy`); a violation fails with its own code.
-//!     SIGTERM stops both stages and replies `cancelled`; 10 minutes in all
-//!     (`job-timeout`). A failure leaves nothing behind: `decode-failed`
+//!     SIGTERM stops both stages and replies `cancelled`. The stages get
+//!     what is left of 10 minutes from the helper's start (`job-timeout`
+//!     once that is used up); if they are still running 10 s after those
+//!     10 minutes, the helper replies `job-timeout` itself and exits (the
+//!     stages die with it), so a conversion ends within 610 s. A
+//!     failure leaves nothing behind: `decode-failed`
 //!     (ffprobe or stage A did not exit 0), `invalid-frames` (no frame, a
 //!     partial one, or more than 60 s of them), `encode-failed`,
 //!     `output-too-large` (over 150 MiB), `source-changed` (the file
 //!     changed while it was read).
-//!   - Other codes: `video-missing`, `not-regular-file`,
+//!   - Other codes: `no-video` (ffprobe found no video stream; probe and
+//!     convert), `video-missing`, `not-regular-file`,
 //!     `decoder-unavailable` (no bwrap, ffmpeg or ffprobe),
 //!     `sandbox-architecture-unsupported`, `decode-timeout`,
 //!     `invalid-pixels`, `unsafe-cache`, `cache-busy`, `cancelled`,

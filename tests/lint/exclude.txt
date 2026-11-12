@@ -1,0 +1,2 @@
+# Paths a check must not read: `<glob> [checks]  # reason` (foamy-kit tests/validate.sh).
+tests/harness/*.qml  qmllint  # harness scenes and fixtures: tests/harness writes them into a temporary app beside the plugin's files, so their imports ("fixtures", "mocks", "baseline", "Layout.js", the stand-in Commons) exist only there

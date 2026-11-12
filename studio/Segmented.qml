@@ -27,15 +27,19 @@ Rectangle {
   Accessible.name: name
 
   function indexOf(value) {
-    for (var i = 0; i < options.length; i++) if (options[i].value === value) return i
+    for (var i = 0; i < options.length; i++)
+      if (options[i].value === value)
+        return i
     return -1
   }
 
   function step(direction) {
-    if (options.length === 0) return
+    if (options.length === 0)
+      return
     var index = Math.max(0, indexOf(value))
     var next = Math.max(0, Math.min(options.length - 1, index + direction))
-    if (next !== index) picked(options[next].value)
+    if (next !== index)
+      picked(options[next].value)
   }
 
   Keys.onLeftPressed: step(LayoutMirroring.enabled ? 1 : -1)

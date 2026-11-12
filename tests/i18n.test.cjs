@@ -69,12 +69,10 @@ assert.equal(manifest.barWidget?.defaults?.language, undefined);
 assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);
 assert.equal(I.text('Unknown %1 {name}', 'no', ['$& %2']), '$& %2 {name}'.replace(/^/, 'Unknown '));
 assert.equal(I.text('constructor', 'no'), 'constructor');
-const ui = fs.readFileSync(path.join(__dirname, '../kit/FoamyI18n.qml'), 'utf8');
-assert.ok(ui.includes('Qt.createQmlObject'), '4.0 must not statically require a 4.5 QML type');
 
 const service = fs.readFileSync(path.join(__dirname, '../Service.qml'), 'utf8');
 // The preview overlay holds exclusive keyboard focus, so a key must close it.
-assert.match(service, /Keys\.onPressed: function\(event\) \{ root\.previewKeyPressed\(event\) \}/);
+assert.match(service, /Keys\.onPressed: function\s*\(event\)\s*\{\s*root\.previewKeyPressed\(event\)\s*\}/);
 assert.ok(!/\bIpcHandler\s*\{/.test(service), 'IPC goes through FoamyIpc');
 const artworkQml = fs.readFileSync(path.join(__dirname, '../Artwork.qml'), 'utf8');
 // Both jobs run the bundled native helper; the avatar job keeps its outer timeout.

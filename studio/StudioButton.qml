@@ -17,14 +17,12 @@ Rectangle {
   property real leading: 0
   // Room after the value on the reading end (a menu button's chevron).
   property real trailing: 0
-  signal clicked()
+  signal clicked
 
   implicitHeight: FoamyStyle.controlHeight
   implicitWidth: row.implicitWidth + 2 * FoamyStyle.controlPaddingX
   radius: FoamyStyle.radiusSmall
-  color: primary ? FoamyPalette.accent
-    : checked ? FoamyPalette.selectedFill
-    : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
+  color: primary ? FoamyPalette.accent : checked ? FoamyPalette.selectedFill : mouse.containsMouse && enabled ? FoamyPalette.hoverFill : FoamyPalette.fieldFill
   border.width: primary ? 0 : activeFocus ? 2 : FoamyStyle.borderWidth
   border.color: activeFocus || checked ? FoamyPalette.accent : FoamyPalette.border
   opacity: enabled ? 1 : FoamyStyle.disabledOpacity
@@ -37,10 +35,14 @@ Rectangle {
   // checked instead.
   Accessible.selected: checked && !Accessible.checkable
   Accessible.checked: checked
-  Accessible.onPressAction: if (enabled) clicked()
-  Keys.onReturnPressed: if (enabled) clicked()
-  Keys.onEnterPressed: if (enabled) clicked()
-  Keys.onSpacePressed: if (enabled) clicked()
+  Accessible.onPressAction: if (enabled)
+    clicked()
+  Keys.onReturnPressed: if (enabled)
+    clicked()
+  Keys.onEnterPressed: if (enabled)
+    clicked()
+  Keys.onSpacePressed: if (enabled)
+    clicked()
 
   // The accent fill would hide a ring on it: a primary button's focus ring
   // sits just outside.
@@ -57,10 +59,8 @@ Rectangle {
   Row {
     id: row
     anchors.verticalCenter: parent.verticalCenter
-    x: button.horizontalAlignment === Text.AlignHCenter ? (button.width - width) / 2
-      : FoamyStyle.controlPaddingX + (button.LayoutMirroring.enabled ? button.trailing : button.leading)
-    width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth
-      : button.width - 2 * FoamyStyle.controlPaddingX - button.leading - button.trailing
+    x: button.horizontalAlignment === Text.AlignHCenter ? (button.width - width) / 2 : FoamyStyle.controlPaddingX + (button.LayoutMirroring.enabled ? button.trailing : button.leading)
+    width: button.horizontalAlignment === Text.AlignHCenter ? implicitWidth : button.width - 2 * FoamyStyle.controlPaddingX - button.leading - button.trailing
     spacing: FoamyStyle.gap
 
     Text {

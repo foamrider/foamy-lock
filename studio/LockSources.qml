@@ -149,18 +149,18 @@ Item {
   property bool picturePending: false
   property bool helperUnavailable: false
   readonly property bool preparing: pictureProc.running
-  readonly property string wantedPicture: look && look.background.source === "picture" && !Layout.isVideoPath(look.background.path)
-    ? String(look.background.path || "") : ""
-  readonly property string pictureKey: wantedPicture ? JSON.stringify({ kind: "background", path: wantedPicture,
-    width: Math.max(16, Math.min(7680, screenWidth)), height: Math.max(16, Math.min(4320, screenHeight)),
-    blur: look.background.blur }) : ""
+  readonly property string wantedPicture: look && look.background.source === "picture" && !Layout.isVideoPath(look.background.path) ? String(look.background.path || "") : ""
+  readonly property string pictureKey: wantedPicture ? JSON.stringify({
+    kind: "background",
+    path: wantedPicture,
+    width: Math.max(16, Math.min(7680, screenWidth)),
+    height: Math.max(16, Math.min(4320, screenHeight)),
+    blur: look.background.blur
+  }) : ""
 
   // The background the canvas shows, and whether it is already blurred (a
   // video's poster is not: the canvas blurs it, as the lock does).
-  readonly property string backgroundPath: !look ? ""
-    : look.background.source === "omarchy" ? wallpaperPath
-    : pictureIsVideo ? (videoProbe && videoProbeKey === clipKey ? videoProbe.poster : "")
-    : wantedPicture && pictureSource === wantedPicture ? picturePath : ""
+  readonly property string backgroundPath: !look ? "" : look.background.source === "omarchy" ? wallpaperPath : pictureIsVideo ? (videoProbe && videoProbeKey === clipKey ? videoProbe.poster : "") : wantedPicture && pictureSource === wantedPicture ? picturePath : ""
   readonly property bool backgroundPrepared: !!look && look.background.source === "picture" && !pictureIsVideo
   readonly property int backgroundVersion: wallpaperVersion
 
@@ -179,10 +179,15 @@ Item {
   readonly property string clipSource: Draft.videoSource(look, videoPath)
   readonly property var videoSize: {
     var natives = []
-    for (var name in nativeMonitors) natives.push(nativeMonitors[name])
+    for (var name in nativeMonitors)
+      natives.push(nativeMonitors[name])
     return Model.videoScreenSize(natives, Quickshell.screens || [])
   }
-  readonly property string clipKey: clipSource ? JSON.stringify({ path: clipSource, width: videoSize[0], height: videoSize[1] }) : ""
+  readonly property string clipKey: clipSource ? JSON.stringify({
+    path: clipSource,
+    width: videoSize[0],
+    height: videoSize[1]
+  }) : ""
   readonly property string videoDirectory: cacheHome + "/omarchy/foamy.lock/video/"
   // Model.videoProbeResult for videoProbeKey (null while it runs).
   property var videoProbe: null
@@ -196,10 +201,8 @@ Item {
   property string convertedClip: ""
   property real convertedBytes: 0
   // The clip for the video on the canvas ("" without), and its size.
-  readonly property string clip: videoProbe && videoProbeKey === clipKey && videoProbe.clip ? videoProbe.clip
-    : convertKey === clipKey && convertedClip ? convertedClip : ""
-  readonly property real clipBytes: clip === "" ? 0
-    : clip === convertedClip ? convertedBytes : Number(videoProbe.reply.clipBytes) || 0
+  readonly property string clip: videoProbe && videoProbeKey === clipKey && videoProbe.clip ? videoProbe.clip : convertKey === clipKey && convertedClip ? convertedClip : ""
+  readonly property real clipBytes: clip === "" ? 0 : clip === convertedClip ? convertedBytes : Number(videoProbe.reply.clipBytes) || 0
   signal converted(var report)
 
   // Native pixels and scale per Hyprland monitor name (Draft.monitorEntries).
@@ -209,9 +212,14 @@ Item {
     var monitors = hyprland ? Hyprland.monitors.values : []
     for (var i = 0; i < monitors.length; i++) {
       var ipc = monitors[i].lastIpcObject
-      if (!monitors[i].name || !ipc) continue
-      out[monitors[i].name] = { width: Number(ipc.width) || 0, height: Number(ipc.height) || 0,
-        scale: Number(ipc.scale) || 1, transform: Number(ipc.transform) || 0 }
+      if (!monitors[i].name || !ipc)
+        continue
+      out[monitors[i].name] = {
+        width: Number(ipc.width) || 0,
+        height: Number(ipc.height) || 0,
+        scale: Number(ipc.scale) || 1,
+        transform: Number(ipc.transform) || 0
+      }
     }
     return out
   }
@@ -257,22 +265,27 @@ Item {
 
   Connections {
     target: Quickshell
-    function onScreensChanged() { sources.refreshMonitors() }
+    function onScreensChanged() {
+      sources.refreshMonitors()
+    }
   }
 
   // Hyprland's monitors again (a read-only query: scale or mode changes).
   function refreshMonitors() {
-    if (hyprland) Hyprland.refreshMonitors()
+    if (hyprland)
+      Hyprland.refreshMonitors()
   }
 
   function checkMugshot() {
-    if (mugshotChecking) return
+    if (mugshotChecking)
+      return
     mugshotChecking = true
     mugshotProbe.running = true
   }
 
   function checkCatalog() {
-    if (catalogChecking) return
+    if (catalogChecking)
+      return
     catalogChecking = true
     catalogProc.running = true
   }
@@ -281,33 +294,47 @@ Item {
   // a yes or no changes what is known; anything else keeps it.
   function applyCatalog(exitCode, text) {
     catalogChecking = false
-    if (exitCode !== 0) return
+    if (exitCode !== 0)
+      return
     var data = Draft.replyOf(text)
-    if (data && data.version >= 3 && data.weather && typeof data.weather.target === "boolean") weatherTarget = data.weather.target
+    if (data && data.version >= 3 && data.weather && typeof data.weather.target === "boolean")
+      weatherTarget = data.weather.target
   }
 
   // The last tip seen, kept for the next start.
   function setTip(id) {
-    if (!/^[a-z-]{1,32}$/.test(String(id)) || id === tip) return
+    if (!/^[a-z-]{1,32}$/.test(String(id)) || id === tip)
+      return
     tip = id
-    stateFile.setText(JSON.stringify({ version: 1, tip: id }) + "\n")
+    stateFile.setText(JSON.stringify({
+      version: 1,
+      tip: id
+    }) + "\n")
   }
 
   // The state file's text (also a test hook): a version 1 object.
   function applyState(text) {
     var data = null
-    try { data = JSON.parse(String(text || "")) } catch (error) { data = null }
-    if (data && data.version === 1 && typeof data.tip === "string" && /^[a-z-]{1,32}$/.test(data.tip)) tip = data.tip
+    try {
+      data = JSON.parse(String(text || ""))
+    } catch (error) {
+      data = null
+    }
+    if (data && data.version === 1 && typeof data.tip === "string" && /^[a-z-]{1,32}$/.test(data.tip))
+      tip = data.tip
     stateKnown = true
   }
 
   Connections {
     target: Commons.Color
-    function onCurrentThemePathChanged() { sources.refreshWallpaper() }
+    function onCurrentThemePathChanged() {
+      sources.refreshWallpaper()
+    }
   }
 
   function refreshWallpaper() {
-    if (helperUnavailable) return
+    if (helperUnavailable)
+      return
     if (wallpaperProc.running) {
       wallpaperPending = true
       return
@@ -319,17 +346,21 @@ Item {
   // The probe's answer (also a test hook).
   function applyWallpaper(exitCode, text) {
     var data = null
-    if (FoamyNative.unavailable(exitCode)) helperUnavailable = true
+    if (FoamyNative.unavailable(exitCode))
+      helperUnavailable = true
     else if (exitCode === 0) {
-      try { data = JSON.parse(String(text || "")) } catch (error) { data = null }
+      try {
+        data = JSON.parse(String(text || ""))
+      } catch (error) {
+        data = null
+      }
     }
-    if (!data || data.ok !== true || typeof data.path !== "string" || data.path[0] !== "/"
-        || typeof data.signature !== "string" || data.signature === "") {
+    if (!data || data.ok !== true || typeof data.path !== "string" || data.path[0] !== "/" || typeof data.signature !== "string" || data.signature === "") {
       wallpaperPath = ""
       wallpaperError = helperUnavailable ? "helper-unavailable" : data && typeof data.error === "string" ? data.error : "wallpaper-unavailable"
       return
     }
-    if (Model.isVideoPath(data.path)) {
+    if (Commons.Util.isVideoPath(data.path)) {
       // Its still frame, made as the lock makes it (until then, the theme
       // colour). "video" while there is none.
       wallpaperError = "video"
@@ -352,11 +383,16 @@ Item {
   }
 
   function refreshPoster() {
-    if (!videoPath || posterBusy) return
+    if (!videoPath || posterBusy)
+      return
     posterBusy = true
     posterProc.sourcePath = videoPath
     posterProc.sourceSignature = videoSignature
-    posterProc.request = JSON.stringify({ path: videoPath, width: videoSize[0], height: videoSize[1] })
+    posterProc.request = JSON.stringify({
+      path: videoPath,
+      width: videoSize[0],
+      height: videoSize[1]
+    })
     posterProc.stdinEnabled = true
     posterProc.running = true
   }
@@ -389,7 +425,8 @@ Item {
       pictureError = ""
       return
     }
-    if (key === pictureRequest || !active) return
+    if (key === pictureRequest || !active)
+      return
     if (pictureProc.running) {
       picturePending = true
       return
@@ -408,20 +445,27 @@ Item {
   function applyPicture(exitCode, text, request) {
     var asked = request === undefined ? pictureRequest : request
     var path = ""
-    try { path = JSON.parse(asked).path } catch (error) { path = "" }
-    var result = null
-    if (FoamyNative.unavailable(exitCode)) helperUnavailable = true
-    else {
-      try { result = JSON.parse(String(text || "")) } catch (error) { result = null }
+    try {
+      path = JSON.parse(asked).path
+    } catch (error) {
+      path = ""
     }
-    if (result && result.ok === true && typeof result.path === "string" && result.path.indexOf(pictureDirectory) === 0
-        && /^[0-9a-f]{64}\.png$/.test(result.path.slice(pictureDirectory.length))) {
+    var result = null
+    if (FoamyNative.unavailable(exitCode))
+      helperUnavailable = true
+    else {
+      try {
+        result = JSON.parse(String(text || ""))
+      } catch (error) {
+        result = null
+      }
+    }
+    if (result && result.ok === true && typeof result.path === "string" && result.path.indexOf(pictureDirectory) === 0 && /^[0-9a-f]{64}\.png$/.test(result.path.slice(pictureDirectory.length))) {
       pictureError = ""
       picturePath = result.path
       pictureSource = path
     } else {
-      pictureError = helperUnavailable ? "helper-unavailable"
-        : result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "picture-helper-failed"
+      pictureError = helperUnavailable ? "helper-unavailable" : result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "picture-helper-failed"
       if (pictureSource === path) {
         picturePath = ""
         pictureSource = ""
@@ -430,7 +474,8 @@ Item {
   }
 
   function pick() {
-    if (pickProc.running) return
+    if (pickProc.running)
+      return
     pickError = ""
     picking = true
     pickProc.running = true
@@ -441,7 +486,11 @@ Item {
   function applyPick(exitCode, text) {
     picking = false
     var data = null
-    try { data = JSON.parse(String(text || "").trim().split("\n").pop()) } catch (error) { data = null }
+    try {
+      data = JSON.parse(String(text || "").trim().split("\n").pop())
+    } catch (error) {
+      data = null
+    }
     if (FoamyNative.unavailable(exitCode)) {
       pickError = "helper-unavailable"
     } else if (exitCode === 0 && data && data.ok === true && data.cancelled === true) {
@@ -472,7 +521,8 @@ Item {
       videoProbeKey = ""
       return
     }
-    if (key === videoProbeKey || !active) return
+    if (key === videoProbeKey || !active)
+      return
     if (videoProbeProc.running) {
       videoProbePending = true
       return
@@ -490,9 +540,11 @@ Item {
 
   // video-probe's answer for `request` (also a test hook).
   function applyVideoProbe(exitCode, text, request) {
-    if (request !== videoProbeKey) return
+    if (request !== videoProbeKey)
+      return
     if (FoamyNative.unavailable(exitCode)) {
-      if (!videoHelper) helperUnavailable = true
+      if (!videoHelper)
+        helperUnavailable = true
       videoProbe = Model.videoProbeResult('{"ok":false,"error":"helper-unavailable"}', videoDirectory)
     } else {
       videoProbe = Model.videoProbeResult(exitCode === 0 ? text : "", videoDirectory)
@@ -501,7 +553,8 @@ Item {
 
   // Converts the video on the canvas: the Convert button, never on its own.
   function convertVideo() {
-    if (converting || !clipKey) return false
+    if (converting || !clipKey)
+      return false
     convertKey = clipKey
     convertProgress = null
     convertError = ""
@@ -517,26 +570,30 @@ Item {
 
   // Cancel: the helper stops both stages and keeps nothing.
   function cancelConvert() {
-    if (videoConvertProc.running) videoConvertProc.signal(15)
+    if (videoConvertProc.running)
+      videoConvertProc.signal(15)
   }
 
   // One line of video-convert's output (also a test hook).
   function applyConvertLine(line) {
     var progress = Draft.videoProgress(line)
-    if (progress) convertProgress = progress
+    if (progress)
+      convertProgress = progress
   }
 
   // video-convert's end (also a test hook): its last line.
   function applyConvert(exitCode, text, request) {
     converting = false
     var report = Draft.convertReport(exitCode, text, videoDirectory)
-    if (request !== convertKey) return
+    if (request !== convertKey)
+      return
     convertError = report.ok ? "" : report.error
     if (report.ok) {
       convertedClip = report.clip
       convertedBytes = report.bytes
       // The probe finds it from now on.
-      if (videoProbeKey === request) videoProbeKey = ""
+      if (videoProbeKey === request)
+        videoProbeKey = ""
       refreshVideo()
     }
     converted(report)
@@ -544,22 +601,39 @@ Item {
 
   // --- the draft on disk ------------------------------------------------------
 
-  function loadDraft() { queueDraft({ op: "draft-load", request: "" }) }
-  function saveDraft(h) { queueDraft({ op: "draft-save", request: JSON.stringify(Draft.diskDraft(h)) }) }
-  function clearDraft() { queueDraft({ op: "draft-clear", request: "" }) }
+  function loadDraft() {
+    queueDraft({
+      op: "draft-load",
+      request: ""
+    })
+  }
+  function saveDraft(h) {
+    queueDraft({
+      op: "draft-save",
+      request: JSON.stringify(Draft.diskDraft(h))
+    })
+  }
+  function clearDraft() {
+    queueDraft({
+      op: "draft-clear",
+      request: ""
+    })
+  }
 
   function queueDraft(job) {
     var queue = draftQueue.slice()
     var last = queue.length > 0 ? queue[queue.length - 1] : null
     // A newer save or clear makes one still waiting pointless.
-    if (last && last.op !== "draft-load" && job.op !== "draft-load") queue.pop()
+    if (last && last.op !== "draft-load" && job.op !== "draft-load")
+      queue.pop()
     queue.push(job)
     draftQueue = queue
     runDraft()
   }
 
   function runDraft() {
-    if (draftRunning || draftQueue.length === 0) return
+    if (draftRunning || draftQueue.length === 0)
+      return
     var job = draftQueue[0]
     draftQueue = draftQueue.slice(1)
     draftProc.op = job.op
@@ -578,7 +652,8 @@ Item {
   // --- Apply and Preview ------------------------------------------------------
 
   function applyLook(entry) {
-    if (applying) return false
+    if (applying)
+      return false
     applyProc.entry = Draft.ordered(entry)
     applyProc.request = JSON.stringify(applyProc.entry)
     applyProc.stdinEnabled = true
@@ -593,7 +668,8 @@ Item {
   }
 
   function previewLook(entry) {
-    if (previewing) return false
+    if (previewing)
+      return false
     previewProc.look = JSON.stringify(Draft.ordered(entry))
     previewing = true
     previewProc.running = true
@@ -611,7 +687,8 @@ Item {
   signal coverArtDone(var report, string mode)
 
   function setCoverArt(mode) {
-    if (coverArtBusy || Model.COVER_ART_MODES.indexOf(mode) === -1) return false
+    if (coverArtBusy || Model.COVER_ART_MODES.indexOf(mode) === -1)
+      return false
     coverArtProc.mode = mode
     coverArtBusy = true
     coverArtProc.running = true
@@ -628,7 +705,8 @@ Item {
   // `op` is "save" ({ id, name, look }), "rename" ({ id, name }) or
   // "delete" ({ id }).
   function runPreset(op, request) {
-    if (presetBusy || ["save", "rename", "delete"].indexOf(op) === -1) return false
+    if (presetBusy || ["save", "rename", "delete"].indexOf(op) === -1)
+      return false
     presetProc.op = op
     presetProc.payload = request
     presetProc.request = JSON.stringify(request)
@@ -641,7 +719,8 @@ Item {
   // The helper's answer (also a test hook): a Draft.applyReport.
   function applyPresetReply(op, exitCode, text, request) {
     var report = Draft.applyReport(exitCode, text)
-    if (report.saved) userPresets = Draft.presetsAfter(userPresets, op, request)
+    if (report.saved)
+      userPresets = Draft.presetsAfter(userPresets, op, request)
     presetDone(op, report, request)
   }
 
@@ -651,19 +730,26 @@ Item {
     property string request: ""
     command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", op]))
     onStarted: {
-      if (request === "") return
+      if (request === "")
+        return
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: draftOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: draftOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.draftRunning = false
       sources.applyDraft(draftProc.op, -1, "")
       Qt.callLater(sources.runDraft)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.draftRunning = false
       sources.applyDraft(draftProc.op, exitCode, draftOutput.text)
@@ -682,15 +768,21 @@ Item {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: applyOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: applyOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applying = false
       // Nothing ran: as exit 1, before anything is called.
       sources.applyApply(1, "", applyProc.entry)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applying = false
       sources.applyApply(exitCode, applyOutput.text, applyProc.entry)
@@ -708,15 +800,21 @@ Item {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: presetOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: presetOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.presetBusy = false
       // Nothing ran: as exit 1, before anything is called.
       sources.applyPresetReply(presetProc.op, 1, "", presetProc.payload)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.presetBusy = false
       sources.applyPresetReply(presetProc.op, exitCode, presetOutput.text, presetProc.payload)
@@ -728,18 +826,25 @@ Item {
   Process {
     id: previewProc
     property string look: ""
-    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c",
-      'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock previewLook "$1"',
-      "foamy-lock-studio-preview", look]
-    stdout: StdioCollector { id: previewOutput; waitForEnd: true }
-    stderr: StdioCollector { id: previewErrors; waitForEnd: true }
+    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c", 'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock previewLook "$1"', "foamy-lock-studio-preview", look]
+    stdout: StdioCollector {
+      id: previewOutput
+      waitForEnd: true
+    }
+    stderr: StdioCollector {
+      id: previewErrors
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.previewing = false
       sources.applyPreview(-1, "", "")
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.previewing = false
       sources.applyPreview(exitCode, previewOutput.text, previewErrors.text)
@@ -750,18 +855,25 @@ Item {
   Process {
     id: coverArtProc
     property string mode: "player"
-    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c",
-      'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock setCoverArt "$1"',
-      "foamy-lock-studio-cover-art", mode]
-    stdout: StdioCollector { id: coverArtOutput; waitForEnd: true }
-    stderr: StdioCollector { id: coverArtErrors; waitForEnd: true }
+    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c", 'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock setCoverArt "$1"', "foamy-lock-studio-cover-art", mode]
+    stdout: StdioCollector {
+      id: coverArtOutput
+      waitForEnd: true
+    }
+    stderr: StdioCollector {
+      id: coverArtErrors
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.coverArtBusy = false
       sources.applyCoverArt(-1, "", "", coverArtProc.mode)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.coverArtBusy = false
       sources.applyCoverArt(exitCode, coverArtOutput.text, coverArtErrors.text, coverArtProc.mode)
@@ -771,16 +883,20 @@ Item {
   // The same omarchy-shell as Preview; the catalog is read only.
   Process {
     id: catalogProc
-    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c",
-      'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock catalog',
-      "foamy-lock-studio-catalog"]
-    stdout: StdioCollector { id: catalogOutput; waitForEnd: true }
+    command: ["timeout", "--kill-after=1s", "6s", "bash", "-c", 'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock catalog', "foamy-lock-studio-catalog"]
+    stdout: StdioCollector {
+      id: catalogOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applyCatalog(-1, "")
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applyCatalog(exitCode, catalogOutput.text)
     }
@@ -804,24 +920,36 @@ Item {
     // The helper's own limit is 60 s.
     command: ["timeout", "--kill-after=1s", "65s"].concat(sources.videoCommand("video-probe"))
     clearEnvironment: true
-    environment: ({ HOME: sources.home, XDG_CACHE_HOME: sources.cacheHome, PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: sources.home,
+        XDG_CACHE_HOME: sources.cacheHome,
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: videoProbeOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: videoProbeOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applyVideoProbe(-1, "", videoProbeProc.request)
       // Asked again by the next refresh, as a video not yet probed.
-      if (sources.videoProbeKey === videoProbeProc.request) sources.videoProbeKey = ""
+      if (sources.videoProbeKey === videoProbeProc.request)
+        sources.videoProbeKey = ""
       if (sources.videoProbePending) {
         sources.videoProbePending = false
         Qt.callLater(sources.refreshVideo)
       }
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applyVideoProbe(exitCode, videoProbeOutput.text, videoProbeProc.request)
       if (sources.videoProbePending) {
@@ -839,23 +967,31 @@ Item {
     property string lastLine: ""
     command: ["timeout", "--kill-after=5s", "630s"].concat(sources.videoCommand("video-convert"))
     clearEnvironment: true
-    environment: ({ HOME: sources.home, XDG_CACHE_HOME: sources.cacheHome, PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: sources.home,
+        XDG_CACHE_HOME: sources.cacheHome,
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
     stdout: SplitParser {
-      onRead: function(data) {
+      onRead: function (data) {
         videoConvertProc.lastLine = data
         sources.applyConvertLine(data)
       }
     }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applyConvert(-1, "", videoConvertProc.request)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applyConvert(exitCode, videoConvertProc.lastLine, videoConvertProc.request)
     }
@@ -863,21 +999,31 @@ Item {
 
   Process {
     id: wallpaperProc
-    command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper",
-      ["wallpaper", sources.wallpaperLink]))
+    command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["wallpaper", sources.wallpaperLink]))
     clearEnvironment: true
-    environment: ({ PATH: "/usr/bin", LANG: "C.UTF-8" })
-    stdout: StdioCollector { id: wallpaperOutput; waitForEnd: true }
+    environment: ({
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
+    stdout: StdioCollector {
+      id: wallpaperOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applyWallpaper(-1, "")
-      if (sources.wallpaperPending) Qt.callLater(sources.refreshWallpaper)
+      if (sources.wallpaperPending)
+        Qt.callLater(sources.refreshWallpaper)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applyWallpaper(exitCode, wallpaperOutput.text)
-      if (sources.wallpaperPending) sources.refreshWallpaper()
+      if (sources.wallpaperPending)
+        sources.refreshWallpaper()
     }
   }
 
@@ -891,19 +1037,30 @@ Item {
     property string request: ""
     command: ["timeout", "--kill-after=1s", "65s"].concat(sources.videoCommand("video-probe"))
     clearEnvironment: true
-    environment: ({ HOME: sources.home, XDG_CACHE_HOME: sources.cacheHome, PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: sources.home,
+        XDG_CACHE_HOME: sources.cacheHome,
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: posterOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: posterOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.posterBusy = false
       sources.applyPoster(-1, "", posterProc.sourcePath, posterProc.sourceSignature)
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.posterBusy = false
       sources.applyPoster(exitCode, posterOutput.text, posterProc.sourcePath, posterProc.sourceSignature)
@@ -916,24 +1073,36 @@ Item {
     // The helper's own job limit is 9 s.
     command: ["timeout", "--kill-after=1s", "12s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["artwork"]))
     clearEnvironment: true
-    environment: ({ HOME: sources.home, XDG_CACHE_HOME: sources.pictureCache, PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: sources.home,
+        XDG_CACHE_HOME: sources.pictureCache,
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(pictureProc.request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: pictureOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: pictureOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applyPicture(-1, "", pictureProc.request)
       // Asked again by the next refresh, as a picture not yet prepared.
-      if (sources.pictureRequest === pictureProc.request) sources.pictureRequest = ""
+      if (sources.pictureRequest === pictureProc.request)
+        sources.pictureRequest = ""
       if (sources.picturePending) {
         sources.picturePending = false
         Qt.callLater(sources.refreshPicture)
       }
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applyPicture(exitCode, pictureOutput.text, pictureProc.request)
       if (sources.picturePending) {
@@ -948,16 +1117,20 @@ Item {
     // The helper waits up to 30 minutes for the choice (the dialog waits on
     // the user) and then answers PORTAL_FAILED; this is the backstop.
     objectName: "studioPickProcess"
-    command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper",
-      ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter"),
-        FoamyI18n.t("studio.pick.media")]))
-    stdout: StdioCollector { id: pickOutput; waitForEnd: true }
+    command: ["timeout", "--kill-after=5s", "1830s"].concat(FoamyNative.command(sources.pluginDir, "foamy-lock-helper", ["studio", "pick-picture", FoamyI18n.t("studio.pick.title"), FoamyI18n.t("studio.pick.filter"), FoamyI18n.t("studio.pick.media")]))
+    stdout: StdioCollector {
+      id: pickOutput
+      waitForEnd: true
+    }
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.applyPick(-1, "")
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.applyPick(exitCode, pickOutput.text)
     }
@@ -968,11 +1141,14 @@ Item {
     command: ["test", "-x", sources.mugshotPath]
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       sources.mugshotAvailable = false
       sources.mugshotChecking = false
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       sources.mugshotAvailable = exitCode === 0
       sources.mugshotChecking = false
@@ -997,7 +1173,8 @@ Item {
     onLoaded: {
       var result = Model.parseConfig(text())
       sources.settingsError = result.error
-      if (result.valid) sources.settings = result.settings
+      if (result.valid)
+        sources.settings = result.settings
       sources.configEntry = result.entry || null
       var presets = Draft.userPresetsOf(result.entry)
       sources.userPresets = presets.presets

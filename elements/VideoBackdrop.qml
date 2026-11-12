@@ -41,7 +41,8 @@ Item {
 
   // Once: the view gives up after the first failure.
   function fail(reason) {
-    if (reported) return
+    if (reported)
+      return
     reported = true
     player.stop()
     failed(reason)
@@ -50,7 +51,8 @@ Item {
   // Plays or pauses the player's current source (a new source stops it,
   // so this runs again once the source is set).
   function follow() {
-    if (reported || String(player.source) === "") return
+    if (reported || String(player.source) === "")
+      return
     if (playing) {
       if (player.playbackState !== MediaPlayer.PlayingState) {
         lastProgressMs = Date.now()
@@ -75,7 +77,9 @@ Item {
       video.lastProgressMs = Date.now()
       video.follow()
     }
-    onErrorOccurred: function(error, errorString) { video.fail("error") }
+    onErrorOccurred: function (error, errorString) {
+      video.fail("error")
+    }
   }
 
   VideoOutput {
@@ -105,6 +109,7 @@ Item {
     interval: 250
     repeat: true
     running: video.playing && !video.reported && video.path !== ""
-    onTriggered: if (Date.now() - video.lastProgressMs >= video.stallMs) video.fail("stall")
+    onTriggered: if (Date.now() - video.lastProgressMs >= video.stallMs)
+      video.fail("stall")
   }
 }

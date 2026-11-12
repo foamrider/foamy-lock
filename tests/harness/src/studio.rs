@@ -576,11 +576,11 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
     let fake = fake_shell(&base)?;
     let fake_text = fake.display().to_string();
     // The fake comes first, so neither the app nor the helper reaches the
-    // real omarchy-shell.
+    // real omarchy-shell; the rest is the hermetic PATH.
     let path = format!(
         "{}:{}",
         fake.join("bin").display(),
-        std::env::var("PATH").unwrap_or_default()
+        host::get(&app::quickshell_env(&base, shell), "PATH")
     );
     let out_text = out.display().to_string();
     let mut raised = None;

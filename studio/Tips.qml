@@ -29,14 +29,16 @@ Rectangle {
   Accessible.name: FoamyI18n.t("studio.tips")
 
   function tipText(id) {
-    if (id === "mugshot" && !(sources && sources.mugshotAvailable)) return FoamyI18n.t("studio.tip.mugshotMissing")
+    if (id === "mugshot" && !(sources && sources.mugshotAvailable))
+      return FoamyI18n.t("studio.tip.mugshotMissing")
     return FoamyI18n.t("studio.tip." + id)
   }
 
   // The tip `step` away from this one (wrapping), remembered.
   function go(step) {
     var count = ids.length
-    if (sources) sources.setTip(ids[((index + step) % count + count) % count])
+    if (sources)
+      sources.setTip(ids[((index + step) % count + count) % count])
   }
 
   // A small ghost button: no surface until hovered, an accent ring with
@@ -45,7 +47,7 @@ Rectangle {
     id: ghost
     property string icon: ""
     property string name: ""
-    signal clicked()
+    signal clicked
     implicitWidth: FoamyStyle.actionSize
     implicitHeight: FoamyStyle.actionSize
     radius: FoamyStyle.radiusSmall

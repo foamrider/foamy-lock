@@ -14,8 +14,7 @@ Item {
   property var fileRoots: []
   readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache"
   readonly property string cacheDirectory: cacheHome + "/omarchy/foamy.lock/artwork/"
-  readonly property var roots: [cacheHome].concat(
-    Quickshell.env("XDG_RUNTIME_DIR") ? [Quickshell.env("XDG_RUNTIME_DIR")] : []).concat(fileRoots)
+  readonly property var roots: [cacheHome].concat(Quickshell.env("XDG_RUNTIME_DIR") ? [Quickshell.env("XDG_RUNTIME_DIR")] : []).concat(fileRoots)
   readonly property string trackKey: allowed ? Model.artworkKey(player) : ""
   readonly property string requestKey: trackKey ? JSON.stringify([trackKey, hosts, roots]) : ""
   property string path: ""
@@ -35,9 +34,11 @@ Item {
   property var loggedErrors: ({})
 
   function logError(code) {
-    if (loggedErrors[code]) return
+    if (loggedErrors[code])
+      return
     var next = {}
-    for (var key in loggedErrors) next[key] = true
+    for (var key in loggedErrors)
+      next[key] = true
     next[code] = true
     loggedErrors = next
     console.warn("foamy.lock artwork: " + code)
@@ -45,32 +46,48 @@ Item {
 
   function cached(key) {
     for (var i = 0; i < entries.length; i++) {
-      if (entries[i].key === key) return entries[i]
+      if (entries[i].key === key)
+        return entries[i]
     }
     return null
   }
 
   function remember(entry) {
-    entries = [entry].concat(entries.filter(function(other) { return other.key !== entry.key })).slice(0, 16)
+    entries = [entry].concat(entries.filter(function (other) {
+      return other.key !== entry.key
+    })).slice(0, 16)
   }
 
   function invalidate(failedPath) {
-    if (!failedPath || failedPath !== path) return
-    entries = entries.filter(function(entry) { return entry.path !== failedPath })
-    remember({ key: requestKey, path: "", error: "thumbnail-unavailable", retryAt: Date.now() + 60000 })
+    if (!failedPath || failedPath !== path)
+      return
+    entries = entries.filter(function (entry) {
+      return entry.path !== failedPath
+    })
+    remember({
+      key: requestKey,
+      path: "",
+      error: "thumbnail-unavailable",
+      retryAt: Date.now() + 60000
+    })
     refresh()
   }
 
   function refresh() {
-    if (!initialized) return
+    if (!initialized)
+      return
     generation += 1
     debounce.stop()
     // Cancellation never waits for a decoder or network operation before lock.
     // busy stays true until exit, preventing overlap with the replacement job.
-    if (busy) worker.running = false
+    if (busy)
+      worker.running = false
     path = ""
     error = ""
-    if (!requestKey) { state = "empty"; return }
+    if (!requestKey) {
+      state = "empty"
+      return
+    }
     var entry = cached(requestKey)
     if (entry && entry.path) {
       remember(entry)
@@ -87,7 +104,10 @@ Item {
       logError(refused)
       return
     }
-    if (locked) { state = "locked-miss"; return }
+    if (locked) {
+      state = "locked-miss"
+      return
+    }
     if (helperUnavailable) {
       state = "fallback"
       error = "helper-unavailable"
@@ -107,9 +127,17 @@ Item {
   }
 
   function startJob() {
-    if (busy || locked || !requestKey) return
-    job = { key: requestKey, generation: generation,
-      request: JSON.stringify({ url: String(player.trackArtUrl || ""), hosts: hosts, roots: roots }) }
+    if (busy || locked || !requestKey)
+      return
+    job = {
+      key: requestKey,
+      generation: generation,
+      request: JSON.stringify({
+        url: String(player.trackArtUrl || ""),
+        hosts: hosts,
+        roots: roots
+      })
+    }
     lastStarted = Date.now()
     busy = true
     worker.stdinEnabled = true
@@ -129,7 +157,7 @@ Item {
     }
     // Stream delivery can precede or follow exit. Defer until both have had
     // a chance to run, then recover failed starts or schedule the newest track.
-    Qt.callLater(function() {
+    Qt.callLater(function () {
       if (root.job && root.job.generation === root.generation && root.state === "loading")
         root.acceptResult('{"ok":false,"error":"helper-exited"}')
       root.refresh()
@@ -137,24 +165,41 @@ Item {
   }
 
   function acceptResult(text) {
-    if (!job || job.generation !== generation || locked || job.key !== requestKey) return
+    if (!job || job.generation !== generation || locked || job.key !== requestKey)
+      return
     var result
-    try { result = JSON.parse(text) }
-    catch (parseError) { result = { ok: false, error: "invalid-helper-result" } }
+    try {
+      result = JSON.parse(text)
+    } catch (parseError) {
+      result = {
+        ok: false,
+        error: "invalid-helper-result"
+      }
+    }
     if (!result || typeof result !== "object" || Array.isArray(result))
-      result = { ok: false, error: "invalid-helper-result" }
+      result = {
+        ok: false,
+        error: "invalid-helper-result"
+      }
     var filename = typeof result.path === "string" ? result.path.slice(cacheDirectory.length) : ""
     if (result.ok === true && result.path === cacheDirectory + filename && /^[a-f0-9]{64}\.png$/.test(filename)) {
-      remember({ key: job.key, path: result.path })
+      remember({
+        key: job.key,
+        path: result.path
+      })
       path = result.path
       state = "ready"
       error = ""
       loggedErrors = ({})
     } else {
       // Only stable codes enter logs/status; URLs and media metadata stay private.
-      var code = typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
-        ? result.error : "invalid-helper-result"
-      remember({ key: job.key, path: "", error: code, retryAt: Date.now() + 60000 })
+      var code = typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "invalid-helper-result"
+      remember({
+        key: job.key,
+        path: "",
+        error: code,
+        retryAt: Date.now() + 60000
+      })
       state = "fallback"
       error = code
       logError(code)
@@ -163,9 +208,15 @@ Item {
 
   onRequestKeyChanged: refresh()
   onLockedChanged: refresh()
-  Component.onCompleted: { initialized = true; refresh() }
+  Component.onCompleted: {
+    initialized = true
+    refresh()
+  }
 
-  Timer { id: debounce; onTriggered: root.startJob() }
+  Timer {
+    id: debounce
+    onTriggered: root.startJob()
+  }
   Timer {
     id: watchdog
     interval: 10000
@@ -173,35 +224,53 @@ Item {
       // A running worker's exit settles the job (busy, the next track); one
       // that isn't running has no exit to come, so the job ends here.
       var running = worker.running
-      if (running) worker.signal(9)
+      if (running)
+        worker.signal(9)
       root.acceptResult('{"ok":false,"error":"helper-timeout"}')
-      if (!running) root.finishJob(-1)
+      if (!running)
+        root.finishJob(-1)
     }
   }
   Process {
     id: worker
     command: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"])
     clearEnvironment: true
-    environment: ({ HOME: Quickshell.env("HOME"), XDG_CACHE_HOME: root.cacheHome,
-      XDG_RUNTIME_DIR: Quickshell.env("XDG_RUNTIME_DIR"), PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: Quickshell.env("HOME"),
+        XDG_CACHE_HOME: root.cacheHome,
+        XDG_RUNTIME_DIR: Quickshell.env("XDG_RUNTIME_DIR"),
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
-      if (!root.job || root.job.generation !== root.generation || root.locked) { running = false; return }
+      if (!root.job || root.job.generation !== root.generation || root.locked) {
+        running = false
+        return
+      }
       write(root.job.request + "\n")
       stdinEnabled = false
     }
     // The helper always prints one line; no output means it never ran or was
     // killed, which finishJob settles (helper-unavailable, helper-exited).
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: if (text) root.acceptResult(text) }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: if (text)
+        root.acceptResult(text)
+    }
     // exited() comes before `running` goes false; a command that couldn't
     // start reports only the latter.
     property bool exitSeen: false
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       root.finishJob(exitCode)
     }
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
-      if (root.busy) root.finishJob(-1)
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
+      if (root.busy)
+        root.finishJob(-1)
     }
   }
 }

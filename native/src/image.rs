@@ -1300,19 +1300,31 @@ mod tests {
 
     #[test]
     fn command_line_is_artwork_py() {
-        let fd: std::os::fd::OwnedFd = std::fs::File::open("/dev/null").unwrap().into();
+        use std::os::fd::AsRawFd;
+        use std::os::unix::fs::MetadataExt;
+        // A memfd has its own inode, so the identity check below can only
+        // match the filter itself.
+        let filter = BpfFilter::decoder().unwrap().memfd().unwrap();
         let (bwrap, magick) = command(
             "PNG",
             Path::new("/s/policy.xml"),
             Path::new("/s/input"),
-            &fd,
+            &filter,
         );
         let argv: Vec<String> = bwrap
             .argv(magick)
             .into_iter()
             .map(|a| a.into_string().unwrap())
             .collect();
-        let fd = std::os::fd::AsRawFd::as_raw_fd(&fd).to_string();
+        // `--seccomp` names the builder's retained duplicate of the filter:
+        // the same file under another number, open while `bwrap` lives.
+        let at = argv.iter().position(|a| a == "--seccomp").unwrap();
+        let fd = argv[at + 1].clone();
+        let number: i32 = fd.parse().unwrap();
+        assert_ne!(number, filter.as_raw_fd());
+        let named = std::fs::metadata(format!("/proc/self/fd/{number}")).unwrap();
+        let original = std::fs::metadata(format!("/proc/self/fd/{}", filter.as_raw_fd())).unwrap();
+        assert_eq!((named.dev(), named.ino()), (original.dev(), original.ino()));
         let expected = [
             "/usr/bin/bwrap",
             "--unshare-all",

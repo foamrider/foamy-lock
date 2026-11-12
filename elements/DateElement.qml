@@ -29,15 +29,13 @@ Item {
   // The main line, as the tests read it.
   readonly property alias text: label.text
   readonly property alias font: label.font
-  readonly property int textAlignment: alignment === "start" ? Text.AlignLeft
-    : alignment === "end" ? Text.AlignRight : Text.AlignHCenter
+  readonly property int textAlignment: alignment === "start" ? Text.AlignLeft : alignment === "end" ? Text.AlignRight : Text.AlignHCenter
   // "stacked": the day number, a gap, then the month and weekday column.
   readonly property real dayGap: Math.round(14 * uiScale)
   readonly property real columnWidth: Math.max(month.implicitWidth, weekday.implicitWidth)
   readonly property real stackWidth: label.implicitWidth + dayGap + columnWidth
   // The width it needs outside the center column.
-  readonly property real naturalWidth: serif ? Math.max(label.implicitWidth, detail.implicitWidth)
-    : stacked ? stackWidth : label.implicitWidth
+  readonly property real naturalWidth: serif ? Math.max(label.implicitWidth, detail.implicitWidth) : stacked ? stackWidth : label.implicitWidth
   // A serif face where one is installed; fontconfig's generic serif otherwise.
   readonly property string serifFamily: view.fontOr("Georgia", view.fontOr("Noto Serif Display", view.fontOr("Noto Serif", "serif")))
   // "stacked": where the group starts inside the element, on screen (it is
@@ -58,23 +56,13 @@ Item {
     x: !date.stacked ? 0 : date.view.rightToLeft ? date.stackStart + date.stackWidth - width : date.stackStart
     width: date.stacked ? implicitWidth : date.width
     textFormat: Text.PlainText
-    text: date.caps ? date.view.now.toLocaleString(date.view.userLocale, "dddd d MMMM").toLocaleUpperCase()
-      : date.abbreviated ? date.view.now.toLocaleString(date.view.userLocale, "ddd d MMM")
-      : date.serif ? date.view.now.toLocaleString(date.view.userLocale, "dddd")
-      : date.numeric ? date.view.now.toLocaleDateString(date.view.userLocale, Locale.ShortFormat)
-      : date.stacked ? FoamyI18n.number(date.view.now.getDate())
-      : date.week ? FoamyI18n.t("Week %1", [FoamyI18n.number(date.view.weekOf(date.view.now))]) + "  ·  "
-        + date.view.now.toLocaleString(date.view.userLocale, "d MMMM")
-      // ISO 8601 keeps its own digits in every language.
-      : date.iso ? date.view.now.toLocaleString(Qt.locale("C"), "yyyy-MM-dd") + "  "
-        + date.view.now.toLocaleString(date.view.userLocale, "ddd")
-      : date.view.now.toLocaleString(date.view.userLocale, "dddd, d MMMM")
+    text: date.caps ? date.view.now.toLocaleString(date.view.userLocale, "dddd d MMMM").toLocaleUpperCase() : date.abbreviated ? date.view.now.toLocaleString(date.view.userLocale, "ddd d MMM") : date.serif ? date.view.now.toLocaleString(date.view.userLocale, "dddd") : date.numeric ? date.view.now.toLocaleDateString(date.view.userLocale, Locale.ShortFormat) : date.stacked ? FoamyI18n.number(date.view.now.getDate()) : date.week ? FoamyI18n.t("Week %1", [FoamyI18n.number(date.view.weekOf(date.view.now))]) + "  ·  " + date.view.now.toLocaleString(date.view.userLocale, "d MMMM") :
+    // ISO 8601 keeps its own digits in every language.
+    date.iso ? date.view.now.toLocaleString(Qt.locale("C"), "yyyy-MM-dd") + "  " + date.view.now.toLocaleString(date.view.userLocale, "ddd") : date.view.now.toLocaleString(date.view.userLocale, "dddd, d MMMM")
     color: date.view.foreground
     opacity: date.caps || date.week || date.iso ? 0.86 : 1
-    font.family: date.serif ? date.serifFamily : date.iso ? FoamyStyle.monoFamily
-      : date.caps || date.abbreviated || date.week ? date.view.textFontFamily : date.view.displayFontFamily
-    font.pixelSize: Math.round((date.caps ? 17 : date.abbreviated ? 24 : date.serif ? 64 : date.numeric ? 34
-      : date.stacked ? 72 : date.week ? 18 : date.iso ? 20 : 30) * date.uiScale)
+    font.family: date.serif ? date.serifFamily : date.iso ? FoamyStyle.monoFamily : date.caps || date.abbreviated || date.week ? date.view.textFontFamily : date.view.displayFontFamily
+    font.pixelSize: Math.round((date.caps ? 17 : date.abbreviated ? 24 : date.serif ? 64 : date.numeric ? 34 : date.stacked ? 72 : date.week ? 18 : date.iso ? 20 : 30) * date.uiScale)
     font.weight: date.caps || date.week || date.iso ? Font.Medium : date.abbreviated || date.numeric ? Font.DemiBold : Font.Normal
     font.letterSpacing: date.caps ? Math.round(3 * date.uiScale) : date.numeric || date.iso ? Math.round(2 * date.uiScale) : 0
     horizontalAlignment: date.stacked ? Text.AlignLeft : date.textAlignment

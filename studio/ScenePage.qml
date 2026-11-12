@@ -31,9 +31,7 @@ FocusScope {
   property string page: "background"
   readonly property bool backgroundShown: page === "background" || page === "look"
   readonly property bool glassShown: page === "glass" || page === "look"
-  readonly property string title: page === "look" ? FoamyI18n.t("studio.look")
-    : page === "glass" ? FoamyI18n.t("studio.glassDim")
-    : page === "shapes" ? FoamyI18n.t("studio.shapes") : FoamyI18n.t("studio.background")
+  readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n.t("studio.shapes") : FoamyI18n.t("studio.background")
 
   readonly property var look: app ? app.look : LockLayout.defaults()
   readonly property var background: look.background
@@ -49,23 +47,36 @@ FocusScope {
   Accessible.role: Accessible.Pane
   Accessible.name: title
 
-  function commit(next) { app.commit(next) }
-  function preview(next) { app.preview(next) }
-  function percent(value) { return FoamyI18n.t("studio.percent", Math.round(value * 100)) }
+  function commit(next) {
+    app.commit(next)
+  }
+  function preview(next) {
+    app.preview(next)
+  }
+  function percent(value) {
+    return FoamyI18n.t("studio.percent", Math.round(value * 100))
+  }
 
   // A source chosen: the picture without a path asks for one first.
   function chooseSource(choice) {
-    if (choice === "picture" && !pictureChosen) sources.pick()
-    else if (choice === "picture") commit(Draft.setPicture(app.draft, background.path))
-    else commit(Draft.chooseSource(app.draft, choice))
+    if (choice === "picture" && !pictureChosen)
+      sources.pick()
+    else if (choice === "picture")
+      commit(Draft.setPicture(app.draft, background.path))
+    else
+      commit(Draft.chooseSource(app.draft, choice))
   }
 
   // A swatch's colour on screen, and its name.
   function swatchColor(value) {
-    if (value === "background") return Commons.Color.background
-    if (value === "accent") return Commons.Color.accent
-    if (value === "muted") return Commons.Color.muted
-    if (value === "urgent") return Commons.Color.urgent
+    if (value === "background")
+      return Commons.Color.background
+    if (value === "accent")
+      return Commons.Color.accent
+    if (value === "muted")
+      return Commons.Color.muted
+    if (value === "urgent")
+      return Commons.Color.urgent
     return value
   }
   function swatchName(value) {
@@ -74,16 +85,20 @@ FocusScope {
 
   // What went wrong with the picture, in words ("" when nothing did).
   function pictureProblem() {
-    if (!sources) return ""
+    if (!sources)
+      return ""
     if (sources.pickError) {
-      if (sources.pickError === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
+      if (sources.pickError === "helper-unavailable")
+        return FoamyI18n.t("studio.helperUnavailable")
       const known = ["NO_SESSION_BUS", "PORTAL_UNAVAILABLE", "PORTAL_FAILED", "UNSUPPORTED"]
-      return known.indexOf(sources.pickError) !== -1 ? FoamyI18n.t("studio.pick." + sources.pickError)
-        : FoamyI18n.t("studio.pick.failed", sources.pickError)
+      return known.indexOf(sources.pickError) !== -1 ? FoamyI18n.t("studio.pick." + sources.pickError) : FoamyI18n.t("studio.pick.failed", sources.pickError)
     }
-    if (background.source !== "picture" || sources.pictureIsVideo || !sources.pictureError) return ""
-    if (sources.pictureError === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
-    if (sources.pictureError === "background-missing") return FoamyI18n.t("studio.picture.missing")
+    if (background.source !== "picture" || sources.pictureIsVideo || !sources.pictureError)
+      return ""
+    if (sources.pictureError === "helper-unavailable")
+      return FoamyI18n.t("studio.helperUnavailable")
+    if (sources.pictureError === "background-missing")
+      return FoamyI18n.t("studio.picture.missing")
     return FoamyI18n.t("studio.picture.failed", sources.pictureError)
   }
 
@@ -93,10 +108,8 @@ FocusScope {
   // the estimate, Convert or its progress and Cancel, the clip once ready,
   // and the motion. Nothing converts until Convert is pressed.
   readonly property bool videoShown: !!sources && sources.clipSource !== ""
-  readonly property var probeReply: sources && sources.videoProbe && sources.videoProbeKey === sources.clipKey
-    ? sources.videoProbe.reply : null
-  readonly property var card: !sources ? null : Draft.videoCard(sources.videoProbeKey === sources.clipKey ? sources.videoProbe : null,
-    sources.converting && sources.convertKey === sources.clipKey, sources.clip)
+  readonly property var probeReply: sources && sources.videoProbe && sources.videoProbeKey === sources.clipKey ? sources.videoProbe.reply : null
+  readonly property var card: !sources ? null : Draft.videoCard(sources.videoProbeKey === sources.clipKey ? sources.videoProbe : null, sources.converting && sources.convertKey === sources.clipKey, sources.clip)
   readonly property string cardState: card ? card.state : "checking"
   readonly property string motion: background.motion === "play" ? "play" : "still"
   // Play can be chosen once there is a clip; a saved Play can always go back.
@@ -104,9 +117,9 @@ FocusScope {
 
   function lengthText(seconds) {
     var length = Draft.duration(seconds)
-    if (!length) return ""
-    return length.minutes > 0 ? FoamyI18n.t("studio.video.minutes", [length.minutes, length.seconds])
-      : FoamyI18n.t("studio.video.seconds", length.seconds)
+    if (!length)
+      return ""
+    return length.minutes > 0 ? FoamyI18n.t("studio.video.minutes", [length.minutes, length.seconds]) : FoamyI18n.t("studio.video.seconds", length.seconds)
   }
   function sizeText(bytes) {
     var size = Draft.megabytes(bytes)
@@ -119,11 +132,14 @@ FocusScope {
   // "4 min 12 s · 3840 × 2160 · HEVC · 412 MB" (only the size over 2 GiB).
   function factsText() {
     var reply = probeReply
-    if (!reply) return cardState === "checking" ? FoamyI18n.t("studio.video.checking") : ""
-    if (reply.codec === null) return sizeText(reply.bytes)
+    if (!reply)
+      return cardState === "checking" ? FoamyI18n.t("studio.video.checking") : ""
+    if (reply.codec === null)
+      return sizeText(reply.bytes)
     var parts = []
     var length = lengthText(reply.duration)
-    if (length) parts.push(length)
+    if (length)
+      parts.push(length)
     parts.push(FoamyI18n.t("studio.video.size", [reply.width, reply.height]))
     parts.push(Draft.codecLabel(reply.codec))
     parts.push(sizeText(reply.bytes))
@@ -132,45 +148,57 @@ FocusScope {
   // What converting makes of it.
   function planText() {
     var output = probeReply ? probeReply.output : null
-    if (!output || cardState === "limit") return ""
-    return output.cut ? FoamyI18n.t("studio.video.planCut", [60, output.width, output.height, rateText(output.fps)])
-      : FoamyI18n.t("studio.video.plan", [output.width, output.height, rateText(output.fps)])
+    if (!output || cardState === "limit")
+      return ""
+    return output.cut ? FoamyI18n.t("studio.video.planCut", [60, output.width, output.height, rateText(output.fps)]) : FoamyI18n.t("studio.video.plan", [output.width, output.height, rateText(output.fps)])
   }
   function estimateText() {
-    return probeReply && typeof probeReply.estimate === "number"
-      ? FoamyI18n.t("studio.video.estimate", lengthText(probeReply.estimate)) : ""
+    return probeReply && typeof probeReply.estimate === "number" ? FoamyI18n.t("studio.video.estimate", lengthText(probeReply.estimate)) : ""
   }
   // Why it can't be converted or played, or how the last conversion ended.
   function videoProblem() {
-    if (!sources || !card) return ""
+    if (!sources || !card)
+      return ""
     var code = card.code
     if (cardState === "limit") {
-      if (code === "unsupported-codec") return FoamyI18n.t("studio.video.limit.unsupported-codec", Draft.codecLabel(probeReply ? probeReply.codec : ""))
-      if (["input-too-large", "input-too-wide"].indexOf(code) !== -1) return FoamyI18n.t("studio.video.limit." + code)
+      if (code === "unsupported-codec")
+        return FoamyI18n.t("studio.video.limit.unsupported-codec", Draft.codecLabel(probeReply ? probeReply.codec : ""))
+      if (["input-too-large", "input-too-wide"].indexOf(code) !== -1)
+        return FoamyI18n.t("studio.video.limit." + code)
       return FoamyI18n.t("studio.video.problem", code)
     }
     if (cardState === "problem") {
-      if (code === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
+      if (code === "helper-unavailable")
+        return FoamyI18n.t("studio.helperUnavailable")
       if (["decode-failed", "unsupported-format", "video-missing", "decoder-unavailable"].indexOf(code) !== -1)
         return FoamyI18n.t("studio.video.problem." + code)
       return FoamyI18n.t("studio.video.problem", code)
     }
     var failed = sources.convertKey === sources.clipKey && !sources.converting ? sources.convertError : ""
-    if (!failed) return ""
-    if (failed === "cancelled") return FoamyI18n.t("studio.video.cancelled")
-    if (failed === "helper-unavailable") return FoamyI18n.t("studio.helperUnavailable")
-    if (["busy", "job-timeout", "output-too-large"].indexOf(failed) !== -1) return FoamyI18n.t("studio.video.failed." + failed)
+    if (!failed)
+      return ""
+    if (failed === "cancelled")
+      return FoamyI18n.t("studio.video.cancelled")
+    if (failed === "helper-unavailable")
+      return FoamyI18n.t("studio.helperUnavailable")
+    if (["busy", "job-timeout", "output-too-large"].indexOf(failed) !== -1)
+      return FoamyI18n.t("studio.video.failed." + failed)
     return FoamyI18n.t("studio.video.failed", failed)
   }
 
   // The picture's state in words.
   function pictureStatus() {
-    if (!sources) return ""
-    if (sources.picking) return FoamyI18n.t("studio.picture.choosing")
+    if (!sources)
+      return ""
+    if (sources.picking)
+      return FoamyI18n.t("studio.picture.choosing")
     // A video's state is on its card.
-    if (sources.pictureIsVideo) return ""
-    if (background.source !== "picture") return ""
-    if (sources.preparing || (sources.pictureSource !== background.path && !sources.pictureError)) return FoamyI18n.t("studio.picture.preparing")
+    if (sources.pictureIsVideo)
+      return ""
+    if (background.source !== "picture")
+      return ""
+    if (sources.preparing || (sources.pictureSource !== background.path && !sources.pictureError))
+      return FoamyI18n.t("studio.picture.preparing")
     return ""
   }
 
@@ -252,10 +280,7 @@ FocusScope {
         // Only what would surprise: a wallpaper the canvas can't show.
         PaneNote {
           objectName: "studioWallpaperNote"
-          text: scene.choice !== "omarchy" || !scene.sources ? ""
-            : scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo")
-            : scene.sources.wallpaperError !== "" ? FoamyI18n.t("studio.wallpaperMissing")
-            : ""
+          text: scene.choice !== "omarchy" || !scene.sources ? "" : scene.sources.wallpaperError === "video" ? FoamyI18n.t("studio.wallpaperVideo") : scene.sources.wallpaperError !== "" ? FoamyI18n.t("studio.wallpaperMissing") : ""
         }
 
         // --- the image (Custom image) -------------------------------------
@@ -340,7 +365,9 @@ FocusScope {
                 Accessible.name: scene.swatchName(modelData)
                 Accessible.checkable: true
                 Accessible.checked: chosen
-                function choose() { scene.commit(Draft.setColor(scene.app.draft, modelData)) }
+                function choose() {
+                  scene.commit(Draft.setColor(scene.app.draft, modelData))
+                }
                 Accessible.onPressAction: choose()
                 Keys.onReturnPressed: choose()
                 Keys.onEnterPressed: choose()
@@ -366,9 +393,11 @@ FocusScope {
               }
             }
             function focusSwatch(index) {
-              if (index < 0 || index >= scene.swatches.length) return
+              if (index < 0 || index >= scene.swatches.length)
+                return
               for (var i = 0; i < children.length; i++)
-                if (children[i].objectName === "studioSwatch-" + scene.swatches[index]) children[i].forceActiveFocus(Qt.TabFocusReason)
+                if (children[i].objectName === "studioSwatch-" + scene.swatches[index])
+                  children[i].forceActiveFocus(Qt.TabFocusReason)
             }
           }
           // Any colour: six hex digits, checked as typed and by the lock.
@@ -383,12 +412,18 @@ FocusScope {
               placeholderText: "#rrggbb"
               value: scene.colorValue.charAt(0) === "#" ? scene.colorValue : ""
               field.maximumLength: 7
-              validate: function(text) { return text === "" || Draft.hexColor(text) !== "" || FoamyI18n.t("studio.color.invalid") }
+              validate: function (text) {
+                return text === "" || Draft.hexColor(text) !== "" || FoamyI18n.t("studio.color.invalid")
+              }
               // Then shown as the lock keeps it ("C0FFEE" → "#c0ffee").
-              onCommitted: function(text) {
-                if (text === "") return
+              onCommitted: function (text) {
+                if (text === "")
+                  return
                 scene.commit(Draft.setColor(scene.app.draft, text))
-                Qt.callLater(function() { if (!hexField.dirty) hexField.show() })
+                Qt.callLater(function () {
+                  if (!hexField.dirty)
+                    hexField.show()
+                })
               }
             }
             Rectangle {
@@ -424,8 +459,12 @@ FocusScope {
             title: FoamyI18n.t("studio.animation")
             options: LockLayout.DRAWN_SOURCES
             value: scene.choice === "animation" ? scene.background.source : ""
-            labelFor: function(name) { return FoamyI18n.t("studio.source." + name) }
-            onPicked: function(name) { scene.commit(Draft.setBackground(scene.app.draft, "source", name)) }
+            labelFor: function (name) {
+              return FoamyI18n.t("studio.source." + name)
+            }
+            onPicked: function (name) {
+              scene.commit(Draft.setBackground(scene.app.draft, "source", name))
+            }
           }
         }
 
@@ -459,8 +498,7 @@ FocusScope {
                 asynchronous: true
                 sourceSize.width: 224
                 sourceSize.height: 126
-                readonly property string path: scene.sources && scene.sources.videoProbe && scene.sources.videoProbeKey === scene.sources.clipKey
-                  ? scene.sources.videoProbe.poster : ""
+                readonly property string path: scene.sources && scene.sources.videoProbe && scene.sources.videoProbeKey === scene.sources.clipKey ? scene.sources.videoProbe.poster : ""
                 source: path ? "file://" + path.split("/").map(encodeURIComponent).join("/") : ""
                 Accessible.role: Accessible.Graphic
                 Accessible.name: FoamyI18n.t("studio.video.poster")
@@ -523,8 +561,7 @@ FocusScope {
               Layout.fillWidth: true
               visible: scene.cardState === "converting"
               readonly property var progress: scene.sources ? scene.sources.convertProgress : null
-              text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)])
-                : FoamyI18n.t("studio.video.starting")
+              text: !visible ? "" : progress ? FoamyI18n.t("studio.video.converting", [FoamyI18n.number(progress.frames, 0), FoamyI18n.number(progress.total, 0)]) : FoamyI18n.t("studio.video.starting")
             }
           }
           // The frames done out of the total.
@@ -559,9 +596,16 @@ FocusScope {
             name: FoamyI18n.t("studio.motion")
             enabled: scene.motionEnabled
             opacity: enabled ? 1 : FoamyStyle.disabledOpacity
-            options: LockLayout.MOTIONS.map(function(m) { return { value: m, label: FoamyI18n.t("studio.motion." + m) } })
+            options: LockLayout.MOTIONS.map(function (m) {
+              return {
+                value: m,
+                label: FoamyI18n.t("studio.motion." + m)
+              }
+            })
             value: scene.motion
-            onPicked: function(value) { scene.commit(Draft.setBackground(scene.app.draft, "motion", value)) }
+            onPicked: function (value) {
+              scene.commit(Draft.setBackground(scene.app.draft, "motion", value))
+            }
           }
           PaneNote {
             objectName: "studioMotionNote"
@@ -587,10 +631,13 @@ FocusScope {
           stepSize: 0.05
           value: scene.background.blur
           valueText: scene.percent(shown)
-          onMoved: function(v) { scene.preview(Draft.setBackground(scene.app.draft, "blur", v)) }
-          onCommitted: function(v) { scene.commit(Draft.setBackground(scene.app.draft, "blur", v)) }
+          onMoved: function (v) {
+            scene.preview(Draft.setBackground(scene.app.draft, "blur", v))
+          }
+          onCommitted: function (v) {
+            scene.commit(Draft.setBackground(scene.app.draft, "blur", v))
+          }
         }
-
       }
 
       // --- glass and dim ----------------------------------------------------
@@ -617,8 +664,12 @@ FocusScope {
           stepSize: 0.01
           value: scene.background.dim
           valueText: scene.percent(shown)
-          onMoved: function(v) { scene.preview(Draft.setBackground(scene.app.draft, "dim", v)) }
-          onCommitted: function(v) { scene.commit(Draft.setBackground(scene.app.draft, "dim", v)) }
+          onMoved: function (v) {
+            scene.preview(Draft.setBackground(scene.app.draft, "dim", v))
+          }
+          onCommitted: function (v) {
+            scene.commit(Draft.setBackground(scene.app.draft, "dim", v))
+          }
         }
 
         SectionLabel {
@@ -634,8 +685,12 @@ FocusScope {
           stepSize: 0.05
           value: scene.look.glass.opacity
           valueText: scene.percent(shown)
-          onMoved: function(v) { scene.preview(Draft.setGlassLook(scene.app.draft, "opacity", v)) }
-          onCommitted: function(v) { scene.commit(Draft.setGlassLook(scene.app.draft, "opacity", v)) }
+          onMoved: function (v) {
+            scene.preview(Draft.setGlassLook(scene.app.draft, "opacity", v))
+          }
+          onCommitted: function (v) {
+            scene.commit(Draft.setGlassLook(scene.app.draft, "opacity", v))
+          }
         }
         RowLayout {
           width: parent.width
@@ -651,9 +706,16 @@ FocusScope {
           Segmented {
             objectName: "studioTint"
             name: FoamyI18n.t("studio.tint")
-            options: LockLayout.GLASS_TINTS.map(function(t) { return { value: t, label: FoamyI18n.t("studio.tint." + t) } })
+            options: LockLayout.GLASS_TINTS.map(function (t) {
+              return {
+                value: t,
+                label: FoamyI18n.t("studio.tint." + t)
+              }
+            })
             value: scene.look.glass.tint || "none"
-            onPicked: function(value) { scene.commit(Draft.setGlassLook(scene.app.draft, "tint", value)) }
+            onPicked: function (value) {
+              scene.commit(Draft.setGlassLook(scene.app.draft, "tint", value))
+            }
           }
         }
       }
@@ -732,15 +794,16 @@ FocusScope {
           value: ""
           enabled: scene.shapes.length < LockLayout.SHAPE_LIMITS.count
           opacity: enabled ? 1 : FoamyStyle.disabledOpacity
-          labelFor: function(choice) { return scene.choiceLabel(choice) }
-          onPicked: function(choice) { scene.addShape(choice) }
+          labelFor: function (choice) {
+            return scene.choiceLabel(choice)
+          }
+          onPicked: function (choice) {
+            scene.addShape(choice)
+          }
         }
         PaneNote {
           objectName: "studioAddShapeNote"
-          text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full")
-            : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickModule")
-            : scene.addRefused !== "" ? FoamyI18n.t("studio.shape.noRoom", scene.choiceLabel(scene.addRefused))
-            : ""
+          text: scene.shapes.length >= LockLayout.SHAPE_LIMITS.count ? FoamyI18n.t("studio.shape.full") : scene.addRefused === "around" ? FoamyI18n.t("studio.shape.pickModule") : scene.addRefused !== "" ? FoamyI18n.t("studio.shape.noRoom", scene.choiceLabel(scene.addRefused)) : ""
         }
 
         // --- the selected shape -------------------------------------------------
@@ -768,10 +831,16 @@ FocusScope {
             Segmented {
               objectName: "studioShapeWrap"
               name: FoamyI18n.t("studio.shape.wraps")
-              options: ["zones", "modules"].concat(scene.shapeKind === "panel" ? ["none"] : [])
-                .map(function(mode) { return { value: mode, label: FoamyI18n.t("studio.shape.wrap." + mode) } })
+              options: ["zones", "modules"].concat(scene.shapeKind === "panel" ? ["none"] : []).map(function (mode) {
+                return {
+                  value: mode,
+                  label: FoamyI18n.t("studio.shape.wrap." + mode)
+                }
+              })
               value: Draft.wrapMode(scene.shape)
-              onPicked: function(mode) { scene.commit(Draft.setWrapMode(scene.app.draft, scene.shapeIndex, mode)) }
+              onPicked: function (mode) {
+                scene.commit(Draft.setWrapMode(scene.app.draft, scene.shapeIndex, mode))
+              }
             }
           }
           // In a RowLayout, so it starts on the reading start.
@@ -782,12 +851,14 @@ FocusScope {
               objectName: "studioShapeZones"
               name: FoamyI18n.t("studio.shape.zones")
               zones: scene.shape && scene.shape.wrap && scene.shape.wrap.zones ? scene.shape.wrap.zones : []
-              onPicked: function(zone) {
+              onPicked: function (zone) {
                 var on = scene.shape.wrap.zones.indexOf(zone) === -1
                 scene.commit(Draft.toggleWrapped(scene.app.draft, scene.shapeIndex, zone, on))
               }
             }
-            Item { Layout.fillWidth: true }
+            Item {
+              Layout.fillWidth: true
+            }
           }
           Column {
             objectName: "studioShapeModules"
@@ -824,9 +895,16 @@ FocusScope {
             Segmented {
               objectName: "studioShapeEdge"
               name: FoamyI18n.t("studio.shape.edge")
-              options: LockLayout.SHAPE_EDGES.map(function(edge) { return { value: edge, label: FoamyI18n.t("studio.shape.edge." + edge) } })
+              options: LockLayout.SHAPE_EDGES.map(function (edge) {
+                return {
+                  value: edge,
+                  label: FoamyI18n.t("studio.shape.edge." + edge)
+                }
+              })
               value: scene.shape && scene.shape.edge ? scene.shape.edge : ""
-              onPicked: function(edge) { scene.setShape("edge", edge) }
+              onPicked: function (edge) {
+                scene.setShape("edge", edge)
+              }
             }
           }
           Labelled {
@@ -836,9 +914,16 @@ FocusScope {
             Segmented {
               objectName: "studioShapeStyle"
               name: FoamyI18n.t("studio.shape.style")
-              options: LockLayout.FRAME_STYLES.map(function(style) { return { value: style, label: FoamyI18n.t("studio.shape.style." + style) } })
+              options: LockLayout.FRAME_STYLES.map(function (style) {
+                return {
+                  value: style,
+                  label: FoamyI18n.t("studio.shape.style." + style)
+                }
+              })
               value: scene.shapeKind === "frame" ? scene.shapeValue("style") : ""
-              onPicked: function(style) { scene.setShape("style", style) }
+              onPicked: function (style) {
+                scene.setShape("style", style)
+              }
             }
           }
           Labelled {
@@ -849,7 +934,9 @@ FocusScope {
               objectName: "studioShapePadX"
               name: FoamyI18n.t("studio.shape.padX")
               value: scene.shapeKind === "box" ? scene.shapeValue("pad").x : 0
-              onCommitted: function(v) { scene.setShape("pad.x", v) }
+              onCommitted: function (v) {
+                scene.setShape("pad.x", v)
+              }
             }
           }
           Labelled {
@@ -860,7 +947,9 @@ FocusScope {
               objectName: "studioShapePadY"
               name: FoamyI18n.t("studio.shape.padY")
               value: scene.shapeKind === "box" ? scene.shapeValue("pad").y : 0
-              onCommitted: function(v) { scene.setShape("pad.y", v) }
+              onCommitted: function (v) {
+                scene.setShape("pad.y", v)
+              }
             }
           }
           Labelled {
@@ -871,7 +960,9 @@ FocusScope {
               objectName: "studioShapePad"
               name: FoamyI18n.t("studio.shape.pad")
               value: scene.shapeKind === "panel" ? scene.shapeValue("pad") : 0
-              onCommitted: function(v) { scene.setShape("pad", v) }
+              onCommitted: function (v) {
+                scene.setShape("pad", v)
+              }
             }
           }
           StudioToggle {
@@ -910,16 +1001,36 @@ FocusScope {
                   visible: scene.boundUnit(boundRow.modelData) !== "off"
                   name: FoamyI18n.t("studio.shape." + boundRow.modelData)
                   value: scene.boundValue(boundRow.modelData)
-                  onCommitted: function(v) { scene.setBound(boundRow.modelData, scene.boundUnit(boundRow.modelData), v) }
+                  onCommitted: function (v) {
+                    scene.setBound(boundRow.modelData, scene.boundUnit(boundRow.modelData), v)
+                  }
                 }
                 Segmented {
                   objectName: "studioShapeUnit-" + boundRow.modelData
                   name: FoamyI18n.t("studio.shape." + boundRow.modelData)
-                  options: [{ value: "off", label: FoamyI18n.t("studio.shape.off") }, { value: "screen", label: "%" }, { value: "px", label: "px" }]
+                  options: [
+                    {
+                      value: "off",
+                      label: FoamyI18n.t("studio.shape.off")
+                    },
+                    {
+                      value: "screen",
+                      label: "%"
+                    },
+                    {
+                      value: "px",
+                      label: "px"
+                    }
+                  ]
                   value: scene.boundUnit(boundRow.modelData)
-                  onPicked: function(unit) { if (unit !== scene.boundUnit(boundRow.modelData)) scene.setBound(boundRow.modelData, unit) }
+                  onPicked: function (unit) {
+                    if (unit !== scene.boundUnit(boundRow.modelData))
+                      scene.setBound(boundRow.modelData, unit)
+                  }
                 }
-                Item { Layout.fillWidth: true }
+                Item {
+                  Layout.fillWidth: true
+                }
               }
             }
           }
@@ -931,7 +1042,9 @@ FocusScope {
               objectName: "studioShapeInset"
               name: FoamyI18n.t("studio.shape.inset")
               value: scene.shape ? scene.shapeValue("inset") : 0
-              onCommitted: function(v) { scene.setShape("inset", v) }
+              onCommitted: function (v) {
+                scene.setShape("inset", v)
+              }
             }
           }
           StudioToggle {
@@ -953,8 +1066,12 @@ FocusScope {
             stepSize: 1
             value: scene.shape && scene.shapeValue("radius") !== "auto" ? scene.shapeValue("radius") : scene.shapeDefaults.radius || 0
             valueText: FoamyI18n.t("studio.px", FoamyI18n.number(shown, 0))
-            onMoved: function(v) { scene.previewShape("radius", v) }
-            onCommitted: function(v) { scene.setShape("radius", v) }
+            onMoved: function (v) {
+              scene.previewShape("radius", v)
+            }
+            onCommitted: function (v) {
+              scene.setShape("radius", v)
+            }
           }
 
           // Its fill.
@@ -967,9 +1084,16 @@ FocusScope {
             objectName: "studioShapeFill"
             visible: scene.shapeKind !== "frame"
             name: FoamyI18n.t("studio.shape.fill")
-            options: LockLayout.SHAPE_FILLS.map(function(color) { return { value: color, label: FoamyI18n.t("studio.shape.fill." + color) } })
+            options: LockLayout.SHAPE_FILLS.map(function (color) {
+              return {
+                value: color,
+                label: FoamyI18n.t("studio.shape.fill." + color)
+              }
+            })
             value: scene.shape ? scene.fillValue("color") : ""
-            onPicked: function(color) { scene.setShape("fill.color", color) }
+            onPicked: function (color) {
+              scene.setShape("fill.color", color)
+            }
           }
           PaneNote {
             objectName: "studioShapeFillNote"
@@ -987,8 +1111,12 @@ FocusScope {
             stepSize: 0.01
             value: scene.shape ? scene.fillValue("opacity") : 0
             valueText: scene.percent(shown)
-            onMoved: function(v) { scene.previewShape("fill.opacity", v) }
-            onCommitted: function(v) { scene.setShape("fill.opacity", v) }
+            onMoved: function (v) {
+              scene.previewShape("fill.opacity", v)
+            }
+            onCommitted: function (v) {
+              scene.setShape("fill.opacity", v)
+            }
           }
           StudioToggle {
             objectName: "studioShapeFrost"
@@ -1014,12 +1142,19 @@ FocusScope {
             objectName: "studioShapeBorder"
             visible: scene.shapeKind !== "frame"
             name: FoamyI18n.t("studio.shape.border")
-            options: ["none"].concat(LockLayout.SHAPE_BORDERS).map(function(color) { return { value: color, label: FoamyI18n.t("studio.shape.border." + color) } })
+            options: ["none"].concat(LockLayout.SHAPE_BORDERS).map(function (color) {
+              return {
+                value: color,
+                label: FoamyI18n.t("studio.shape.border." + color)
+              }
+            })
             value: !scene.shape ? "" : scene.borderValue("width") === 0 ? "none" : scene.borderValue("color")
-            onPicked: function(color) {
-              if (color === "none") return scene.setShape("border.width", 0)
+            onPicked: function (color) {
+              if (color === "none")
+                return scene.setShape("border.width", 0)
               var next = Draft.setShape(scene.app.draft, scene.shapeIndex, "border.color", color)
-              if (scene.borderValue("width") === 0) next = Draft.setShape(next, scene.shapeIndex, "border.width", null)
+              if (scene.borderValue("width") === 0)
+                next = Draft.setShape(next, scene.shapeIndex, "border.width", null)
               scene.commit(next)
             }
           }
@@ -1031,7 +1166,10 @@ FocusScope {
               objectName: "studioShapeBorderWidth"
               name: FoamyI18n.t("studio.shape.borderWidth")
               value: scene.shape ? scene.borderValue("width") : 0
-              onCommitted: function(v) { if (v >= 1) scene.setShape("border.width", v) }
+              onCommitted: function (v) {
+                if (v >= 1)
+                  scene.setShape("border.width", v)
+              }
             }
           }
           StudioToggle {
@@ -1060,7 +1198,10 @@ FocusScope {
         }
       }
 
-      Item { width: 1; height: FoamyStyle.gap }
+      Item {
+        width: 1
+        height: FoamyStyle.gap
+      }
     }
   }
 
@@ -1073,7 +1214,9 @@ FocusScope {
   // A template that had no room, or "around" without a module ("" when none).
   property string addRefused: ""
 
-  function shapeValue(key) { return shape && shape[key] !== undefined ? shape[key] : shapeDefaults[key] }
+  function shapeValue(key) {
+    return shape && shape[key] !== undefined ? shape[key] : shapeDefaults[key]
+  }
   function fillValue(key) {
     var fill = shape && shape.fill ? shape.fill : {}
     return fill[key] !== undefined ? fill[key] : LockLayout.SHAPE_FILL_DEFAULTS[key]
@@ -1082,21 +1225,34 @@ FocusScope {
     var border = shape && shape.border ? shape.border : {}
     return border[key] !== undefined ? border[key] : LockLayout.SHAPE_BORDER_DEFAULTS[key]
   }
-  function setShape(path, value) { commit(Draft.setShape(app.draft, shapeIndex, path, value)) }
-  function previewShape(path, value) { preview(Draft.setShape(app.draft, shapeIndex, path, value)) }
-  function kindLabel(kind) { return FoamyI18n.t("studio.shape.kind." + kind) }
+  function setShape(path, value) {
+    commit(Draft.setShape(app.draft, shapeIndex, path, value))
+  }
+  function previewShape(path, value) {
+    preview(Draft.setShape(app.draft, shapeIndex, path, value))
+  }
+  function kindLabel(kind) {
+    return FoamyI18n.t("studio.shape.kind." + kind)
+  }
   // A shape in words: "Box around Clock, Date", "Frame: Glow", …
   function shapeText(index) {
     var item = shapes[index]
-    if (!item) return ""
-    if (item.kind === "frame") return FoamyI18n.t("studio.shape.frameText", FoamyI18n.t("studio.shape.style." + (item.style || "auto")))
-    if (!item.wrap) return FoamyI18n.t("studio.shape.alone", [kindLabel(item.kind), FoamyI18n.t("studio.shape.edge." + item.edge).toLowerCase()])
+    if (!item)
+      return ""
+    if (item.kind === "frame")
+      return FoamyI18n.t("studio.shape.frameText", FoamyI18n.t("studio.shape.style." + (item.style || "auto")))
+    if (!item.wrap)
+      return FoamyI18n.t("studio.shape.alone", [kindLabel(item.kind), FoamyI18n.t("studio.shape.edge." + item.edge).toLowerCase()])
     var names = Draft.wrappedModules(look, item)
-    if (names.length === 0) return FoamyI18n.t("studio.shape.aroundNothing", kindLabel(item.kind))
-    return FoamyI18n.t("studio.shape.around", [kindLabel(item.kind), names.map(function(name) { return app.moduleLabel(name) }).join(", ")])
+    if (names.length === 0)
+      return FoamyI18n.t("studio.shape.aroundNothing", kindLabel(item.kind))
+    return FoamyI18n.t("studio.shape.around", [kindLabel(item.kind), names.map(function (name) {
+        return app.moduleLabel(name)
+      }).join(", ")])
   }
   function choiceLabel(choice) {
-    if (choice !== "around") return FoamyI18n.t("studio.decor." + choice)
+    if (choice !== "around")
+      return FoamyI18n.t("studio.decor." + choice)
     return app && app.selected ? FoamyI18n.t("studio.decor.aroundModule", app.moduleLabel(app.selected)) : FoamyI18n.t("studio.decor.around")
   }
   // Add a template (or a box around the selected module) and select it.
@@ -1128,9 +1284,23 @@ FocusScope {
     var unit = boundUnit(bound)
     return unit === "off" ? 0 : unit === "px" ? shape.size[bound].px : Math.round(shape.size[bound].screen * 100)
   }
-  readonly property var boundStarts: ({ min: { screen: 0.3, px: 400 }, max: { screen: 0.5, px: 800 }, fillPast: { screen: 0.6, px: 1200 } })
+  readonly property var boundStarts: ({
+      min: {
+        screen: 0.3,
+        px: 400
+      },
+      max: {
+        screen: 0.5,
+        px: 800
+      },
+      fillPast: {
+        screen: 0.6,
+        px: 1200
+      }
+    })
   function setBound(bound, unit, value) {
-    if (unit === "off") return setShape("size." + bound, null)
+    if (unit === "off")
+      return setShape("size." + bound, null)
     var next = {}
     next[unit] = value === undefined ? boundStarts[bound][unit] : unit === "screen" ? value / 100 : value
     setShape("size." + bound, next)

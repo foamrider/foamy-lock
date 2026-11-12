@@ -72,7 +72,7 @@ Item {
   // No helper binary for this CPU (exit 126/127): the plain themed background
   // stays, wallpaperError is helper-unavailable and the probe is not run again.
   property bool wallpaperHelperUnavailable: false
-  readonly property bool videoBackground: Model.isVideoPath(backgroundPath)
+  readonly property bool videoBackground: Commons.Util.isVideoPath(backgroundPath)
   readonly property string lockWallpaperPath: videoBackground ? videoPosterPath : backgroundPath
   readonly property string lockWallpaperUrl: Model.fileUrl(lockWallpaperPath, backgroundVersion)
   property string userDisplayName: ""
@@ -134,8 +134,7 @@ Item {
   readonly property int weatherRetryMs: 10000
   readonly property int weatherRetries: 3
   readonly property var weather: Model.weatherFresh(weatherReport, weatherClockMs) ? weatherReport : null
-  readonly property bool weatherWanted: (lockRequested && !displayBlanked && lookShowsWeather(look))
-    || (previewVisible && lookShowsWeather(previewLook || look))
+  readonly property bool weatherWanted: (lockRequested && !displayBlanked && lookShowsWeather(look)) || (previewVisible && lookShowsWeather(previewLook || look))
   // Lock surfaces that have keyboard focus: the field shows there, or on
   // every surface while none does (Layout.isPrimary).
   property int activeSurfaces: 0
@@ -145,8 +144,7 @@ Item {
   // The look's own picture, prepared by the helper's sandbox while unlocked
   // (decoded, cropped to the largest screen, blurred). Qt never decodes the
   // original; without a prepared file the theme colour shows.
-  readonly property bool pictureWanted: look.background.source === "picture" && look.background.path !== ""
-    && !Layout.isVideoPath(look.background.path)
+  readonly property bool pictureWanted: look.background.source === "picture" && look.background.path !== "" && !Layout.isVideoPath(look.background.path)
   // One prepared picture at a time, for the look on screen: the preview's,
   // else the saved one. A view uses it only when it was made for its look.
   readonly property var pictureLook: previewLook || look
@@ -173,7 +171,12 @@ Item {
     var monitors = hyprlandSession ? Hyprland.monitors.values : []
     for (var i = 0; i < monitors.length; i++) {
       var ipc = monitors[i].lastIpcObject
-      if (ipc) out.push({ width: Number(ipc.width) || 0, height: Number(ipc.height) || 0, transform: Number(ipc.transform) || 0 })
+      if (ipc)
+        out.push({
+          width: Number(ipc.width) || 0,
+          height: Number(ipc.height) || 0,
+          transform: Number(ipc.transform) || 0
+        })
     }
     return out
   }
@@ -193,11 +196,22 @@ Item {
   // blank's lock for up to that blank's deadline, and checks the clamshell.
   readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "15s"]
   readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]
+  // The account and fingerprint probes are finite jobs too: getent can hang
+  // on a network NSS, and busctl and fprintd-list wait up to D-Bus's ~25 s
+  // per call. A probe cut off reads as no answer (the name and avatar stay;
+  // the fingerprint state is unknown and asked again), and later refreshes
+  // still run.
+  readonly property var identityDeadline: ["timeout", "--kill-after=1s", "5s"]
+  readonly property var fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "10s"]
   // A wake asked for while a blank runs: the blank's display off can land
   // after the wake's display on, so the wake runs again once the blank is
   // done (wakeQueued: once the wake still running then is done).
   property bool wakeAfterBlank: false
   property bool wakeQueued: false
+  // A blank asked for while a wake runs: the wake's keyboard restore can land
+  // after the blank's keyboard off, leaving the backlight lit under a dark
+  // display, so the blank waits for the wake (unless a wake comes first).
+  property bool blankAfterWake: false
 
   readonly property bool locked: lockRequested || sessionLock.locked || sessionLock.secure
   readonly property bool authenticating: authenticatingPassword || fingerprintAuthenticating
@@ -205,10 +219,8 @@ Item {
   readonly property string configPath: home + "/.config/omarchy/shell.json"
   property var settings: Model.defaults()
   property string configError: ""
-  readonly property var activePlayer: settings.showMedia
-    ? Model.selectPlayer(Mpris.players.values, settings.showBrowserMedia) : null
-  readonly property string avatarCacheDirectory: (Quickshell.env("XDG_CACHE_HOME") || home + "/.cache")
-    + "/omarchy/foamy.lock"
+  readonly property var activePlayer: settings.showMedia ? Model.selectPlayer(Mpris.players.values, settings.showBrowserMedia) : null
+  readonly property string avatarCacheDirectory: (Quickshell.env("XDG_CACHE_HOME") || home + "/.cache") + "/omarchy/foamy.lock"
   readonly property string userAvatarCachePath: avatarCacheDirectory + "/avatar.png"
 
   Artwork {
@@ -217,9 +229,7 @@ Item {
     // Only the styles with a cover show artwork (Layout.ARTWORK_STYLES): a
     // hidden or one-line player, or a look without the cover
     // (media.artwork false), prepares none.
-    allowed: root.settings.showMedia && root.settings.showArtwork
-      && !root.look.elements.media.hidden && Layout.ARTWORK_STYLES.indexOf(root.look.elements.media.style) !== -1
-      && root.look.elements.media.artwork !== false
+    allowed: root.settings.showMedia && root.settings.showArtwork && !root.look.elements.media.hidden && Layout.ARTWORK_STYLES.indexOf(root.look.elements.media.style) !== -1 && root.look.elements.media.artwork !== false
     locked: root.locked
     hosts: root.settings.artworkHosts
     fileRoots: root.settings.artworkFileRoots
@@ -232,7 +242,8 @@ Item {
     if (result.valid) {
       settings = result.settings
       stockLockEnabled = result.stockLockEnabled
-    } else console.warn("foamy.lock: " + configError + "; keeping previous settings")
+    } else
+      console.warn("foamy.lock: " + configError + "; keeping previous settings")
     noteEntryState(text, result.entry)
     // The look keys are read whenever the file has one foamy.lock entry.
     if (result.entry) {
@@ -241,8 +252,10 @@ Item {
       var parsed = Layout.parseLook(result.entry)
       lookError = parsed.error
       if (parsed.valid) {
-        if (JSON.stringify(parsed.look) !== JSON.stringify(look)) look = parsed.look
-      } else console.warn("foamy.lock: " + lookError + "; keeping the previous look")
+        if (JSON.stringify(parsed.look) !== JSON.stringify(look))
+          look = parsed.look
+      } else
+        console.warn("foamy.lock: " + lookError + "; keeping the previous look")
     }
     // Services may have been added or removed with this edit.
     Qt.callLater(checkLockRoute)
@@ -257,18 +270,24 @@ Item {
   function noteEntryState(text, entry) {
     var source = String(text || "")
     var config = null
-    try { config = JSON.parse(source) } catch (error) { config = null }
+    try {
+      config = JSON.parse(source)
+    } catch (error) {
+      config = null
+    }
     var readable = config !== null && typeof config === "object" && !Array.isArray(config) && config.version === 1
     entryState = readable ? (entry ? "ok" : "no-entry") : source.trim() === "" ? "no-entry" : "unreadable"
   }
 
   function applyUserPresets(entry) {
     var parsed = Layout.parseUserPresets(entry)
-    if (JSON.stringify(parsed.presets) !== JSON.stringify(userPresets)) userPresets = parsed.presets
+    if (JSON.stringify(parsed.presets) !== JSON.stringify(userPresets))
+      userPresets = parsed.presets
     userPresetsInvalid = parsed.invalid
     if (parsed.error !== userPresetsError) {
       userPresetsError = parsed.error
-      if (parsed.error) console.warn("foamy.lock: " + parsed.invalid + " user preset(s) skipped: " + parsed.error)
+      if (parsed.error)
+        console.warn("foamy.lock: " + parsed.invalid + " user preset(s) skipped: " + parsed.error)
     }
     userPresetLink = Layout.userPresetLink(entry, parsed.presets)
   }
@@ -276,9 +295,12 @@ Item {
   // The entry an IPC write merges into, or the reply when there is none
   // to write.
   function writableEntry() {
-    if (!shell || typeof shell.updateEntryInline !== "function") return "unsupported"
-    if (!lastEntry || entryState === "no-entry") return "no-entry"
-    if (entryState !== "ok") return "write-failed"
+    if (!shell || typeof shell.updateEntryInline !== "function")
+      return "unsupported"
+    if (!lastEntry || entryState === "no-entry")
+      return "no-entry"
+    if (entryState !== "ok")
+      return "write-failed"
     return lastEntry
   }
 
@@ -287,9 +309,13 @@ Item {
   // second write before the file watch reports this one merges over it,
   // never over the entry before (two quick saves don't revert each other).
   function writeEntry(next) {
-    if (!shell.updateEntryInline("foamy.lock", next)) return "unchanged"
-    var written = { id: "foamy.lock" }
-    for (var key in next) written[key] = next[key]
+    if (!shell.updateEntryInline("foamy.lock", next))
+      return "unchanged"
+    var written = {
+      id: "foamy.lock"
+    }
+    for (var key in next)
+      written[key] = next[key]
     lastEntry = written
     applyUserPresets(written)
     return "ok"
@@ -298,9 +324,14 @@ Item {
   // The catalog's user presets: each with its look and its built-in
   // preset's thumbnail (user presets have none of their own).
   function catalogUserPresets(dir) {
-    return userPresets.map(function(preset) {
-      return { id: preset.id, name: preset.name, entry: preset.look, look: preset.effective,
-        thumbnail: dir + "/previews/presets/" + preset.effective.preset + ".png" }
+    return userPresets.map(function (preset) {
+      return {
+        id: preset.id,
+        name: preset.name,
+        entry: preset.look,
+        look: preset.effective,
+        thumbnail: dir + "/previews/presets/" + preset.effective.preset + ".png"
+      }
     })
   }
 
@@ -310,24 +341,28 @@ Item {
   // the lock the user enabled, so the request and the pre-suspend status poll
   // always reach the same session lock; status then reports the conflict.
   // It only reorders the registry's list: no other handler is removed,
-  // disabled or called. 4.0 has no registry: nothing happens there.
+  // disabled or called.
   function checkLockRoute() {
     lockRoute.recheck()
     var reasons = conflictReasons()
     var key = reasons.join(",")
-    if (key && key !== conflictLogged) console.warn("foamy.lock: another lock service is loaded (" + key + "); keep omarchy.lock in disabledPlugins")
+    if (key && key !== conflictLogged)
+      console.warn("foamy.lock: another lock service is loaded (" + key + "); keep omarchy.lock in disabledPlugins")
     conflictLogged = key
   }
 
   function conflictReasons() {
     var reasons = []
-    if (stockLockEnabled === true) reasons.push("stock-lock-enabled")
-    if (lockRoute.others > 0) reasons.push("lock-target-shared")
+    if (stockLockEnabled === true)
+      reasons.push("stock-lock-enabled")
+    if (lockRoute.others > 0)
+      reasons.push("lock-target-shared")
     return reasons
   }
 
   onSettingsChanged: {
-    if (lockRequested) armBlankTimer()
+    if (lockRequested)
+      armBlankTimer()
   }
 
   function currentlyLocked() {
@@ -335,13 +370,15 @@ Item {
   }
 
   function pauseFingerprint() {
-    if (fingerprintPaused) return
+    if (fingerprintPaused)
+      return
     fingerprintPaused = true
     fingerprintRetryTimer.stop()
   }
 
   function resumeFingerprint() {
-    if (!fingerprintPaused) return
+    if (!fingerprintPaused)
+      return
     fingerprintPaused = false
     if (fingerprintSleptWhilePaused) {
       fingerprintSleptWhilePaused = false
@@ -351,11 +388,13 @@ Item {
     } else {
       fingerprintRetryTimer.interval = Math.max(FingerprintModel.MATCH_RETRY_MS, fingerprintRetryDueMs - Date.now())
     }
-    if (lockRequested && fingerprintConfigured && !fingerprintAuthenticating) fingerprintRetryTimer.restart()
+    if (lockRequested && fingerprintConfigured && !fingerprintAuthenticating)
+      fingerprintRetryTimer.restart()
   }
 
   function noteSleepRequested() {
-    if (!lockRequested || !fingerprintPaused) return
+    if (!lockRequested || !fingerprintPaused)
+      return
     // logind holds a suspend for its inhibitor delay, at most 15 seconds here.
     fingerprintResumeTimer.ticksLeft = 20
     fingerprintResumeTimer.lastTickMs = Date.now()
@@ -368,7 +407,8 @@ Item {
 
     for (var i = 0; i < screens.length; i++) {
       var screen = screens[i]
-      if (screen && screen.name && screen.width > 0 && screen.height > 0) count += 1
+      if (screen && screen.name && screen.width > 0 && screen.height > 0)
+        count += 1
     }
 
     return count
@@ -380,19 +420,24 @@ Item {
 
   function queueSessionLock() {
     pendingSessionLock = true
-    if (!sessionLockStabilizeTimer.running) logEvent("lock-pending: screen-stabilizing")
+    if (!sessionLockStabilizeTimer.running)
+      logEvent("lock-pending: screen-stabilizing")
     sessionLockStabilizeTimer.restart()
-    if (!pendingSessionLockTimer.running) pendingSessionLockTimer.start()
+    if (!pendingSessionLockTimer.running)
+      pendingSessionLockTimer.start()
   }
 
   function requestSessionLock() {
-    if (!lockRequested || sessionLock.locked || sessionLock.secure) return
-    if (sessionLockStabilizeTimer.running) return
-
+    if (!lockRequested || sessionLock.locked || sessionLock.secure)
+      return
+    if (sessionLockStabilizeTimer.running)
+      return
     if (!hasRealScreen()) {
-      if (!pendingSessionLock || lastEvent !== "lock-pending: no-real-screen") logEvent("lock-pending: no-real-screen")
+      if (!pendingSessionLock || lastEvent !== "lock-pending: no-real-screen")
+        logEvent("lock-pending: no-real-screen")
       pendingSessionLock = true
-      if (!pendingSessionLockTimer.running) pendingSessionLockTimer.start()
+      if (!pendingSessionLockTimer.running)
+        pendingSessionLockTimer.start()
       return
     }
 
@@ -405,7 +450,8 @@ Item {
   // a startup check must distinguish an orphan from another live locker.
   // Outputs can still be absent, so keep retrying an undetermined answer.
   function checkStrandedLock() {
-    if (strandedLockResolved || strandedLockCheckProc.running) return
+    if (strandedLockResolved || strandedLockCheckProc.running)
+      return
 
     // A lock this shell took is nobody's orphan.
     if (currentlyLocked()) {
@@ -417,8 +463,8 @@ Item {
   }
 
   function recoverStrandedLock() {
-    if (!strandedLock || currentlyLocked() || !passwordPamConfigured) return
-
+    if (!strandedLock || currentlyLocked() || !passwordPamConfigured)
+      return
     strandedLock = false
     logEvent("lock-stranded: recovering")
     beginLock()
@@ -431,7 +477,8 @@ Item {
       return
     }
     backgroundProbePending = false
-    if (wallpaperHelperUnavailable) return
+    if (wallpaperHelperUnavailable)
+      return
     wallpaperProbeProc.running = true
   }
 
@@ -440,17 +487,23 @@ Item {
       videoPosterPath = ""
       return
     }
-    if (posterProc.running) return
+    if (posterProc.running)
+      return
     var size = Model.videoScreenSize(videoNatives, Quickshell.screens || [])
     posterProc.sourcePath = backgroundPath
-    posterProc.request = JSON.stringify({ path: backgroundPath, width: size[0], height: size[1] })
+    posterProc.request = JSON.stringify({
+      path: backgroundPath,
+      width: size[0],
+      height: size[1]
+    })
     posterProc.stdinEnabled = true
     posterProc.sourceSignature = backgroundSignature
     posterProc.running = true
   }
 
   function refreshFingerprintStatus() {
-    if (!fingerprintCheckProc.running) fingerprintCheckProc.running = true
+    if (!fingerprintCheckProc.running)
+      fingerprintCheckProc.running = true
   }
 
   // An unreachable fprintd -- restarting under the resume hook, or still
@@ -461,7 +514,8 @@ Item {
   function applyFingerprintProbe(text) {
     var status = FingerprintModel.classifyProbe(text)
     if (status === "unknown") {
-      if (fingerprintConfigured) return
+      if (fingerprintConfigured)
+        return
       fingerprintProbeStreak += 1
       if (lockRequested) {
         fingerprintRecheckTimer.interval = FingerprintModel.retryDelayMs(fingerprintProbeStreak)
@@ -474,18 +528,21 @@ Item {
     fingerprintConfigured = status === "yes"
     if (lockRequested && fingerprintConfigured) {
       // A pending retry already owns the next attempt.
-      if (!fingerprintRetryTimer.running) startFingerprint()
+      if (!fingerprintRetryTimer.running)
+        startFingerprint()
     } else if (!fingerprintConfigured) {
       // abort() delivers no completion signal, so close the attempt here
       // too; settle returns before arming a retry while unconfigured.
-      if (fingerprintPam.active) fingerprintPam.abort()
+      if (fingerprintPam.active)
+        fingerprintPam.abort()
       settleFingerprintAttempt()
       fingerprintRetryTimer.stop()
     }
   }
 
   function refreshUserIdentity() {
-    if (!userName || passwdIdentityProc.running || accountsIdentityProc.running) return
+    if (!userName || passwdIdentityProc.running || accountsIdentityProc.running)
+      return
     passwdIdentityProc.running = true
   }
 
@@ -510,20 +567,26 @@ Item {
     // The same sandboxed decoder as media artwork (foamy-lock-helper), bounded by
     // its own alarm and an outer timeout, so a pathological picture can
     // neither run ImageMagick delegates nor hang the refresh.
-    avatarThumbnailProc.request = JSON.stringify({ kind: "avatar", path: userAvatarPath })
+    avatarThumbnailProc.request = JSON.stringify({
+      kind: "avatar",
+      path: userAvatarPath
+    })
     avatarThumbnailProc.stdinEnabled = true
     avatarThumbnailProc.running = true
   }
 
   function applyAvatarResult(text) {
     var result = null
-    try { result = JSON.parse(String(text || "")) } catch (error) { result = null }
+    try {
+      result = JSON.parse(String(text || ""))
+    } catch (error) {
+      result = null
+    }
     if (result && result.ok === true && result.path === userAvatarCachePath) {
       avatarError = ""
       userAvatarRenderPath = userAvatarCachePath
     } else {
-      var code = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
-        ? result.error : "avatar-helper-failed"
+      var code = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "avatar-helper-failed"
       avatarError = code
       // Without Bubblewrap or ImageMagick there is no thumbnail at all; the
       // user's own picture is then shown as before. A picture the sandbox
@@ -536,8 +599,8 @@ Item {
   function applyPasswdIdentity(value) {
     var line = String(value || "").trim().split("\n")[0]
     var fields = line.split(":")
-    if (fields.length < 7) return
-
+    if (fields.length < 7)
+      return
     userDisplayName = String(fields[4] || "").split(",")[0].trim()
     var accountHome = String(fields[5] || "").trim() || home
     userAvatarPath = accountHome + "/.face"
@@ -546,11 +609,12 @@ Item {
 
   function applyAccountsIdentity(value) {
     var lines = String(value || "").trim().split("\n")
-    if (lines.length < 4) return
-
+    if (lines.length < 4)
+      return
     var values = []
     try {
-      for (var i = 0; i < lines.length; i++) values.push(JSON.parse(lines[i]).data)
+      for (var i = 0; i < lines.length; i++)
+        values.push(JSON.parse(lines[i]).data)
     } catch (error) {
       return
     }
@@ -558,7 +622,8 @@ Item {
     var realName = String(values[0] || "").trim()
     var iconFile = String(values[1] || "").trim()
     var accountHome = String(values[3] || "").trim() || home
-    if (realName) userDisplayName = realName
+    if (realName)
+      userDisplayName = realName
     userAvatarPath = iconFile || userAvatarPath || accountHome + "/.face"
     refreshAvatarThumbnail()
   }
@@ -579,9 +644,11 @@ Item {
   }
   // Fallback reports describe the views of the current lock and look.
   onLockRequestedChanged: {
-    if (lockRequested) clearLayoutFallback()
+    if (lockRequested)
+      clearLayoutFallback()
+    else
     // A picture changed while locked is prepared once unlocked.
-    else {
+    {
       refreshPicture()
       refreshVideo()
     }
@@ -601,21 +668,29 @@ Item {
     var width = 0
     var height = 0
     for (var i = 0; i < screens.length; i++) {
-      if (!screens[i]) continue
+      if (!screens[i])
+        continue
       width = Math.max(width, Math.round(screens[i].width || 0))
       height = Math.max(height, Math.round(screens[i].height || 0))
     }
-    if (width < 16 || height < 16) return [1920, 1080]
+    if (width < 16 || height < 16)
+      return [1920, 1080]
     return [Math.min(width, 7680), Math.min(height, 4320)]
   }
 
   // The helper request for a look's picture, "" when it has none.
   function pictureKey(target) {
     var background = target ? target.background : null
-    if (!background || background.source !== "picture" || !background.path || Layout.isVideoPath(background.path)) return ""
+    if (!background || background.source !== "picture" || !background.path || Layout.isVideoPath(background.path))
+      return ""
     var size = pictureSize()
-    return JSON.stringify({ kind: "background", path: background.path, width: size[0], height: size[1],
-      blur: background.blur })
+    return JSON.stringify({
+      kind: "background",
+      path: background.path,
+      width: size[0],
+      height: size[1],
+      blur: background.blur
+    })
   }
 
   // --- video backgrounds --------------------------------------------------------
@@ -625,9 +700,12 @@ Item {
   // the look plays (its still stays Omarchy's poster). "" otherwise.
   function videoSourcePath(target) {
     var background = target ? target.background : null
-    if (!background) return ""
-    if (background.source === "picture" && Layout.isVideoPath(background.path)) return background.path
-    if (background.source === "omarchy" && videoBackground && Layout.playsVideo(background)) return backgroundPath
+    if (!background)
+      return ""
+    if (background.source === "picture" && Layout.isVideoPath(background.path))
+      return background.path
+    if (background.source === "omarchy" && videoBackground && Layout.playsVideo(background))
+      return backgroundPath
     return ""
   }
 
@@ -639,15 +717,21 @@ Item {
   // file and the largest screen's native size, the clip's key.
   function videoKey(target) {
     var path = videoSourcePath(target)
-    if (!path) return ""
+    if (!path)
+      return ""
     var size = Model.videoScreenSize(videoNatives, Quickshell.screens || [])
-    return JSON.stringify({ path: path, width: size[0], height: size[1] })
+    return JSON.stringify({
+      path: path,
+      width: size[0],
+      height: size[1]
+    })
   }
 
   // Asks Hyprland for its monitors again (a read-only query), so the native
   // size follows mode and scale changes.
   function refreshVideoScreens() {
-    if (hyprlandSession) Hyprland.refreshMonitors()
+    if (hyprlandSession)
+      Hyprland.refreshMonitors()
   }
 
   function refreshVideo() {
@@ -659,9 +743,11 @@ Item {
       videoError = ""
       return
     }
-    if (key === videoRequestKey) return
+    if (key === videoRequestKey)
+      return
     // Probed while unlocked only, as the picture is prepared.
-    if (currentlyLocked()) return
+    if (currentlyLocked())
+      return
     if (videoProc.running) {
       videoPending = true
       return
@@ -681,15 +767,15 @@ Item {
 
   // The probe's reply for `request` (Model.videoProbeResult's checks).
   function applyVideoResult(text, request) {
-    if (request !== videoRequestKey) return
+    if (request !== videoRequestKey)
+      return
     var result = Model.videoProbeResult(text, videoCacheDirectory)
     var violations = result.ok && Array.isArray(result.reply.violations) ? result.reply.violations : []
     videoPosterRender = result.poster
     videoClipPath = result.clip
-    videoError = !result.ok ? result.error
-      : violations.length > 0 && /^[a-z-]{1,48}$/.test(String(violations[0])) ? String(violations[0])
-      : !result.poster ? "video-poster-missing" : ""
-    if (videoError) console.warn("foamy.lock: video background has no poster or clip (" + videoError + ")")
+    videoError = !result.ok ? result.error : violations.length > 0 && /^[a-z-]{1,48}$/.test(String(violations[0])) ? String(violations[0]) : !result.poster ? "video-poster-missing" : ""
+    if (videoError)
+      console.warn("foamy.lock: video background has no poster or clip (" + videoError + ")")
   }
 
   // A view gave up on the clip ("error" or "stall"): its poster stays.
@@ -706,9 +792,11 @@ Item {
       pictureError = ""
       return
     }
-    if (key === pictureRequestKey) return
+    if (key === pictureRequestKey)
+      return
     // Prepared while unlocked only: a lock keeps what it was shown with.
-    if (currentlyLocked()) return
+    if (currentlyLocked())
+      return
     if (pictureProc.running) {
       picturePending = true
       return
@@ -725,15 +813,17 @@ Item {
 
   function applyPictureResult(text) {
     var result = null
-    try { result = JSON.parse(String(text || "")) } catch (error) { result = null }
-    var directory = avatarCacheDirectory + "/background/"
-    if (result && result.ok === true && typeof result.path === "string"
-        && result.path.indexOf(directory) === 0 && /^[0-9a-f]{64}\.png$/.test(result.path.slice(directory.length))) {
+    try {
+      result = JSON.parse(String(text || ""))
+    } catch (error) {
+      result = null
+    }
+    var directory = avatarCacheDirectory + "/background/";
+    if (result && result.ok === true && typeof result.path === "string" && result.path.indexOf(directory) === 0 && /^[0-9a-f]{64}\.png$/.test(result.path.slice(directory.length))) {
       pictureError = ""
       pictureRenderPath = result.path
     } else {
-      pictureError = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error)
-        ? result.error : "picture-helper-failed"
+      pictureError = result && typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "picture-helper-failed"
       pictureRenderPath = ""
       console.warn("foamy.lock: background picture unavailable (" + pictureError + "); showing the theme colour")
     }
@@ -777,8 +867,10 @@ Item {
     fingerprintRetryTimer.stop()
     fingerprintReachTimer.stop()
     fingerprintResumeTimer.stop()
-    if (passwordPam.active) passwordPam.abort()
-    if (fingerprintPam.active) fingerprintPam.abort()
+    if (passwordPam.active)
+      passwordPam.abort()
+    if (fingerprintPam.active)
+      fingerprintPam.abort()
   }
 
   function beginLock() {
@@ -798,7 +890,7 @@ Item {
     queueSessionLock()
     openWeather()
 
-    Qt.callLater(function() {
+    Qt.callLater(function () {
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
@@ -820,11 +912,13 @@ Item {
   }
 
   function pollWeatherIfDue() {
-    if (weatherWanted && Date.now() - weatherPolledAtMs >= weatherPollMs) pollWeather()
+    if (weatherWanted && Date.now() - weatherPolledAtMs >= weatherPollMs)
+      pollWeather()
   }
 
   function pollWeather() {
-    if (!weatherWanted) return
+    if (!weatherWanted)
+      return
     weatherPendingLeft = weatherRetries
     weatherPolledAtMs = Date.now()
     requestWeather()
@@ -839,10 +933,11 @@ Item {
       weatherReport = null
       return
     }
-    if (weatherBusy) return
+    if (weatherBusy)
+      return
     weatherBusy = true
     weatherPolls++
-    weatherPeer.call("foamy.weather", "current", [], function(ok, output) {
+    weatherPeer.call("foamy.weather", "current", [], function (ok, output) {
       root.weatherBusy = false
       root.applyWeatherReply(ok, output)
     })
@@ -852,7 +947,10 @@ Item {
   // pending asks again later and keeps what shows; anything else replaces it.
   function applyWeatherReply(ok, output) {
     weatherClockMs = Date.now()
-    var parsed = ok ? Model.parseWeather(output, weatherClockMs) : { state: "unavailable", weather: null }
+    var parsed = ok ? Model.parseWeather(output, weatherClockMs) : {
+      state: "unavailable",
+      weather: null
+    }
     weatherState = parsed.state
     if (parsed.state === "pending") {
       if (weatherPendingLeft > 0 && weatherWanted) {
@@ -865,8 +963,8 @@ Item {
   }
 
   function finishUnlock() {
-    if (!root.currentlyLocked()) return
-
+    if (!root.currentlyLocked())
+      return
     lockRequested = false
     pendingSessionLock = false
     sessionLockStabilizeTimer.stop()
@@ -878,17 +976,26 @@ Item {
     runWake()
   }
 
-  function armBlankTimer() {
+  // `runUpMs`: the least time before the display blanks (a resume's
+  // idleBlankTimer.resumeMs); blankAfterSec when it is longer.
+  function armBlankTimer(runUpMs) {
     idleBlankTimer.armedAt = Date.now()
-    if (settings.blankAfterSec === null) idleBlankTimer.stop()
-    else idleBlankTimer.restart()
+    idleBlankTimer.runUpMs = runUpMs || 0
+    if (settings.blankAfterSec === null)
+      idleBlankTimer.stop()
+    else
+      idleBlankTimer.restart()
   }
 
   function runWake() {
     displayBlanked = false
-    if (blankProcess.running) wakeAfterBlank = true
-    if (!wakeProcess.running) wakeProcess.running = true
-    if (lockRequested) armBlankTimer()
+    blankAfterWake = false
+    if (blankProcess.running)
+      wakeAfterBlank = true
+    if (!wakeProcess.running)
+      wakeProcess.running = true
+    if (lockRequested)
+      armBlankTimer()
     resumeFingerprint()
     nudgeFingerprint()
   }
@@ -900,7 +1007,8 @@ Item {
   // be re-collapsed straight back into the storm the backoff exists to prevent;
   // past the floor, the current tier paces repeat nudges.
   function nudgeFingerprint() {
-    if (!lockRequested) return
+    if (!lockRequested)
+      return
     if (!fingerprintConfigured && fingerprintRecheckTimer.running) {
       var now = Date.now()
       if (FingerprintModel.shouldNudge(now, fingerprintLastNudgeMs, now - FingerprintModel.IDLE_CLEAR_MS, fingerprintRecheckTimer.interval)) {
@@ -910,11 +1018,15 @@ Item {
       }
       return
     }
-    if (!fingerprintConfigured) return
-    if (fingerprintPam.active || fingerprintAuthenticating) return
-    if (!fingerprintRetryTimer.running) return
+    if (!fingerprintConfigured)
+      return
+    if (fingerprintPam.active || fingerprintAuthenticating)
+      return
+    if (!fingerprintRetryTimer.running)
+      return
     var now = Date.now()
-    if (!FingerprintModel.shouldNudge(now, fingerprintLastNudgeMs, fingerprintLastSettleMs, fingerprintRetryBackoffMs)) return
+    if (!FingerprintModel.shouldNudge(now, fingerprintLastNudgeMs, fingerprintLastSettleMs, fingerprintRetryBackoffMs))
+      return
     fingerprintLastNudgeMs = now
     armFingerprintRetry(FingerprintModel.MATCH_RETRY_MS)
   }
@@ -923,7 +1035,8 @@ Item {
     fingerprintRetryTimer.interval = delayMs
     fingerprintRetryBackoffMs = delayMs
     fingerprintRetryDueMs = Date.now() + delayMs
-    if (!fingerprintPaused) fingerprintRetryTimer.restart()
+    if (!fingerprintPaused)
+      fingerprintRetryTimer.restart()
   }
 
   // Monotonic timers pause across suspend, so a wait armed before the sleep
@@ -935,7 +1048,8 @@ Item {
   // resume can be noticed by more than one timer.
   function noteFingerprintResumed() {
     var now = Date.now()
-    if (FingerprintModel.inResumeGrace(now, fingerprintResumedAtMs)) return
+    if (FingerprintModel.inResumeGrace(now, fingerprintResumedAtMs))
+      return
     logEvent("fingerprint-resume: streak=" + fingerprintUnreachedStreak)
     fingerprintResumedAtMs = now
     fingerprintUnreachedStreak = 0
@@ -952,40 +1066,60 @@ Item {
   function restartFingerprintAfterSleep() {
     noteFingerprintResumed()
     if (fingerprintAuthenticating || fingerprintPam.active) {
-      if (fingerprintPam.active) fingerprintPam.abort()
+      if (fingerprintPam.active)
+        fingerprintPam.abort()
       settleFingerprintAttempt()
       return
     }
-    if (!fingerprintRetryTimer.running) return
+    if (!fingerprintRetryTimer.running)
+      return
     armFingerprintRetry(FingerprintModel.MATCH_RETRY_MS)
   }
 
   function runBlank() {
     displayBlanked = true
     pauseFingerprint()
-    if (!blankProcess.running) blankProcess.running = true
+    if (wakeProcess.running)
+      blankAfterWake = true
+    else if (!blankProcess.running)
+      blankProcess.running = true
   }
 
   // blankProcess's end (also when it couldn't start): a wake that came
   // meanwhile runs again, unless a blank came after it.
   function blankFinished() {
-    if (!wakeAfterBlank) return
+    if (!wakeAfterBlank)
+      return
     wakeAfterBlank = false
-    if (displayBlanked) return
-    if (wakeProcess.running) wakeQueued = true
-    else wakeProcess.running = true
+    if (displayBlanked)
+      return
+    if (wakeProcess.running)
+      wakeQueued = true
+    else
+      wakeProcess.running = true
   }
 
+  // wakeProcess's end (also when it couldn't start): a wake queued behind a
+  // blank runs again, or a blank that waited for this wake runs now.
   function wakeFinished() {
-    if (!wakeQueued) return
-    wakeQueued = false
-    if (!displayBlanked && !wakeProcess.running) wakeProcess.running = true
+    if (wakeQueued) {
+      wakeQueued = false
+      if (!displayBlanked && !wakeProcess.running) {
+        wakeProcess.running = true
+        return
+      }
+    }
+    if (!blankAfterWake)
+      return
+    blankAfterWake = false
+    if (displayBlanked && !blankProcess.running)
+      blankProcess.running = true
   }
 
   function submitPassword(value) {
     var password = String(value || "")
-    if (!lockRequested || authenticatingPassword || password.length === 0) return
-
+    if (!lockRequested || authenticatingPassword || password.length === 0)
+      return
     runWake()
     pendingPassword = password
     failureMessage = ""
@@ -1001,16 +1135,18 @@ Item {
   }
 
   function respondToPasswordPrompt() {
-    if (!authenticatingPassword || !passwordPam.active || !passwordPam.responseRequired) return
+    if (!authenticatingPassword || !passwordPam.active || !passwordPam.responseRequired)
+      return
     passwordPam.respond(pendingPassword)
   }
 
   function handlePasswordFailure() {
     // Settle each attempt once: onError and onCompleted may both report it.
-    if (!passwordAttemptOpen) return
+    if (!passwordAttemptOpen)
+      return
     passwordAttemptOpen = false
-    if (!lockRequested) return
-
+    if (!lockRequested)
+      return
     authenticatingPassword = false
     enteredPassword = ""
     pendingPassword = ""
@@ -1020,9 +1156,10 @@ Item {
   }
 
   function startFingerprint() {
-    if (!lockRequested || !sessionLock.secure || !fingerprintConfigured || fingerprintPaused) return
-    if (fingerprintPam.active || fingerprintAuthenticating) return
-
+    if (!lockRequested || !sessionLock.secure || !fingerprintConfigured || fingerprintPaused)
+      return
+    if (fingerprintPam.active || fingerprintAuthenticating)
+      return
     fingerprintAuthenticating = true
     fingerprintAttemptReachedDevice = false
     fingerprintAttemptFastError = false
@@ -1044,7 +1181,8 @@ Item {
   // the reader. Immediate device errors still back off. It may now
   // wait for a finger as long as pam_fprintd allows, so the reach bound stops.
   function noteFingerprintReachedDevice() {
-    if (fingerprintAttemptReachedDevice) return
+    if (fingerprintAttemptReachedDevice)
+      return
     fingerprintAttemptReachedDevice = true
     fingerprintAttemptPromptedAtMs = Date.now()
     fingerprintReachTimer.stop()
@@ -1056,7 +1194,8 @@ Item {
   // may now be fresh, instead of hanging silently behind a normal icon.
   function timeoutFingerprintReach() {
     logEvent("fingerprint-reach-timeout")
-    if (fingerprintPam.active) fingerprintPam.abort()
+    if (fingerprintPam.active)
+      fingerprintPam.abort()
     settleFingerprintAttempt()
   }
 
@@ -1065,17 +1204,18 @@ Item {
   // attempt being open, and the first settle closes it. Reached attempts clear
   // the streak; unreached ones advance it and stretch the next retry.
   function settleFingerprintAttempt(deviceError) {
-    if (!fingerprintAuthenticating) return
+    if (!fingerprintAuthenticating)
+      return
     fingerprintAuthenticating = false
     fingerprintReachTimer.stop()
-    if (!lockRequested || !fingerprintConfigured) return
+    if (!lockRequested || !fingerprintConfigured)
+      return
 
     // An error can arrive before the sleep watcher notices the wall-clock gap.
     var now = Date.now()
     fingerprintAttemptFastError = !!deviceError && fingerprintAttemptReachedDevice && now - fingerprintAttemptPromptedAtMs < FingerprintModel.FAST_ERROR_MS
     var usableAttempt = fingerprintAttemptReachedDevice && !fingerprintAttemptFastError
-    if (!usableAttempt && fingerprintSleepWatch.running
-        && FingerprintModel.spannedSleep(now - fingerprintSleepWatch.lastTickMs, fingerprintSleepWatch.interval)) {
+    if (!usableAttempt && fingerprintSleepWatch.running && FingerprintModel.spannedSleep(now - fingerprintSleepWatch.lastTickMs, fingerprintSleepWatch.interval)) {
       noteFingerprintResumed()
     }
 
@@ -1098,7 +1238,8 @@ Item {
     if (result === PamResult.Success && lockRequested) {
       // A match after a run of misses is the recovery too; the unlock resets
       // the streak without settling, so log it here or it leaves no trace.
-      if (fingerprintUnreachedStreak > 0) logEvent("fingerprint-recovered: streak=" + fingerprintUnreachedStreak)
+      if (fingerprintUnreachedStreak > 0)
+        logEvent("fingerprint-recovered: streak=" + fingerprintUnreachedStreak)
       finishUnlock()
     } else {
       settleFingerprintAttempt(result === PamResult.Error)
@@ -1148,23 +1289,25 @@ Item {
         // Keystrokes arrive at the focused surface; Window.active follows it.
         readonly property bool surfaceActive: Window.active
         onSurfaceActiveChanged: root.activeSurfaces = Math.max(0, root.activeSurfaces + (surfaceActive ? 1 : -1))
-        Component.onDestruction: if (surfaceActive) root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
+        Component.onDestruction: if (surfaceActive)
+          root.activeSurfaces = Math.max(0, root.activeSurfaces - 1)
         look: root.look
         displayAwake: !root.displayBlanked
         weather: root.weather
         primary: Layout.isPrimary(surfaceActive, root.activeSurfaces > 0, lockSurface.screen !== null)
-        onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
+        onLayoutFellBack: function (error, preset) {
+          root.noteLayoutFallback(error, preset)
+        }
         anchors.fill: parent
         // Only a picture (or a video's poster) made for this look; otherwise
         // the theme colour. A video's poster is not blurred yet.
-        backgroundPath: root.isVideoPicture(root.look)
-          ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "")
-          : !root.pictureWanted ? root.lockWallpaperPath
-          : root.pictureRequestKey === root.lookPictureKey ? root.pictureRenderPath : ""
+        backgroundPath: root.isVideoPicture(root.look) ? (root.videoRequestKey === root.lookVideoKey ? root.videoPosterRender : "") : !root.pictureWanted ? root.lockWallpaperPath : root.pictureRequestKey === root.lookPictureKey ? root.pictureRenderPath : ""
         backgroundPrepared: root.pictureWanted
         // Only the clip made for this look's video and screen.
         videoPath: root.lookVideoKey !== "" && root.videoRequestKey === root.lookVideoKey ? root.videoClipPath : ""
-        onVideoFailed: function(reason) { root.noteVideoFailure(reason) }
+        onVideoFailed: function (reason) {
+          root.noteVideoFailure(reason)
+        }
         backgroundVersion: root.backgroundVersion
         fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
         fingerprintUnavailable: root.fingerprintUnavailable
@@ -1175,7 +1318,9 @@ Item {
         loadBackground: root.locked
         activePlayer: root.activePlayer
         artworkPath: artwork.path
-        onArtworkFailed: function(path) { artwork.invalidate(path) }
+        onArtworkFailed: function (path) {
+          artwork.invalidate(path)
+        }
         showUserInfo: root.settings.showUserInfo
         timeFormat: root.settings.timeFormat
         passwordText: root.enteredPassword
@@ -1183,19 +1328,27 @@ Item {
         userDisplayName: root.userDisplayName
         avatarPath: root.userAvatarRenderPath
         avatarVersion: root.userAvatarVersion
-        onPasswordTextEdited: function(password) { root.enteredPassword = password }
-        onSubmitPassword: function(password) { root.submitPassword(password) }
+        onPasswordTextEdited: function (password) {
+          root.enteredPassword = password
+        }
+        onSubmitPassword: function (password) {
+          root.submitPassword(password)
+        }
         onClearFailureRequested: root.failureMessage = ""
         onWakeRequested: root.runWake()
       }
-
     }
   }
 
   PanelWindow {
     id: previewWindow
     visible: root.previewVisible || root.previewHolding
-    anchors { top: true; bottom: true; left: true; right: true }
+    anchors {
+      top: true
+      bottom: true
+      left: true
+      right: true
+    }
     color: "transparent"
     WlrLayershell.namespace: "foamy-lock-preview"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -1204,7 +1357,9 @@ Item {
     // While holding (closed, keys still swallowed) the pointer goes through.
     mask: root.previewVisible ? null : previewNoInput
 
-    Region { id: previewNoInput }
+    Region {
+      id: previewNoInput
+    }
 
     LockView {
       objectName: "previewView"
@@ -1212,13 +1367,12 @@ Item {
       visible: root.previewVisible
       // A preview isn't a lock: it never asks for the password.
       showUnlockHint: false
-      backgroundPath: root.isVideoPicture(root.pictureLook)
-        ? (root.videoRequestKey === root.previewVideoKey ? root.videoPosterRender : "")
-        : !root.previewPictureKey ? root.lockWallpaperPath
-        : root.pictureRequestKey === root.previewPictureKey ? root.pictureRenderPath : ""
+      backgroundPath: root.isVideoPicture(root.pictureLook) ? (root.videoRequestKey === root.previewVideoKey ? root.videoPosterRender : "") : !root.previewPictureKey ? root.lockWallpaperPath : root.pictureRequestKey === root.previewPictureKey ? root.pictureRenderPath : ""
       backgroundPrepared: root.previewPictureKey !== ""
       videoPath: root.previewVideoKey !== "" && root.videoRequestKey === root.previewVideoKey ? root.videoClipPath : ""
-      onVideoFailed: function(reason) { root.noteVideoFailure(reason) }
+      onVideoFailed: function (reason) {
+        root.noteVideoFailure(reason)
+      }
       backgroundVersion: root.backgroundVersion
       fingerprintConfigured: root.fingerprintConfigured || root.fingerprintUnavailable
       fingerprintUnavailable: root.fingerprintUnavailable
@@ -1229,7 +1383,9 @@ Item {
       loadBackground: root.previewVisible
       activePlayer: root.activePlayer
       artworkPath: artwork.path
-      onArtworkFailed: function(path) { artwork.invalidate(path) }
+      onArtworkFailed: function (path) {
+        artwork.invalidate(path)
+      }
       showUserInfo: root.settings.showUserInfo
       timeFormat: root.settings.timeFormat
       passwordText: ""
@@ -1240,7 +1396,9 @@ Item {
       look: root.previewLook || root.look
       weather: root.weather
       primary: true
-      onLayoutFellBack: function(error, preset) { root.noteLayoutFallback(error, preset) }
+      onLayoutFellBack: function (error, preset) {
+        root.noteLayoutFallback(error, preset)
+      }
     }
 
     // Says what this is: a look on the screen, not a lock.
@@ -1266,7 +1424,9 @@ Item {
       id: previewKeys
       anchors.fill: parent
       focus: true
-      Keys.onPressed: function(event) { root.previewKeyPressed(event) }
+      Keys.onPressed: function (event) {
+        root.previewKeyPressed(event)
+      }
     }
   }
 
@@ -1282,14 +1442,16 @@ Item {
     interval: root.weatherPollMs
     repeat: true
     running: root.weatherWanted
-    onRunningChanged: if (running) Qt.callLater(root.pollWeatherIfDue)
+    onRunningChanged: if (running)
+      Qt.callLater(root.pollWeatherIfDue)
     onTriggered: root.pollWeather()
   }
 
   Timer {
     id: weatherRetryTimer
     interval: root.weatherRetryMs
-    onTriggered: if (root.weatherWanted) root.requestWeather()
+    onTriggered: if (root.weatherWanted)
+      root.requestWeather()
   }
 
   // The three-hour cutoff applies while a report is held, replies or not.
@@ -1303,7 +1465,8 @@ Item {
   // Any key closes the preview; while holding, keys are only swallowed.
   function previewKeyPressed(event) {
     previewVisible = false
-    if (event) event.accepted = true
+    if (event)
+      event.accepted = true
   }
 
   function endPreviewHold() {
@@ -1325,18 +1488,20 @@ Item {
     onResponseRequiredChanged: root.respondToPasswordPrompt()
     onPamMessage: root.respondToPasswordPrompt()
 
-    onCompleted: function(result) {
+    onCompleted: function (result) {
       root.authenticatingPassword = false
       root.pendingPassword = ""
 
-      if (!root.lockRequested) return
+      if (!root.lockRequested)
+        return
       if (result === PamResult.Success) {
         root.passwordAttemptOpen = false
         root.finishUnlock()
-      } else root.handlePasswordFailure()
+      } else
+        root.handlePasswordFailure()
     }
 
-    onError: function(error) {
+    onError: function (error) {
       root.handlePasswordFailure()
     }
   }
@@ -1347,14 +1512,15 @@ Item {
     user: root.userName
 
     onPamMessage: {
-      if (!messageIsError) root.noteFingerprintReachedDevice()
+      if (!messageIsError)
+        root.noteFingerprintReachedDevice()
     }
 
-    onCompleted: function(result) {
+    onCompleted: function (result) {
       root.handleFingerprintFinished(result)
     }
 
-    onError: function(error) {
+    onError: function (error) {
       root.settleFingerprintAttempt(true)
     }
   }
@@ -1378,7 +1544,8 @@ Item {
       var now = Date.now()
       var slept = FingerprintModel.spannedSleep(now - lastTickMs, interval)
       lastTickMs = now
-      if (slept) root.restartFingerprintAfterSleep()
+      if (slept)
+        root.restartFingerprintAfterSleep()
     }
   }
 
@@ -1399,7 +1566,7 @@ Item {
         stop()
         root.fingerprintSleptWhilePaused = true
         root.resumeFingerprint()
-        root.armBlankTimer()
+        root.armBlankTimer(idleBlankTimer.resumeMs)
       } else if (slept || !root.fingerprintPaused || --ticksLeft <= 0) {
         stop()
       }
@@ -1436,20 +1603,28 @@ Item {
     // The helper resolves the link like readlink -f and stats the target:
     // {"ok":true,"path":"/…","signature":"…"}, the signature changing with the
     // file's size, mtime or ctime. Any failure keeps the themed background.
-    command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(
-      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["wallpaper", root.currentBackgroundLink]))
+    command: ["timeout", "--kill-after=1s", "2s"].concat(FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["wallpaper", root.currentBackgroundLink]))
     clearEnvironment: true
-    environment: ({ PATH: "/usr/bin", LANG: "C.UTF-8" })
-    stdout: StdioCollector { id: backgroundOutput; waitForEnd: true }
+    environment: ({
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
+    stdout: StdioCollector {
+      id: backgroundOutput
+      waitForEnd: true
+    }
     // exited() comes before `running` goes false; a command that couldn't
     // start reports only the latter, and is settled as a failure there.
     property bool exitSeen: false
-    onExited: function(exitCode, exitStatus) {
+    onExited: function (exitCode, exitStatus) {
       exitSeen = true
       finish(exitCode, exitStatus)
     }
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       finish(-1, 1)
     }
     // exitCode -1: the probe couldn't start.
@@ -1458,10 +1633,13 @@ Item {
       if (FoamyNative.unavailable(exitCode)) {
         root.wallpaperHelperUnavailable = true
       } else if (exitCode === 0 && exitStatus === 0) {
-        try { data = JSON.parse(backgroundOutput.text) } catch (error) { data = null }
+        try {
+          data = JSON.parse(backgroundOutput.text)
+        } catch (error) {
+          data = null
+        }
       }
-      if (!data || data.ok !== true || typeof data.path !== "string" || data.path[0] !== "/"
-          || typeof data.signature !== "string" || data.signature.length === 0) {
+      if (!data || data.ok !== true || typeof data.path !== "string" || data.path[0] !== "/" || typeof data.signature !== "string" || data.signature.length === 0) {
         root.backgroundPath = ""
         root.videoPosterPath = ""
         root.wallpaperError = root.wallpaperHelperUnavailable ? "helper-unavailable" : "wallpaper-unavailable"
@@ -1476,8 +1654,10 @@ Item {
         root.refreshPoster()
       }
       if (root.backgroundProbePending) {
-        if (exitCode === -1) Qt.callLater(root.refreshBackground)
-        else root.refreshBackground()
+        if (exitCode === -1)
+          Qt.callLater(root.refreshBackground)
+        else
+          root.refreshBackground()
       }
     }
   }
@@ -1492,17 +1672,42 @@ Item {
     // video), never a decoder outside the sandbox. Its own limit is 60 s.
     command: ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)
     clearEnvironment: true
-    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
-      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: root.home,
+        XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: posterOutput; waitForEnd: true }
-    onExited: function(exitCode, exitStatus) {
+    stdout: StdioCollector {
+      id: posterOutput
+      waitForEnd: true
+    }
+    // exited() comes before `running` goes false; a command that couldn't
+    // start reports only the latter, and is settled as a failure there.
+    property bool exitSeen: false
+    onExited: function (exitCode, exitStatus) {
+      exitSeen = true
+      finish(exitCode, exitStatus)
+    }
+    onRunningChanged: {
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
+      finish(-1, 1)
+    }
+    // exitCode -1: the probe couldn't start.
+    function finish(exitCode, exitStatus) {
       // A theme can change during extraction; never show the previous theme's frame.
       if (sourcePath !== root.backgroundPath || sourceSignature !== root.backgroundSignature) {
-        root.refreshPoster()
+        if (exitCode === -1)
+          Qt.callLater(root.refreshPoster)
+        else
+          root.refreshPoster()
         return
       }
       var result = Model.videoProbeResult(exitCode === 0 && exitStatus === 0 ? posterOutput.text : "", root.videoCacheDirectory)
@@ -1518,13 +1723,16 @@ Item {
 
   Process {
     id: passwdIdentityProc
-    command: ["getent", "passwd", root.userName]
+    command: root.identityDeadline.concat(["getent", "passwd", root.userName])
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyPasswdIdentity(text)
     }
-    onExited: {
-      if (root.userName && !accountsIdentityProc.running) accountsIdentityProc.running = true
+    // `running` going false is the one end, after an exit or a command that
+    // couldn't start alike: AccountsService is asked next either way.
+    onRunningChanged: {
+      if (!running && root.userName && !accountsIdentityProc.running)
+        accountsIdentityProc.running = true
     }
   }
 
@@ -1532,11 +1740,7 @@ Item {
     id: accountsIdentityProc
     // AccountsService owns the desktop-facing real name and avatar. getent and
     // ~/.face remain usable when the service or its optional fields are absent.
-    command: [
-      "bash", "-c",
-      "uid=$(id -u -- \"$1\") || exit 1; exec busctl --system --json=short get-property org.freedesktop.Accounts \"/org/freedesktop/Accounts/User${uid}\" org.freedesktop.Accounts.User RealName IconFile UserName HomeDirectory",
-      "lock-identity", root.userName
-    ]
+    command: root.identityDeadline.concat(["bash", "-c", "uid=$(id -u -- \"$1\") || exit 1; exec busctl --system --json=short get-property org.freedesktop.Accounts \"/org/freedesktop/Accounts/User${uid}\" org.freedesktop.Accounts.User RealName IconFile UserName HomeDirectory", "lock-identity", root.userName])
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyAccountsIdentity(text)
@@ -1547,21 +1751,30 @@ Item {
     id: pictureProc
     property string request: ""
     // The helper's own job limit is 9 s.
-    command: ["timeout", "--kill-after=1s", "12s"].concat(FoamyNative.command(
-      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
+    command: ["timeout", "--kill-after=1s", "12s"].concat(FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
     clearEnvironment: true
-    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
-      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: root.home,
+        XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: pictureOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: pictureOutput
+      waitForEnd: true
+    }
     // exited() comes before `running` goes false; a command that couldn't
     // start reports only the latter, and is settled as a failure there.
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       // Asked again by the next refresh, as a key not yet prepared.
       root.applyPictureResult("")
       root.pictureRequestKey = ""
@@ -1570,7 +1783,7 @@ Item {
         Qt.callLater(root.refreshPicture)
       }
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       if (FoamyNative.unavailable(exitCode)) {
         root.pictureHelperUnavailable = true
@@ -1590,29 +1803,39 @@ Item {
     property string request: ""
     // The helper's own job limit is 60 s (hashing up to 2 GiB, ffprobe and
     // the poster, each in its sandbox).
-    command: ["timeout", "--kill-after=1s", "65s"].concat(FoamyNative.command(
-      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"]))
+    command: ["timeout", "--kill-after=1s", "65s"].concat(FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"]))
     clearEnvironment: true
-    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
-      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: root.home,
+        XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: videoOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: videoOutput
+      waitForEnd: true
+    }
     // exited() comes before `running` goes false; a command that couldn't
     // start reports only the latter, and is settled as a failure there.
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       root.applyVideoResult("", videoProc.request)
-      if (root.videoRequestKey === videoProc.request) root.videoRequestKey = ""
+      if (root.videoRequestKey === videoProc.request)
+        root.videoRequestKey = ""
       if (root.videoPending) {
         root.videoPending = false
         Qt.callLater(root.refreshVideo)
       }
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       if (FoamyNative.unavailable(exitCode)) {
         root.videoHelperUnavailable = true
@@ -1630,28 +1853,37 @@ Item {
   Process {
     id: avatarThumbnailProc
     property string request: ""
-    command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(
-      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
+    command: ["timeout", "--kill-after=1s", "10s"].concat(FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["artwork"]))
     clearEnvironment: true
-    environment: ({ HOME: root.home, XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
-      PATH: "/usr/bin", LANG: "C.UTF-8" })
+    environment: ({
+        HOME: root.home,
+        XDG_CACHE_HOME: Quickshell.env("XDG_CACHE_HOME") || root.home + "/.cache",
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
     onStarted: {
       write(request + "\n")
       stdinEnabled = false
     }
-    stdout: StdioCollector { id: avatarOutput; waitForEnd: true }
+    stdout: StdioCollector {
+      id: avatarOutput
+      waitForEnd: true
+    }
     // exited() comes before `running` goes false; a command that couldn't
     // start reports only the latter, and is settled as a failure there.
     property bool exitSeen: false
     onRunningChanged: {
-      if (running || exitSeen) { exitSeen = false; return }
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
       root.applyAvatarResult("")
       if (root.avatarThumbnailPending) {
         root.avatarThumbnailPending = false
         Qt.callLater(root.refreshAvatarThumbnail)
       }
     }
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       exitSeen = true
       if (FoamyNative.unavailable(exitCode)) {
         root.avatarHelperUnavailable = true
@@ -1670,11 +1902,27 @@ Item {
   // The probe hands fprintd-list's raw output (errors included) to
   // classifyProbe, which answers yes, no, or unknown; only a definitive
   // answer may change fingerprintConfigured. See applyFingerprintProbe.
+  // A probe cut off at its deadline (timeout's 124 or 137) or one that
+  // couldn't start is no answer: "unknown", asked again.
   Process {
     id: fingerprintCheckProc
-    command: ["bash", "-c", "if [[ -f /etc/pam.d/omarchy-lock-fingerprint ]] && command -v fprintd-list >/dev/null 2>&1; then LC_ALL=C fprintd-list \"$USER\" 2>&1; else echo no; fi"]
-    stdout: StdioCollector { id: fingerprintCheckStdout; waitForEnd: true }
-    onExited: root.applyFingerprintProbe(fingerprintCheckStdout.text)
+    command: root.fingerprintProbeDeadline.concat(["bash", "-c", "if [[ -f /etc/pam.d/omarchy-lock-fingerprint ]] && command -v fprintd-list >/dev/null 2>&1; then LC_ALL=C fprintd-list \"$USER\" 2>&1; else echo no; fi"])
+    stdout: StdioCollector {
+      id: fingerprintCheckStdout
+      waitForEnd: true
+    }
+    property bool exitSeen: false
+    onExited: function (exitCode, exitStatus) {
+      exitSeen = true
+      root.applyFingerprintProbe(exitCode === 124 || exitCode === 137 ? "" : fingerprintCheckStdout.text)
+    }
+    onRunningChanged: {
+      if (running || exitSeen) {
+        exitSeen = false
+        return
+      }
+      root.applyFingerprintProbe("")
+    }
   }
 
   // Retries a probe that could not reach fprintd, paced like the attempt
@@ -1691,11 +1939,11 @@ Item {
   Process {
     id: strandedLockCheckProc
     command: ["bash", "-c", "exec timeout --kill-after=1s 10s omarchy-hyprland-session-lock-stranded \"$PPID\""]
-    onExited: function(exitCode) {
+    onExited: function (exitCode) {
       // No output to read the lock off yet, or no answer in time (timeout's
       // 124 and 137): the retries ask again.
-      if (exitCode === 2 || exitCode === 124 || exitCode === 137) return
-
+      if (exitCode === 2 || exitCode === 124 || exitCode === 137)
+        return
       root.strandedLockResolved = true
 
       // A lock taken while this was in flight is this shell's own.
@@ -1709,18 +1957,26 @@ Item {
   Process {
     id: wakeProcess
     command: root.wakeDeadline.concat(["bash", "-c", "omarchy-system-wake"])
-    onRunningChanged: if (!running) Qt.callLater(root.wakeFinished)
+    onRunningChanged: if (!running)
+      Qt.callLater(root.wakeFinished)
   }
 
   Process {
     id: blankProcess
     command: root.blankDeadline.concat(["bash", "-c", "omarchy-brightness-keyboard off; omarchy-brightness-display off"])
-    onRunningChanged: if (!running) Qt.callLater(root.blankFinished)
+    onRunningChanged: if (!running)
+      Qt.callLater(root.blankFinished)
   }
 
   Timer {
     id: idleBlankTimer
-    interval: root.settings.blankAfterSec === null ? 30000 : root.settings.blankAfterSec * 1000
+    // A resume reaches the lock as soon as the kernel thaws, seconds before
+    // the panel lights (on NVIDIA it waits out a VT switch and a modeset),
+    // so after one the display gets at least this run-up, as Omarchy's own
+    // lock gives it, even with a shorter blankAfterSec.
+    readonly property int resumeMs: 15000
+    property int runUpMs: 0
+    interval: Math.max(root.settings.blankAfterSec === null ? 30000 : root.settings.blankAfterSec * 1000, runUpMs)
     repeat: false
     property double armedAt: 0
     onTriggered: {
@@ -1728,13 +1984,14 @@ Item {
       // blank the freshly woken unlock screen under the user. Wall-clock time
       // exposes the gap: take a fresh run-up instead of blanking.
       if (Date.now() - armedAt > interval + 2000) {
-        root.armBlankTimer()
+        root.armBlankTimer(resumeMs)
         return
       }
       // Only a password check in flight should hold the display up. The
       // fingerprint PAM stays armed for the whole lock, so gating on
       // `authenticating` here would keep the panel lit until unlock.
-      if (root.lockRequested && !root.authenticatingPassword) root.runBlank()
+      if (root.lockRequested && !root.authenticatingPassword)
+        root.runBlank()
     }
   }
 
@@ -1762,7 +2019,8 @@ Item {
     running: !root.strandedLockResolved && remaining > 0
 
     function rearm() {
-      if (!root.strandedLockResolved) remaining = budget
+      if (!root.strandedLockResolved)
+        remaining = budget
     }
 
     onTriggered: {
@@ -1778,7 +2036,8 @@ Item {
       // Only an arriving display wakes the reader; unplugging one must not.
       if (screens > root.knownScreenCount) {
         root.resumeFingerprint()
-        if (root.lockRequested) root.armBlankTimer()
+        if (root.lockRequested)
+          root.armBlankTimer()
       }
       root.knownScreenCount = screens
       root.requestSessionLock()
@@ -1792,9 +2051,12 @@ Item {
   }
 
   onAuthenticatingPasswordChanged: {
-    if (!lockRequested) return
-    if (authenticatingPassword) idleBlankTimer.stop()
-    else armBlankTimer()
+    if (!lockRequested)
+      return
+    if (authenticatingPassword)
+      idleBlankTimer.stop()
+    else
+      armBlankTimer()
   }
 
   // Service entries are not exposed through the scoped shell API. Watch the
@@ -1825,8 +2087,8 @@ Item {
   // No lock before PAM is known good. An answer from before then may be stale --
   // the failsafe can be cleared from a TTY -- so re-ask rather than act on it.
   onPasswordPamConfiguredChanged: {
-    if (!passwordPamConfigured) return
-
+    if (!passwordPamConfigured)
+      return
     strandedLock = false
     strandedLockResolved = false
     strandedLockRetryTimer.rearm()
@@ -1836,7 +2098,8 @@ Item {
   // Lock Studio's launcher entry: once per shell start, a while after it so
   // it doesn't add to the start, the helper adds or refreshes the entry
   // (`studio ensure`: nothing after `studio uninstall`, no write when it is
-  // current). The entry removes itself once the plugin is gone.
+  // current, and a file the user edited is left as it is: "modified"). The
+  // entry removes itself once the plugin is gone.
   property string launcherAction: ""
   Timer {
     id: launcherTimer
@@ -1846,18 +2109,27 @@ Item {
   }
   Process {
     id: launcherProc
-    command: ["timeout", "--kill-after=1s", "5s"].concat(FoamyNative.command(
-      FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["studio", "ensure"]))
+    command: ["timeout", "--kill-after=1s", "5s"].concat(FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["studio", "ensure"]))
     clearEnvironment: true
-    environment: ({ HOME: root.home, XDG_DATA_HOME: Quickshell.env("XDG_DATA_HOME") || root.home + "/.local/share",
-      XDG_STATE_HOME: Quickshell.env("XDG_STATE_HOME") || root.home + "/.local/state",
-      PATH: "/usr/bin", LANG: "C.UTF-8" })
-    stdout: StdioCollector { id: launcherOutput; waitForEnd: true }
-    onExited: function(exitCode, exitStatus) {
+    environment: ({
+        HOME: root.home,
+        XDG_DATA_HOME: Quickshell.env("XDG_DATA_HOME") || root.home + "/.local/share",
+        XDG_STATE_HOME: Quickshell.env("XDG_STATE_HOME") || root.home + "/.local/state",
+        PATH: "/usr/bin",
+        LANG: "C.UTF-8"
+      })
+    stdout: StdioCollector {
+      id: launcherOutput
+      waitForEnd: true
+    }
+    onExited: function (exitCode, exitStatus) {
       var data = null
-      try { data = JSON.parse(launcherOutput.text) } catch (error) { data = null }
-      root.launcherAction = data && data.ok === true && typeof data.action === "string" ? data.action
-        : "error:" + (data && typeof data.code === "string" ? data.code : String(exitCode))
+      try {
+        data = JSON.parse(launcherOutput.text)
+      } catch (error) {
+        data = null
+      }
+      root.launcherAction = data && data.ok === true && typeof data.action === "string" ? data.action : "error:" + (data && typeof data.code === "string" ? data.code : String(exitCode))
     }
   }
 
@@ -1884,14 +2156,23 @@ Item {
       activeSurfaces: root.activeSurfaces,
       previewPreset: root.previewLook ? root.previewLook.preset : "",
       // User presets: their ids and names, the items skipped, the link.
-      userPresets: root.userPresets.map(function(preset) { return { id: preset.id, name: preset.name } }),
+      userPresets: root.userPresets.map(function (preset) {
+        return {
+          id: preset.id,
+          name: preset.name
+        }
+      }),
       userPresetsInvalid: root.userPresetsInvalid,
       userPresetsError: root.userPresetsError,
       userPreset: root.userPresetLink,
       launcher: root.launcherAction,
       // Never the place name: status is readable by any local process.
-      weather: { state: root.weatherState, shown: root.weather !== null, polls: root.weatherPolls,
-        updatedAt: root.weatherReport ? new Date(root.weatherReport.updatedAtMs).toISOString() : "" },
+      weather: {
+        state: root.weatherState,
+        shown: root.weather !== null,
+        polls: root.weatherPolls,
+        updatedAt: root.weatherReport ? new Date(root.weatherReport.updatedAtMs).toISOString() : ""
+      },
       locked: root.currentlyLocked(),
       requested: root.lockRequested,
       pending: root.pendingSessionLock,
@@ -1916,8 +2197,13 @@ Item {
       picturePath: root.pictureRenderPath,
       // A video background: the probe's poster and clip ("" without), why
       // not, and the last view to give up on the clip ("error", "stall").
-      video: { poster: root.videoPosterRender, clip: root.videoClipPath, error: root.videoError,
-        failure: root.videoFailure, request: root.videoRequestKey ? JSON.parse(root.videoRequestKey) : null },
+      video: {
+        poster: root.videoPosterRender,
+        clip: root.videoClipPath,
+        error: root.videoError,
+        failure: root.videoFailure,
+        request: root.videoRequestKey ? JSON.parse(root.videoRequestKey) : null
+      },
       conflict: reasons.length > 0,
       conflictReasons: reasons,
       ipcFastPath: IpcResolver.fastPath(root),
@@ -1939,10 +2225,13 @@ Item {
 
     function lock(): string {
       root.checkLockRoute()
-      if (!root.passwordPamConfigured) return "missing-pam"
+      if (!root.passwordPamConfigured)
+        return "missing-pam"
       // The pre-suspend service requests a lock even when already locked.
-      if (root.currentlyLocked()) root.noteSleepRequested()
-      if (!root.currentlyLocked() && !root.beginLock()) return "failed"
+      if (root.currentlyLocked())
+        root.noteSleepRequested()
+      if (!root.currentlyLocked() && !root.beginLock())
+        return "failed"
       return "ok"
     }
 
@@ -1956,7 +2245,8 @@ Item {
 
     function preview(): string {
       // Like previewLook and previewPreset: no overlay over a real lock.
-      if (root.currentlyLocked()) return "locked"
+      if (root.currentlyLocked())
+        return "locked"
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
@@ -2013,31 +2303,61 @@ Item {
       var presets = []
       for (var i = 0; i < Layout.SELECTABLE_PRESETS.length; i++) {
         var name = Layout.SELECTABLE_PRESETS[i]
-        presets.push({ name: name, look: Layout.preset(name), thumbnail: dir + "/previews/presets/" + name + ".png" })
+        presets.push({
+          name: name,
+          look: Layout.preset(name),
+          thumbnail: dir + "/previews/presets/" + name + ".png"
+        })
       }
       var keysFor = {}
-      for (var e = 0; e < Layout.ELEMENTS.length; e++) keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
-      return JSON.stringify({ version: 4, elements: Layout.ELEMENTS, elementKeys: Layout.ELEMENT_KEYS,
-        elementKeysFor: keysFor, statusItems: Layout.STATUS_ITEMS,
-        weather: { target: IpcResolver.handlersFor(root, "foamy.weather").length > 0, state: root.weatherState },
-        elementLimits: Layout.elementLimits(), screens: Layout.SCREENS,
-        zones: Layout.ZONES, passwordZones: Layout.PASSWORD_ZONES, styles: Layout.STYLES,
-        presets: presets, backgroundSources: Layout.BACKGROUND_SOURCES, backgroundAnimations: Layout.DRAWN_SOURCES,
-        backgroundColors: Layout.THEME_COLORS, backgroundDecor: Layout.DECORATIONS,
-        shapeKinds: Layout.SHAPE_KINDS, shapeLimits: Layout.shapeCatalog(), templates: Layout.templates(),
-        glassTints: Layout.GLASS_TINTS, defaultPreset: Layout.DEFAULT_PRESET,
+      for (var e = 0; e < Layout.ELEMENTS.length; e++)
+        keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
+      return JSON.stringify({
+        version: 4,
+        elements: Layout.ELEMENTS,
+        elementKeys: Layout.ELEMENT_KEYS,
+        elementKeysFor: keysFor,
+        statusItems: Layout.STATUS_ITEMS,
+        weather: {
+          target: IpcResolver.handlersFor(root, "foamy.weather").length > 0,
+          state: root.weatherState
+        },
+        elementLimits: Layout.elementLimits(),
+        screens: Layout.SCREENS,
+        zones: Layout.ZONES,
+        passwordZones: Layout.PASSWORD_ZONES,
+        styles: Layout.STYLES,
+        presets: presets,
+        backgroundSources: Layout.BACKGROUND_SOURCES,
+        backgroundAnimations: Layout.DRAWN_SOURCES,
+        backgroundColors: Layout.THEME_COLORS,
+        backgroundDecor: Layout.DECORATIONS,
+        shapeKinds: Layout.SHAPE_KINDS,
+        shapeLimits: Layout.shapeCatalog(),
+        templates: Layout.templates(),
+        glassTints: Layout.GLASS_TINTS,
+        defaultPreset: Layout.DEFAULT_PRESET,
         // Cover art (additive): the settings' mode (Model.coverArtMode:
         // off, player, spotify or custom) and what setCoverArt takes.
-        coverArt: Model.coverArtMode(root.settings), coverArtModes: Model.COVER_ART_MODES,
+        coverArt: Model.coverArtMode(root.settings),
+        coverArtModes: Model.COVER_ART_MODES,
         // Video backgrounds: background.motion and its defaults (additive).
-        backgroundMotions: Layout.MOTIONS, backgroundDefaults: Layout.BACKGROUND_DEFAULTS,
-        look: root.look, lookError: root.lookError,
+        backgroundMotions: Layout.MOTIONS,
+        backgroundDefaults: Layout.BACKGROUND_DEFAULTS,
+        look: root.look,
+        lookError: root.lookError,
         // User presets (R2-2): newest first, the items skipped, the link
         // and the limits of savePreset.
-        userPresets: root.catalogUserPresets(dir), userPresetsInvalid: root.userPresetsInvalid,
-        userPresetsError: root.userPresetsError, userPreset: root.userPresetLink,
-        userPresetLimits: { count: Layout.USER_PRESET_LIMIT, bytes: Layout.USER_PRESETS_BYTES,
-          name: Layout.USER_PRESET_NAME_LENGTH } })
+        userPresets: root.catalogUserPresets(dir),
+        userPresetsInvalid: root.userPresetsInvalid,
+        userPresetsError: root.userPresetsError,
+        userPreset: root.userPresetLink,
+        userPresetLimits: {
+          count: Layout.USER_PRESET_LIMIT,
+          bytes: Layout.USER_PRESETS_BYTES,
+          name: Layout.USER_PRESET_NAME_LENGTH
+        }
+      })
     }
 
     // The preview overlay with an unsaved look: a JSON object with the same
@@ -2047,11 +2367,18 @@ Item {
       var entry = null
       var text = String(look || "")
       var big = Layout.ipcArgumentError(text)
-      if (big) return "invalid: " + big
-      try { entry = JSON.parse(text) } catch (error) { return "invalid-json" }
+      if (big)
+        return "invalid: " + big
+      try {
+        entry = JSON.parse(text)
+      } catch (error) {
+        return "invalid-json"
+      }
       var parsed = Layout.parseLook(entry)
-      if (!parsed.valid) return "invalid: " + parsed.error
-      if (root.currentlyLocked()) return "locked"
+      if (!parsed.valid)
+        return "invalid: " + parsed.error
+      if (root.currentlyLocked())
+        return "locked"
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
@@ -2076,31 +2403,45 @@ Item {
       var request = null
       var text = String(look || "")
       var big = Layout.ipcArgumentError(text)
-      if (big) return "invalid: " + big
-      try { request = JSON.parse(text) } catch (error) { return "invalid-json" }
-      if (!request || typeof request !== "object" || Array.isArray(request)) return "invalid: expected an object"
+      if (big)
+        return "invalid: " + big
+      try {
+        request = JSON.parse(text)
+      } catch (error) {
+        return "invalid-json"
+      }
+      if (!request || typeof request !== "object" || Array.isArray(request))
+        return "invalid: expected an object"
       for (var key in request)
-        if (keys.indexOf(key) === -1) return "invalid: unknown key " + key
+        if (keys.indexOf(key) === -1)
+          return "invalid: unknown key " + key
       var parsed = Layout.parseLook(request)
-      if (!parsed.valid) return "invalid: " + parsed.error
+      if (!parsed.valid)
+        return "invalid: " + parsed.error
       if (request.userPreset !== undefined && Layout.userPresetIdError(request.userPreset))
         return "invalid: userPreset must be a user preset's id"
-      if (root.currentlyLocked()) return "locked"
+      if (root.currentlyLocked())
+        return "locked"
       var base = root.writableEntry()
-      if (typeof base === "string") return base
+      if (typeof base === "string")
+        return base
       var next = {}
       for (var existing in base)
-        if (existing !== "id" && keys.indexOf(existing) === -1) next[existing] = base[existing]
+        if (existing !== "id" && keys.indexOf(existing) === -1)
+          next[existing] = base[existing]
       for (var i = 0; i < keys.length; i++)
-        if (request[keys[i]] !== undefined) next[keys[i]] = request[keys[i]]
+        if (request[keys[i]] !== undefined)
+          next[keys[i]] = request[keys[i]]
       return root.writeEntry(next)
     }
 
     // A built-in preset by name, or a user preset as `user:<id>`.
     function previewPreset(name: string): string {
       var user = String(name).indexOf("user:") === 0 ? Layout.findUserPreset(root.userPresets, String(name).slice(5)) : null
-      if (!user && Layout.SELECTABLE_PRESETS.indexOf(name) === -1) return "unknown-preset"
-      if (root.currentlyLocked()) return "locked"
+      if (!user && Layout.SELECTABLE_PRESETS.indexOf(name) === -1)
+        return "unknown-preset"
+      if (root.currentlyLocked())
+        return "locked"
       root.refreshBackground()
       root.refreshFingerprintStatus()
       root.refreshUserIdentity()
@@ -2125,23 +2466,34 @@ Item {
       var item = null
       var text = String(preset || "")
       var big = Layout.ipcArgumentError(text)
-      if (big) return "invalid: " + big
-      try { item = JSON.parse(text) } catch (error) { return "invalid-json" }
+      if (big)
+        return "invalid: " + big
+      try {
+        item = JSON.parse(text)
+      } catch (error) {
+        return "invalid-json"
+      }
       var problem = Layout.userPresetError(item)
-      if (problem) return "invalid: " + problem
-      if (root.currentlyLocked()) return "locked"
+      if (problem)
+        return "invalid: " + problem
+      if (root.currentlyLocked())
+        return "locked"
       var base = root.writableEntry()
-      if (typeof base === "string") return base
+      if (typeof base === "string")
+        return base
       var change = Layout.savingPreset(base, item)
       return change.error || root.writeEntry(change.entry)
     }
 
     function renamePreset(presetId: string, name: string): string {
-      var problem = Layout.userPresetIdError(presetId) || Layout.userPresetNameError(name)
-      if (problem) return "invalid: " + problem
-      if (root.currentlyLocked()) return "locked"
+      var problem = Layout.userPresetIdError(presetId) || Layout.userPresetNewNameError(name)
+      if (problem)
+        return "invalid: " + problem
+      if (root.currentlyLocked())
+        return "locked"
       var base = root.writableEntry()
-      if (typeof base === "string") return base
+      if (typeof base === "string")
+        return base
       var change = Layout.renamingPreset(base, presetId, name)
       return change.error || root.writeEntry(change.entry)
     }
@@ -2154,13 +2506,17 @@ Item {
     // here can unlock.
     function setCoverArt(mode: string): string {
       var change = Model.coverArtSettings(String(mode))
-      if (!change || String(mode) !== mode) return "invalid: mode must be one of " + Model.COVER_ART_MODES.join(", ")
-      if (root.currentlyLocked()) return "locked"
+      if (!change || String(mode) !== mode)
+        return "invalid: mode must be one of " + Model.COVER_ART_MODES.join(", ")
+      if (root.currentlyLocked())
+        return "locked"
       var base = root.writableEntry()
-      if (typeof base === "string") return base
+      if (typeof base === "string")
+        return base
       var next = {}
       for (var key in base)
-        if (key !== "id") next[key] = base[key]
+        if (key !== "id")
+          next[key] = base[key]
       next.showArtwork = change.showArtwork
       next.artworkHosts = change.artworkHosts.slice()
       return root.writeEntry(next)
@@ -2170,10 +2526,13 @@ Item {
     // working, without its link.
     function deletePreset(presetId: string): string {
       var problem = Layout.userPresetIdError(presetId)
-      if (problem) return "invalid: " + problem
-      if (root.currentlyLocked()) return "locked"
+      if (problem)
+        return "invalid: " + problem
+      if (root.currentlyLocked())
+        return "locked"
       var base = root.writableEntry()
-      if (typeof base === "string") return base
+      if (typeof base === "string")
+        return base
       var change = Layout.deletingPreset(base, presetId)
       return change.error || root.writeEntry(change.entry)
     }

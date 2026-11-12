@@ -84,6 +84,10 @@ test('ids and names', () => {
   assert.match(Draft.nameProblem('   '), /^name must be/)
   assert.match(Draft.nameProblem('a\nb'), /control/)
   assert.match(Draft.nameProblem('x'.repeat(65)), /at most 64/)
+  // A new name can't start with "-" (it would be an argument to omarchy-shell).
+  assert.match(Draft.nameProblem('--help'), /must not start with -/)
+  assert.match(Draft.nameProblem(' -mine'), /must not start with -/)
+  assert.equal(Draft.nameProblem('mine -1'), '')
   assert.equal(Draft.uniqueName('Calm', presets), 'Calm 2')
   assert.equal(Draft.uniqueName('Quiet', presets), 'Quiet')
   const many = [{name: 'A'}, {name: 'A 2'}, {name: 'A 3'}]

@@ -40,23 +40,28 @@ const COMMANDS: [(&str, &str); 9] = [
         "omarchy-shell",
         r#"printf "%s\n" "$*" >> "$HOME/omarchy-shell-calls"; echo "Function not found.""#,
     ),
+    // $HOME/getent-hang and $HOME/fprintd-hang make those probes hang (the
+    // pid in getent-pid, fprintd-pid); $HOME/getent-name is the real name.
     (
         "getent",
-        r#"printf "fixture:x:1000:1000:Foamy User:%s:/bin/sh\n" "$HOME""#,
+        r#"if [ -e "$HOME/getent-hang" ]; then sleep 60 & echo $! > "$HOME/getent-pid"; wait; fi
+printf "fixture:x:1000:1000:%s:%s:/bin/sh\n" "$(cat "$HOME/getent-name" 2>/dev/null || echo "Foamy User")" "$HOME""#,
     ),
     ("busctl", "exit 1"),
     ("magick", "exit 1"),
     (
         "fprintd-list",
-        r#"cat "$HOME/fingerprint-output" 2>/dev/null || echo no"#,
+        r#"if [ -e "$HOME/fprintd-hang" ]; then sleep 60 & echo $! > "$HOME/fprintd-pid"; wait; fi
+cat "$HOME/fingerprint-output" 2>/dev/null || echo no"#,
     ),
     (
         "omarchy-hyprland-session-lock-stranded",
         "printf \"%s\\n\" \"$1\" > \"$HOME/stranded-parent\"\nexit \"$(cat \"$HOME/stranded-result\" 2>/dev/null || echo 1)\"",
     ),
     // $HOME/wake-hang makes the wake hang (its pid in wake-pid);
-    // $HOME/blank-slow holds the display-off step for that many seconds
-    // (its pid in blank-pid).
+    // $HOME/blank-slow holds the display-off step for that many seconds,
+    // and $HOME/blank-hold holds it until the file is removed (either one's
+    // pid in blank-pid).
     (
         "omarchy-system-wake",
         r#"printf "%s\n" "omarchy-system-wake" >> "$HOME/calls"
@@ -69,7 +74,8 @@ if [ -e "$HOME/wake-hang" ]; then sleep 60 & echo $! > "$HOME/wake-pid"; wait; f
     (
         "omarchy-brightness-display",
         r#"printf "%s\n" "omarchy-brightness-display" >> "$HOME/calls"
-if [ -e "$HOME/blank-slow" ]; then sleep "$(cat "$HOME/blank-slow")" & echo $! > "$HOME/blank-pid"; wait; fi"#,
+if [ -e "$HOME/blank-slow" ]; then sleep "$(cat "$HOME/blank-slow")" & echo $! > "$HOME/blank-pid"; wait; fi
+if [ -e "$HOME/blank-hold" ]; then (while [ -e "$HOME/blank-hold" ]; do sleep 0.05; done) & echo $! > "$HOME/blank-pid"; wait; fi"#,
     ),
 ];
 
@@ -126,8 +132,15 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testResume: fingerprintResumeTimer
   property alias testWeatherRetry: weatherRetryTimer
   property alias testFoamyIpc: foamyLockIpc
+  property alias testLockIpc: lockIpc
   property alias testWake: wakeProcess
   property alias testBlank: blankProcess
+  property alias testIdleBlank: idleBlankTimer
+  property alias testPasswd: passwdIdentityProc
+  property alias testAccounts: accountsIdentityProc
+  property alias testFingerprintCheck: fingerprintCheckProc
+  property alias testPoster: posterProc
+  property bool testPosterUnstartable: false
   property bool testStaleLocked: false";
     let replacements = [
         ("import Quickshell.Wayland", "import \"mocks\" as Mock"),
@@ -148,8 +161,14 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
             r#"readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-lock-helper", ["video-probe"])"#,
             r#"readonly property var posterProbeCommand: ["bash", "-c", "exec \"$0\" video-probe", root.home + "/fake-video-probe"]"#,
         ),
+        // A poster probe that can't start (no exited(), only `running` going
+        // false), switched on by testPosterUnstartable.
         (
-            "    anchors { top: true; bottom: true; left: true; right: true }",
+            r#"    command: ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)"#,
+            r#"    command: root.testPosterUnstartable ? [root.home + "/no-such-command"] : ["timeout", "--kill-after=1s", "65s"].concat(root.posterProbeCommand)"#,
+        ),
+        (
+            "    anchors {\n      top: true\n      bottom: true\n      left: true\n      right: true\n    }",
             "    width: 800; height: 600",
         ),
         (
@@ -165,14 +184,26 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
             "readonly property int weatherRetryMs: 10000",
             "readonly property int weatherRetryMs: 200",
         ),
-        // The wake and blank deadlines: 1 s (display_commands waits them out).
+        // The wake and blank deadlines: 3 s each (display_commands waits
+        // them out). They leave the overlap cases, which hold one of them
+        // while several IPC calls run, room on a loaded machine.
         (
             r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "15s"]"#,
-            r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "1s"]"#,
+            r#"readonly property var wakeDeadline: ["timeout", "--kill-after=1s", "3s"]"#,
         ),
         (
             r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "10s"]"#,
-            r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "1s"]"#,
+            r#"readonly property var blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#,
+        ),
+        // The identity and fingerprint probes' deadlines: 2 s (probe_deadlines
+        // waits them out).
+        (
+            r#"readonly property var identityDeadline: ["timeout", "--kill-after=1s", "5s"]"#,
+            r#"readonly property var identityDeadline: ["timeout", "--kill-after=1s", "2s"]"#,
+        ),
+        (
+            r#"readonly property var fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "10s"]"#,
+            r#"readonly property var fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "2s"]"#,
         ),
         // Both PAM services are fixtures; enrollment must not depend on host setup.
         ("/etc/pam.d/omarchy-lock-password", &pam),
@@ -363,11 +394,7 @@ impl Test {
                 .into_iter()
                 .filter(|(key, _)| key != "OMARCHY_LANGUAGE_FILE")
                 .collect();
-        let path = format!(
-            "{}:{}",
-            bin.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
+        let path = format!("{}:{}", bin.display(), env["PATH"]);
         for (key, value) in [
             ("USER", "fixture".to_string()),
             ("LOGNAME", "fixture".to_string()),
@@ -474,6 +501,10 @@ impl Test {
         self.ipc("test", method, &[])
     }
 
+    fn test_args(&self, method: &str, args: &[&str]) -> R<String> {
+        self.ipc("test", method, args)
+    }
+
     fn test_json(&self, method: &str) -> R<Value> {
         parse(&self.test(method)?)
     }
@@ -545,7 +576,14 @@ fn run_host(shell: &Path) -> R {
     }
     print!("{}", fs::read_to_string(&log_path).unwrap_or_default());
     println!("Runtime evidence: {}", base.display());
-    result
+    result?;
+    // Every host command the Service runs has a fake in `bin`.
+    let unfaked = host::host_commands(&base);
+    ensure!(
+        unfaked.is_empty(),
+        "host commands ran without a fake:\n{unfaked}"
+    );
+    Ok(())
 }
 
 fn scenarios(test: &Test) -> R {
@@ -561,6 +599,8 @@ fn scenarios(test: &Test) -> R {
     fingerprint(test)?;
     stranded(test)?;
     display_commands(test)?;
+    blank_after_resume(test)?;
+    probe_deadlines(test)?;
     test.test("missingPam")?;
     ensure!(test.lock("lock")? == "missing-pam");
     ensure!(!on(&test.status()?, "locked")?);
@@ -685,13 +725,17 @@ fn preview(test: &Test) -> R {
     // Any key closes it; for previewHoldMs after, keys are still swallowed
     // (accepted, the overlay stays closed) and the view and banner are gone.
     let closed = Instant::now();
-    ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
-    let parts = parse(&test.test("previewParts")?)?;
+    let keys = test.test_json("previewKeyTwice")?;
+    let parts = at(&keys, "parts")?;
     ensure!(
-        on(&parts, "holding")? && !on(&parts, "banner")? && !on(&parts, "view")?,
+        on(&keys, "first")? && on(&keys, "second")? && on(&keys, "closed")?,
+        "a key closes it and the next is swallowed: {keys}"
+    );
+    ensure!(
+        on(parts, "holding")? && !on(parts, "banner")? && !on(parts, "view")?,
         "holding the keyboard after closing: {parts}"
     );
-    ensure!(test.test("previewKey")? == "true" && test.test("previewState")? == "false");
+    ensure!(test.test("previewState")? == "false");
     loop {
         let parts = parse(&test.test("previewParts")?)?;
         if !on(&parts, "holding")? {
@@ -707,8 +751,7 @@ fn preview(test: &Test) -> R {
     ensure!(held >= Duration::from_millis(450), "held only {held:?}");
     // Opening it again during a hold ends the hold.
     ensure!(test.lock("preview")? == "ok");
-    ensure!(test.lock("hidePreview")? == "ok");
-    ensure!(on(&parse(&test.test("previewParts")?)?, "holding")?);
+    ensure!(on(&test.test_json("hidePreviewParts")?, "holding")?);
     ensure!(test.lock("preview")? == "ok");
     let parts = parse(&test.test("previewParts")?)?;
     ensure!(
@@ -1846,6 +1889,15 @@ fn wallpaper(test: &Test) -> R {
         path()? == "",
         "without the helper a video must never reach Image"
     );
+    // A probe that can't start (no exited(), only `running` going false) is
+    // a failure too, and the next refresh probes again.
+    test.test_args("posterUnstartable", &["true"])?;
+    test.refresh_wallpaper()?;
+    test.wait_for(error_is("video-poster-failed"))?;
+    ensure!(path()? == "" && !on(&test.test_json("posterState")?, "running")?);
+    test.test_args("posterUnstartable", &["false"])?;
+    test.refresh_wallpaper()?;
+    test.wait_for(error_is("video-poster-unavailable"))?;
     probe("exit 1")?;
     test.refresh_wallpaper()?;
     test.wait_for(error_is("video-poster-failed"))?;
@@ -1992,8 +2044,12 @@ fn settings_and_password(test: &Test) -> R {
     ensure!(test.lock("isLocked")? == "false");
     // A preview just closed by a key holds the keyboard; a real lock ends
     // the hold at once.
-    ensure!(test.lock("preview")? == "ok" && test.test("previewKey")? == "true");
-    ensure!(on(&parse(&test.test("previewParts")?)?, "holding")?);
+    ensure!(test.lock("preview")? == "ok");
+    let keys = test.test_json("previewKeyTwice")?;
+    ensure!(
+        on(&keys, "first")? && on(at(&keys, "parts")?, "holding")?,
+        "{keys}"
+    );
     ensure!(test.lock("lock")? == "ok");
     test.wait_for(|s| Ok(on(s, "requested")? && on(s, "secure")?))?;
     ensure!(
@@ -2316,7 +2372,7 @@ fn display_commands(test: &Test) -> R {
     let started = Instant::now();
     test.wait_for(|_| Ok(!running("wake")?))?;
     ensure!(
-        started.elapsed() < Duration::from_millis(3500),
+        started.elapsed() < Duration::from_millis(5000),
         "the wake deadline stops it: {:?}",
         started.elapsed()
     );
@@ -2335,7 +2391,7 @@ fn display_commands(test: &Test) -> R {
     let started = Instant::now();
     test.wait_for(|_| Ok(!running("blank")?))?;
     ensure!(
-        started.elapsed() < Duration::from_millis(3500),
+        started.elapsed() < Duration::from_millis(5000),
         "the blank deadline stops it: {:?}",
         started.elapsed()
     );
@@ -2346,14 +2402,22 @@ fn display_commands(test: &Test) -> R {
     test.test("blank")?;
     test.wait_for(|_| Ok(!running("blank")? && count("omarchy-brightness-display") == blanks + 1))?;
 
+    // The overlap cases hold the blank's display-off step until the case has
+    // made its calls (blank-hold), not for a fixed time: a blank that ended
+    // early would be no overlap at all, and its re-run wake was miscounted
+    // on a loaded machine.
+    let hold = test.path("blank-hold");
+    let displays = || count("omarchy-brightness-display");
+
     // A wake while a blank runs: it runs then, and once more after the blank.
-    write(&slow, "0.8")?;
+    write(&hold, "")?;
     let before = wakes();
     test.test("blank")?;
     test.wait_for(|_| Ok(test.path("blank-pid").exists() && running("blank")?))?;
     test.test("wake")?;
     test.wait_for(|_| Ok(wakes() == before + 1))?;
     ensure!(running("blank")?, "the wake came during the blank");
+    unlink(&hold)?;
     test.wait_for(|_| Ok(!running("blank")? && !running("wake")? && wakes() == before + 2))?;
     ms(400);
     ensure!(wakes() == before + 2, "one wake again, not more");
@@ -2361,17 +2425,67 @@ fn display_commands(test: &Test) -> R {
 
     // A blank after that wake, still during the first blank: no wake again.
     unlink(&test.path("blank-pid"))?;
+    write(&hold, "")?;
     let before = wakes();
+    let blanks = displays();
     test.test("blank")?;
     test.wait_for(|_| Ok(test.path("blank-pid").exists() && running("blank")?))?;
     test.test("wake")?;
     test.wait_for(|_| Ok(wakes() == before + 1 && !running("wake")?))?;
     test.test("blank")?;
+    ensure!(
+        running("blank")? && displays() == blanks + 1,
+        "the second blank came while the first still ran"
+    );
+    unlink(&hold)?;
     test.wait_for(|_| Ok(!running("blank")?))?;
     ms(400);
     ensure!(wakes() == before + 1, "a later blank stands");
     ensure!(on(&test.test_json("displayCommands")?, "blanked")?);
-    unlink(&slow)?;
+
+    // A blank while a wake runs waits for it: the wake's keyboard restore
+    // would land after the blank's keyboard off. The wake is held (its sleep
+    // in wake-pid) until the case has made its calls.
+    let release = |file: &str| -> R {
+        let pid = read(&test.path(file))?;
+        let _ = Command::new("kill").arg(pid.trim()).status();
+        Ok(())
+    };
+    test.test("wake")?;
+    test.wait_for(|_| Ok(!running("wake")? && !running("blank")?))?;
+    let _ = fs::remove_file(test.path("wake-pid"));
+    write(&hang, "")?;
+    let blanks = displays();
+    test.test("wake")?;
+    test.wait_for(|_| Ok(test.path("wake-pid").exists() && running("wake")?))?;
+    let state = test.test_json("blankNow")?;
+    ensure!(
+        on(&state, "wake")? && !on(&state, "blank")? && on(&state, "blankQueued")?,
+        "the blank waits for the wake: {state}"
+    );
+    ensure!(displays() == blanks, "no display off while the wake runs");
+    unlink(&hang)?;
+    release("wake-pid")?;
+    test.wait_for(|_| Ok(!running("wake")? && displays() == blanks + 1))?;
+    test.wait_for(|_| Ok(!running("blank")?))?;
+    ensure!(on(&test.test_json("displayCommands")?, "blanked")?);
+    // A wake in between drops the waiting blank.
+    unlink(&test.path("wake-pid"))?;
+    write(&hang, "")?;
+    let blanks = displays();
+    test.test("wake")?;
+    test.wait_for(|_| Ok(test.path("wake-pid").exists() && running("wake")?))?;
+    ensure!(on(&test.test_json("blankNow")?, "blankQueued")?);
+    test.test("wake")?;
+    unlink(&hang)?;
+    release("wake-pid")?;
+    test.wait_for(|_| Ok(!running("wake")?))?;
+    ms(400);
+    let state = test.test_json("displayCommands")?;
+    ensure!(
+        displays() == blanks && !on(&state, "blanked")? && !on(&state, "blankQueued")?,
+        "a later wake stands: {state}"
+    );
 
     // Without overlap a wake runs once.
     let before = wakes();
@@ -2380,7 +2494,142 @@ fn display_commands(test: &Test) -> R {
     ms(400);
     ensure!(wakes() == before + 1);
     println!(
-        "PASS: hung wake and blank stopped at their deadlines with their children, later ones still run, a wake during a blank runs again after it"
+        "PASS: hung wake and blank stopped at their deadlines with their children, later ones still run, a wake during a blank runs again after it, a blank during a wake runs after it unless a wake came"
+    );
+    Ok(())
+}
+
+/// After a resume the display gets Omarchy's 15 s run-up before it blanks,
+/// even with a shorter blankAfterSec: the panel lights seconds after the
+/// lock hears of the resume.
+fn blank_after_resume(test: &Test) -> R {
+    let calls = test.path("calls");
+    let displays = || {
+        fs::read_to_string(&calls)
+            .map(|text| {
+                text.lines()
+                    .filter(|line| *line == "omarchy-brightness-display")
+                    .count()
+            })
+            .unwrap_or(0)
+    };
+    let display = || test.test_json("displayCommands");
+    test.write_config(STOCK_OFF, json!({"blankAfterSec": 2}))?;
+    test.wait_for(|s| Ok(num(s, "settings.blankAfterSec")? == 2.0))?;
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|s| on(s, "secure"))?;
+    ensure!(num(&display()?, "blankInterval")? == 2000.0);
+
+    // The idle countdown froze through a suspend: it fires late, and takes
+    // the resume run-up instead of blanking.
+    let blanks = displays();
+    test.test("blankGap")?;
+    test.wait_for(|_| Ok(num(&display()?, "blankInterval")? == 15000.0))?;
+    ensure!(on(&display()?, "blankArmed")?);
+    ms(3000);
+    ensure!(
+        displays() == blanks && !on(&display()?, "blanked")?,
+        "no blank 2 s after a resume"
+    );
+    // Input is the user back: blankAfterSec again.
+    test.test("wake")?;
+    ensure!(num(&display()?, "blankInterval")? == 2000.0);
+    test.wait_for(|_| Ok(displays() == blanks + 1))?;
+
+    // A resume the fingerprint's watch sees (the lock asked for again
+    // while blanked, before a suspend): the same run-up.
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|_| on(&test.fingerprint()?, "resumeWatching"))?;
+    test.test("sleepGap")?;
+    test.wait_for(|_| Ok(num(&display()?, "blankInterval")? == 15000.0))?;
+
+    test.submit("test-password")?;
+    test.wait_for(|s| Ok(!on(s, "locked")?))?;
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(num(s, "settings.blankAfterSec")? == 30.0))?;
+    println!(
+        "PASS: after a resume (a late idle countdown, the fingerprint's resume watch) the display gets the 15 s run-up, and blankAfterSec again after input"
+    );
+    Ok(())
+}
+
+/// The account and fingerprint probes end at their deadlines (2 s here)
+/// with their children; later probes still run.
+fn probe_deadlines(test: &Test) -> R {
+    let identity = || test.test_json("identity");
+    let alive = |file: &str| -> R<bool> {
+        let pid = read(&test.path(file))?;
+        Ok(
+            fs::read_to_string(format!("/proc/{}/stat", pid.trim())).is_ok_and(|stat| {
+                stat.rsplit(')')
+                    .next()
+                    .is_some_and(|rest| !rest.trim_start().starts_with('Z'))
+            }),
+        )
+    };
+    // getent hangs (a network NSS): cut off, the name stays, and the next
+    // refresh reads the new one.
+    let hang = test.path("getent-hang");
+    write(&hang, "")?;
+    write(&test.path("getent-name"), "Renamed User")?;
+    let name = text(&identity()?, "name")?.to_string();
+    test.test("identityRefresh")?;
+    test.wait_for(|_| Ok(test.path("getent-pid").exists() && on(&identity()?, "passwd")?))?;
+    let started = Instant::now();
+    test.wait_for(|_| Ok(!on(&identity()?, "passwd")?))?;
+    ensure!(
+        started.elapsed() < Duration::from_millis(4500),
+        "the identity deadline stops getent: {:?}",
+        started.elapsed()
+    );
+    test.wait_for(|_| Ok(!alive("getent-pid")?))?;
+    ensure!(
+        text(&identity()?, "name")? == name,
+        "a cut-off probe is no answer"
+    );
+    unlink(&hang)?;
+    test.wait_for(|_| Ok(!on(&identity()?, "accounts")?))?;
+    test.test("identityRefresh")?;
+    test.wait_for(|_| Ok(text(&identity()?, "name")? == "Renamed User"))?;
+    unlink(&test.path("getent-name"))?;
+    test.test("identityRefresh")?;
+    test.wait_for(|_| Ok(text(&identity()?, "name")? == name))?;
+
+    // fprintd-list hangs: no answer ("unknown", asked again), not "no".
+    let output = test.path("fingerprint-output");
+    write(&output, "no")?;
+    test.test("fingerprintProbe")?;
+    test.wait_for(|_| {
+        let state = test.fingerprint()?;
+        Ok(!on(&state, "probeRunning")? && num(&state, "probing")? == 0.0)
+    })?;
+    let hang = test.path("fprintd-hang");
+    write(&hang, "")?;
+    test.test("fingerprintProbe")?;
+    test.wait_for(|_| {
+        Ok(test.path("fprintd-pid").exists() && on(&test.fingerprint()?, "probeRunning")?)
+    })?;
+    let started = Instant::now();
+    test.wait_for(|_| Ok(!on(&test.fingerprint()?, "probeRunning")?))?;
+    ensure!(
+        started.elapsed() < Duration::from_millis(4500),
+        "the probe deadline stops fprintd-list: {:?}",
+        started.elapsed()
+    );
+    test.wait_for(|_| Ok(!alive("fprintd-pid")?))?;
+    ensure!(
+        num(&test.fingerprint()?, "probing")? == 1.0,
+        "a cut-off probe is unknown"
+    );
+    unlink(&hang)?;
+    test.test("fingerprintProbe")?;
+    test.wait_for(|_| {
+        let state = test.fingerprint()?;
+        Ok(!on(&state, "probeRunning")? && num(&state, "probing")? == 0.0)
+    })?;
+    unlink(&output)?;
+    println!(
+        "PASS: a hung getent and fprintd-list end at their deadlines with their children; the name stays, the fingerprint is unknown, and later probes run"
     );
     Ok(())
 }
@@ -2402,7 +2651,12 @@ Item {
   PamContext { config: \"/etc/pam.d/omarchy-lock-password\" }
   PamContext { config: \"/etc/pam.d/omarchy-lock-fingerprint\" }
   PanelWindow {
-    anchors { top: true; bottom: true; left: true; right: true }
+    anchors {
+      top: true
+      bottom: true
+      left: true
+      right: true
+    }
     WlrLayershell.layer: WlrLayer.Overlay
     exclusionMode: ExclusionMode.Ignore
       WlrLayershell.deeper: kept
@@ -2411,7 +2665,14 @@ Item {
   function screens() { var screens = Quickshell.screens || [] }
   readonly property int weatherPollMs: 900000
   readonly property int weatherRetryMs: 10000
+  readonly property var wakeDeadline: [\"timeout\", \"--kill-after=1s\", \"15s\"]
+  readonly property var blankDeadline: [\"timeout\", \"--kill-after=1s\", \"10s\"]
+  readonly property var identityDeadline: [\"timeout\", \"--kill-after=1s\", \"5s\"]
+  readonly property var fingerprintProbeDeadline: [\"timeout\", \"--kill-after=1s\", \"10s\"]
   readonly property var posterProbeCommand: FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl(\".\")), \"foamy-lock-helper\", [\"video-probe\"])
+  Process {
+    command: [\"timeout\", \"--kill-after=1s\", \"65s\"].concat(root.posterProbeCommand)
+  }
 }
 ";
 
@@ -2422,6 +2683,14 @@ Item {
         assert!(patched.contains("property alias testResume: fingerprintResumeTimer\n"));
         assert!(patched.contains("locked: testStaleLocked || lockRequested"));
         assert!(patched.contains("weatherPollMs: 2500") && patched.contains("weatherRetryMs: 200"));
+        assert!(
+            patched.contains(r#"wakeDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
+                && patched.contains(r#"blankDeadline: ["timeout", "--kill-after=1s", "3s"]"#)
+                && patched.contains(r#"identityDeadline: ["timeout", "--kill-after=1s", "2s"]"#)
+                && patched
+                    .contains(r#"fingerprintProbeDeadline: ["timeout", "--kill-after=1s", "2s"]"#)
+        );
+        assert!(patched.contains("command: root.testPosterUnstartable ? ["));
         assert!(patched.contains("root.home + \"/fake-video-probe\"]"));
         assert_eq!(
             patched

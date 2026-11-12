@@ -1,5 +1,6 @@
 pragma Singleton
 import QtQuick
+
 // Stands in for PipeWire, Bluetooth and the keyboard layout: the fixture
 // sources (fixtures/sources) read these, and count how often they are made,
 // so a test can check that a source exists only while an item needs it.

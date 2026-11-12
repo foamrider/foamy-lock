@@ -24,9 +24,17 @@ Item {
 
   // What it draws, in view coordinates and drawing order, for the tests:
   // { x, y, width, height, index, kind }, and `frame` for a frame.
-  readonly property var surfaces: shapes.map(function(s) {
-    var out = { x: s.x, y: s.y, width: s.width, height: s.height, index: s.index, kind: s.kind }
-    if (s.kind === "frame") out.frame = true
+  readonly property var surfaces: shapes.map(function (s) {
+    var out = {
+      x: s.x,
+      y: s.y,
+      width: s.width,
+      height: s.height,
+      index: s.index,
+      kind: s.kind
+    }
+    if (s.kind === "frame")
+      out.frame = true
     return out
   })
 
@@ -34,8 +42,10 @@ Item {
   // shape's opacity times the look's, opaque under the solid tint), the
   // modules' own glass ("surface") or black.
   function fillColor(spec) {
-    if (!spec) return "transparent"
-    if (spec.fill === "black") return Qt.rgba(0, 0, 0, spec.opacity)
+    if (!spec)
+      return "transparent"
+    if (spec.fill === "black")
+      return Qt.rgba(0, 0, 0, spec.opacity)
     if (spec.fill === "surface") {
       const own = view.glassAt(spec.glass)
       return Qt.rgba(own.r, own.g, own.b, own.a * spec.opacity)
@@ -178,9 +188,7 @@ Item {
             radius: Math.max(0, frameItem.radius - offset)
             color: "transparent"
             border.width: modelData === 0 && frameItem.glow ? Math.max(2, Math.round(2.5 * decoration.view.uiScale)) : step
-            border.color: !frameItem.glow ? decoration.view.glassBorder
-              : Qt.rgba(decoration.view.accent.r, decoration.view.accent.g, decoration.view.accent.b,
-                modelData === 0 ? 1 : 0.32 / Math.abs(modelData))
+            border.color: !frameItem.glow ? decoration.view.glassBorder : Qt.rgba(decoration.view.accent.r, decoration.view.accent.g, decoration.view.accent.b, modelData === 0 ? 1 : 0.32 / Math.abs(modelData))
           }
         }
       }

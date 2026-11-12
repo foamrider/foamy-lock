@@ -61,7 +61,8 @@ Item {
   // The day of the month in cell `index`: of this month in a grid (outside
   // 1..days for the blanks), of this week's days (any month) in the strip.
   function dayAt(index) {
-    if (!week) return index - offset + 1
+    if (!week)
+      return index - offset + 1
     return new Date(year, month, today - weekIndex + index).getDate()
   }
 
@@ -83,8 +84,7 @@ Item {
     width: calendar.width - 2 * calendar.padding
     height: calendar.titleHeight
     textFormat: Text.PlainText
-    text: calendar.locale.standaloneMonthName(calendar.month, Locale.LongFormat) + " "
-      + calendar.view.now.toLocaleString(calendar.locale, "yyyy")
+    text: calendar.locale.standaloneMonthName(calendar.month, Locale.LongFormat) + " " + calendar.view.now.toLocaleString(calendar.locale, "yyyy")
     color: calendar.view.foreground
     font.family: calendar.view.textFontFamily
     font.pixelSize: Math.round((calendar.mini ? 15 : 19) * calendar.unit)

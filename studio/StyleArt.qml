@@ -41,7 +41,9 @@ Item {
   LayoutMirroring.enabled: element === "decor" && FoamyI18n.rightToLeft
   LayoutMirroring.childrenInherit: true
 
-  function dateText(format) { return sampleDate.toLocaleDateString(locale, format) }
+  function dateText(format) {
+    return sampleDate.toLocaleDateString(locale, format)
+  }
 
   // A small line icon in a w × h box: the arrow, music note, play, globe,
   // battery, timer, gauge, chip and box the drawings use.
@@ -58,14 +60,17 @@ Item {
     function line(points) {
       ctx.beginPath()
       ctx.moveTo(points[0] * s, points[1] * s)
-      for (var i = 2; i < points.length; i += 2) ctx.lineTo(points[i] * s, points[i + 1] * s)
+      for (var i = 2; i < points.length; i += 2)
+        ctx.lineTo(points[i] * s, points[i + 1] * s)
       ctx.stroke()
     }
     function circle(x, y, r, fill) {
       ctx.beginPath()
       ctx.arc(x * s, y * s, r * s, 0, Math.PI * 2)
-      if (fill) ctx.fill()
-      else ctx.stroke()
+      if (fill)
+        ctx.fill()
+      else
+        ctx.stroke()
     }
     switch (name) {
     case "arrow-right":
@@ -124,68 +129,129 @@ Item {
   }
 
   function pick(name) {
-    if (element === "animation") return animationArt
+    if (element === "animation")
+      return animationArt
     switch (name) {
-    case "clock:thin": return clockThin
-    case "clock:bold": return clockBold
-    case "clock:stacked": return clockStacked
-    case "clock:mono": return clockMono
-    case "clock:outline": return clockOutline
-    case "clock:dots": return clockDots
-    case "clock:flip": return clockFlip
-    case "clock:analog": return clockAnalog
-    case "clock:small": return clockSmall
-    case "clock:poster": return clockPoster
-    case "clock:ring": return clockRing
-    case "clock:serif": return clockSerif
-    case "date:long": return dateLong
-    case "date:caps": return dateCaps
-    case "date:short": return dateShort
-    case "date:serif": return dateSerif
-    case "date:numeric": return dateNumeric
-    case "date:stacked": return dateStacked
-    case "date:week": return dateWeek
-    case "date:iso": return dateIso
-    case "account:avatar": return accountAvatar
-    case "account:chip": return accountChip
-    case "account:name": return accountName
-    case "account:greeting": return accountGreeting
-    case "password:pill": return passwordPill
-    case "password:underline": return passwordUnderline
-    case "password:box": return passwordBox
-    case "password:dots": return passwordDots
-    case "password:terminal": return passwordTerminal
-    case "password:card": return passwordCard
-    case "media:card": return mediaCard
-    case "media:line": return mediaLine
-    case "media:pill": return mediaPill
-    case "media:art": return mediaArt
-    case "media:hero": return mediaHero
-    case "media:minimal": return mediaMinimal
-    case "media:disc": return mediaDisc
-    case "status:text": return statusText
-    case "status:icons": return statusIcons
-    case "status:pill": return statusPill
-    case "status:system": return statusSystem
-    case "calendar:card": return calendarCard
-    case "calendar:plain": return calendarPlain
-    case "calendar:week": return calendarWeek
-    case "calendar:mini": return calendarMini
-    case "weather:compact": return weatherCompact
-    case "weather:pill": return weatherPill
-    case "weather:detailed": return weatherDetailed
-    case "weather:line": return weatherLine
-    case "weather:large": return weatherLarge
-    case "weather:card": return weatherCard
-    case "decor:none": return decorNone
-    case "decor:split": return decorSplit
-    case "decor:sheet": return decorSheet
-    case "decor:cinema": return decorCinema
-    case "decor:strip": return decorStrip
-    case "decor:island": return decorIsland
-    case "decor:frame": return decorFrame
-    case "decor:card": return decorCard
-    case "decor:around": return decorAround
+    case "clock:thin":
+      return clockThin
+    case "clock:bold":
+      return clockBold
+    case "clock:stacked":
+      return clockStacked
+    case "clock:mono":
+      return clockMono
+    case "clock:outline":
+      return clockOutline
+    case "clock:dots":
+      return clockDots
+    case "clock:flip":
+      return clockFlip
+    case "clock:analog":
+      return clockAnalog
+    case "clock:small":
+      return clockSmall
+    case "clock:poster":
+      return clockPoster
+    case "clock:ring":
+      return clockRing
+    case "clock:serif":
+      return clockSerif
+    case "date:long":
+      return dateLong
+    case "date:caps":
+      return dateCaps
+    case "date:short":
+      return dateShort
+    case "date:serif":
+      return dateSerif
+    case "date:numeric":
+      return dateNumeric
+    case "date:stacked":
+      return dateStacked
+    case "date:week":
+      return dateWeek
+    case "date:iso":
+      return dateIso
+    case "account:avatar":
+      return accountAvatar
+    case "account:chip":
+      return accountChip
+    case "account:name":
+      return accountName
+    case "account:greeting":
+      return accountGreeting
+    case "password:pill":
+      return passwordPill
+    case "password:underline":
+      return passwordUnderline
+    case "password:box":
+      return passwordBox
+    case "password:dots":
+      return passwordDots
+    case "password:terminal":
+      return passwordTerminal
+    case "password:card":
+      return passwordCard
+    case "media:card":
+      return mediaCard
+    case "media:line":
+      return mediaLine
+    case "media:pill":
+      return mediaPill
+    case "media:art":
+      return mediaArt
+    case "media:hero":
+      return mediaHero
+    case "media:minimal":
+      return mediaMinimal
+    case "media:disc":
+      return mediaDisc
+    case "status:text":
+      return statusText
+    case "status:icons":
+      return statusIcons
+    case "status:pill":
+      return statusPill
+    case "status:system":
+      return statusSystem
+    case "calendar:card":
+      return calendarCard
+    case "calendar:plain":
+      return calendarPlain
+    case "calendar:week":
+      return calendarWeek
+    case "calendar:mini":
+      return calendarMini
+    case "weather:compact":
+      return weatherCompact
+    case "weather:pill":
+      return weatherPill
+    case "weather:detailed":
+      return weatherDetailed
+    case "weather:line":
+      return weatherLine
+    case "weather:large":
+      return weatherLarge
+    case "weather:card":
+      return weatherCard
+    case "decor:none":
+      return decorNone
+    case "decor:split":
+      return decorSplit
+    case "decor:sheet":
+      return decorSheet
+    case "decor:cinema":
+      return decorCinema
+    case "decor:strip":
+      return decorStrip
+    case "decor:island":
+      return decorIsland
+    case "decor:frame":
+      return decorFrame
+    case "decor:card":
+      return decorCard
+    case "decor:around":
+      return decorAround
     }
     return generic
   }
@@ -226,13 +292,19 @@ Item {
     border.width: 1
     border.color: root.edge
     Rectangle {
-      width: parent.width * 0.4; height: width; radius: width / 2
-      x: (parent.width - width) / 2; y: parent.height * 0.2
+      width: parent.width * 0.4
+      height: width
+      radius: width / 2
+      x: (parent.width - width) / 2
+      y: parent.height * 0.2
       color: root.edge
     }
     Rectangle {
-      width: parent.width * 0.8; height: width; radius: width / 2
-      x: (parent.width - width) / 2; y: parent.height * 0.66
+      width: parent.width * 0.8
+      height: width
+      radius: width / 2
+      x: (parent.width - width) / 2
+      y: parent.height * 0.66
       color: root.edge
     }
   }
@@ -242,7 +314,12 @@ Item {
     spacing: size * 0.6
     Repeater {
       model: parent.count
-      Rectangle { width: parent.size; height: width; radius: width / 2; color: root.ink }
+      Rectangle {
+        width: parent.size
+        height: width
+        radius: width / 2
+        color: root.ink
+      }
     }
   }
   component Glass: Rectangle {
@@ -269,7 +346,12 @@ Item {
     height: Math.max(2, root.u * 2.4)
     radius: height / 2
     color: root.faint
-    Rectangle { width: parent.width * parent.value; height: parent.height; radius: parent.radius; color: root.ink }
+    Rectangle {
+      width: parent.width * parent.value
+      height: parent.height
+      radius: parent.radius
+      color: root.ink
+    }
   }
   // This month (November 2026) as a grid: weekday initials, then six weeks
   // (the lock keeps six rows whatever the month); today, the 7th, in the
@@ -318,14 +400,55 @@ Item {
     color: Qt.alpha(root.ink, 0.06)
     border.width: 1
     border.color: root.edge
-    Item { id: layer; anchors.fill: parent }
+    Item {
+      id: layer
+      anchors.fill: parent
+    }
   }
 
   // ---- clock (digits keep their order in right-to-left languages)
-  Component { id: clockThin; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.weight: Font.Light } } }
-  Component { id: clockBold; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.weight: Font.Black; font.letterSpacing: -0.5 } } }
-  Component { id: clockSerif; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.family: "Noto Serif Display"; font.weight: Font.Light } } }
-  Component { id: clockMono; Item { Fit { text: "12:30"; font.pixelSize: FoamyStyle.font.display; font.family: FoamyStyle.monoFamily } } }
+  Component {
+    id: clockThin
+    Item {
+      Fit {
+        text: "12:30"
+        font.pixelSize: FoamyStyle.font.display
+        font.weight: Font.Light
+      }
+    }
+  }
+  Component {
+    id: clockBold
+    Item {
+      Fit {
+        text: "12:30"
+        font.pixelSize: FoamyStyle.font.display
+        font.weight: Font.Black
+        font.letterSpacing: -0.5
+      }
+    }
+  }
+  Component {
+    id: clockSerif
+    Item {
+      Fit {
+        text: "12:30"
+        font.pixelSize: FoamyStyle.font.display
+        font.family: "Noto Serif Display"
+        font.weight: Font.Light
+      }
+    }
+  }
+  Component {
+    id: clockMono
+    Item {
+      Fit {
+        text: "12:30"
+        font.pixelSize: FoamyStyle.font.display
+        font.family: FoamyStyle.monoFamily
+      }
+    }
+  }
   Component {
     id: clockStacked
     Item {
@@ -373,12 +496,12 @@ Item {
     Canvas {
       // 5×7 dot glyphs, as on the lock's LED face.
       readonly property var glyphs: ({
-        "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
-        "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
-        "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
-        "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
-        ":": ["0", "0", "1", "0", "1", "0", "0"]
-      })
+          "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+          "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+          "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+          "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+          ":": ["0", "0", "1", "0", "1", "0", "0"]
+        })
       readonly property color ink: root.ink
       onInkChanged: requestPaint()
       onWidthChanged: requestPaint()
@@ -388,7 +511,8 @@ Item {
         ctx.reset()
         var text = "12:30"
         var columns = 0
-        for (var c = 0; c < text.length; c++) columns += glyphs[text[c]][0].length + (c ? 1 : 0)
+        for (var c = 0; c < text.length; c++)
+          columns += glyphs[text[c]][0].length + (c ? 1 : 0)
         var pitch = Math.min(width / columns, height / 7)
         var x0 = (width - pitch * columns) / 2, y0 = (height - pitch * 7) / 2
         var x = x0
@@ -458,7 +582,9 @@ Item {
         ctx.strokeStyle = ink
         ctx.lineCap = "round"
         ctx.lineWidth = Math.max(1, r / 12)
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.stroke()
         for (var t = 0; t < 12; t += 3) {
           var a = t / 12 * Math.PI * 2
           ctx.beginPath()
@@ -467,10 +593,12 @@ Item {
           ctx.stroke()
         }
         // 12:30: the minute hand down, the hour hand halfway past 12.
-        var hand = function(angle, length, w) {
+        var hand = function (angle, length, w) {
           ctx.lineWidth = w
-          ctx.beginPath(); ctx.moveTo(cx, cy)
-          ctx.lineTo(cx + Math.sin(angle) * length, cy - Math.cos(angle) * length); ctx.stroke()
+          ctx.beginPath()
+          ctx.moveTo(cx, cy)
+          ctx.lineTo(cx + Math.sin(angle) * length, cy - Math.cos(angle) * length)
+          ctx.stroke()
         }
         hand(Math.PI, r * 0.78, Math.max(1, r / 10))
         hand(Math.PI * 2 * 12.5 / 12, r * 0.5, Math.max(1.5, r / 7))
@@ -536,9 +664,13 @@ Item {
           ctx.lineWidth = Math.max(1.5, r / 9)
           ctx.lineCap = "round"
           ctx.strokeStyle = Qt.alpha(ink, 0.18)
-          ctx.beginPath(); ctx.arc(width / 2, height / 2, r, 0, Math.PI * 2); ctx.stroke()
+          ctx.beginPath()
+          ctx.arc(width / 2, height / 2, r, 0, Math.PI * 2)
+          ctx.stroke()
           ctx.strokeStyle = ink
-          ctx.beginPath(); ctx.arc(width / 2, height / 2, r, -Math.PI / 2, Math.PI / 2); ctx.stroke()
+          ctx.beginPath()
+          ctx.arc(width / 2, height / 2, r, -Math.PI / 2, Math.PI / 2)
+          ctx.stroke()
         }
       }
       Text {
@@ -554,12 +686,37 @@ Item {
   }
 
   // ---- date
-  Component { id: dateLong; Item { Fit { text: root.dateText("dddd d MMMM"); font.pixelSize: FoamyStyle.font.subtitle; font.weight: Font.Light } } }
+  Component {
+    id: dateLong
+    Item {
+      Fit {
+        text: root.dateText("dddd d MMMM")
+        font.pixelSize: FoamyStyle.font.subtitle
+        font.weight: Font.Light
+      }
+    }
+  }
   Component {
     id: dateCaps
-    Item { Fit { text: root.dateText("ddd d MMMM").toLocaleUpperCase(); font.pixelSize: FoamyStyle.font.caption; font.weight: Font.Medium; font.letterSpacing: 1.5 } }
+    Item {
+      Fit {
+        text: root.dateText("ddd d MMMM").toLocaleUpperCase()
+        font.pixelSize: FoamyStyle.font.caption
+        font.weight: Font.Medium
+        font.letterSpacing: 1.5
+      }
+    }
   }
-  Component { id: dateShort; Item { Fit { text: root.dateText("ddd d MMM"); font.pixelSize: FoamyStyle.font.subtitle; font.weight: Font.DemiBold } } }
+  Component {
+    id: dateShort
+    Item {
+      Fit {
+        text: root.dateText("ddd d MMM")
+        font.pixelSize: FoamyStyle.font.subtitle
+        font.weight: Font.DemiBold
+      }
+    }
+  }
   Component {
     id: dateSerif
     Item {
@@ -599,11 +756,24 @@ Item {
   // The ISO date and the short weekday, in the mono face.
   Component {
     id: dateIso
-    Item { Fit { text: root.sampleDate.toLocaleString(Qt.locale("C"), "yyyy-MM-dd") + " " + root.dateText("ddd"); font.pixelSize: FoamyStyle.font.subtitle; font.family: FoamyStyle.monoFamily } }
+    Item {
+      Fit {
+        text: root.sampleDate.toLocaleString(Qt.locale("C"), "yyyy-MM-dd") + " " + root.dateText("ddd")
+        font.pixelSize: FoamyStyle.font.subtitle
+        font.family: FoamyStyle.monoFamily
+      }
+    }
   }
   Component {
     id: dateNumeric
-    Item { Fit { text: root.dateText(Locale.ShortFormat); font.pixelSize: FoamyStyle.font.subtitle; font.weight: Font.DemiBold; font.letterSpacing: 1 } }
+    Item {
+      Fit {
+        text: root.dateText(Locale.ShortFormat)
+        font.pixelSize: FoamyStyle.font.subtitle
+        font.weight: Font.DemiBold
+        font.letterSpacing: 1
+      }
+    }
   }
   // A large day number beside the month over the weekday.
   Component {
@@ -660,8 +830,14 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: root.u * 3
-        Avatar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 24 }
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 30 }
+        Avatar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 24
+        }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 30
+        }
       }
     }
   }
@@ -673,14 +849,42 @@ Item {
         width: root.u * 56
         height: root.u * 18
         radius: height / 2
-        Avatar { id: chipAvatar; x: root.u * 3; anchors.verticalCenter: parent.verticalCenter; width: parent.height - root.u * 6 }
-        Bar { anchors.left: chipAvatar.right; anchors.leftMargin: root.u * 4; anchors.verticalCenter: parent.verticalCenter; width: root.u * 26 }
+        Avatar {
+          id: chipAvatar
+          x: root.u * 3
+          anchors.verticalCenter: parent.verticalCenter
+          width: parent.height - root.u * 6
+        }
+        Bar {
+          anchors.left: chipAvatar.right
+          anchors.leftMargin: root.u * 4
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 26
+        }
       }
     }
   }
-  Component { id: accountName; Item { Bar { anchors.centerIn: parent; width: root.u * 40; height: root.u * 5 } } }
+  Component {
+    id: accountName
+    Item {
+      Bar {
+        anchors.centerIn: parent
+        width: root.u * 40
+        height: root.u * 5
+      }
+    }
+  }
   // A greeting for the time of day.
-  Component { id: accountGreeting; Item { Fit { text: FoamyI18n.t("studio.art.greeting"); font.pixelSize: FoamyStyle.font.title; font.weight: Font.Light } } }
+  Component {
+    id: accountGreeting
+    Item {
+      Fit {
+        text: FoamyI18n.t("studio.art.greeting")
+        font.pixelSize: FoamyStyle.font.title
+        font.weight: Font.Light
+      }
+    }
+  }
 
   // ---- password field
   Component {
@@ -691,7 +895,10 @@ Item {
         width: root.u * 66
         height: root.u * 18
         radius: height / 2
-        Dots { x: root.u * 8; anchors.verticalCenter: parent.verticalCenter }
+        Dots {
+          x: root.u * 8
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }
@@ -702,8 +909,16 @@ Item {
         anchors.centerIn: parent
         width: root.u * 66
         height: root.u * 16
-        Dots { x: root.u * 4; anchors.verticalCenter: parent.verticalCenter }
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: Math.max(1, root.u * 1.2); color: root.ink }
+        Dots {
+          x: root.u * 4
+          anchors.verticalCenter: parent.verticalCenter
+        }
+        Rectangle {
+          anchors.bottom: parent.bottom
+          width: parent.width
+          height: Math.max(1, root.u * 1.2)
+          color: root.ink
+        }
       }
     }
   }
@@ -715,12 +930,29 @@ Item {
         width: root.u * 66
         height: root.u * 20
         radius: root.u * 4
-        Dots { x: root.u * 7; anchors.verticalCenter: parent.verticalCenter }
-        Icon { name: "arrow-right"; anchors.right: parent.right; anchors.rightMargin: root.u * 4; anchors.verticalCenter: parent.verticalCenter }
+        Dots {
+          x: root.u * 7
+          anchors.verticalCenter: parent.verticalCenter
+        }
+        Icon {
+          name: "arrow-right"
+          anchors.right: parent.right
+          anchors.rightMargin: root.u * 4
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }
-  Component { id: passwordDots; Item { Dots { anchors.centerIn: parent; count: 6; size: root.u * 6 } } }
+  Component {
+    id: passwordDots
+    Item {
+      Dots {
+        anchors.centerIn: parent
+        count: 6
+        size: root.u * 6
+      }
+    }
+  }
   Component {
     id: passwordTerminal
     Item {
@@ -735,7 +967,12 @@ Item {
           font.family: FoamyStyle.monoFamily
           font.pixelSize: FoamyStyle.font.body
         }
-        Rectangle { anchors.verticalCenter: parent.verticalCenter; width: root.u * 5; height: root.u * 11; color: root.ink }
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 5
+          height: root.u * 11
+          color: root.ink
+        }
       }
     }
   }
@@ -748,7 +985,11 @@ Item {
         height: root.u * 36
         radius: root.u * 5
         color: root.faint
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; y: root.u * 7; width: root.u * 32 }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          y: root.u * 7
+          width: root.u * 32
+        }
         Glass {
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.bottom: parent.bottom
@@ -756,7 +997,11 @@ Item {
           width: parent.width - root.u * 14
           height: root.u * 12
           radius: height / 2
-          Dots { x: root.u * 5; anchors.verticalCenter: parent.verticalCenter; size: root.u * 3 }
+          Dots {
+            x: root.u * 5
+            anchors.verticalCenter: parent.verticalCenter
+            size: root.u * 3
+          }
         }
       }
     }
@@ -771,17 +1016,38 @@ Item {
         width: root.u * 74
         height: root.u * 30
         radius: root.u * 5
-        Rectangle { id: cardArt; x: root.u * 4; anchors.verticalCenter: parent.verticalCenter; width: parent.height - root.u * 8; height: width; radius: root.u * 3; color: root.edge }
+        Rectangle {
+          id: cardArt
+          x: root.u * 4
+          anchors.verticalCenter: parent.verticalCenter
+          width: parent.height - root.u * 8
+          height: width
+          radius: root.u * 3
+          color: root.edge
+        }
         Column {
           anchors.left: cardArt.right
           anchors.leftMargin: root.u * 5
           anchors.verticalCenter: parent.verticalCenter
           spacing: root.u * 3
-          Bar { width: root.u * 30 }
-          Bar { width: root.u * 20; opacity: 0.6 }
+          Bar {
+            width: root.u * 30
+          }
+          Bar {
+            width: root.u * 20
+            opacity: 0.6
+          }
           Row {
             spacing: root.u * 4
-            Repeater { model: 3; Rectangle { width: root.u * 3; height: width; radius: width / 2; color: root.ink } }
+            Repeater {
+              model: 3
+              Rectangle {
+                width: root.u * 3
+                height: width
+                radius: width / 2
+                color: root.ink
+              }
+            }
           }
         }
       }
@@ -793,9 +1059,19 @@ Item {
       Row {
         anchors.centerIn: parent
         spacing: root.u * 4
-        Icon { name: "music"; anchors.verticalCenter: parent.verticalCenter }
-        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 32 }
-        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 18; opacity: 0.6 }
+        Icon {
+          name: "music"
+          anchors.verticalCenter: parent.verticalCenter
+        }
+        Bar {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 32
+        }
+        Bar {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 18
+          opacity: 0.6
+        }
       }
     }
   }
@@ -807,9 +1083,28 @@ Item {
         width: root.u * 64
         height: root.u * 18
         radius: height / 2
-        Rectangle { id: pillArt; x: root.u * 3; anchors.verticalCenter: parent.verticalCenter; width: parent.height - root.u * 6; height: width; radius: width / 2; color: root.edge }
-        Bar { anchors.left: pillArt.right; anchors.leftMargin: root.u * 4; anchors.verticalCenter: parent.verticalCenter; width: root.u * 26 }
-        Icon { name: "play"; width: root.u * 9; anchors.right: parent.right; anchors.rightMargin: root.u * 5; anchors.verticalCenter: parent.verticalCenter }
+        Rectangle {
+          id: pillArt
+          x: root.u * 3
+          anchors.verticalCenter: parent.verticalCenter
+          width: parent.height - root.u * 6
+          height: width
+          radius: width / 2
+          color: root.edge
+        }
+        Bar {
+          anchors.left: pillArt.right
+          anchors.leftMargin: root.u * 4
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 26
+        }
+        Icon {
+          name: "play"
+          width: root.u * 9
+          anchors.right: parent.right
+          anchors.rightMargin: root.u * 5
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }
@@ -819,11 +1114,25 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: root.u * 3
-        Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 26; height: width; radius: root.u * 3; color: root.edge }
+        Rectangle {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 26
+          height: width
+          radius: root.u * 3
+          color: root.edge
+        }
         Row {
           anchors.horizontalCenter: parent.horizontalCenter
           spacing: root.u * 5
-          Repeater { model: 3; Rectangle { width: root.u * 3.5; height: width; radius: width / 2; color: root.ink } }
+          Repeater {
+            model: 3
+            Rectangle {
+              width: root.u * 3.5
+              height: width
+              radius: width / 2
+              color: root.ink
+            }
+          }
         }
       }
     }
@@ -836,9 +1145,22 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: root.u * 2.5
-        Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 27; height: width; radius: root.u * 3.5; color: root.edge }
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 22 }
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 14; opacity: 0.6 }
+        Rectangle {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 27
+          height: width
+          radius: root.u * 3.5
+          color: root.edge
+        }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 22
+        }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 14
+          opacity: 0.6
+        }
       }
     }
   }
@@ -857,9 +1179,20 @@ Item {
           font.family: FoamyStyle.fontFamily
           font.pixelSize: Math.round(root.u * 10)
         }
-        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 26 }
-        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 4; opacity: 0.6 }
-        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 18; opacity: 0.6 }
+        Bar {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 26
+        }
+        Bar {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 4
+          opacity: 0.6
+        }
+        Bar {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 18
+          opacity: 0.6
+        }
       }
     }
   }
@@ -876,15 +1209,32 @@ Item {
           height: width
           radius: width / 2
           color: root.edge
-          Rectangle { anchors.centerIn: parent; width: root.u * 5; height: width; radius: width / 2; color: root.faint; border.width: 1; border.color: root.ink }
+          Rectangle {
+            anchors.centerIn: parent
+            width: root.u * 5
+            height: width
+            radius: width / 2
+            color: root.faint
+            border.width: 1
+            border.color: root.ink
+          }
         }
         Column {
           anchors.verticalCenter: parent.verticalCenter
           spacing: root.u * 3
-          Bar { width: root.u * 24 }
-          Bar { width: root.u * 16; opacity: 0.6 }
+          Bar {
+            width: root.u * 24
+          }
+          Bar {
+            width: root.u * 16
+            opacity: 0.6
+          }
         }
-        Icon { name: "play"; width: root.u * 9; anchors.verticalCenter: parent.verticalCenter }
+        Icon {
+          name: "play"
+          width: root.u * 9
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }
@@ -898,13 +1248,27 @@ Item {
         spacing: root.u * 6
         Row {
           spacing: root.u * 2
-          Icon { name: "globe"; width: root.u * 13; anchors.verticalCenter: parent.verticalCenter }
-          Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 16 }
+          Icon {
+            name: "globe"
+            width: root.u * 13
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Bar {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.u * 16
+          }
         }
         Row {
           spacing: root.u * 2
-          Icon { name: "battery-medium"; width: root.u * 13; anchors.verticalCenter: parent.verticalCenter }
-          Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 12 }
+          Icon {
+            name: "battery-medium"
+            width: root.u * 13
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Bar {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.u * 12
+          }
         }
       }
     }
@@ -915,8 +1279,14 @@ Item {
       Row {
         anchors.centerIn: parent
         spacing: root.u * 6
-        Icon { name: "globe"; width: root.u * 16 }
-        Icon { name: "battery-medium"; width: root.u * 16 }
+        Icon {
+          name: "globe"
+          width: root.u * 16
+        }
+        Icon {
+          name: "battery-medium"
+          width: root.u * 16
+        }
       }
     }
   }
@@ -932,9 +1302,20 @@ Item {
           id: statusRow
           anchors.centerIn: parent
           spacing: root.u * 3
-          Icon { name: "globe"; width: root.u * 9; anchors.verticalCenter: parent.verticalCenter }
-          Icon { name: "battery-medium"; width: root.u * 9; anchors.verticalCenter: parent.verticalCenter }
-          Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 10 }
+          Icon {
+            name: "globe"
+            width: root.u * 9
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Icon {
+            name: "battery-medium"
+            width: root.u * 9
+            anchors.verticalCenter: parent.verticalCenter
+          }
+          Bar {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.u * 10
+          }
         }
       }
     }
@@ -959,8 +1340,16 @@ Item {
             Row {
               required property var modelData
               spacing: root.u * 2
-              Icon { name: parent.modelData[0]; width: root.u * 9; anchors.verticalCenter: parent.verticalCenter }
-              Meter { width: root.u * 14; value: parent.modelData[1]; anchors.verticalCenter: parent.verticalCenter }
+              Icon {
+                name: parent.modelData[0]
+                width: root.u * 9
+                anchors.verticalCenter: parent.verticalCenter
+              }
+              Meter {
+                width: root.u * 14
+                value: parent.modelData[1]
+                anchors.verticalCenter: parent.verticalCenter
+              }
             }
           }
         }
@@ -977,8 +1366,21 @@ Item {
         width: cardMonth.width + root.u * 8
         height: parent.height
         radius: root.u * 4
-        Bar { id: cardTitle; anchors.horizontalCenter: parent.horizontalCenter; y: root.u * 3; width: root.u * 16; height: root.u * 2.2; opacity: 0.8 }
-        Month { id: cardMonth; anchors.horizontalCenter: parent.horizontalCenter; anchors.top: cardTitle.bottom; anchors.topMargin: root.u * 1.2; cell: root.u * 4.1 }
+        Bar {
+          id: cardTitle
+          anchors.horizontalCenter: parent.horizontalCenter
+          y: root.u * 3
+          width: root.u * 16
+          height: root.u * 2.2
+          opacity: 0.8
+        }
+        Month {
+          id: cardMonth
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.top: cardTitle.bottom
+          anchors.topMargin: root.u * 1.2
+          cell: root.u * 4.1
+        }
       }
     }
   }
@@ -988,8 +1390,16 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: root.u * 1.2
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 16; height: root.u * 2.2; opacity: 0.8 }
-        Month { anchors.horizontalCenter: parent.horizontalCenter; cell: root.u * 4.1 }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 16
+          height: root.u * 2.2
+          opacity: 0.8
+        }
+        Month {
+          anchors.horizontalCenter: parent.horizontalCenter
+          cell: root.u * 4.1
+        }
       }
     }
   }
@@ -1053,8 +1463,16 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: root.u
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 12; height: root.u * 1.8; opacity: 0.8 }
-        Month { anchors.horizontalCenter: parent.horizontalCenter; cell: root.u * 3.4 }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 12
+          height: root.u * 1.8
+          opacity: 0.8
+        }
+        Month {
+          anchors.horizontalCenter: parent.horizontalCenter
+          cell: root.u * 3.4
+        }
       }
     }
   }
@@ -1078,8 +1496,15 @@ Item {
       Row {
         anchors.centerIn: parent
         spacing: root.u * 3
-        WeatherIcon { anchors.verticalCenter: parent.verticalCenter; width: root.u * 14; height: width }
-        Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 15) }
+        WeatherIcon {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 14
+          height: width
+        }
+        Temperature {
+          anchors.verticalCenter: parent.verticalCenter
+          font.pixelSize: Math.round(root.u * 15)
+        }
       }
     }
   }
@@ -1096,9 +1521,21 @@ Item {
           id: pillLine
           anchors.centerIn: parent
           spacing: root.u * 3
-          WeatherIcon { anchors.verticalCenter: parent.verticalCenter; width: root.u * 9; height: width }
-          Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 8); font.weight: Font.DemiBold }
-          Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 16; opacity: 0.6 }
+          WeatherIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.u * 9
+            height: width
+          }
+          Temperature {
+            anchors.verticalCenter: parent.verticalCenter
+            font.pixelSize: Math.round(root.u * 8)
+            font.weight: Font.DemiBold
+          }
+          Bar {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.u * 16
+            opacity: 0.6
+          }
         }
       }
     }
@@ -1118,16 +1555,30 @@ Item {
           x: root.u * 5
           y: root.u * 4
           spacing: root.u * 3
-          WeatherIcon { anchors.verticalCenter: parent.verticalCenter; width: root.u * 13; height: width }
-          Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 14); font.weight: Font.Light }
+          WeatherIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.u * 13
+            height: width
+          }
+          Temperature {
+            anchors.verticalCenter: parent.verticalCenter
+            font.pixelSize: Math.round(root.u * 14)
+            font.weight: Font.Light
+          }
         }
         Column {
           anchors.top: cardHead.bottom
           anchors.topMargin: root.u * 2.5
           x: root.u * 5
           spacing: root.u * 2.5
-          Bar { width: root.u * 30; opacity: 0.8 }
-          Bar { width: root.u * 22; opacity: 0.55 }
+          Bar {
+            width: root.u * 30
+            opacity: 0.8
+          }
+          Bar {
+            width: root.u * 22
+            opacity: 0.55
+          }
         }
       }
     }
@@ -1140,7 +1591,11 @@ Item {
       Row {
         anchors.centerIn: parent
         spacing: root.u * 3
-        Bar { anchors.verticalCenter: parent.verticalCenter; width: root.u * 24; opacity: 0.7 }
+        Bar {
+          anchors.verticalCenter: parent.verticalCenter
+          width: root.u * 24
+          opacity: 0.7
+        }
         Text {
           anchors.verticalCenter: parent.verticalCenter
           textFormat: Text.PlainText
@@ -1149,7 +1604,11 @@ Item {
           font.family: FoamyStyle.fontFamily
           font.pixelSize: Math.round(root.u * 9)
         }
-        Temperature { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Math.round(root.u * 9); font.weight: Font.DemiBold }
+        Temperature {
+          anchors.verticalCenter: parent.verticalCenter
+          font.pixelSize: Math.round(root.u * 9)
+          font.weight: Font.DemiBold
+        }
       }
     }
   }
@@ -1160,8 +1619,16 @@ Item {
       Column {
         anchors.centerIn: parent
         spacing: root.u * 1.5
-        Temperature { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: Math.round(root.u * 22); font.weight: Font.Light }
-        Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 20; opacity: 0.6 }
+        Temperature {
+          anchors.horizontalCenter: parent.horizontalCenter
+          font.pixelSize: Math.round(root.u * 22)
+          font.weight: Font.Light
+        }
+        Bar {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: root.u * 20
+          opacity: 0.6
+        }
       }
     }
   }
@@ -1178,10 +1645,26 @@ Item {
         Column {
           anchors.centerIn: parent
           spacing: root.u * 1.5
-          WeatherIcon { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 10; height: width }
-          Temperature { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: Math.round(root.u * 10); font.weight: Font.Light }
-          Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 20; opacity: 0.8 }
-          Bar { anchors.horizontalCenter: parent.horizontalCenter; width: root.u * 14; opacity: 0.55 }
+          WeatherIcon {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: root.u * 10
+            height: width
+          }
+          Temperature {
+            anchors.horizontalCenter: parent.horizontalCenter
+            font.pixelSize: Math.round(root.u * 10)
+            font.weight: Font.Light
+          }
+          Bar {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: root.u * 20
+            opacity: 0.8
+          }
+          Bar {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: root.u * 14
+            opacity: 0.55
+          }
         }
       }
     }
@@ -1196,7 +1679,16 @@ Item {
     border.width: 1
     border.color: root.edge
   }
-  Component { id: decorNone; Item { Screen { Field { anchors.centerIn: parent } } } }
+  Component {
+    id: decorNone
+    Item {
+      Screen {
+        Field {
+          anchors.centerIn: parent
+        }
+      }
+    }
+  }
   Component {
     id: decorSplit
     Item {
@@ -1208,8 +1700,17 @@ Item {
           height: parent.height
           color: Qt.alpha(root.ink, 0.28)
         }
-        Rectangle { anchors.left: splitPanel.right; width: Math.max(1, root.u * 0.8); height: parent.height; color: Commons.Color.accent }
-        Field { anchors.horizontalCenter: splitPanel.horizontalCenter; anchors.verticalCenter: parent.verticalCenter; width: splitPanel.width * 0.7 }
+        Rectangle {
+          anchors.left: splitPanel.right
+          width: Math.max(1, root.u * 0.8)
+          height: parent.height
+          color: Commons.Color.accent
+        }
+        Field {
+          anchors.horizontalCenter: splitPanel.horizontalCenter
+          anchors.verticalCenter: parent.verticalCenter
+          width: splitPanel.width * 0.7
+        }
       }
     }
   }
@@ -1229,7 +1730,11 @@ Item {
           border.width: 1
           border.color: root.edge
         }
-        Field { anchors.horizontalCenter: sheetPanel.horizontalCenter; anchors.verticalCenter: parent.verticalCenter; width: sheetPanel.width * 0.75 }
+        Field {
+          anchors.horizontalCenter: sheetPanel.horizontalCenter
+          anchors.verticalCenter: parent.verticalCenter
+          width: sheetPanel.width * 0.75
+        }
       }
     }
   }
@@ -1237,9 +1742,23 @@ Item {
     id: decorCinema
     Item {
       Screen {
-        Rectangle { width: parent.width; height: parent.height * 0.2; color: root.ink; opacity: 0.6 }
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: parent.height * 0.2; color: root.ink; opacity: 0.6 }
-        Field { anchors.horizontalCenter: parent.horizontalCenter; anchors.verticalCenter: parent.verticalCenter }
+        Rectangle {
+          width: parent.width
+          height: parent.height * 0.2
+          color: root.ink
+          opacity: 0.6
+        }
+        Rectangle {
+          anchors.bottom: parent.bottom
+          width: parent.width
+          height: parent.height * 0.2
+          color: root.ink
+          opacity: 0.6
+        }
+        Field {
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }
@@ -1254,7 +1773,11 @@ Item {
           height: parent.height * 0.24
           color: Qt.alpha(root.ink, 0.28)
         }
-        Field { anchors.centerIn: stripBand; width: root.u * 14; height: root.u * 3.4 }
+        Field {
+          anchors.centerIn: stripBand
+          width: root.u * 14
+          height: root.u * 3.4
+        }
       }
     }
   }
@@ -1271,7 +1794,10 @@ Item {
           color: root.ink
           opacity: 0.6
         }
-        Field { anchors.horizontalCenter: parent.horizontalCenter; anchors.verticalCenter: parent.verticalCenter }
+        Field {
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.verticalCenter: parent.verticalCenter
+        }
       }
     }
   }
@@ -1287,7 +1813,9 @@ Item {
           border.width: Math.max(1.5, root.u * 1.2)
           border.color: root.ink
         }
-        Field { anchors.centerIn: parent }
+        Field {
+          anchors.centerIn: parent
+        }
       }
     }
   }
@@ -1318,7 +1846,9 @@ Item {
           radius: width / 2
           color: Qt.alpha(root.ink, 0.5)
         }
-        Field { anchors.centerIn: parent }
+        Field {
+          anchors.centerIn: parent
+        }
       }
     }
   }
@@ -1335,7 +1865,10 @@ Item {
           border.width: 1
           border.color: root.edge
         }
-        Field { anchors.centerIn: parent; width: parent.width * 0.3 }
+        Field {
+          anchors.centerIn: parent
+          width: parent.width * 0.3
+        }
       }
     }
   }
@@ -1355,7 +1888,10 @@ Item {
           height: 300
           view: stillView
           source: root.styleName
-          transform: Scale { xScale: animationScreen.width / 480; yScale: animationScreen.height / 300 }
+          transform: Scale {
+            xScale: animationScreen.width / 480
+            yScale: animationScreen.height / 300
+          }
         }
       }
       // What Backdrop reads from its LockView.
@@ -1383,7 +1919,11 @@ Item {
         color: root.faint
         border.width: 1
         border.color: root.edge
-        Icon { name: "box"; anchors.centerIn: parent; color: Qt.alpha(root.ink, 0.7) }
+        Icon {
+          name: "box"
+          anchors.centerIn: parent
+          color: Qt.alpha(root.ink, 0.7)
+        }
       }
     }
   }

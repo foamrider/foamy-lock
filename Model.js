@@ -1,9 +1,5 @@
-// Runtime helpers, local rather than Commons.Util because Omarchy 4.0.6 has no
-// video-path helper and the plugin still loads there.
-function isVideoPath(path) {
-  return /\.(mp4|m4v|mov|webm|mkv|avi)$/i.test(String(path || ""))
-}
-
+// Commons.Util.fileUrl with a cache-busting version, so a rewritten
+// wallpaper at the same path reloads.
 function fileUrl(path, version) {
   if (!path) return ""
   return "file://" + String(path).split("/").map(encodeURIComponent).join("/") + "?v=" + Number(version || 0)
@@ -421,7 +417,7 @@ function videoProbeResult(text, directory) {
 
 if (typeof module !== "undefined") module.exports = {
   videoScreenSize: videoScreenSize, videoProbeResult: videoProbeResult,
-  defaults: defaults, parseConfig: parseConfig, isVideoPath: isVideoPath, fileUrl: fileUrl,
+  defaults: defaults, parseConfig: parseConfig, fileUrl: fileUrl,
   selectPlayer: selectPlayer, runMediaAction: runMediaAction, artworkKey: artworkKey,
   mediaPlaying: mediaPlaying, isBrowserPlayer: isBrowserPlayer, artworkPrecheck: artworkPrecheck,
   stockLockEnabled: stockLockEnabled, normalizeRoot: normalizeRoot, isoWeek: isoWeek,

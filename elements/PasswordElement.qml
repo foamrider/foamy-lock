@@ -63,16 +63,13 @@ Rectangle {
   readonly property int passwordDotFontSize: Math.round(17 * uiScale)
   readonly property int passwordDotLetterSpacing: Math.round(2 * uiScale)
   readonly property alias input: passwordInput
-  readonly property real passwordDotScale: dotMetrics.advanceWidth > 0
-    ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth)
-    : 1
+  readonly property real passwordDotScale: dotMetrics.advanceWidth > 0 ? Math.min(1, (passwordInput.width - 4) / dotMetrics.advanceWidth) : 1
   readonly property bool mirrored: view.rightToLeft
   readonly property string editorFontFamily: terminal ? FoamyStyle.monoFamily : view.textFontFamily
   // The surface behind everything: glass for the pill (while typing, or
   // always with reveal "always"), the box and card, a dark panel for the
   // terminal, none otherwise.
-  readonly property bool surfaceShown: chromeShown && !surfaceIdleHidden
-    && (box || card || terminal || (styleName === "pill" && (view.showPassword || idleShown)))
+  readonly property bool surfaceShown: chromeShown && !surfaceIdleHidden && (box || card || terminal || (styleName === "pill" && (view.showPassword || idleShown)))
   readonly property real submitWidth: Math.round(70 * uiScale)
   // The submit arrow: the pill and card while typing, the box always; the
   // dots and terminal submit with Enter alone.
@@ -85,10 +82,8 @@ Rectangle {
 
   objectName: "inputField"
   width: box || terminal || card ? Math.min(Math.round((terminal ? 440 : 360) * uiScale), contentWidth) : fieldWidth
-  height: box ? Math.round(56 * uiScale) : terminal ? Math.round(50 * uiScale)
-    : card ? Math.round(138 * uiScale) : fieldHeight
-  radius: box ? Math.round(12 * uiScale) : terminal ? Math.round(6 * uiScale)
-    : card ? Math.round(24 * uiScale) : underline || dotsOnly ? 0 : height / 2
+  height: box ? Math.round(56 * uiScale) : terminal ? Math.round(50 * uiScale) : card ? Math.round(138 * uiScale) : fieldHeight
+  radius: box ? Math.round(12 * uiScale) : terminal ? Math.round(6 * uiScale) : card ? Math.round(24 * uiScale) : underline || dotsOnly ? 0 : height / 2
   color: !surfaceShown ? "transparent" : terminal ? Qt.rgba(0.012, 0.016, 0.03, 0.72) : glassFill
   border.width: surfaceShown ? 1 : 0
   border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
@@ -225,11 +220,9 @@ Rectangle {
   Row {
     id: unlockHint
     objectName: "unlockHint"
-    readonly property bool contained: field.box || field.card || field.terminal
-      || (field.styleName === "pill" && field.idleShown)
+    readonly property bool contained: field.box || field.card || field.terminal || (field.styleName === "pill" && field.idleShown)
     readonly property real limit: contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.uiScale)) : field.contentWidth
-    x: !field.terminal ? hintArea.x + (hintArea.width - width) / 2
-      : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
+    x: !field.terminal ? hintArea.x + (hintArea.width - width) / 2 : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
     y: hintArea.y + (hintArea.height - height) / 2
     spacing: Math.round(10 * field.uiScale)
     visible: field.chromeShown && !field.view.showPassword && field.view.showUnlockHint
@@ -247,8 +240,7 @@ Rectangle {
       objectName: "unlockHintText"
       textFormat: Text.PlainText
       text: field.view.fingerprintConfigured && !field.view.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
-      width: Math.min(implicitWidth, unlockHint.limit
-        - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
+      width: Math.min(implicitWidth, unlockHint.limit - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
       color: field.view.foreground
       opacity: field.dotsOnly || field.terminal ? 0.82 : 1
       font.family: field.editorFontFamily
@@ -287,9 +279,7 @@ Rectangle {
     selectionColor: field.view.selection
     selectedTextColor: field.view.foreground
     font.family: field.editorFontFamily
-    font.pixelSize: text.length > 0
-      ? Math.max(1, Math.floor(field.passwordDotFontSize * field.passwordDotScale))
-      : field.fieldFontSize
+    font.pixelSize: text.length > 0 ? Math.max(1, Math.floor(field.passwordDotFontSize * field.passwordDotScale)) : field.fieldFontSize
     font.letterSpacing: text.length > 0 ? field.passwordDotLetterSpacing * field.passwordDotScale : 0
     cursorVisible: activeFocus && field.view.showPasswordCursor && text.length > 0
     // The terminal's caret is a block.
@@ -301,14 +291,17 @@ Rectangle {
     }
 
     onTextChanged: {
-      if (!field.view.syncingPasswordText) field.view.passwordTextEdited(text)
-      if (text.length > 0) field.view.wakeRequested()
-      if (text.length > 0 && field.view.failureMessage.length > 0) field.view.clearFailureRequested()
+      if (!field.view.syncingPasswordText)
+        field.view.passwordTextEdited(text)
+      if (text.length > 0)
+        field.view.wakeRequested()
+      if (text.length > 0 && field.view.failureMessage.length > 0)
+        field.view.clearFailureRequested()
     }
 
     onAccepted: field.view.submitCurrentPassword()
 
-    Keys.onPressed: function(event) {
+    Keys.onPressed: function (event) {
       if (event.isAutoRepeat && field.view.dropsAutoRepeat(event.key)) {
         event.accepted = true
         return
@@ -325,13 +318,9 @@ Rectangle {
   Text {
     textFormat: Text.PlainText
     anchors.fill: passwordInput
-    text: field.view.authenticatingPassword
-      ? FoamyI18n.t("Checking…")
-      : (field.view.failureMessage.length > 0 ? field.view.failedAttempts > 0 ? FoamyI18n.t("Authentication failed (%1)", FoamyI18n.number(field.view.failedAttempts)) : FoamyI18n.t(field.view.failureMessage) : field.view.placeholderText)
+    text: field.view.authenticatingPassword ? FoamyI18n.t("Checking…") : (field.view.failureMessage.length > 0 ? field.view.failedAttempts > 0 ? FoamyI18n.t("Authentication failed (%1)", FoamyI18n.number(field.view.failedAttempts)) : FoamyI18n.t(field.view.failureMessage) : field.view.placeholderText)
     visible: field.chromeShown && field.view.showPassword && passwordInput.text.length === 0
-    color: field.view.authenticatingPassword
-      ? field.view.foreground
-      : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
+    color: field.view.authenticatingPassword ? field.view.foreground : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
     font.family: field.editorFontFamily
     font.pixelSize: field.dotsOnly ? Math.round(13 * field.uiScale) : field.terminal ? Math.round(15 * field.uiScale) : field.fieldFontSize
     font.italic: field.view.errorState
@@ -353,9 +342,7 @@ Rectangle {
       width: Math.round(38 * field.uiScale)
       height: width
       radius: width / 2
-      color: submitMouse.containsMouse && submitMouse.enabled
-        ? Qt.rgba(1, 1, 1, 0.1)
-        : "transparent"
+      color: submitMouse.containsMouse && submitMouse.enabled ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
     }
 
     Item {
@@ -366,7 +353,10 @@ Rectangle {
       height: Math.round(26 * field.uiScale)
       // The submit arrow points along the reading direction, mirrored
       // around its own centre (a bare `width` inside Scale is the view's).
-      transform: Scale { origin.x: submitArrow.width / 2; xScale: field.view.rightToLeft ? -1 : 1 }
+      transform: Scale {
+        origin.x: submitArrow.width / 2
+        xScale: field.view.rightToLeft ? -1 : 1
+      }
 
       Rectangle {
         x: Math.round(2 * field.uiScale)
@@ -414,8 +404,7 @@ Rectangle {
     objectName: "fingerprintNotice"
     // Plain x/y, mirrored here (see AccountElement: no anchors toggled at runtime).
     y: field.height + Math.round(8 * field.uiScale)
-    x: field.alignment === "center" ? (field.width - width) / 2
-      : (field.alignment === "start") !== field.view.rightToLeft ? 0 : field.width - width
+    x: field.alignment === "center" ? (field.width - width) / 2 : (field.alignment === "start") !== field.view.rightToLeft ? 0 : field.width - width
     width: field.alignment === "center" ? field.contentWidth : field.width
     visible: field.chromeShown && field.view.fingerprintUnavailable
     textFormat: Text.PlainText

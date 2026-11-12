@@ -1,6 +1,7 @@
 // The real view is exercised separately by the render and parity tests; no
 // session-lock surface is created here.
 import QtQuick
+
 Item {
   property string backgroundPath: ""
   property int backgroundVersion: 0
@@ -23,8 +24,8 @@ Item {
   property int avatarVersion: 0
   signal passwordTextEdited(string password)
   signal submitPassword(string password)
-  signal clearFailureRequested()
-  signal wakeRequested()
+  signal clearFailureRequested
+  signal wakeRequested
   property var look: null
   property bool primary: true
   property bool backgroundPrepared: false

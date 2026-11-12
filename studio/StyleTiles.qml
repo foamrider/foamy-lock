@@ -17,7 +17,9 @@ FocusScope {
   property string value: ""
   property var options: []
   // The words for an option (the caller translates).
-  property var labelFor: function(name) { return name }
+  property var labelFor: function (name) {
+    return name
+  }
   property string title: ""
   property int columns: 3
   // The cursor (a tile index) while the grid has the keyboard.
@@ -29,41 +31,62 @@ FocusScope {
 
   implicitHeight: grid.implicitHeight
   activeFocusOnTab: true
-  onActiveFocusChanged: if (activeFocus && cursor < 0) cursor = Math.max(0, options.indexOf(value))
+  onActiveFocusChanged: if (activeFocus && cursor < 0)
+    cursor = Math.max(0, options.indexOf(value))
   onElementChanged: cursor = -1
 
   Accessible.role: Accessible.List
   Accessible.name: title
 
   function choose(index) {
-    if (index >= 0 && index < options.length) picked(options[index])
+    if (index >= 0 && index < options.length)
+      picked(options[index])
   }
 
   // Move the cursor by dx columns (on screen) and dy rows.
   function step(dx, dy) {
     var from = cursor >= 0 ? cursor : Math.max(0, options.indexOf(value))
     var next = from
-    if (dy !== 0) next = from + dy * columns
+    if (dy !== 0)
+      next = from + dy * columns
     else {
       let column = from % columns + dx * (LayoutMirroring.enabled ? -1 : 1)
-      if (column >= 0 && column < columns) next = from - from % columns + column
+      if (column >= 0 && column < columns)
+        next = from - from % columns + column
     }
-    if (next >= 0 && next < options.length) cursor = next
-    else cursor = from
+    if (next >= 0 && next < options.length)
+      cursor = next
+    else
+      cursor = from
   }
 
-  Keys.onPressed: function(event) {
+  Keys.onPressed: function (event) {
     switch (event.key) {
-    case Qt.Key_Left: step(-1, 0); break
-    case Qt.Key_Right: step(1, 0); break
-    case Qt.Key_Up: step(0, -1); break
-    case Qt.Key_Down: step(0, 1); break
-    case Qt.Key_Home: cursor = 0; break
-    case Qt.Key_End: cursor = options.length - 1; break
+    case Qt.Key_Left:
+      step(-1, 0)
+      break
+    case Qt.Key_Right:
+      step(1, 0)
+      break
+    case Qt.Key_Up:
+      step(0, -1)
+      break
+    case Qt.Key_Down:
+      step(0, 1)
+      break
+    case Qt.Key_Home:
+      cursor = 0
+      break
+    case Qt.Key_End:
+      cursor = options.length - 1
+      break
     case Qt.Key_Return:
     case Qt.Key_Enter:
-    case Qt.Key_Space: choose(cursor >= 0 ? cursor : options.indexOf(value)); break
-    default: return
+    case Qt.Key_Space:
+      choose(cursor >= 0 ? cursor : options.indexOf(value))
+      break
+    default:
+      return
     }
     event.accepted = true
   }

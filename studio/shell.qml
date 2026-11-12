@@ -44,8 +44,10 @@ ShellRoot {
 
   // The test driver keeps the app running when it checks quitting.
   function quit() {
-    if (testDriver.item && typeof testDriver.item.catchQuit === "function") testDriver.item.catchQuit()
-    else Qt.quit()
+    if (testDriver.item && typeof testDriver.item.catchQuit === "function")
+      testDriver.item.catchQuit()
+    else
+      Qt.quit()
   }
 
   // A second `foamy-lock-helper studio` raises this window instead of
@@ -67,7 +69,10 @@ ShellRoot {
     id: testDriver
     Component.onCompleted: {
       if (Quickshell.env("FOAMY_LOCK_STUDIO_TEST") === "1")
-        testDriver.setSource("StudioTest.qml", { window: window, studio: studio })
+        testDriver.setSource("StudioTest.qml", {
+          window: window,
+          studio: studio
+        })
     }
   }
 }

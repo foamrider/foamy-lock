@@ -43,8 +43,8 @@ FocusScope {
   signal pickedUser(string id)
   signal renameRequested(string id)
   signal deleteRequested(string id)
-  signal saveAsNewRequested()
-  signal closed()
+  signal saveAsNewRequested
+  signal closed
 
   anchors.fill: parent
   visible: false
@@ -54,9 +54,17 @@ FocusScope {
   function entryAt(index) {
     if (index < userCount) {
       var preset = userPresets[index]
-      return { user: true, id: preset.id, name: preset.name, base: preset.effective ? preset.effective.preset : "foamy" }
+      return {
+        user: true,
+        id: preset.id,
+        name: preset.name,
+        base: preset.effective ? preset.effective.preset : "foamy"
+      }
     }
-    return { user: false, name: presets[index - userCount] }
+    return {
+      user: false,
+      name: presets[index - userCount]
+    }
   }
 
   function keyOf(index) {
@@ -65,7 +73,9 @@ FocusScope {
   }
 
   function indexOf(key) {
-    for (var i = 0; i < count; i++) if (keyOf(i) === key) return i
+    for (var i = 0; i < count; i++)
+      if (keyOf(i) === key)
+        return i
     return -1
   }
 
@@ -79,23 +89,28 @@ FocusScope {
   // The entry in `row` at `column` (the row's last one when it is short),
   // or -1 past either end.
   function indexAt(row, column) {
-    if (row < 0) return -1
-    if (row < userRows) return Math.min(row * columns + column, userCount - 1)
+    if (row < 0)
+      return -1
+    if (row < userRows)
+      return Math.min(row * columns + column, userCount - 1)
     var first = userCount + (row - userRows) * columns
-    if (first >= count) return -1
+    if (first >= count)
+      return -1
     return Math.min(first + column, count - 1)
   }
 
   function open() {
     cursor = Math.max(0, indexOf(current))
-    if (anchorItem) origin = anchorItem.mapToItem(menu, 0, anchorItem.height)
+    if (anchorItem)
+      origin = anchorItem.mapToItem(menu, 0, anchorItem.height)
     visible = true
     forceActiveFocus(Qt.PopupFocusReason)
     ensureShown(cursor)
   }
 
   function close() {
-    if (!visible) return
+    if (!visible)
+      return
     visible = false
     closed()
   }
@@ -106,22 +121,28 @@ FocusScope {
 
   function ensureShown(index) {
     var tile = tileFor(index)
-    if (!tile) return
+    if (!tile)
+      return
     var top = tile.mapToItem(content, 0, 0).y
     // A section's first row keeps its heading in view.
-    if (rowOf(index) === 0 || rowOf(index) === userRows) top = Math.max(0, top - FoamyStyle.controlHeight - FoamyStyle.gap)
-    if (top < list.contentY) list.contentY = top
-    else if (top + tileHeight > list.contentY + list.height) list.contentY = top + tileHeight - list.height
+    if (rowOf(index) === 0 || rowOf(index) === userRows)
+      top = Math.max(0, top - FoamyStyle.controlHeight - FoamyStyle.gap)
+    if (top < list.contentY)
+      list.contentY = top
+    else if (top + tileHeight > list.contentY + list.height)
+      list.contentY = top + tileHeight - list.height
   }
 
   function move(dx, dy) {
     var next = -1
-    if (dy !== 0) next = indexAt(rowOf(cursor) + dy, columnOf(cursor))
+    if (dy !== 0)
+      next = indexAt(rowOf(cursor) + dy, columnOf(cursor))
     else {
       let column = columnOf(cursor) + dx * (LayoutMirroring.enabled ? -1 : 1)
       var rowStart = cursor - columnOf(cursor)
       var rowEnd = Math.min(rowStart + columns, cursor < userCount ? userCount : count)
-      if (column >= 0 && rowStart + column < rowEnd) next = rowStart + column
+      if (column >= 0 && rowStart + column < rowEnd)
+        next = rowStart + column
     }
     if (next >= 0 && next < count) {
       cursor = next
@@ -131,8 +152,10 @@ FocusScope {
 
   function pick(index) {
     var entry = entryAt(index)
-    if (entry.user) pickedUser(entry.id)
-    else picked(entry.name)
+    if (entry.user)
+      pickedUser(entry.id)
+    else
+      picked(entry.name)
   }
 
   readonly property real tileWidth: 116
@@ -141,26 +164,55 @@ FocusScope {
   // Keys while open; true when handled (every key but Tab, which stays put).
   function keyPressed(key) {
     switch (key) {
-    case Qt.Key_Escape: close(); break
-    case Qt.Key_Left: move(-1, 0); break
-    case Qt.Key_Right: move(1, 0); break
-    case Qt.Key_Up: move(0, -1); break
-    case Qt.Key_Down: move(0, 1); break
-    case Qt.Key_Home: cursor = 0; ensureShown(0); break
-    case Qt.Key_End: cursor = count - 1; ensureShown(cursor); break
+    case Qt.Key_Escape:
+      close()
+      break
+    case Qt.Key_Left:
+      move(-1, 0)
+      break
+    case Qt.Key_Right:
+      move(1, 0)
+      break
+    case Qt.Key_Up:
+      move(0, -1)
+      break
+    case Qt.Key_Down:
+      move(0, 1)
+      break
+    case Qt.Key_Home:
+      cursor = 0
+      ensureShown(0)
+      break
+    case Qt.Key_End:
+      cursor = count - 1
+      ensureShown(cursor)
+      break
     case Qt.Key_Return:
     case Qt.Key_Enter:
-    case Qt.Key_Space: pick(cursor); break
-    case Qt.Key_F2: if (cursor < userCount) renameRequested(entryAt(cursor).id); break
-    case Qt.Key_Delete: if (cursor < userCount) deleteRequested(entryAt(cursor).id); break
+    case Qt.Key_Space:
+      pick(cursor)
+      break
+    case Qt.Key_F2:
+      if (cursor < userCount)
+        renameRequested(entryAt(cursor).id)
+      break
+    case Qt.Key_Delete:
+      if (cursor < userCount)
+        deleteRequested(entryAt(cursor).id)
+      break
     case Qt.Key_Tab:
-    case Qt.Key_Backtab: break
-    default: return false
+    case Qt.Key_Backtab:
+      break
+    default:
+      return false
     }
     return true
   }
 
-  Keys.onPressed: function(event) { if (menu.keyPressed(event.key)) event.accepted = true }
+  Keys.onPressed: function (event) {
+    if (menu.keyPressed(event.key))
+      event.accepted = true
+  }
 
   // A press outside closes it.
   MouseArea {
@@ -173,7 +225,7 @@ FocusScope {
     id: action
     property string icon: ""
     property string name: ""
-    signal clicked()
+    signal clicked
     width: 22
     height: 22
     radius: FoamyStyle.radiusSmall
@@ -211,8 +263,8 @@ FocusScope {
     property bool cursorHere: false
     property bool shown: false
     default property alias actions: actionRow.data
-    signal hovered()
-    signal activated()
+    signal hovered
+    signal activated
     width: 116
     height: 92
     radius: FoamyStyle.radiusSmall
@@ -287,8 +339,7 @@ FocusScope {
     id: card
     objectName: "studioPresetMenu"
     // Its start edge on the button's (mirrored right to left), kept inside.
-    x: Math.max(FoamyStyle.gap, Math.min(menu.width - width - FoamyStyle.gap,
-      menu.LayoutMirroring.enabled && menu.anchorItem ? menu.origin.x + menu.anchorItem.width - width : menu.origin.x))
+    x: Math.max(FoamyStyle.gap, Math.min(menu.width - width - FoamyStyle.gap, menu.LayoutMirroring.enabled && menu.anchorItem ? menu.origin.x + menu.anchorItem.width - width : menu.origin.x))
     y: menu.origin.y + FoamyStyle.gapSmall
     width: menu.columns * menu.tileWidth + (menu.columns - 1) * FoamyStyle.gap + 2 * FoamyStyle.gapLarge
     height: Math.min(menu.height - y - FoamyStyle.gapLarge, content.implicitHeight + 2 * FoamyStyle.gapLarge)
@@ -300,7 +351,9 @@ FocusScope {
     Accessible.name: FoamyI18n.t("studio.presets")
 
     // Presses inside stay inside.
-    MouseArea { anchors.fill: parent }
+    MouseArea {
+      anchors.fill: parent
+    }
 
     Flickable {
       id: list

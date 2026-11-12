@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+
 ShellRoot {
   id: shell
   property var stock: null
@@ -23,26 +24,44 @@ ShellRoot {
       return changed
     }
   }
-  Service { id: service; shell: fakeShell }
+  Service {
+    id: service
+    shell: fakeShell
+  }
   function weatherAnswer() {
     weatherCalls++
     return weatherReply.replace("__UPDATED__", new Date(Date.now() - weatherAge * 1000).toISOString())
   }
   IpcHandler {
     target: "test"
-    function submit(value: string): string { service.submitPassword(value); return "ok" }
-    function failures(): string { return String(service.failedAttempts) }
-    function savedEntry(): string { return JSON.stringify({module: fakeShell.module, entry: fakeShell.entry}) }
+    function submit(value: string): string {
+      service.submitPassword(value)
+      return "ok"
+    }
+    function failures(): string {
+      return String(service.failedAttempts)
+    }
+    function savedEntry(): string {
+      return JSON.stringify({
+        module: fakeShell.module,
+        entry: fakeShell.entry
+      })
+    }
     function fingerprintState(): string {
-      return JSON.stringify({starts: service.testFingerprintPam.starts,
+      return JSON.stringify({
+        starts: service.testFingerprintPam.starts,
         generation: service.testFingerprintPam.generation,
         streak: service.fingerprintUnreachedStreak,
-        delay: service.testRetry.interval, retrying: service.testRetry.running,
+        delay: service.testRetry.interval,
+        retrying: service.testRetry.running,
         active: service.testFingerprintPam.active,
         probing: service.fingerprintProbeStreak,
         probeRetrying: service.testProbeRetry.running,
-        backoff: service.fingerprintRetryBackoffMs, due: service.fingerprintRetryDueMs,
-        resumeWatching: service.testResume.running})
+        backoff: service.fingerprintRetryBackoffMs,
+        due: service.fingerprintRetryDueMs,
+        resumeWatching: service.testResume.running,
+        probeRunning: service.testFingerprintCheck.running
+      })
     }
     function fingerprintFail(): string {
       service.testFingerprintPam.active = false
@@ -50,56 +69,185 @@ ShellRoot {
       service.testFingerprintPam.completed(1)
       return "ok"
     }
-    function blank(): string { service.runBlank(); return "ok" }
-    function wake(): string { service.runWake(); return "ok" }
-    function displayCommands(): string {
-      return JSON.stringify({wake: service.testWake.running, blank: service.testBlank.running, blanked: service.displayBlanked})
+    function blank(): string {
+      service.runBlank()
+      return "ok"
     }
-    function unpause(): string { service.resumeFingerprint(); return "ok" }
-    function sleepGap(): string { service.testResume.lastTickMs -= 10000; return "ok" }
-    function strandedCheck(): string { service.strandedLockResolved = false; service.checkStrandedLock(); return "ok" }
-    function strandedResolved(): string { return String(service.strandedLockResolved) }
-    function staleLock(value: bool): string { service.testStaleLocked = value; return "ok" }
+    function wake(): string {
+      service.runWake()
+      return "ok"
+    }
+    function displayCommands(): string {
+      return JSON.stringify({
+        wake: service.testWake.running,
+        blank: service.testBlank.running,
+        blanked: service.displayBlanked,
+        blankQueued: service.blankAfterWake,
+        blankInterval: service.testIdleBlank.interval,
+        blankArmed: service.testIdleBlank.running
+      })
+    }
+    // runBlank, and the display commands as it left them (one call, so the
+    // wake it may wait for is still the one that was running).
+    function blankNow(): string {
+      service.runBlank()
+      return displayCommands()
+    }
+    // The idle countdown as a suspend leaves it: armed long ago.
+    function blankGap(): string {
+      service.testIdleBlank.armedAt -= 60000
+      return "ok"
+    }
+    function identityRefresh(): string {
+      service.refreshUserIdentity()
+      return "ok"
+    }
+    function identity(): string {
+      return JSON.stringify({
+        name: service.userDisplayName,
+        passwd: service.testPasswd.running,
+        accounts: service.testAccounts.running
+      })
+    }
+    function posterUnstartable(value: bool): string {
+      service.testPosterUnstartable = value
+      return "ok"
+    }
+    function posterState(): string {
+      return JSON.stringify({
+        running: service.testPoster.running
+      })
+    }
+    function unpause(): string {
+      service.resumeFingerprint()
+      return "ok"
+    }
+    function sleepGap(): string {
+      service.testResume.lastTickMs -= 10000
+      return "ok"
+    }
+    function strandedCheck(): string {
+      service.strandedLockResolved = false
+      service.checkStrandedLock()
+      return "ok"
+    }
+    function strandedResolved(): string {
+      return String(service.strandedLockResolved)
+    }
+    function staleLock(value: bool): string {
+      service.testStaleLocked = value
+      return "ok"
+    }
     function fingerprintMismatch(): string {
       service.testFingerprintPam.active = false
       service.testFingerprintPam.completed(1)
       return "ok"
     }
-    function oldPrompt(): string { service.fingerprintAttemptPromptedAtMs -= 3000; return "ok" }
-    function wallpaperRefresh(): string { service.refreshBackground(); return "ok" }
-    function wallpaperState(): string {
-      return JSON.stringify({path: service.lockWallpaperPath, version: service.backgroundVersion,
-        source: service.backgroundPath, error: service.wallpaperError})
+    function oldPrompt(): string {
+      service.fingerprintAttemptPromptedAtMs -= 3000
+      return "ok"
     }
-    function fingerprintPrompt(): string { service.testFingerprintPam.pamMessage(); return "ok" }
+    function wallpaperRefresh(): string {
+      service.refreshBackground()
+      return "ok"
+    }
+    function wallpaperState(): string {
+      return JSON.stringify({
+        path: service.lockWallpaperPath,
+        version: service.backgroundVersion,
+        source: service.backgroundPath,
+        error: service.wallpaperError
+      })
+    }
+    function fingerprintPrompt(): string {
+      service.testFingerprintPam.pamMessage()
+      return "ok"
+    }
     function fingerprintMatch(): string {
       service.testFingerprintPam.active = false
       service.testFingerprintPam.completed(0)
       return "ok"
     }
-    function fingerprintProbe(): string { service.refreshFingerprintStatus(); return "ok" }
-    function resume(): string { service.restartFingerprintAfterSleep(); return "ok" }
-    function missingPam(): string { service.passwordPamConfigured = false; return "ok" }
-    function doubleReport(value: bool): string { service.testPasswordPam.doubleReport = value; return "ok" }
-    function previewState(): string { return String(service.previewVisible) }
-    function previewKey(): string { var event = { accepted: false }; service.previewKeyPressed(event); return String(event.accepted) }
+    function fingerprintProbe(): string {
+      service.refreshFingerprintStatus()
+      return "ok"
+    }
+    function resume(): string {
+      service.restartFingerprintAfterSleep()
+      return "ok"
+    }
+    function missingPam(): string {
+      service.passwordPamConfigured = false
+      return "ok"
+    }
+    function doubleReport(value: bool): string {
+      service.testPasswordPam.doubleReport = value
+      return "ok"
+    }
+    function previewState(): string {
+      return String(service.previewVisible)
+    }
+    // A key, the overlay's parts and a second key in one call: the hold
+    // after a close lasts previewHoldMs, less than an IPC round trip can
+    // take on a loaded machine.
+    function previewKeyTwice(): string {
+      var first = {
+        accepted: false
+      }
+      service.previewKeyPressed(first)
+      var closed = !service.previewVisible
+      var parts = JSON.parse(previewParts())
+      var second = {
+        accepted: false
+      }
+      service.previewKeyPressed(second)
+      return JSON.stringify({
+        first: first.accepted,
+        second: second.accepted,
+        closed: closed && !service.previewVisible,
+        parts: parts
+      })
+    }
+    // The lock target's hidePreview and the parts right after it, in one call.
+    function hidePreviewParts(): string {
+      service.testLockIpc.hidePreview()
+      return previewParts()
+    }
     // The overlay's parts: the banner, the hint, the keyboard hold.
     // foamy.lock's JSON calls with arguments just over and at 64 KiB.
     function bigArguments(): string {
       var ipc = service.testFoamyIpc
-      function pad(head, bytes) { return head + " ".repeat(bytes - head.length) }
+      function pad(head, bytes) {
+        return head + " ".repeat(bytes - head.length)
+      }
       var look = '{"preset":"zen"}'
       return JSON.stringify({
-        previewLook: { over: ipc.previewLook(pad(look, 65537)), at: ipc.previewLook(pad(look, 65536)) },
-        saveLook: { over: ipc.saveLook(pad(look, 65537)), at: ipc.saveLook(pad('{"preset":"zen","bogus":1}', 65536)) },
-        savePreset: { over: ipc.savePreset(pad(look, 65537)), at: ipc.savePreset(pad('{"id":"big"}', 65536)) } })
+        previewLook: {
+          over: ipc.previewLook(pad(look, 65537)),
+          at: ipc.previewLook(pad(look, 65536))
+        },
+        saveLook: {
+          over: ipc.saveLook(pad(look, 65537)),
+          at: ipc.saveLook(pad('{"preset":"zen","bogus":1}', 65536))
+        },
+        savePreset: {
+          over: ipc.savePreset(pad(look, 65537)),
+          at: ipc.savePreset(pad('{"id":"big"}', 65536))
+        }
+      })
     }
     function previewParts(): string {
       function find(item, name) {
-        if (!item) return null
-        if (item.objectName === name) return item
+        if (!item)
+          return null
+        if (item.objectName === name)
+          return item
         var children = item.children || []
-        for (var i = 0; i < children.length; i++) { var found = find(children[i], name); if (found) return found }
+        for (var i = 0; i < children.length; i++) {
+          var found = find(children[i], name)
+          if (found)
+            return found
+        }
         return null
       }
       var banner = find(service, "previewBanner")
@@ -109,16 +257,20 @@ ShellRoot {
       // Drawn, not only set (the banner once laid out at zero width and drew
       // an empty box): the title whole on its line, the hint with room.
       function drawn(text) {
-        return !!text && text.text !== "" && text.width > 0 && text.paintedWidth > 0 && text.paintedHeight > 0
-          && !text.truncated && text.opacity > 0
+        return !!text && text.text !== "" && text.width > 0 && text.paintedWidth > 0 && text.paintedHeight > 0 && !text.truncated && text.opacity > 0
       }
-      return JSON.stringify({ visible: service.previewVisible, holding: service.previewHolding,
-        banner: !!banner && banner.visible, title: title ? title.text : "", hint: hint ? hint.text : "",
+      return JSON.stringify({
+        visible: service.previewVisible,
+        holding: service.previewHolding,
+        banner: !!banner && banner.visible,
+        title: title ? title.text : "",
+        hint: hint ? hint.text : "",
         plain: !!title && title.textFormat === Text.PlainText && hint.textFormat === Text.PlainText,
-        drawn: drawn(title) && drawn(hint) && title.width >= Math.ceil(title.implicitWidth) - 1
-          && banner.width >= title.width && banner.height > title.height + hint.height,
+        drawn: drawn(title) && drawn(hint) && title.width >= Math.ceil(title.implicitWidth) - 1 && banner.width >= title.width && banner.height > title.height + hint.height,
         size: banner ? [banner.width, banner.height, title.width, title.implicitWidth, title.paintedWidth] : [],
-        view: !!view && view.visible, unlockHint: view ? view.showUnlockHint : null })
+        view: !!view && view.visible,
+        unlockHint: view ? view.showUnlockHint : null
+      })
     }
     // 4.5 only: what the omarchy-shell socket would answer, with a second
     // "lock" handler (standing in for omarchy.lock) registered ahead of foamy.
@@ -130,7 +282,10 @@ ShellRoot {
     }
     function registryDirect(): string {
       var found = registry()
-      return JSON.stringify({direct: found.call("lock", "status", []), refused: found.call("lock", "destroy", [])})
+      return JSON.stringify({
+        direct: found.call("lock", "status", []),
+        refused: found.call("lock", "destroy", [])
+      })
     }
     // Put the stand-in ahead of foamy without telling foamy, as if another
     // service (or a later prefer()) had promoted itself.
@@ -143,9 +298,12 @@ ShellRoot {
     }
     function registryRoute(): string {
       var found = registry()
-      return JSON.stringify({first: found.handlerFor("lock") !== shell.stock,
-        status: found.call("lock", "status", []), isLocked: found.call("lock", "isLocked", []),
-        lock: found.call("lock", "lock", [])})
+      return JSON.stringify({
+        first: found.handlerFor("lock") !== shell.stock,
+        status: found.call("lock", "status", []),
+        isLocked: found.call("lock", "isLocked", []),
+        lock: found.call("lock", "lock", [])
+      })
     }
     // "none" removes the target; current false stands in for an older
     // Foamy Weather (the target without current()).
@@ -154,22 +312,30 @@ ShellRoot {
       shell.weatherAge = Number(age)
       shell.weatherCalls = 0
       var kind = reply === "none" ? "" : current ? "current" : "older"
-      if (shell.weatherPeer && shell.weatherPeer.kind === kind) return "ok"
+      if (shell.weatherPeer && shell.weatherPeer.kind === kind)
+        return "ok"
       if (shell.weatherPeer) {
         registry().unregister(shell.weatherPeer)
         shell.weatherPeer.destroy()
         shell.weatherPeer = null
       }
-      if (!kind) return "ok"
+      if (!kind)
+        return "ok"
       var body = current ? 'function current(): string { return shell.weatherAnswer() }' : 'function forecast(): string { return "{}" }'
-      shell.weatherPeer = Qt.createQmlObject('import qs.Commons; ShellIpc { target: "foamy.weather"; readonly property string kind: "'
-        + kind + '"; ' + body + ' }', shell, "WeatherPeer")
+      shell.weatherPeer = Qt.createQmlObject('import qs.Commons; ShellIpc { target: "foamy.weather"; readonly property string kind: "' + kind + '"; ' + body + ' }', shell, "WeatherPeer")
       return "ok"
     }
     function weather(): string {
-      return JSON.stringify({ calls: shell.weatherCalls, state: service.weatherState, polls: service.weatherPolls,
-        pendingLeft: service.weatherPendingLeft, retrying: service.testWeatherRetry.running, wanted: service.weatherWanted,
-        report: service.weatherReport, shown: service.weather })
+      return JSON.stringify({
+        calls: shell.weatherCalls,
+        state: service.weatherState,
+        polls: service.weatherPolls,
+        pendingLeft: service.weatherPendingLeft,
+        retrying: service.testWeatherRetry.running,
+        wanted: service.weatherWanted,
+        report: service.weatherReport,
+        shown: service.weather
+      })
     }
     function registryCleanup(): string {
       var found = registry()

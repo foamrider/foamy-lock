@@ -35,8 +35,10 @@ Item {
   // Morning from 5, afternoon from 12, evening from 18.
   readonly property string greetingText: {
     var name = firstName
-    if (hour >= 5 && hour < 12) return name ? FoamyI18n.t("Good morning, %1", [name]) : FoamyI18n.t("Good morning")
-    if (hour >= 12 && hour < 18) return name ? FoamyI18n.t("Good afternoon, %1", [name]) : FoamyI18n.t("Good afternoon")
+    if (hour >= 5 && hour < 12)
+      return name ? FoamyI18n.t("Good morning, %1", [name]) : FoamyI18n.t("Good morning")
+    if (hour >= 12 && hour < 18)
+      return name ? FoamyI18n.t("Good afternoon, %1", [name]) : FoamyI18n.t("Good afternoon")
     return name ? FoamyI18n.t("Good evening, %1", [name]) : FoamyI18n.t("Good evening")
   }
   readonly property real chipPadding: Math.round(7 * uiScale)
@@ -46,13 +48,10 @@ Item {
   // off between styles at runtime leaves stale anchors behind.
   readonly property bool mirrored: view.rightToLeft
   // The width it needs outside the center column (and the chip's width).
-  readonly property real naturalWidth: chip
-    ? chipPadding + avatar.width + chipGap + nameLabel.implicitWidth + chipEnd
-    : textOnly ? nameLabel.implicitWidth : Math.max(avatar.width, nameLabel.implicitWidth)
+  readonly property real naturalWidth: chip ? chipPadding + avatar.width + chipGap + nameLabel.implicitWidth + chipEnd : textOnly ? nameLabel.implicitWidth : Math.max(avatar.width, nameLabel.implicitWidth)
 
   objectName: "identityBlock"
-  height: chip ? Math.round(48 * uiScale) : textOnly ? nameLabel.height
-    : avatar.height + nameLabel.topMargin + nameLabel.height
+  height: chip ? Math.round(48 * uiScale) : textOnly ? nameLabel.height : avatar.height + nameLabel.topMargin + nameLabel.height
 
   Rectangle {
     objectName: "accountChip"
@@ -73,8 +72,10 @@ Item {
     radius: width / 2
     y: account.chip ? (account.height - height) / 2 : 0
     x: {
-      if (account.chip) return account.mirrored ? account.width - account.chipPadding - width : account.chipPadding
-      if (account.alignment === "center") return (account.width - width) / 2
+      if (account.chip)
+        return account.mirrored ? account.width - account.chipPadding - width : account.chipPadding
+      if (account.alignment === "center")
+        return (account.width - width) / 2
       var atStart = account.alignment === "start"
       return atStart !== account.mirrored ? 0 : account.width - width
     }
@@ -153,8 +154,7 @@ Item {
     font.pixelSize: Math.round((account.chip ? 16 : account.nameOnly ? 24 : account.greeting ? 32 : 20) * account.uiScale)
     font.weight: account.nameOnly ? Font.Medium : Font.Normal
     elide: Text.ElideRight
-    horizontalAlignment: account.chip || account.alignment === "start" ? Text.AlignLeft
-      : account.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
+    horizontalAlignment: account.chip || account.alignment === "start" ? Text.AlignLeft : account.alignment === "end" ? Text.AlignRight : Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
   }
 }

@@ -27,7 +27,9 @@ import "Draft.js" as Draft
 FocusScope {
   id: canvas
 
-  property var draft: ({ preset: Layout.DEFAULT_PRESET })
+  property var draft: ({
+      preset: Layout.DEFAULT_PRESET
+    })
   property string selected: ""
   // The shape selected on the shapes page (-1: none).
   property int selectedShape: -1
@@ -50,14 +52,18 @@ FocusScope {
   property string backgroundPath: ""
   property bool backgroundPrepared: false
   property int backgroundVersion: 0
-  property var lockSettings: ({ timeFormat: "24h", showUserInfo: true, showMedia: true })
+  property var lockSettings: ({
+      timeFormat: "24h",
+      showUserInfo: true,
+      showMedia: true
+    })
   // Dropping a module from the canvas on this item (the library) hides it.
   property Item hideArea: null
 
   signal edited(var draft)
   signal selectRequested(string name)
   signal shapeSelectRequested(int index)
-  signal deselectRequested()
+  signal deselectRequested
 
   readonly property var look: Draft.lookOf(draft)
   // The look while a drag or resize is shown; null otherwise.
@@ -74,7 +80,9 @@ FocusScope {
   // The selected shape as drawn (Layout.shapeRects), or null.
   readonly property var shapeRect: {
     var all = view.shapeGeometry
-    for (var i = 0; i < all.length; i++) if (all[i].index === selectedShape) return all[i]
+    for (var i = 0; i < all.length; i++)
+      if (all[i].index === selectedShape)
+        return all[i]
     return null
   }
   // What it wraps: the shown modules, and the zones of a zone shape.
@@ -93,12 +101,26 @@ FocusScope {
   Accessible.name: FoamyI18n.t("studio.canvas")
   Accessible.description: selectionText
 
-  Keys.onPressed: function(event) { if (canvas.keyPressed(event.key, event.modifiers)) event.accepted = true }
-  Keys.onReleased: function(event) { if (canvas.keyReleased(event.key, event.modifiers)) event.accepted = true }
-  onActiveFocusChanged: if (!activeFocus) { shiftHeld = false; altHeld = false }
+  Keys.onPressed: function (event) {
+    if (canvas.keyPressed(event.key, event.modifiers))
+      event.accepted = true
+  }
+  Keys.onReleased: function (event) {
+    if (canvas.keyReleased(event.key, event.modifiers))
+      event.accepted = true
+  }
+  onActiveFocusChanged: if (!activeFocus) {
+    shiftHeld = false
+    altHeld = false
+  }
 
   function geometry() {
-    return { width: screenWidth, height: screenHeight, margin: Math.round(4 * view.uiScale), rightToLeft: rightToLeft }
+    return {
+      width: screenWidth,
+      height: screenHeight,
+      margin: Math.round(4 * view.uiScale),
+      rightToLeft: rightToLeft
+    }
   }
 
   // The topmost module under a point in view pixels: the selected one when
@@ -107,8 +129,10 @@ FocusScope {
     var best = "", area = Infinity
     for (var name in rects) {
       var r = rects[name]
-      if (x < r.x || y < r.y || x > r.x + r.width || y > r.y + r.height) continue
-      if (name === selected) return name
+      if (x < r.x || y < r.y || x > r.x + r.width || y > r.y + r.height)
+        continue
+      if (name === selected)
+        return name
       if (r.width * r.height < area) {
         best = name
         area = r.width * r.height
@@ -125,16 +149,33 @@ FocusScope {
     for (var i = 0; i < zones.length; i++) {
       probe.look = Draft.probeLook(look, name, zones[i])
       var r = probe.drawnRect(name)
-      anchors.push({ zone: zones[i], x: r.x, y: r.y, width: r.width, height: r.height })
+      anchors.push({
+        zone: zones[i],
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height
+      })
     }
     return anchors
   }
 
   function snapInput(g) {
     var geo = geometry()
-    return { name: g.name, width: geo.width, height: geo.height, margin: geo.margin, rightToLeft: geo.rightToLeft,
-      start: g.start, delta: g.delta, axis: altHeld ? g.axis : "", snapping: snapping && !shiftHeld,
-      radius: Draft.snapRadius(zoom), anchors: g.anchors, others: g.others }
+    return {
+      name: g.name,
+      width: geo.width,
+      height: geo.height,
+      margin: geo.margin,
+      rightToLeft: geo.rightToLeft,
+      start: g.start,
+      delta: g.delta,
+      axis: altHeld ? g.axis : "",
+      snapping: snapping && !shiftHeld,
+      radius: Draft.snapRadius(zoom),
+      anchors: g.anchors,
+      others: g.others
+    }
   }
 
   // The shape drawn at a point in view pixels (the last drawn on top), or
@@ -145,9 +186,11 @@ FocusScope {
     for (var i = all.length - 1; i >= 0; i--) {
       var s = all[i]
       var inside = x >= s.x && y >= s.y && x <= s.x + s.width && y <= s.y + s.height
-      if (s.kind !== "frame" && inside) return s.index
+      if (s.kind !== "frame" && inside)
+        return s.index
       var reach = s.inset + Math.round(16 * view.uiScale)
-      if (s.kind === "frame" && (x < reach || y < reach || x > view.width - reach || y > view.height - reach)) return s.index
+      if (s.kind === "frame" && (x < reach || y < reach || x > view.width - reach || y > view.height - reach))
+        return s.index
     }
     return -1
   }
@@ -156,27 +199,48 @@ FocusScope {
   // shape there.
   function tapAt(x, y) {
     var name = hit(x, y)
-    if (name) return selectRequested(name)
+    if (name)
+      return selectRequested(name)
     var shape = shapeHit(x, y)
-    if (shape !== -1) shapeSelectRequested(shape)
-    else selectRequested("")
+    if (shape !== -1)
+      shapeSelectRequested(shape)
+    else
+      selectRequested("")
   }
 
   // Start moving `name` (the pointer pressed on it, or a test).
   function beginMove(name) {
-    if (!rects[name]) return false
+    if (!rects[name])
+      return false
     cancelGesture()
     selectRequested(name)
     forceActiveFocus(Qt.MouseFocusReason)
     var anchors = measureAnchors(name)
     var zone = look.elements[name].zone
     var current = null
-    for (var i = 0; i < anchors.length; i++) if (anchors[i].zone === zone) current = anchors[i]
-    if (!current) return false
+    for (var i = 0; i < anchors.length; i++)
+      if (anchors[i].zone === zone)
+        current = anchors[i]
+    if (!current)
+      return false
     var others = []
-    for (var other in rects) if (other !== name) others.push(rects[other])
-    gesture = { mode: "move", name: name, start: view.drawnRect(name), anchors: anchors, current: current,
-      others: others, axis: "", delta: { x: 0, y: 0 }, result: null }
+    for (var other in rects)
+      if (other !== name)
+        others.push(rects[other])
+    gesture = {
+      mode: "move",
+      name: name,
+      start: view.drawnRect(name),
+      anchors: anchors,
+      current: current,
+      others: others,
+      axis: "",
+      delta: {
+        x: 0,
+        y: 0
+      },
+      result: null
+    }
     updateGesture()
     return true
   }
@@ -185,28 +249,58 @@ FocusScope {
   // at `point` (view pixels): it follows the pointer with the canvas's
   // snapping, and the drop shows it there (finishGesture).
   function beginInsert(name, point) {
-    if (!look.elements[name]) return false
+    if (!look.elements[name])
+      return false
     cancelGesture()
     selectRequested(name)
     var anchors = measureAnchors(name)
     var zone = look.elements[name].zone
     var current = null
-    for (var i = 0; i < anchors.length; i++) if (anchors[i].zone === zone) current = anchors[i]
-    if (!current) current = anchors[0]
-    if (!current) return false
+    for (var i = 0; i < anchors.length; i++)
+      if (anchors[i].zone === zone)
+        current = anchors[i]
+    if (!current)
+      current = anchors[0]
+    if (!current)
+      return false
     var others = []
-    for (var other in rects) if (other !== name) others.push(rects[other])
-    var start = { x: current.x, y: current.y, width: current.width, height: current.height }
-    gesture = { mode: "move", insert: true, name: name, base: Draft.probeLook(look, name, current.zone), start: start,
-      origin: { x: start.x + start.width / 2, y: start.y + start.height / 2 }, anchors: anchors, current: current,
-      others: others, axis: "", delta: { x: 0, y: 0 }, result: null }
+    for (var other in rects)
+      if (other !== name)
+        others.push(rects[other])
+    var start = {
+      x: current.x,
+      y: current.y,
+      width: current.width,
+      height: current.height
+    }
+    gesture = {
+      mode: "move",
+      insert: true,
+      name: name,
+      base: Draft.probeLook(look, name, current.zone),
+      start: start,
+      origin: {
+        x: start.x + start.width / 2,
+        y: start.y + start.height / 2
+      },
+      anchors: anchors,
+      current: current,
+      others: others,
+      axis: "",
+      delta: {
+        x: 0,
+        y: 0
+      },
+      result: null
+    }
     moveInsert(point)
     return true
   }
 
   // The pointer, dragging from the library, is at `point` (view pixels).
   function moveInsert(point, modifiers) {
-    if (!gesture || !gesture.insert) return
+    if (!gesture || !gesture.insert)
+      return
     moveGesture((point.x - gesture.origin.x) * zoom, (point.y - gesture.origin.y) * zoom, modifiers)
   }
 
@@ -215,27 +309,43 @@ FocusScope {
   // screen (the field below the top third) as the arrow keys keep it.
   function offsetTo(name, pixels) {
     var item = look.elements[name]
-    if (!item) return draft
-    if (!rects[name]) return Draft.setOffset(draft, name, { x: pixels.x / screenWidth, y: pixels.y / screenHeight })
+    if (!item)
+      return draft
+    if (!rects[name])
+      return Draft.setOffset(draft, name, {
+        x: pixels.x / screenWidth,
+        y: pixels.y / screenHeight
+      })
     var current = Draft.offsetPixels(Draft.elementValue(item, "offset"), screenWidth, screenHeight)
-    return Draft.nudge(draft, name, (pixels.x - current.x) * (rightToLeft ? -1 : 1), pixels.y - current.y,
-      view.drawnRect(name), view.reservedRect(name), geometry())
+    return Draft.nudge(draft, name, (pixels.x - current.x) * (rightToLeft ? -1 : 1), pixels.y - current.y, view.drawnRect(name), view.reservedRect(name), geometry())
   }
 
   // Whether the window point `scene` is over the library (hideArea).
   function overHideArea(scene) {
-    if (!hideArea || !hideArea.visible) return false
+    if (!hideArea || !hideArea.visible)
+      return false
     var p = hideArea.mapFromItem(null, scene.x, scene.y)
     return p.x >= 0 && p.y >= 0 && p.x <= hideArea.width && p.y <= hideArea.height
   }
 
   // Start scaling the selection from a corner (`handle` { x, y }: -1 or 1).
   function beginResize(handle) {
-    if (!selectedRect) return false
+    if (!selectedRect)
+      return false
     cancelGesture()
     forceActiveFocus(Qt.MouseFocusReason)
-    gesture = { mode: "resize", name: selected, start: view.drawnRect(selected), handle: handle,
-      startScale: Draft.elementValue(look.elements[selected], "scale"), delta: { x: 0, y: 0 }, scale: undefined }
+    gesture = {
+      mode: "resize",
+      name: selected,
+      start: view.drawnRect(selected),
+      handle: handle,
+      startScale: Draft.elementValue(look.elements[selected], "scale"),
+      delta: {
+        x: 0,
+        y: 0
+      },
+      scale: undefined
+    }
     return true
   }
 
@@ -243,16 +353,22 @@ FocusScope {
   // `modifiers` (when known) are the pointer's; `scene` (when known) is
   // where it is in the window, to find the library under it.
   function moveGesture(dx, dy, modifiers, scene) {
-    if (!gesture) return
+    if (!gesture)
+      return
     if (modifiers !== undefined) {
       shiftHeld = (modifiers & Qt.ShiftModifier) !== 0
       altHeld = (modifiers & Qt.AltModifier) !== 0
     }
     var g = Object.assign({}, gesture)
-    g.delta = { x: dx / zoom, y: dy / zoom }
-    if (scene !== undefined && g.mode === "move" && !g.insert) g.overHide = g.name !== "password" && overHideArea(scene)
+    g.delta = {
+      x: dx / zoom,
+      y: dy / zoom
+    }
+    if (scene !== undefined && g.mode === "move" && !g.insert)
+      g.overHide = g.name !== "password" && overHideArea(scene)
     // The axis the drag started along, for Alt (two view pixels decide it).
-    if (!g.axis && Math.max(Math.abs(g.delta.x), Math.abs(g.delta.y)) >= 2) g.axis = Draft.dragAxis(g.delta.x, g.delta.y)
+    if (!g.axis && Math.max(Math.abs(g.delta.x), Math.abs(g.delta.y)) >= 2)
+      g.axis = Draft.dragAxis(g.delta.x, g.delta.y)
     gesture = g
     updateGesture()
   }
@@ -260,7 +376,8 @@ FocusScope {
   // Recompute the shown result from the last movement (also after Shift or
   // Alt changes with the pointer still).
   function updateGesture() {
-    if (!gesture) return
+    if (!gesture)
+      return
     var g = Object.assign({}, gesture)
     if (g.mode === "move") {
       g.result = Draft.snap(snapInput(g))
@@ -275,19 +392,22 @@ FocusScope {
   // The drop: one edit (zone, order and offset, or the scale on its step).
   function finishGesture() {
     var g = gesture
-    if (!g) return
+    if (!g)
+      return
     gesture = null
     var next = draft
     if (g.mode === "move" && g.overHide) {
       next = Draft.setHidden(draft, g.name, true)
     } else if (g.mode === "move" && g.result) {
       var placed = Draft.drop(g.result.rect, snapInput(g))
-      if (placed) next = Draft.place(draft, g.name, placed.zone, placed.offset, g.insert === true)
+      if (placed)
+        next = Draft.place(draft, g.name, placed.zone, placed.offset, g.insert === true)
     } else if (g.mode === "resize" && g.scale !== undefined) {
       next = Draft.setScale(draft, g.name, g.scale)
     }
     liveLook = null
-    if (!Draft.same(next, draft)) edited(next)
+    if (!Draft.same(next, draft))
+      edited(next)
   }
 
   function cancelGesture() {
@@ -296,9 +416,12 @@ FocusScope {
   }
 
   function setModifier(key, held) {
-    if (key === Qt.Key_Shift) shiftHeld = held
-    else if (key === Qt.Key_Alt) altHeld = held
-    else return false
+    if (key === Qt.Key_Shift)
+      shiftHeld = held
+    else if (key === Qt.Key_Alt)
+      altHeld = held
+    else
+      return false
     updateGesture()
     return true
   }
@@ -307,7 +430,8 @@ FocusScope {
   // move one grid step (Shift: one pixel), Ctrl+arrows to the neighbouring
   // zone, + and - scale, Delete hides (not the password field).
   function keyPressed(key, modifiers) {
-    if (setModifier(key, true)) return false
+    if (setModifier(key, true))
+      return false
     if (key === Qt.Key_Escape && gesture) {
       cancelGesture()
       return true
@@ -315,10 +439,12 @@ FocusScope {
     // The selected shape (the shapes page): Delete removes it.
     if (!selected && !gesture && selectedShape !== -1 && key === Qt.Key_Delete) {
       var removed = Draft.removeShape(draft, selectedShape)
-      if (!Draft.same(removed, draft)) edited(removed)
+      if (!Draft.same(removed, draft))
+        edited(removed)
       return true
     }
-    if (!selected || gesture) return false
+    if (!selected || gesture)
+      return false
     var directions = {}
     directions[Qt.Key_Left] = "left"
     directions[Qt.Key_Right] = "right"
@@ -329,29 +455,32 @@ FocusScope {
       if (modifiers & Qt.ControlModifier) {
         var zone = look.elements[selected].zone
         var next = Draft.neighbourZone(zone, direction, rightToLeft, selected)
-        if (next !== zone) edited(Draft.setZone(draft, selected, next))
+        if (next !== zone)
+          edited(Draft.setZone(draft, selected, next))
         return true
       }
-      if (!selectedRect) return true
+      if (!selectedRect)
+        return true
       var rect = view.drawnRect(selected), anchor = view.reservedRect(selected)
       var sign = direction === "left" || direction === "up" ? -1 : 1
       var across = direction === "left" || direction === "right"
       var step = Draft.gridStep(screenHeight)
-      var delta = (modifiers & Qt.ShiftModifier) ? sign
-        : across ? Draft.gridMove(rect.x + rect.width / 2, anchor.x + anchor.width / 2, sign, step)
-        : Draft.gridMove(rect.y, anchor.y, sign, step)
+      var delta = (modifiers & Qt.ShiftModifier) ? sign : across ? Draft.gridMove(rect.x + rect.width / 2, anchor.x + anchor.width / 2, sign, step) : Draft.gridMove(rect.y, anchor.y, sign, step)
       var moved = Draft.nudge(draft, selected, across ? delta : 0, across ? 0 : delta, rect, anchor, geometry())
-      if (!Draft.same(moved, draft)) edited(moved)
+      if (!Draft.same(moved, draft))
+        edited(moved)
       return true
     }
     if (key === Qt.Key_Plus || key === Qt.Key_Equal || key === Qt.Key_Minus) {
       var scaled = Draft.scaleBy(draft, selected, key === Qt.Key_Minus ? -1 : 1)
-      if (!Draft.same(scaled, draft)) edited(scaled)
+      if (!Draft.same(scaled, draft))
+        edited(scaled)
       return true
     }
     if (key === Qt.Key_Delete) {
       var hidden = Draft.setHidden(draft, selected, true)
-      if (!Draft.same(hidden, draft)) edited(hidden)
+      if (!Draft.same(hidden, draft))
+        edited(hidden)
       return true
     }
     return false
@@ -366,7 +495,8 @@ FocusScope {
   // selection (true); on the image the image's own handler picks.
   function tapOutside(x, y) {
     var r = stageRect
-    if (x >= r.x && y >= r.y && x <= r.x + r.width && y <= r.y + r.height) return false
+    if (x >= r.x && y >= r.y && x <= r.x + r.width && y <= r.y + r.height)
+      return false
     forceActiveFocus(Qt.MouseFocusReason)
     cancelGesture()
     deselectRequested()
@@ -375,7 +505,10 @@ FocusScope {
 
   function zoneCell(zone) {
     var column = Layout.screenColumn(zone, rightToLeft)
-    return { column: ["start", "center", "end"].indexOf(column), row: ["top", "middle", "bottom"].indexOf(Layout.zoneRow(zone)) }
+    return {
+      column: ["start", "center", "end"].indexOf(column),
+      row: ["top", "middle", "bottom"].indexOf(Layout.zoneRow(zone))
+    }
   }
 
   Item {
@@ -384,7 +517,7 @@ FocusScope {
 
     // Beside the lock image: the image's handlers take taps on it.
     TapHandler {
-      onTapped: function(eventPoint) {
+      onTapped: function (eventPoint) {
         var p = stageArea.mapToItem(canvas, eventPoint.position.x, eventPoint.position.y)
         canvas.tapOutside(p.x, p.y)
       }
@@ -561,7 +694,24 @@ FocusScope {
           }
 
           Repeater {
-            model: [{ x: -1, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: 1, y: 1 }]
+            model: [
+              {
+                x: -1,
+                y: -1
+              },
+              {
+                x: 1,
+                y: -1
+              },
+              {
+                x: -1,
+                y: 1
+              },
+              {
+                x: 1,
+                y: 1
+              }
+            ]
             Rectangle {
               id: handle
               required property var modelData
@@ -586,10 +736,13 @@ FocusScope {
                   target: null
                   dragThreshold: 2
                   onActiveChanged: {
-                    if (active) canvas.beginResize(handle.modelData)
-                    else canvas.finishGesture()
+                    if (active)
+                      canvas.beginResize(handle.modelData)
+                    else
+                      canvas.finishGesture()
                   }
-                  onActiveTranslationChanged: if (active) canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers)
+                  onActiveTranslationChanged: if (active)
+                    canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers)
                 }
               }
             }
@@ -597,7 +750,7 @@ FocusScope {
         }
 
         TapHandler {
-          onTapped: function(eventPoint) {
+          onTapped: function (eventPoint) {
             canvas.forceActiveFocus(Qt.MouseFocusReason)
             canvas.tapAt(eventPoint.position.x / canvas.zoom, eventPoint.position.y / canvas.zoom)
           }
@@ -611,10 +764,13 @@ FocusScope {
             if (active) {
               var press = centroid.pressPosition
               var name = canvas.hit(press.x / canvas.zoom, press.y / canvas.zoom)
-              if (name) canvas.beginMove(name)
-            } else canvas.finishGesture()
+              if (name)
+                canvas.beginMove(name)
+            } else
+              canvas.finishGesture()
           }
-          onActiveTranslationChanged: if (active) canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers, centroid.scenePosition)
+          onActiveTranslationChanged: if (active)
+            canvas.moveGesture(activeTranslation.x, activeTranslation.y, centroid.modifiers, centroid.scenePosition)
         }
       }
     }

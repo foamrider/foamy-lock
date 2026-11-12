@@ -11,7 +11,9 @@ Item {
   readonly property int connected: {
     var devices = Bluetooth.devices ? Bluetooth.devices.values : []
     var count = 0
-    for (var i = 0; i < devices.length; i++) if (devices[i] && devices[i].connected === true) count++
+    for (var i = 0; i < devices.length; i++)
+      if (devices[i] && devices[i].connected === true)
+        count++
     return enabled ? count : 0
   }
 }
