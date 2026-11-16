@@ -1,0 +1,8 @@
+# Lock Studio runs studio/ from a root foamy-lock-helper assembles at run time
+# (native/src/studio/root.rs, PLUGIN_LINKS): the studio's QML imports these
+# beside itself. qmllint lints a staged copy with the same links.
+studio/kit  kit  # the plugin's kit, linked into the studio root
+studio/elements  elements  # the lock's elements, linked into the studio root
+studio/LockView.qml  LockView.qml  # the lock view the studio previews, linked into the studio root
+studio/Layout.js  Layout.js  # the look model, linked into the studio root
+studio/Model.js  Model.js  # the lock's data helpers, linked into the studio root
