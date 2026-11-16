@@ -8,6 +8,7 @@
 //! foamy-lock-harness styles [--host 4.5]
 //! foamy-lock-harness placement [--host 4.5]
 //! foamy-lock-harness runtime [--host 4.5]
+//! foamy-lock-harness password [--host 4.5]
 //! foamy-lock-harness thumbnails [--host 4.5] [--preset NAME]... [--out DIR]
 //! foamy-lock-harness studio [--host 4.5] [--language CODE]
 //! foamy-lock-harness video [--host 4.5]
@@ -65,6 +66,12 @@
 //! wallpaper helpers, password and fingerprint flows, blanking, stranded-lock
 //! recovery and, on 4.5, the IpcRegistry route. It never locks the desktop.
 //!
+//! `password` drives the real LockView's password field with real key and
+//! mouse events: typing and editing keys on the read-only editor, and paste
+//! (Ctrl+V, Shift+Insert, middle-click) through kit/clipboard.sh against a
+//! wl-paste stand-in, with an endless, a stalled and a late clipboard and a
+//! read cancelled mid-way.
+//!
 //! `thumbnails` renders every selectable preset (or each `--preset`) at
 //! 1920×1080 with the synthetic data and a fixed dark theme, scaled to
 //! 480×270, into `previews/presets/<name>.png` (or `--out`); drawn
@@ -85,6 +92,7 @@ mod app;
 mod host;
 mod layout;
 mod parity;
+mod password;
 mod placement;
 mod png;
 mod render;
@@ -103,13 +111,14 @@ fn main() -> ExitCode {
         Some("parity") => parity::run(&args[1..]),
         Some("layout") => layout::run(&args[1..]),
         Some("runtime") => runtime::run(&args[1..]),
+        Some("password") => password::run(&args[1..]),
         Some("styles") => styles::run(&args[1..]),
         Some("placement") => placement::run(&args[1..]),
         Some("thumbnails") => thumbnails::run(&args[1..]),
         Some("studio") => studio::run(&args[1..]),
         Some("video") => video::run(&args[1..]),
         _ => Err(format!(
-            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness placement [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]\n       foamy-lock-harness studio [--host {hosts}] [--language CODE]",
+            "usage: foamy-lock-harness render [--host {hosts}] [--language CODE]\n       foamy-lock-harness parity [--host {hosts}] [--baseline REV]\n       foamy-lock-harness layout [--host {hosts}] [--preset NAME]\n       foamy-lock-harness styles [--host {hosts}]\n       foamy-lock-harness placement [--host {hosts}]\n       foamy-lock-harness runtime [--host {hosts}]\n       foamy-lock-harness password [--host {hosts}]\n       foamy-lock-harness thumbnails [--host {hosts}] [--preset NAME]... [--out DIR]\n       foamy-lock-harness studio [--host {hosts}] [--language CODE]",
             hosts = host::CHOICES.join("|")
         )),
     };

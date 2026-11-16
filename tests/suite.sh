@@ -60,7 +60,7 @@ if [[ -f $kit/preview/i18n_runtime.py ]]; then
 else
   skip "artwork_runtime.py, the i18n check: no foamy-kit at $kit (set FOAMY_KIT)"
 fi
-for suite in render parity layout runtime studio video; do
+for suite in render parity layout runtime password studio video; do
   run bash tests/harness.sh "$suite"
 done
 if ((status)); then

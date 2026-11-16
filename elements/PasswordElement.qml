@@ -253,6 +253,68 @@ Rectangle {
     }
   }
 
+  // The editor is an editable TextInput, as in Omarchy's own lock: typing,
+  // the input method (fcitx5 by default), editing keys and undo are Qt's.
+  // Only paste is not: Qt's paste reads the whole clipboard on the UI thread
+  // with no byte cap or deadline, so a clipboard owner that keeps sending
+  // could hold the lock screen. Ctrl+V, Shift+Insert and a middle click read
+  // it through foamy-kit's FoamyClipboard instead (at most 16 KiB, killed at
+  // 2 s). An editable TextInput still checks the clipboard's text itself when
+  // the clipboard changes, as Omarchy's lock does; only this plugin's paste
+  // is bounded here.
+  //
+  // A paste's text arrives later. editRevision counts every change it could
+  // land in the wrong place after (the text, the cursor, the selection); a
+  // paste keeps the revision it started at (pasteRevision, -1 for none), and
+  // a result from an older one, or after the editor lost focus or was
+  // disabled, is dropped. A failed paste shows on the notice line under the
+  // field until the next edit.
+  property int editRevision: 0
+  property int pasteRevision: -1
+  property string pasteError: ""
+
+  // Inserts pasted text over the selection, or at the cursor, through the
+  // editor's own insert (its undo, maximum length and cursor).
+  function insertPaste(text) {
+    var start = passwordInput.selectionStart
+    var end = passwordInput.selectionEnd
+    if (start !== end)
+      passwordInput.remove(start, end)
+    passwordInput.insert(start !== end ? start : passwordInput.cursorPosition, text)
+  }
+
+  function requestPaste(primary) {
+    if (!passwordInput.enabled || passwordInput.readOnly || clipboard.busy)
+      return
+    field.pasteError = ""
+    field.pasteRevision = field.editRevision
+    clipboard.start(primary)
+  }
+
+  function cancelPaste() {
+    field.pasteRevision = -1
+    clipboard.cancel()
+  }
+
+  // Whether the paste's result still applies; it is used up either way.
+  function takePaste() {
+    var current = field.pasteRevision >= 0 && field.pasteRevision === field.editRevision && passwordInput.enabled && !passwordInput.readOnly && passwordInput.activeFocus
+    field.pasteRevision = -1
+    return current
+  }
+
+  FoamyClipboard {
+    id: clipboard
+    onRead: function (text) {
+      if (field.takePaste() && text !== "")
+        field.insertPaste(text)
+    }
+    onFailed: function (message) {
+      if (field.takePaste())
+        field.pasteError = message
+    }
+  }
+
   TextInput {
     id: passwordInput
     objectName: "passwordInput"
@@ -291,6 +353,8 @@ Rectangle {
     }
 
     onTextChanged: {
+      field.editRevision++
+      field.pasteError = ""
       if (!field.view.syncingPasswordText)
         field.view.passwordTextEdited(text)
       if (text.length > 0)
@@ -298,6 +362,13 @@ Rectangle {
       if (text.length > 0 && field.view.failureMessage.length > 0)
         field.view.clearFailureRequested()
     }
+    onCursorPositionChanged: field.editRevision++
+    onSelectionStartChanged: field.editRevision++
+    onSelectionEndChanged: field.editRevision++
+    onEnabledChanged: if (!enabled)
+      field.cancelPaste()
+    onActiveFocusChanged: if (!activeFocus)
+      field.cancelPaste()
 
     onAccepted: field.view.submitCurrentPassword()
 
@@ -308,10 +379,32 @@ Rectangle {
       }
       field.view.wakeRequested()
       if (event.key === Qt.Key_Escape || (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_U)) {
+        // Clearing an empty field changes no text, so stop a paste in
+        // flight here rather than through editRevision.
+        field.cancelPaste()
+        field.pasteError = ""
         field.view.passwordTextEdited("")
         field.view.clearFailureRequested()
         event.accepted = true
+        return
       }
+      // Before the editor's own paste (see requestPaste()).
+      if (event.matches(StandardKey.Paste)) {
+        field.requestPaste(false)
+        event.accepted = true
+      }
+    }
+
+    // Middle-click pastes the primary selection through the same bounded
+    // read, before the editor's own; the left button stays the editor's.
+    MouseArea {
+      anchors.fill: parent
+      acceptedButtons: Qt.MiddleButton
+      onPressed: function (mouse) {
+        passwordInput.forceActiveFocus()
+        passwordInput.cursorPosition = passwordInput.positionAt(mouse.x, mouse.y)
+      }
+      onClicked: field.requestPaste(true)
     }
   }
 
@@ -400,15 +493,17 @@ Rectangle {
     }
   }
 
+  // The notice line: a paste that failed (until the next edit), otherwise
+  // the fingerprint reader's state.
   Text {
     objectName: "fingerprintNotice"
     // Plain x/y, mirrored here (see AccountElement: no anchors toggled at runtime).
     y: field.height + Math.round(8 * field.uiScale)
     x: field.alignment === "center" ? (field.width - width) / 2 : (field.alignment === "start") !== field.view.rightToLeft ? 0 : field.width - width
     width: field.alignment === "center" ? field.contentWidth : field.width
-    visible: field.chromeShown && field.view.fingerprintUnavailable
+    visible: field.chromeShown && (field.pasteError !== "" || field.view.fingerprintUnavailable)
     textFormat: Text.PlainText
-    text: FoamyI18n.t("Fingerprint reader unavailable")
+    text: field.pasteError !== "" ? FoamyI18n.t(field.pasteError) : FoamyI18n.t("Fingerprint reader unavailable")
     color: field.view.foreground
     font.family: field.view.textFontFamily
     font.pixelSize: Math.round(13 * field.uiScale)
