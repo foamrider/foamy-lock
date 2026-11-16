@@ -252,9 +252,14 @@ The password field can't be hidden, and it stays in the middle or bottom row.
 whatever the layout says. Artwork is prepared only while a media style
 that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
 
-The field types and edits like Omarchy's own lock (the input method,
-editing keys and undo are Qt's). Ctrl+V, Shift+Insert and a middle click paste
-plain text read outside the shell by foamy-kit's `kit/clipboard.sh`: at most
+The field's editor is read-only to Qt, so the shell never reads the
+clipboard by itself, not even when the clipboard changes (an editable Qt text
+field reads the whole clipboard each time). The plugin types and deletes
+(Backspace, Delete, and Ctrl+Backspace and Ctrl+Delete to the start and end);
+Qt moves the cursor and selection. As in other password fields, there is no
+input method and no undo, and nothing is copied. Ctrl+V, Shift+Insert and a
+middle click paste plain text read outside the shell by foamy-kit's
+`kit/clipboard.sh`: at most
 16 KiB, within 2 s. Larger text, a read that takes longer or no text on the
 clipboard shows a note under the field instead, and a paste that arrives after
 you typed or cleared the field is dropped.

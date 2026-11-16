@@ -253,15 +253,21 @@ Rectangle {
     }
   }
 
-  // The editor is an editable TextInput, as in Omarchy's own lock: typing,
-  // the input method (fcitx5 by default), editing keys and undo are Qt's.
-  // Only paste is not: Qt's paste reads the whole clipboard on the UI thread
-  // with no byte cap or deadline, so a clipboard owner that keeps sending
-  // could hold the lock screen. Ctrl+V, Shift+Insert and a middle click read
-  // it through foamy-kit's FoamyClipboard instead (at most 16 KiB, killed at
-  // 2 s). An editable TextInput still checks the clipboard's text itself when
-  // the clipboard changes, as Omarchy's lock does; only this plugin's paste
-  // is bounded here.
+  // The editor is a TextInput that is always read-only; the field edits it.
+  // Qt reads the whole clipboard on the UI thread with no byte cap or
+  // deadline, so a clipboard owner that keeps sending could hold the lock
+  // screen and the shell it runs in. An editable TextInput does that read
+  // by itself on every clipboard change (q_canPasteChanged, for canPaste),
+  // without a paste; a read-only one never reads the clipboard. So:
+  // - Qt keeps the drawing, the cursor and selection keys (arrows, Home/End,
+  //   Shift, Ctrl+A), the mouse and Enter.
+  // - editKey() types printable text and deletes (Backspace, Delete and
+  //   their word variants) through the editor's insert() and remove(),
+  //   which work on a read-only editor and keep its maximum length.
+  // - Ctrl+V, Shift+Insert and a middle click read the clipboard through
+  //   foamy-kit's FoamyClipboard (at most 16 KiB, killed at 2 s).
+  // - There is no input method (it needs an editable editor) and no undo,
+  //   as in a Qt password field; copy and cut never run on a password.
   //
   // A paste's text arrives later. editRevision counts every change it could
   // land in the wrong place after (the text, the cursor, the selection); a
@@ -273,9 +279,9 @@ Rectangle {
   property int pasteRevision: -1
   property string pasteError: ""
 
-  // Inserts pasted text over the selection, or at the cursor, through the
-  // editor's own insert (its undo, maximum length and cursor).
-  function insertPaste(text) {
+  // Inserts text over the selection, or at the cursor, through the editor's
+  // own insert (its maximum length and cursor).
+  function insertText(text) {
     var start = passwordInput.selectionStart
     var end = passwordInput.selectionEnd
     if (start !== end)
@@ -283,8 +289,82 @@ Rectangle {
     passwordInput.insert(start !== end ? start : passwordInput.cursorPosition, text)
   }
 
+  // Where the code point before `position` starts (a surrogate pair stays whole).
+  function previousPoint(text, position) {
+    var low = text.charCodeAt(position - 1)
+    var high = position >= 2 ? text.charCodeAt(position - 2) : 0
+    return low >= 0xdc00 && low < 0xe000 && high >= 0xd800 && high < 0xdc00 ? position - 2 : position - 1
+  }
+
+  // Where the code point after `position` ends.
+  function nextPoint(text, position) {
+    var high = text.charCodeAt(position)
+    var low = position + 1 < text.length ? text.charCodeAt(position + 1) : 0
+    return high >= 0xd800 && high < 0xdc00 && low >= 0xdc00 && low < 0xe000 ? position + 2 : position + 1
+  }
+
+  // The keys an editable TextInput handles and a read-only one doesn't,
+  // applied to the read-only editor. Returns whether the field takes
+  // `event`; with `apply` it also acts on it (without, it only claims the
+  // key before a shortcut does).
+  function editKey(event, apply) {
+    // Never on a password: undo, redo, copy and cut (Qt's do nothing on one).
+    if (event.matches(StandardKey.Undo) || event.matches(StandardKey.Redo) || event.matches(StandardKey.Copy) || event.matches(StandardKey.Cut))
+      return true
+    var text = passwordInput.text
+    // Qt moves to the previous word (Ctrl+Left; on a password, the start in
+    // the text's direction) only when editable; the next word it always does.
+    if (event.matches(StandardKey.MoveToPreviousWord)) {
+      if (apply) {
+        let reversed = text.length > 0 && passwordInput.positionToRectangle(1).x < passwordInput.positionToRectangle(0).x
+        passwordInput.cursorPosition = reversed ? text.length : 0
+      }
+      return true
+    }
+    var start = passwordInput.selectionStart
+    var end = passwordInput.selectionEnd
+    var position = passwordInput.cursorPosition
+    var selected = start !== end
+    var from = -1
+    var to = -1
+    // As Qt's: Backspace (also with Shift), Delete, and the word variants,
+    // which delete to the start or the end (the dots are one word). Each
+    // deletes the selection when there is one.
+    var control = (event.modifiers & Qt.ControlModifier) !== 0
+    if (event.key === Qt.Key_Backspace && !control) {
+      from = selected ? start : position > 0 ? field.previousPoint(text, position) : 0
+      to = selected ? end : position
+    } else if (event.matches(StandardKey.Delete)) {
+      from = selected ? start : position
+      to = selected ? end : position < text.length ? field.nextPoint(text, position) : position
+    } else if (event.key === Qt.Key_Backspace || event.matches(StandardKey.DeleteStartOfWord)) {
+      from = selected ? start : 0
+      to = selected ? end : position
+    } else if (event.matches(StandardKey.DeleteEndOfWord) || event.matches(StandardKey.DeleteEndOfLine)) {
+      from = selected ? start : position
+      to = selected ? end : text.length
+    }
+    if (from >= 0) {
+      if (apply && from !== to)
+        passwordInput.remove(from, to)
+      return true
+    }
+    // Printable text, as Qt's QInputControl::isAcceptableInput: Ctrl and
+    // Ctrl+Shift combinations are shortcuts (Ctrl+Alt still types, as AltGr
+    // can arrive), and control characters never type.
+    var typed = event.text
+    if (typed === "" || event.modifiers === Qt.ControlModifier || event.modifiers === (Qt.ControlModifier | Qt.ShiftModifier))
+      return false
+    var first = typed.charCodeAt(0)
+    if (first < 0x20 || (first >= 0x7f && first < 0xa0))
+      return false
+    if (apply)
+      field.insertText(typed)
+    return true
+  }
+
   function requestPaste(primary) {
-    if (!passwordInput.enabled || passwordInput.readOnly || clipboard.busy)
+    if (!passwordInput.enabled || clipboard.busy)
       return
     field.pasteError = ""
     field.pasteRevision = field.editRevision
@@ -298,7 +378,7 @@ Rectangle {
 
   // Whether the paste's result still applies; it is used up either way.
   function takePaste() {
-    var current = field.pasteRevision >= 0 && field.pasteRevision === field.editRevision && passwordInput.enabled && !passwordInput.readOnly && passwordInput.activeFocus
+    var current = field.pasteRevision >= 0 && field.pasteRevision === field.editRevision && passwordInput.enabled && passwordInput.activeFocus
     field.pasteRevision = -1
     return current
   }
@@ -307,7 +387,7 @@ Rectangle {
     id: clipboard
     onRead: function (text) {
       if (field.takePaste() && text !== "")
-        field.insertPaste(text)
+        field.insertText(text)
     }
     onFailed: function (message) {
       if (field.takePaste())
@@ -333,7 +413,8 @@ Rectangle {
     activeFocusOnPress: true
     clip: true
     enabled: field.view.inputEnabled && !field.view.authenticatingPassword
-    readOnly: field.view.authenticatingPassword
+    // Always: an editable TextInput reads the clipboard on every change (above).
+    readOnly: true
     echoMode: TextInput.Password
     passwordCharacter: "●"
     passwordMaskDelay: 0
@@ -388,15 +469,24 @@ Rectangle {
         event.accepted = true
         return
       }
-      // Before the editor's own paste (see requestPaste()).
       if (event.matches(StandardKey.Paste)) {
         field.requestPaste(false)
         event.accepted = true
+        return
       }
+      // Typing and deleting; the rest (cursor, selection, Enter) is Qt's.
+      if (field.editKey(event, true))
+        event.accepted = true
+    }
+    // A read-only TextInput claims no shortcuts; claim the keys the field
+    // edits with, as an editable one does.
+    Keys.onShortcutOverride: function (event) {
+      if (event.matches(StandardKey.Paste) || field.editKey(event, false))
+        event.accepted = true
     }
 
     // Middle-click pastes the primary selection through the same bounded
-    // read, before the editor's own; the left button stays the editor's.
+    // read; the left button stays the editor's.
     MouseArea {
       anchors.fill: parent
       acceptedButtons: Qt.MiddleButton

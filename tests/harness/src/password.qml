@@ -1,9 +1,9 @@
 // Password shell: the real LockView's password field, driven with real key
 // and mouse events (QtTest's TestEvent), against a wl-paste stand-in on
-// PATH (password.rs). The editor types as Omarchy's lock does (an editable
-// TextInput: the input method, editing keys, undo); paste never goes through
-// Qt but through kit/clipboard.sh. Written into a temporary app by the
-// harness.
+// PATH (password.rs). The editor is a read-only TextInput, so Qt never
+// reads the clipboard, not even on a clipboard change; the field types and
+// deletes, and pastes through kit/clipboard.sh. Written into a temporary app
+// by the harness.
 import QtQuick
 import QtTest
 import Quickshell
@@ -143,10 +143,15 @@ ShellRoot {
       return
     case 1:
       check(input.activeFocus, "the editor has the keyboard")
-      check(input.readOnly === false, "the editor is editable, so the input method types into it as in Omarchy's lock")
+      // The editor is never writable: an editable TextInput reads the
+      // clipboard's text on every clipboard change, before any paste.
+      check(input.readOnly === true, "the editor is read-only, so Qt never reads the clipboard itself")
+      Quickshell.clipboardText = "QT-CHANGED"
+      check(input.canPaste === false, "a clipboard change leaves canPaste false: Qt did not read its text")
       // Typing and editing keys, as a user types them.
       type("hunter2")
       check(view.passwordText === "hunter2", "typing reaches the view: " + view.passwordText)
+      check(input.cursorVisible && field.view.showPasswordCursor, "the read-only editor still shows its cursor")
       key(Qt.Key_Left)
       key(Qt.Key_Left)
       type("X")
@@ -159,13 +164,82 @@ ShellRoot {
       type("z")
       check(view.passwordText === "z2", "typing replaces a selection: " + view.passwordText)
       key(Qt.Key_Z, Qt.ControlModifier)
-      check(view.passwordText === "hunte2", "Ctrl+Z undoes, as Qt's editor does: " + view.passwordText)
+      key(Qt.Key_C, Qt.ControlModifier)
+      key(Qt.Key_X, Qt.ControlModifier)
+      check(view.passwordText === "z2" && Quickshell.clipboardText === "QT-CHANGED", "Ctrl+Z, Ctrl+C and Ctrl+X neither edit nor type, and copy nothing: " + view.passwordText)
+      key(Qt.Key_End)
+      key(Qt.Key_Left, Qt.ControlModifier)
+      check(input.cursorPosition === 0, "Ctrl+Left moves to the start, as Qt's editable password field does: " + input.cursorPosition)
+      key(Qt.Key_Right, Qt.ControlModifier)
+      check(input.cursorPosition === 2, "Ctrl+Right moves to the end: " + input.cursorPosition)
+      key(Qt.Key_Home)
+      key(Qt.Key_Right)
+      key(Qt.Key_Backspace, Qt.ShiftModifier)
+      check(view.passwordText === "2" && input.cursorPosition === 0, "Shift+Backspace deletes like Backspace: " + view.passwordText)
+      type("abc")
+      key(Qt.Key_Left)
+      key(Qt.Key_Backspace, Qt.ControlModifier)
+      check(view.passwordText === "c2" && input.cursorPosition === 0, "Ctrl+Backspace deletes to the start: " + view.passwordText)
+      key(Qt.Key_Right)
+      key(Qt.Key_Delete, Qt.ControlModifier)
+      check(view.passwordText === "c", "Ctrl+Delete deletes to the end: " + view.passwordText)
+      key(Qt.Key_A, Qt.ControlModifier)
+      key(Qt.Key_Backspace)
+      check(view.passwordText === "", "Ctrl+A selects all, and Backspace deletes the selection: " + JSON.stringify(view.passwordText))
+      key(Qt.Key_Backspace)
+      key(Qt.Key_Delete)
+      check(view.passwordText === "", "deleting in an empty field does nothing")
+      ev.keyClickChar("ø", Qt.NoModifier, -1)
+      ev.keyClickChar("@", Qt.ShiftModifier, -1)
+      check(view.passwordText === "ø@", "a non-ASCII letter and a shifted symbol type: " + view.passwordText)
+      key(Qt.Key_B, Qt.ControlModifier)
+      key(Qt.Key_B, Qt.ControlModifier | Qt.ShiftModifier)
+      check(view.passwordText === "ø@", "Ctrl and Ctrl+Shift combinations never type: " + JSON.stringify(view.passwordText))
+      key(Qt.Key_Escape)
+      check(view.passwordText === "", "Escape clears: " + view.passwordText)
+      setMode("emoji")
+      next()
+      return
+    case 2:
+      if (!fixture.done)
+        return
+      paste()
+      next()
+      return
+    case 3:
+      if (view.passwordText === "")
+        return
+      // A pasted surrogate pair is one character for Backspace and Delete.
+      check(view.passwordText === "a\ud83d\ude00b", "the paste holds a surrogate pair: " + JSON.stringify(view.passwordText))
+      key(Qt.Key_Left)
+      key(Qt.Key_Backspace)
+      check(view.passwordText === "ab" && input.cursorPosition === 1, "Backspace deletes the whole pair: " + JSON.stringify(view.passwordText))
+      ev.keyClickChar("ø", Qt.NoModifier, -1)
+      setMode("emoji")
+      next()
+      return
+    case 4:
+      if (!fixture.done)
+        return
+      paste()
+      next()
+      return
+    case 5:
+      if (view.passwordText === "aøb")
+        return
+      input.cursorPosition = 3
+      key(Qt.Key_Delete)
+      check(view.passwordText === "aøabb", "Delete deletes the whole pair after the cursor: " + JSON.stringify(view.passwordText))
+      key(Qt.Key_Escape)
+      setMode("normal")
+      next()
+      return
       key(Qt.Key_Escape)
       check(view.passwordText === "", "Escape clears: " + view.passwordText)
       setMode("normal")
       next()
       return
-    case 2:
+    case 6:
       if (!fixture.done)
         return
       // Qt's own clipboard holds other text: Qt's paste must never run.
@@ -175,7 +249,7 @@ ShellRoot {
       check(view.passwordText === "x", "a paste waits for the bounded read")
       next()
       return
-    case 3:
+    case 7:
       if (view.passwordText === "x")
         return
       check(view.passwordText === "xs3cret" && input.cursorPosition === 7, "Ctrl+V pastes through the bounded read at the cursor, never through Qt: " + view.passwordText)
@@ -185,7 +259,7 @@ ShellRoot {
       key(Qt.Key_Insert, Qt.ShiftModifier)
       next()
       return
-    case 4:
+    case 8:
       if (view.passwordText === "")
         return
       check(view.passwordText === "s3cret", "Shift+Insert pastes through it too: " + view.passwordText)
@@ -194,7 +268,7 @@ ShellRoot {
       ev.mouseClick(window.contentItem, point.x, point.y, Qt.MiddleButton, Qt.NoModifier, -1)
       next()
       return
-    case 5:
+    case 9:
       if (view.passwordText === "")
         return
       check(view.passwordText === "s3cret" && readFile(state + ".args").indexOf("--primary") >= 0, "a middle click pastes the primary selection: " + readFile(state + ".args"))
@@ -202,13 +276,13 @@ ShellRoot {
       setMode("stream")
       next()
       return
-    case 6:
+    case 10:
       if (!fixture.done)
         return
       paste()
       next()
       return
-    case 7:
+    case 11:
       if (!notice.visible)
         return
       check(noticeSays("Clipboard text is too large or contains invalid characters.") && view.passwordText === "", "an endless clipboard is refused at the cap, on the notice line: " + notice.text)
@@ -218,13 +292,13 @@ ShellRoot {
       setMode("stall")
       next()
       return
-    case 8:
+    case 12:
       if (!fixture.done)
         return
       paste()
       next()
       return
-    case 9:
+    case 13:
       if (!notice.visible)
         return
       check(noticeSays("Clipboard paste timed out. Copy the text again.") && elapsed() < 5000, "a stalled clipboard ends at the 2 s deadline, after " + elapsed() + " ms")
@@ -233,7 +307,7 @@ ShellRoot {
       setMode("delayed")
       next()
       return
-    case 10:
+    case 14:
       if (!fixture.done)
         return
       // Type and delete a character before the delayed read answers.
@@ -242,7 +316,7 @@ ShellRoot {
       key(Qt.Key_Backspace)
       next()
       return
-    case 11:
+    case 15:
       if (elapsed() < 1200)
         return
       check(view.passwordText === "" && !notice.visible, "a paste that answers after an edit (even an undone one) is dropped: " + JSON.stringify(view.passwordText))
@@ -251,21 +325,21 @@ ShellRoot {
       key(Qt.Key_Escape)
       next()
       return
-    case 12:
+    case 16:
       if (elapsed() < 1200)
         return
       check(view.passwordText === "" && !notice.visible, "Esc stops a paste in flight, even in an empty field: " + JSON.stringify(view.passwordText))
       setMode("ignore")
       next()
       return
-    case 13:
+    case 17:
       if (!fixture.done)
         return
       shell.cancelledPid = readFile(state + ".pid")
       paste()
       next()
       return
-    case 14:
+    case 18:
       // Authentication starts mid-read: the editor is disabled, the read stops.
       var pid = readFile(state + ".pid")
       if (pid === shell.cancelledPid)
@@ -276,7 +350,7 @@ ShellRoot {
       console.log("FOAMY PASTE PID " + pid)
       next()
       return
-    case 15:
+    case 19:
       if (elapsed() < 2500)
         return
       view.authenticatingPassword = false
@@ -284,7 +358,7 @@ ShellRoot {
       view.forcePasswordFocus()
       next()
       return
-    case 16:
+    case 20:
       if (!input.activeFocus)
         return
       type("open")
