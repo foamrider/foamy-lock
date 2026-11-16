@@ -252,6 +252,13 @@ The password field can't be hidden, and it stays in the middle or bottom row.
 whatever the layout says. Artwork is prepared only while a media style
 that shows it (`card`, `pill`, `art`, `hero` or `disc`) is shown.
 
+The field types and edits like Omarchy's own lock (the input method,
+editing keys and undo are Qt's). Ctrl+V, Shift+Insert and a middle click paste
+plain text read outside the shell by foamy-kit's `kit/clipboard.sh`: at most
+16 KiB, within 2 s. Larger text, a read that takes longer or no text on the
+clipboard shows a note under the field instead, and a paste that arrives after
+you typed or cleared the field is dropped.
+
 **Background.** These keys set what's behind the elements:
 
 - **`source`.** One of:

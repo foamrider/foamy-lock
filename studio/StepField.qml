@@ -80,61 +80,48 @@ FocusScope {
       name: FoamyI18n.t("studio.less", field.name)
     }
 
-    Rectangle {
+    // A SafeTextField, never a TextInput: an editable TextInput reads the
+    // whole clipboard on the UI thread on every clipboard change and on
+    // paste, with no byte cap or deadline.
+    SafeTextField {
+      id: input
       width: 44
       height: parent.height
-      radius: FoamyStyle.radiusSmall
-      color: FoamyPalette.fieldFill
-      border.width: input.activeFocus ? 2 : FoamyStyle.borderWidth
-      border.color: input.activeFocus ? FoamyPalette.accent : FoamyPalette.border
+      cornerRadius: FoamyStyle.radiusSmall
+      leftPadding: FoamyStyle.gapSmall
+      rightPadding: FoamyStyle.gapSmall
+      horizontalAlignment: Text.AlignHCenter
+      maximumLength: 7
+      foreground: FoamyPalette.text
+      accent: FoamyPalette.accent
+      Accessible.name: field.name
 
-      TextInput {
-        id: input
-        anchors.fill: parent
-        anchors.leftMargin: FoamyStyle.gapSmall
-        anchors.rightMargin: FoamyStyle.gapSmall
-        verticalAlignment: TextInput.AlignVCenter
-        horizontalAlignment: TextInput.AlignHCenter
-        activeFocusOnTab: true
-        selectByMouse: true
-        clip: true
-        maximumLength: 7
-        color: FoamyPalette.text
-        selectionColor: FoamyPalette.selectedFill
-        selectedTextColor: FoamyPalette.text
-        font.family: FoamyStyle.fontFamily
-        font.pixelSize: FoamyStyle.font.body
-        Accessible.role: Accessible.EditableText
-        Accessible.name: field.name
-
-        // Shows the value whenever it isn't being typed in.
-        Binding on text {
-          value: field.format(field.value)
-          when: !input.activeFocus
-        }
-        onActiveFocusChanged: if (activeFocus)
-          selectAll()
-        onEditingFinished: {
-          var steps = field.parse(text)
-          if (!isNaN(steps) && steps !== field.value)
-            field.committed(steps)
-          else
-            text = field.format(field.value)
-        }
-        Keys.onEscapePressed: function (event) {
+      // Shows the value whenever it isn't being typed in.
+      Binding on text {
+        value: field.format(field.value)
+        when: !input.inputActiveFocus
+      }
+      onInputActiveFocusChanged: if (inputActiveFocus)
+        selectAll()
+      onEditingFinished: {
+        var steps = field.parse(text)
+        if (!isNaN(steps) && steps !== field.value)
+          field.committed(steps)
+        else
+          text = field.format(field.value)
+      }
+      onKeyPressed: function (event) {
+        if (event.key === Qt.Key_Escape) {
           text = field.format(field.value)
           selectAll()
           event.accepted = true
-        }
-        Keys.onPressed: function (event) {
-          if (field.keyStep(event)) {
-            event.accepted = true
-            // After the caller has taken the new value.
-            Qt.callLater(function () {
-              input.text = field.format(field.value)
-              input.selectAll()
-            })
-          }
+        } else if (field.keyStep(event)) {
+          event.accepted = true
+          // After the caller has taken the new value.
+          Qt.callLater(function () {
+            input.text = field.format(field.value)
+            input.selectAll()
+          })
         }
       }
     }

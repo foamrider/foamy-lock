@@ -2716,7 +2716,7 @@ Item {
         for (var s = 0; s < stops.length; s++) {
           var stop = stops[s]
           var name = String(stop.Accessible.name || "")
-          expect(name !== "" && stop.Accessible.role !== Accessible.NoRole, "a stop without a name or role: " + stop + " " + stop.objectName)
+          expect(name !== "" && stop.Accessible.role !== Accessible.NoRole, "a stop without a name or role: " + stop + " " + stop.objectName + " (name " + JSON.stringify(name) + ", role " + stop.Accessible.role + ")")
           expect(stop.visible && stop.enabled, "a hidden or disabled stop: " + stop)
           names.push(stop.objectName || name)
         }

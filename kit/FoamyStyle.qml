@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.9.0 36705bb09e7cb869424322c34673be591d091c90f95dd68d13c27b00445990e2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.11.0 4384a8b0ffa4c6ac579a872ca6293b48a4dabc69d5270345e029ea4fc68d48c2 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 
@@ -39,7 +39,8 @@ QtObject {
   // (the Omarchy font, which follows `omarchy font set`).
   readonly property string fontFamily: "sans-serif"
   readonly property string monoFamily: Style.font.family
-  readonly property QtObject font: QtObject {
+  // A named type, so qmllint knows the members (FoamyStyle.font.body).
+  component TypeScale: QtObject {
     readonly property int caption: Style.space(10)
     readonly property int bodySmall: Style.space(11)
     readonly property int body: Style.space(12)
@@ -56,6 +57,7 @@ QtObject {
     readonly property int numeral: Style.space(56)
     readonly property int numeralCompact: Style.space(40)
   }
+  readonly property TypeScale font: TypeScale {}
 
   // --- popup geometry ----------------------------------------------------------
   readonly property int popupWidth: Style.space(420)

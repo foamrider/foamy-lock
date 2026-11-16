@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import "kit"
-import "Layout.js" as Layout
 import "Draft.js" as Draft
 
 // The library (mockup A, left pane): first the preset ("Preset: Default ▾",
