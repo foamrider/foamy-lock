@@ -1,5 +1,16 @@
 #!/bin/bash
-# foamy-kit 0.9.0 15ba60a602c8e82788b28aa4ba405ee341a18193d57f3199a2126e7fdb88b61d — do not edit; change foamy-kit and run sync
+# foamy-kit 0.11.0 d4706efaf23739bf5520e9243518865059dce66a6a301a9a0666bdb96dadffc9 — do not edit; change foamy-kit and run sync
+# Bounded clipboard read for a field that must never let Qt paste itself.
+#
+#   bash kit/clipboard.sh clipboard|primary
+#
+# Prints the selection's text as one JSON string (line breaks as spaces) on
+# stdout. Exit 0 on success; 5 when the text is over 16 KiB or contains NUL;
+# 137 when the 2 s deadline killed the read; 143 when the caller stopped it
+# (TERM, INT or HUP: the whole read is killed); 2 for a bad argument; any other
+# nonzero code when wl-paste failed (no Wayland display, nothing copied, no
+# text type). Read stdout only after exit 0: a failed wl-paste still leaves
+# "" there. Nothing is written to stderr.
 set -euo pipefail
 
 case ${1:-} in

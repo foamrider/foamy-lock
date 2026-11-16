@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 43785191944490c6f83e87f91aee17cb2d8c03a45038272f42a43078892dbb3a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.11.0 f747106e96109f25387505c692e33ba9584dcc935bc90ac6235dd84366180499 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls as Controls
 import Quickshell.Io
@@ -185,7 +185,9 @@ Flickable {
     id: editor
     objectName: "safeEditor"
 
+    // The editor is the tab stop: it carries the field's name and its role.
     Accessible.name: root.Accessible.name
+    Accessible.role: Accessible.EditableText
     activeFocusOnTab: true
     persistentSelection: true
     selectByMouse: true
