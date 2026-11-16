@@ -1,6 +1,7 @@
 //! The password test: the real LockView's password field with real key and
 //! mouse events (password.qml), and paste through kit/clipboard.sh against a
-//! wl-paste stand-in on PATH. Typing and editing keys, Ctrl+V, Shift+Insert
+//! wl-paste stand-in on PATH. The editor stays read-only (Qt never reads the
+//! clipboard on a change), typing and editing keys, Ctrl+V, Shift+Insert
 //! and middle-click paste, an endless and a stalled clipboard, a reply that
 //! arrives after an edit, and authentication starting mid-read (the read
 //! stops, and its wl-paste, which ignores TERM, must be gone).
@@ -31,6 +32,7 @@ case $mode in
   stall) exec sleep 30 ;;
   ignore) trap '' TERM; exec sleep 30 ;;
   delayed) sleep 0.4; printf late ;;
+  emoji) printf 'a\xf0\x9f\x98\x80b' ;;
   *) printf s3cret ;;
 esac
 "#;
