@@ -387,7 +387,7 @@ test('element-only keys are accepted on their own element and only there', () =>
   for (const key of ['reveal', 'items', 'details', 'location']) assert.ok(!Layout.ELEMENT_KEYS.includes(key), key)
   for (const [name, key] of [['clock', 'reveal'], ['date', 'items'], ['media', 'details'], ['status', 'location'], ['password', 'items']])
     assert.equal(errorOf(name, {[key]: 'x'}), `layout.${name} has an unknown key: ${key}`)
-  assert.deepEqual(Layout.elementKeys('password'), [...Layout.ELEMENT_KEYS, 'reveal', 'width', 'height', 'textSize', 'submit', 'mask', 'hint'])
+  assert.deepEqual(Layout.elementKeys('password'), [...Layout.ELEMENT_KEYS, 'reveal', 'width', 'height', 'textSize', 'submit', 'mask', 'hint', 'textAlign'])
   assert.deepEqual(Layout.elementKeys('status'), [...Layout.ELEMENT_KEYS, 'items'])
   assert.deepEqual(Layout.elementKeys('weather'), [...Layout.ELEMENT_KEYS, 'details', 'location'])
   assert.deepEqual(Layout.elementKeys('clock'), Layout.ELEMENT_KEYS)
@@ -445,6 +445,42 @@ test('the field\'s width, height, text size, arrow, mask and hint', () => {
   assert.equal(Layout.canonical(look).elements.password.width, 1.15)
 })
 
+test('the field\'s text alignment', () => {
+  for (const style of Layout.STYLES.password)
+    for (const textAlign of ['start', 'center', 'end']) {
+      const parsed = Layout.parseLook({layout: {password: {style, textAlign}}})
+      assert.ok(parsed.valid, style + ': ' + parsed.error)
+      assert.equal(Layout.optionValue(parsed.look.elements.password, 'textAlign'), textAlign, style)
+    }
+  for (const textAlign of ['left', 'Center', '', null, true])
+    assert.equal(errorOf('password', {textAlign}), 'layout.password.textAlign must be one of auto, start, center, end', String(textAlign))
+  assert.equal(errorOf('clock', {textAlign: 'start'}), 'layout.clock has an unknown key: textAlign')
+  // "auto" is each style's own drawing: the default, left out of the look.
+  const plain = Layout.parseLook({}).look
+  assert.equal(Layout.optionValue(plain.elements.password, 'textAlign'), 'auto')
+  assert.equal(JSON.stringify(Layout.parseLook({layout: {password: {textAlign: 'auto'}}}).look), JSON.stringify(plain))
+})
+
+test('align: every element lines up as its zone, or its own way once set', () => {
+  assert.deepEqual(Layout.ALIGNS, ['start', 'center', 'end'])
+  assert.ok(Layout.ELEMENT_KEYS.includes('align'))
+  for (const name of Layout.ELEMENTS) {
+    for (const align of Layout.ALIGNS) assert.equal(errorOf(name, {align}), '', `${name} ${align}`)
+    for (const align of ['left', 'right', 'Centre', '', null, 1, true])
+      assert.equal(errorOf(name, {align}), `layout.${name}.align must be one of start, center, end`, `${name} ${align}`)
+    assert.deepEqual(Layout.elementLimits()[name].align, ['start', 'center', 'end'], name)
+  }
+  // Absent by default (the zone's column decides), in every preset.
+  for (const name of Layout.SELECTABLE_PRESETS)
+    for (const element of Layout.ELEMENTS) assert.equal(Layout.preset(name).elements[element].align, undefined, `${name} ${element}`)
+  // Once set it stays, also where it equals the zone's column: it then
+  // follows the element into another zone.
+  const look = Layout.parseLook({layout: {clock: {align: 'center'}, date: {zone: 'top-start', align: 'start'}}}).look
+  assert.equal(look.elements.clock.align, 'center')
+  assert.equal(look.elements.date.align, 'start')
+  assert.equal(JSON.stringify(Layout.canonical(look)), JSON.stringify(look))
+})
+
 test('password.reveal defaults to each style\'s own drawing and drops out there', () => {
   // The pill and dots have always shown only the hint while idle; the others the field.
   const own = {pill: 'typing', underline: 'always', box: 'always', dots: 'typing', terminal: 'always', card: 'always'}
@@ -498,7 +534,8 @@ test('an editor is offered each element-only key with its values and defaults', 
     defaults: {pill: 'typing', underline: 'always', box: 'always', dots: 'typing', terminal: 'always', card: 'always'}},
     width: {min: 0.75, max: 1.75, step: 0.05, default: 1}, height: {min: 0.8, max: 1.5, step: 0.05, default: 1},
     textSize: {min: 0.75, max: 1.25, step: 0.05, default: 1}, submit: {values: [true, false], default: true},
-    mask: {values: ['circle', 'bullet', 'asterisk', 'square'], default: 'circle'}, hint: {values: ['normal', 'muted'], default: 'normal'}})
+    mask: {values: ['circle', 'bullet', 'asterisk', 'square'], default: 'circle'}, hint: {values: ['normal', 'muted'], default: 'normal'},
+    textAlign: {values: ['auto', 'start', 'center', 'end'], default: 'auto'}})
   assert.deepEqual(limits.status.options.items.items, Layout.STATUS_ITEMS)
   assert.deepEqual(limits.status.options.items.defaults, Layout.STATUS_DEFAULT_ITEMS)
   assert.deepEqual(Object.keys(limits.status.options.items.defaults), Layout.STYLES.status)

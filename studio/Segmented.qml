@@ -87,6 +87,7 @@ Rectangle {
 
         Text {
           id: segmentLabel
+          objectName: "segmentLabel"
           textFormat: Text.PlainText
           anchors.centerIn: parent
           text: segment.modelData.label

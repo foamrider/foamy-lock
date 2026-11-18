@@ -937,9 +937,20 @@ fn look(test: &Test) -> R {
                 ),
         "{catalog}"
     );
+    // Version 6: every element's align, and the field's textAlign.
+    ensure!(
+        at(&catalog, "elementKeys")?
+            .as_array()
+            .is_some_and(|k| k.iter().any(|k| k == "align"))
+            && at(&catalog, "elementLimits.media.align")? == &json!(["start", "center", "end"])
+            && at(&catalog, "elementLimits.password.options.textAlign.values")?
+                == &json!(["auto", "start", "center", "end"])
+            && text(&catalog, "elementLimits.password.options.textAlign.default")? == "auto",
+        "{catalog}"
+    );
     // Version 2: the placement keys and their limits, per element.
     ensure!(
-        num(&catalog, "version")? == 5.0
+        num(&catalog, "version")? == 6.0
             && at(&catalog, "elementKeys")?.as_array().is_some_and(|k| {
                 ["scale", "opacity", "offset", "glass", "screens"]
                     .iter()

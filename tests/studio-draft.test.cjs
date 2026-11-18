@@ -709,6 +709,24 @@ test('the field\'s width, height and text size: clamped to their range, on its s
   assert.deepEqual(plain(Draft.setStyle(own, 'password', 'box')).layout.password, { style: 'box', submit: false, mask: 'bullet', hint: 'muted' })
 })
 
+test('the field\'s text alignment and every module\'s align', () => {
+  const base = { preset: 'foamy' }
+  assert.deepEqual(plain(Draft.setOption(base, 'password', 'textAlign', 'end')), { preset: 'foamy', layout: { password: { textAlign: 'end' } } })
+  assert.deepEqual(plain(Draft.setOption(Draft.setOption(base, 'password', 'textAlign', 'end'), 'password', 'textAlign', 'auto')), base, 'auto is the default')
+  assert.equal(Draft.setOption(base, 'password', 'textAlign', 'right'), base)
+  assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', 'textAlign'), 'auto')
+  // align: any module, one of Layout.ALIGNS; null follows the zone again.
+  for (const name of Layout.ELEMENTS) {
+    const aligned = Draft.setAlign(base, name, 'start')
+    assert.deepEqual(plain(aligned), { preset: 'foamy', layout: { [name]: { align: 'start' } } }, name)
+    assert.deepEqual(plain(Draft.setAlign(aligned, name, null)), base, name + ' cleared')
+    for (const value of ['left', 'Centre', 1, true]) assert.equal(Draft.setAlign(base, name, value), base, `${name} ${value}`)
+  }
+  // It stays when the module moves to another zone, also at the zone's own column.
+  const centred = Draft.setAlign(base, 'clock', 'center')
+  assert.equal(plain(Draft.setZone(centred, 'clock', 'top-start')).layout.clock.align, 'center')
+})
+
 test('status items: an ordered checklist from the style\'s own contents', () => {
   const base = { preset: 'foamy' }
   assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(base))), ['network', 'battery'])

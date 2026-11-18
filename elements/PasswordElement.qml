@@ -57,12 +57,20 @@ Rectangle {
   // the field's text (the arrow follows uiScale only). submit false leaves
   // out the arrow, maskGlyph is the typed characters' glyph and
   // mutedHint draws the unlock hint in the theme's placeholder colour.
+  // textAlign "start", "center" or "end" lines up the hint, the placeholder
+  // and states and the typed characters (logical); "auto" keeps each
+  // style's own (the hint centred, the terminal's at the start; the rest at
+  // the start, the dots' centred).
   property real widthFactor: 1
   property real heightFactor: 1
   property real textSize: 1
   property bool submit: true
   property string maskGlyph: "●"
   property bool mutedHint: false
+  property string textAlign: "auto"
+  readonly property bool textAligned: textAlign !== "auto"
+  // The explicit alignment as a Text alignment (it mirrors with the view).
+  readonly property int textAlignment: textAlign === "center" ? Text.AlignHCenter : textAlign === "end" ? Text.AlignRight : Text.AlignLeft
   readonly property real textScale: uiScale * textSize
   readonly property bool idleShown: reveal === "always"
   readonly property bool surfaceIdleHidden: reveal === "typing" && (underline || box || terminal || card) && !view.showPassword
@@ -241,9 +249,15 @@ Rectangle {
     id: unlockHint
     objectName: "unlockHint"
     readonly property bool contained: field.box || field.card || field.terminal || (field.styleName === "pill" && field.idleShown)
-    readonly property real limit: contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.uiScale)) : field.contentWidth
+    // With textAlign, the hint keeps to the editor's span (its leading
+    // and trailing insets, on screen) and lines up in it.
+    readonly property real leading: field.editorLeading
+    readonly property real trailing: field.dotsOnly || field.terminal ? field.inset : field.fieldLeadingInset
+    readonly property real spanX: hintArea.x + (field.mirrored ? trailing : leading)
+    readonly property real span: Math.max(0, hintArea.width - leading - trailing)
+    readonly property real limit: field.textAligned ? span : contained ? hintArea.width - (field.terminal ? field.inset : Math.round(24 * field.uiScale)) : field.contentWidth
     readonly property color tone: field.mutedHint ? field.view.secondary : field.view.foreground
-    x: !field.terminal ? hintArea.x + (hintArea.width - width) / 2 : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
+    x: field.textAligned ? spanX + (field.textAlign === "center" ? (span - width) / 2 : (field.textAlign === "start") !== field.mirrored ? 0 : span - width) : !field.terminal ? hintArea.x + (hintArea.width - width) / 2 : field.mirrored ? hintArea.x + hintArea.width - field.inset - width : hintArea.x
     y: hintArea.y + (hintArea.height - height) / 2
     spacing: Math.round(10 * field.textScale)
     visible: field.chromeShown && !field.view.showPassword && field.view.showUnlockHint
@@ -267,7 +281,7 @@ Rectangle {
       opacity: !field.mutedHint && (field.dotsOnly || field.terminal) ? 0.82 : 1
       font.family: field.editorFontFamily
       font.pixelSize: Math.round((field.dotsOnly || field.terminal ? 13 : unlockHint.contained ? 14 : 15) * field.textScale)
-      horizontalAlignment: field.terminal ? Text.AlignLeft : Text.AlignHCenter
+      horizontalAlignment: field.textAligned ? field.textAlignment : field.terminal ? Text.AlignLeft : Text.AlignHCenter
       wrapMode: Text.WordWrap
       maximumLineCount: 2
       elide: Text.ElideRight
@@ -431,7 +445,7 @@ Rectangle {
     anchors.top: editorArea.top
     anchors.bottom: editorArea.bottom
     verticalAlignment: TextInput.AlignVCenter
-    horizontalAlignment: field.dotsOnly ? TextInput.AlignHCenter : TextInput.AlignLeft
+    horizontalAlignment: field.textAlign === "center" || (!field.textAligned && field.dotsOnly) ? TextInput.AlignHCenter : field.textAlign === "end" ? TextInput.AlignRight : TextInput.AlignLeft
     activeFocusOnPress: true
     clip: true
     enabled: field.view.inputEnabled && !field.view.authenticatingPassword
@@ -529,7 +543,7 @@ Rectangle {
     font.family: field.editorFontFamily
     font.pixelSize: field.dotsOnly ? Math.round(13 * field.textScale) : field.terminal ? Math.round(15 * field.textScale) : field.fieldFontSize
     font.italic: field.view.errorState
-    horizontalAlignment: field.dotsOnly ? Text.AlignHCenter : Text.AlignLeft
+    horizontalAlignment: field.textAligned ? field.textAlignment : field.dotsOnly ? Text.AlignHCenter : Text.AlignLeft
     verticalAlignment: Text.AlignVCenter
     elide: Text.ElideRight
   }

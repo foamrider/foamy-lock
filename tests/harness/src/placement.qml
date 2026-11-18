@@ -1,5 +1,5 @@
 // Placement shell: the free-placement keys (scale, opacity, offset, glass,
-// screens) on one view, case by case: what the geometry check reports, that
+// screens, align) on one view, case by case: what the geometry check reports, that
 // decorations keep fitting the un-offset zones, that offsets mirror and that
 // `latchFallback: false` only reports; late weather and status readings
 // re-run the check, and the status sources exist only while an item needs
@@ -382,6 +382,210 @@ ShellRoot {
             var field = findNamed(view, "inputField")
             if (field.width !== view.contentWidthAt(view.uiScale))
               fail("the widest terminal leaves the centre column: " + field.width)
+          }
+        }
+      ]
+    },
+    {
+      name: "align: an element's own alignment in its zone, and the field's text",
+      phases: [
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "top-end",
+                  style: "caps",
+                  order: 5
+                },
+                clock: {
+                  zone: "top-end",
+                  style: "bold"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), clock = findNamed(view, "clockLabel")
+            var right = view.width - view.edgeMargin("top")
+            if (!(clock.width > date.width + 20))
+              fail("the case needs a clock wider than the date: " + [clock.width, date.width])
+            // Without align both keep to the zone's edge, as before.
+            if (!near(date.x + date.width, right) || !near(clock.x + clock.width, right) || date.alignment !== "end")
+              fail("the end zone's edge " + [date.x, date.width, clock.x, clock.width, date.alignment])
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "top-end",
+                  style: "caps",
+                  order: 5,
+                  align: "center"
+                },
+                clock: {
+                  zone: "top-end",
+                  style: "bold"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), clock = findNamed(view, "clockLabel")
+            var right = view.width - view.edgeMargin("top")
+            // Centred on the zone's widest element, the clock; it stays at the edge.
+            if (!near(date.x + date.width / 2, clock.x + clock.width / 2) || !near(clock.x + clock.width, right))
+              fail("not centred on the clock: " + [date.x, date.width, clock.x, clock.width])
+            if (date.alignment !== "center" || !sameRect(view.elementRects.date, view.drawnRect("date")) || !near(view.drawnRect("date").x, date.x))
+              fail("the date's alignment or rect " + date.alignment + " " + JSON.stringify(view.drawnRect("date")))
+            shellRoot.saved = {
+              x: date.x,
+              width: date.width
+            }
+          }
+        },
+        {
+          apply: function () {
+            view.rightToLeft = true
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), ltr = shellRoot.saved
+            if (!near(date.x, view.width - ltr.x - ltr.width))
+              fail("not mirrored: " + date.x + " for " + ltr.x)
+          }
+        },
+        {
+          apply: function () {
+            view.rightToLeft = false
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "top-end",
+                  style: "caps",
+                  order: 5,
+                  align: "start"
+                },
+                clock: {
+                  zone: "top-end",
+                  style: "bold"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), clock = findNamed(view, "clockLabel")
+            if (!near(date.x, clock.x))
+              fail("not at the zone's start: " + [date.x, clock.x])
+          }
+        },
+        {
+          // The centre column: text lines up at its start, and a narrower
+          // element (the field) moves to it.
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  align: "start"
+                },
+                password: {
+                  style: "box",
+                  align: "start",
+                  textAlign: "end"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), field = findNamed(view, "inputField")
+            var dateColumn = view.contentWidthAt(view.elementScale("date")), fieldColumn = view.contentWidthAt(view.elementScale("password"))
+            if (date.width !== dateColumn || !near(view.drawnRect("date").x, (view.width - dateColumn) / 2) || !(view.drawnRect("date").width < dateColumn))
+              fail("the date at the column's start " + JSON.stringify(view.drawnRect("date")))
+            if (!near(field.x, (view.width - fieldColumn) / 2) || !sameRect(view.elementRects.password, view.drawnRect("password")))
+              fail("the field at the column's start " + field.x)
+            // The hint ends at the editor's trailing inset, before the box's arrow segment.
+            var hint = findNamed(field, "unlockHint")
+            if (!near(hint.x + hint.width, field.width - field.submitWidth - field.fieldLeadingInset) || findNamed(field, "unlockHintText").horizontalAlignment !== Text.AlignRight)
+              fail("the hint at the end " + [hint.x, hint.width, field.width])
+            if (findNamed(field, "passwordInput").horizontalAlignment !== TextInput.AlignRight)
+              fail("the typed characters at the end")
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "dots",
+                  textAlign: "start"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), hint = findNamed(field, "unlockHint")
+            // Without align the field stays centred; its text starts at the inset.
+            if (!near(field.x, (view.width - field.width) / 2) || !near(hint.x, field.inset))
+              fail("the dots' hint at the start " + [field.x, hint.x])
+            if (findNamed(field, "passwordInput").horizontalAlignment !== TextInput.AlignLeft)
+              fail("the dots' typed characters at the start")
+          }
+        }
+      ]
+    },
+    {
+      name: "align on a narrow screen: the centred corner stack",
+      phases: [
+        {
+          apply: function () {
+            view.width = 800
+            view.height = 1000
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "bottom-start",
+                  style: "caps",
+                  order: -1
+                }
+              }
+            })
+          },
+          check: function () {
+            var date = findNamed(view, "dateLabel"), media = findNamed(view, "mediaRow")
+            if (!view.compactLayout || !(media.width > date.width + 20))
+              fail("the case needs a narrow view and a media wider than the date: " + [view.compactLayout, media.width, date.width])
+            // Without align each element is centred on its own, as before.
+            if (!near(date.x, Math.round((view.width - date.width) / 2)))
+              fail("the date not centred " + date.x)
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "bottom-start",
+                  style: "caps",
+                  order: -1,
+                  align: "start"
+                }
+              }
+            })
+          },
+          check: function () {
+            var date = findNamed(view, "dateLabel"), media = findNamed(view, "mediaRow")
+            // The stack is centred and the date starts where the media does.
+            if (!near(date.x, media.x) || !near(media.x, Math.round((view.width - media.width) / 2)))
+              fail("not at the centred stack's start: " + [date.x, media.x, media.width])
+            view.width = 1920
+            view.height = 1080
           }
         }
       ]

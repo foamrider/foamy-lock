@@ -3,7 +3,7 @@
 // relies on. Pure functions over plain data; the view does the geometry.
 //
 // A layout maps each element to { zone, style, order, hidden } and the
-// optional scale, opacity, offset, glass and screens (see ELEMENT_KEYS), plus
+// optional scale, opacity, offset, glass, screens and align (see ELEMENT_KEYS), plus
 // a few keys of its own on some elements (ELEMENT_OPTIONS). Zones are a
 // 3×3 grid named by row (top, middle, bottom) and column (start, center,
 // end); start and end mean left and right in left-to-right languages and
@@ -32,7 +32,7 @@ var STYLES = {
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]
-var ELEMENT_KEYS = ["zone", "style", "order", "hidden", "scale", "opacity", "offset", "glass", "screens"]
+var ELEMENT_KEYS = ["zone", "style", "order", "hidden", "scale", "opacity", "offset", "glass", "screens", "align"]
 // What the status element can show, in any of its styles (`status.items`).
 var STATUS_ITEMS = ["network", "battery", "volume", "bluetooth", "keyboard", "uptime", "load", "memory"]
 // What each status style shows without `items` (its built-in behaviour):
@@ -71,6 +71,11 @@ var STATUS_DEFAULT_ITEMS = {
 // - password.mask: the glyph each typed character shows as (MASK_GLYPHS).
 // - password.hint: "muted" draws the unlock hint in the theme's placeholder
 //   colour, as the field's other secondary text (default "normal").
+// - password.textAlign: "start", "center" or "end" lines up the hint, the
+//   placeholder and states and the typed characters inside the field
+//   (logical, like `align`). "auto" (the default) is each style's own: the
+//   hint centred (the terminal's at the start), the rest at the start (the
+//   dots' centred).
 // A spec has `values` (one of a list), `range` ({ min, max, step }) or
 // `list` (status.items), and a `fallback` default except for `list`.
 var MASK_GLYPHS = { circle: "\u25cf", bullet: "\u2022", asterisk: "*", square: "\u25a0" }
@@ -81,7 +86,8 @@ var ELEMENT_OPTIONS = {
     textSize: { range: { min: 0.75, max: 1.25, step: 0.05 }, fallback: 1 },
     submit: { values: [true, false], fallback: true },
     mask: { values: Object.keys(MASK_GLYPHS), fallback: "circle" },
-    hint: { values: ["normal", "muted"], fallback: "normal" } },
+    hint: { values: ["normal", "muted"], fallback: "normal" },
+    textAlign: { values: ["auto"].concat(COLUMNS), fallback: "auto" } },
   status: { items: { list: STATUS_ITEMS } },
   media: { artwork: { values: [true, false], fallback: true } },
   weather: { details: { values: ["temperature", "full"], fallback: "temperature" },
@@ -101,6 +107,13 @@ var REVEAL_STYLES = STYLES.password.slice()
 //   draw one; other styles of the element ignore it, and the date (which
 //   has none) rejects the key.
 // - screens: "all", or "primary" (only the screen that gets the keys).
+// - align: "start", "center" or "end" (ALIGNS; logical, they mirror in
+//   right-to-left languages): how the element lines up in its zone, in
+//   place of the zone's column. Its text aligns that way inside it, and an
+//   element narrower than its zone moves to that side: in the centre
+//   column, of the column; at the sides, of the zone's widest element.
+//   Absent, the zone's column decides (as before); once set it stays,
+//   also when the element moves to another zone.
 // The password field has tighter limits, so it stays legible and in reach.
 var LIMITS = {
   scale: { min: 0.5, max: 2, step: 0.05 },
@@ -115,6 +128,7 @@ var PASSWORD_LIMITS = {
   glass: { min: 0.08, max: 1 }
 }
 var SCREENS = ["all", "primary"]
+var ALIGNS = COLUMNS
 // The account and the field already follow the primary screen (see
 // isPrimary); they take no `screens`.
 var SCREENS_ELEMENTS = ["date", "clock", "media", "status", "calendar", "weather"]
@@ -448,6 +462,8 @@ function elementError(name, value) {
       return "layout." + name + ".screens isn't supported: the " + label(name) + " always follows the screen that gets the keys"
     if (SCREENS.indexOf(value.screens) === -1) return "layout." + name + ".screens must be one of " + SCREENS.join(", ")
   }
+  if (value.align !== undefined && ALIGNS.indexOf(value.align) === -1)
+    return "layout." + name + ".align must be one of " + ALIGNS.join(", ")
   return ""
 }
 
@@ -503,7 +519,7 @@ function onStep(value, step) {
 
 // What an editor may offer for each element: the numeric ranges, the
 // styles that draw glass (null: the element takes no `glass`), the
-// `screens` values (null: it takes none) and its own keys (`options`:
+// `screens` values (null: it takes none), the `align` values and its own keys (`options`:
 // { key: { values, default } }, { key: { min, max, step, default } } for a
 // range or, for status.items, { items, defaults } with each style's
 // built-in contents; {} when it has none).
@@ -515,6 +531,7 @@ function elementLimits() {
     out[name] = { scale: limits.scale, opacity: limits.opacity, offset: limits.offset,
       glass: GLASS_STYLES[name] ? { min: limits.glass.min, max: limits.glass.max, styles: GLASS_STYLES[name].slice() } : null,
       screens: SCREENS_ELEMENTS.indexOf(name) !== -1 ? SCREENS.slice() : null,
+      align: ALIGNS.slice(),
       options: elementOptions(name) }
   }
   return out
@@ -867,7 +884,7 @@ if (typeof module !== "undefined") module.exports = {
   THEME_COLORS: THEME_COLORS, BLACK: BLACK, isColor: isColor, solidColor: solidColor,
   isVideoPath: isVideoPath, playsVideo: playsVideo, pausesOnBattery: pausesOnBattery, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
   ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
-  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, MASK_GLYPHS: MASK_GLYPHS, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
+  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, MASK_GLYPHS: MASK_GLYPHS, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS, ALIGNS: ALIGNS,
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, ARTWORK_STYLES: ARTWORK_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
   elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits,

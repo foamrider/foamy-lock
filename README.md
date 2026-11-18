@@ -175,7 +175,7 @@ rebuilt from the elements, shapes and backgrounds here; no code is shared.
 The editor's thumbnails are in `previews/presets` (`tests/harness.sh thumbnails`).
 
 **Layout.** Each element takes `zone`, `style`, `order` and `hidden`, and the
-optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
+optional `scale`, `opacity`, `offset`, `glass`, `screens` and `align` (below the styles):
 
 - **`zone`.** One of `top-start`, `top-center`, `top-end`, `middle-start`,
   `middle-center`, `middle-end`, `bottom-start`, `bottom-center` and
@@ -215,6 +215,7 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 | `password.submit` | `true`, `false` | `true` | `false` leaves out the submit arrow, and in the `box` its segment, so the editor and the hint get the room. Enter still unlocks. The `dots` and `terminal` never draw an arrow. |
 | `password.mask` | `circle` (●), `bullet` (•), `asterisk` (*), `square` (■) | `circle` | The glyph each typed character shows as. |
 | `password.hint` | `normal`, `muted` | `normal` | `muted` draws the unlock hint and its fingerprint icon in the theme's placeholder colour, like the field's other secondary text, instead of the text colour. |
+| `password.textAlign` | `auto`, `start`, `center`, `end` | `auto` | Lines up the text inside the field: the unlock hint, the placeholder, the checking and failure text and the typed characters. `auto` keeps each style's own (the hint centred, at the start in the `terminal`; the typed characters at the start, centred in `dots`). With the others the hint keeps within the editor's insets (wrapping to a second line there if it must) and the `box` keeps it out of the arrow's segment. Start and end mirror in right-to-left languages. The field's position is `align`. |
 | `status.items` | An ordered list of `network`, `battery`, `volume`, `bluetooth`, `keyboard`, `uptime`, `load`, `memory`, each at most once | the style's own (network and battery; the `system` panel's four rows) | What the status shows, in that order, in any style. An item whose source has nothing (no battery, no PipeWire sink, no Bluetooth adapter) is left out. The volume (the default sink, PipeWire), Bluetooth (on or off and connected devices) and keyboard layout (Hyprland's active layout, read with `hyprctl -j devices`; nothing is switched) are read only while their item shows. A line wider than the centre column wraps. |
 | `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low (the `line` and `large` styles show the condition anyway; the `card` always shows everything). |
 | `weather.location` | `true`, `false` | `false` | Shows the forecast's place name. Off by default: anyone can see a lock screen. |
@@ -241,9 +242,10 @@ element draws exactly as its preset says.
 | `offset` | `{ "x": …, "y": … }`, both required, each -0.5 to 0.5 | none | A move from where the zone puts it, as a fraction of the screen's width (`x`) and height (`y`), so one look fits every screen size. `x` mirrors in right-to-left languages, like start and end. The rest of the zone's stack stays where it was, and a shape around its zone keeps fitting the zone, not the moved element (a shape around the module follows it). |
 | `glass` | 0 to 1; the field 0.08 to 1 | the look's `glass.opacity` | The opacity of the element's own glass surface. Only these styles have one: the clock's `analog` and `ring`, the account `chip`, the field's `pill`, `box` and `card`, the media `card`, `pill` and `art`, the status `pill` and `system`, the calendar `card` and `week`, and the weather `pill`, `detailed` and `card`; the element's other styles ignore it. The date has no glass and rejects the key. |
 | `screens` | `all`, `primary` | `all` | `primary` shows the element only on the monitor that receives your keystrokes (or on every monitor until one does). For the date, clock, media, status, calendar and weather; the account and the field already follow that monitor and reject the key. |
+| `align` | `start`, `center`, `end` | the zone's column | How the element lines up in its zone, in place of the zone's column. Its text aligns that way (a date and clock in `top-center` can both start at the column's left edge, or the name under an avatar can start under its left edge). An element narrower than its zone also moves to that side: in a centre zone, of the centre column; in a side zone, of the zone's widest element (a date centred over a wider clock). Start and end mirror in right-to-left languages. Once set, `align` stays when the element moves to another zone. On narrow screens the centred bottom corners centre the stack and align in it. The media and status keep their own inner layout and only move. |
 
 ```json
-"layout": { "clock": { "scale": 1.25, "offset": { "x": -0.1, "y": 0.02 } }, "media": { "glass": 0.4, "screens": "primary" } }
+"layout": { "clock": { "scale": 1.25, "offset": { "x": -0.1, "y": 0.02 } }, "media": { "glass": 0.4, "screens": "primary" }, "date": { "align": "start" } }
 ```
 
 Each password style has a fixed size (its own, times `width` and `height`), so
@@ -443,8 +445,8 @@ every monitor, so a keystroke is never lost.
 the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
-Editors use three more calls on the same target: `catalog` (version 5) lists the elements, zones,
-styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults, or `min`, `max` and `step` for a number; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), shapes (`shapeKinds`, `shapeLimits` and `templates`; `backgroundDecor` for older clients), glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
+Editors use three more calls on the same target: `catalog` (version 6) lists the elements, zones,
+styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, the `align` values, and each element's own keys under `options` with their values and defaults, or `min`, `max` and `step` for a number; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), shapes (`shapeKinds`, `shapeLimits` and `templates`; `backgroundDecor` for older clients), glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
@@ -513,7 +515,7 @@ a warning.
 
 **Element options.** The inspector also sets each element's own keys: the
 password field's **Show the field** (Always, or While typing; each style starts
-from its own), **Typed characters**, **Hint colour** and **Show the arrow**, with
+from its own), **Typed characters**, **Hint colour**, **Field text** and **Show the arrow**, with
 its **Width**, **Height** and **Text** sliders under **Size**, the status's items (a checklist: tick what it shows, reorder by
 the grip or with Alt+Up and Alt+Down; a new style starts from its own contents),
 the weather's details and place name (off by default), and the media's
@@ -546,7 +548,8 @@ the module's own surface and its only background, opened on the shapes page
 (**Edit its shape** once it has one); padding then grows it evenly. The checker
 warns, without blocking Apply, when a module crosses a shape's edge or leaves a
 frame, frosted shapes overlap, or a shape wraps nothing. A module's **Order in
-the zone** has Move up and Move down in zone.
+the zone** has Move up and Move down in zone, and **Alignment** sets `align`:
+**Zone** (no `align`: as its zone), **Start**, **Centre** or **End**.
 
 **A video background.** "Choose picture or video…" offers MP4, MOV, MKV and WebM
 videos too. For a video (or an Omarchy wallpaper that is one) the background page
@@ -896,10 +899,11 @@ they show CPU rendering: no blur, and the avatar's initial instead of a
 picture.
 
 The placement cases (`placement`, also run by `layout` without `--preset`) put
-`scale`, `opacity`, `offset`, `glass` and `screens` on one view: an offset off
+`scale`, `opacity`, `offset`, `glass`, `screens` and `align` on one view: an offset off
 the screen, onto another zone's element, into its own stack or onto the field,
 the field moved above the top third, a scale that overflows, an offset mirrored
-right-to-left, a primary-only element on a secondary view, zone shapes that keep
+right-to-left, a primary-only element on a secondary view, an element aligned in
+a side zone (mirrored) and in the centre column, the field's text alignment, zone shapes that keep
 fitting the un-offset zones and module shapes that follow their modules (offset,
 scale, late media and weather, mirrored), an absorbing box compared pixel for
 pixel with the module's own surface, weather arriving after the check, the weather's

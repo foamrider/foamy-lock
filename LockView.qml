@@ -350,10 +350,18 @@ Item {
     return shown
   }
 
-  // Logical alignment inside the element: mirroring flips it with the text.
+  // Logical alignment inside the element (its own `align`, else its zone's
+  // column): mirroring flips it with the text.
   function elementAlignment(name) {
-    var column = Layout.zoneColumn(placed[name].zone)
-    return column === "center" ? "center" : column
+    return placed[name].align !== undefined ? placed[name].align : Layout.zoneColumn(placed[name].zone)
+  }
+
+  // Where a part `free` px narrower than its box starts in it, on screen,
+  // for a logical alignment.
+  function alignOffset(align, free) {
+    if (align === "center")
+      return free / 2
+    return (align === "start") !== rightToLeft ? 0 : free
   }
 
   function gapBefore(name) {
@@ -403,10 +411,33 @@ Item {
     if (row === "middle" && Layout.zoneColumn(zone) === "end" && middleStacked())
       column = rightToLeft ? "end" : "start"
     // Narrow screens stack the bottom corners under the field.
-    if (column === "center" || (row === "bottom" && compactLayout)) {
+    var centred = column === "center" || (row === "bottom" && compactLayout)
+    if (placed[name].align !== undefined)
+      return alignedX(name, itemWidth, row, column, centred)
+    if (centred) {
       return column === "center" ? (width - itemWidth) / 2 : Math.round((width - itemWidth) / 2)
     }
     return column === "start" ? edgeMargin(row) : width - itemWidth - edgeMargin(row)
+  }
+
+  // The x of an element with its own `align`: it lines up in its zone's
+  // box, the centre column at its scale or, at the sides (and in the narrow
+  // screens' centred corners), as wide as the zone's widest element. Without
+  // `align` zoneX keeps its placement from before the key, exactly.
+  function alignedX(name, itemWidth, row, column, centred) {
+    var box = Math.max(itemWidth, column === "center" ? contentWidthAt(elementScale(name)) : zoneWidth(placed[name].zone, name))
+    var start = centred ? (width - box) / 2 : column === "start" ? edgeMargin(row) : width - box - edgeMargin(row)
+    var x = start + alignOffset(placed[name].align, box - itemWidth)
+    return column === "center" ? x : Math.round(x)
+  }
+
+  // The widest element in the zone's stack as `self` sees it.
+  function zoneWidth(zone, self) {
+    var names = zoneStack(zone, self)
+    var widest = 0
+    for (let i = 0; i < names.length; i++)
+      widest = Math.max(widest, elementItem(names[i]).width)
+    return widest
   }
 
   function placeY(name) {
@@ -444,15 +475,15 @@ Item {
     return compactLayout && stackHeight("middle-start") > 0 && stackHeight("middle-end") > 0
   }
 
-  // The part of an element that draws: text centred in the full-width
-  // center column is narrower than its item.
+  // The part of an element that draws: text in the full-width center
+  // column is narrower than its item, and lines up in it by its alignment.
   function drawnRect(name) {
     var item = elementItem(name)
     var w = item.width
     if (item.naturalWidth !== undefined && Layout.zoneColumn(placed[name].zone) === "center")
       w = Math.min(item.width, Math.ceil(item.naturalWidth))
     return {
-      x: item.x + (item.width - w) / 2,
+      x: item.x + alignOffset(elementAlignment(name), item.width - w),
       y: item.y,
       width: w,
       height: item.height
@@ -995,6 +1026,7 @@ Item {
       submit: Layout.optionValue(root.placed.password, "submit")
       maskGlyph: Layout.maskGlyph(root.placed.password)
       mutedHint: Layout.optionValue(root.placed.password, "hint") === "muted"
+      textAlign: Layout.optionValue(root.placed.password, "textAlign")
       alignment: root.elementAlignment("password")
       x: root.placeX("password", width)
       y: root.placeY("password")

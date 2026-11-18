@@ -420,6 +420,17 @@ function setScreens(draft, name, screens) {
   return editElement(draft, name, function(item) { item.screens = screens })
 }
 
+// How the element lines up in its zone (Layout.ALIGNS); null follows the
+// zone's column again.
+function setAlign(draft, name, align) {
+  var clear = align === null || align === undefined || align === ""
+  if (!clear && Layout.ALIGNS.indexOf(align) === -1) return draft
+  return editElement(draft, name, function(item) {
+    if (clear) delete item.align
+    else item.align = align
+  })
+}
+
 // Back to the zone position (no offset).
 function resetOffset(draft, name) {
   return setOffset(draft, name, { x: 0, y: 0 })
@@ -1065,7 +1076,7 @@ if (typeof module !== "undefined") module.exports = {
   place: place, setZone: setZone, setOffset: setOffset, setScale: setScale, scaleBy: scaleBy, setOrder: setOrder,
   setHidden: setHidden, setPreset: setPreset, presetKeeping: presetKeeping, cleanOffset: cleanOffset, cleanScale: cleanScale,
   setStyle: setStyle, setOpacity: setOpacity, cleanOpacity: cleanOpacity, setGlass: setGlass, glassOf: glassOf, hasGlass: hasGlass,
-  setScreens: setScreens, resetOffset: resetOffset, offsetPixels: offsetPixels, pixelsToSteps: pixelsToSteps, stepsToPixels: stepsToPixels,
+  setScreens: setScreens, setAlign: setAlign, resetOffset: resetOffset, offsetPixels: offsetPixels, pixelsToSteps: pixelsToSteps, stepsToPixels: stepsToPixels,
   SCENE_LIMITS: SCENE_LIMITS, setBackground: setBackground, setPicture: setPicture, setGlassLook: setGlassLook,
   SOURCE_CHOICES: SOURCE_CHOICES, sourceChoice: sourceChoice, chooseSource: chooseSource, hexColor: hexColor, setColor: setColor,
   history: history, push: push, undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo,

@@ -9,7 +9,7 @@ import "Model.js" as Model
 // The inspector for the selected module (mockup A, right pane): whether it
 // shows, its style (drawn tiles), size, opacity and glass, its zone, its
 // place in the zone's stack (Move up / Move down in zone), offset (grid
-// steps, pixels at the screen shown), screens, and "Wrap in a shape" (a box
+// steps, pixels at the screen shown), alignment, screens, and "Wrap in a shape" (a box
 // around it that is its background; "Edit its shape" once it has one). Every
 // change is one Draft edit committed through the window (`app`), so
 // undo and redo cover them; a slider drag shows live (app.preview) and
@@ -299,6 +299,43 @@ FocusScope {
         }
       }
 
+      // password.textAlign: the field's text, or each style's own (auto).
+      // The label sits above: four segments leave no room beside it.
+      ColumnLayout {
+        width: parent.width
+        visible: inspector.name === "password"
+        spacing: FoamyStyle.gapSmall
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.textAlign")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        Segmented {
+          objectName: "studioTextAlign"
+          Layout.alignment: Qt.AlignLeft
+          name: FoamyI18n.t("studio.textAlign")
+          options: inspector.options.password.options.textAlign.values.map(function (v) {
+            return {
+              value: v,
+              label: FoamyI18n.t("studio.textAlign." + v)
+            }
+          })
+          value: Draft.optionOf(inspector.look, "password", "textAlign")
+          onPicked: function (value) {
+            inspector.commit(Draft.setOption(inspector.app.draft, "password", "textAlign", value))
+          }
+        }
+      }
+      PaneNote {
+        visible: inspector.name === "password"
+        text: FoamyI18n.t("studio.textAlign.hint")
+      }
+
       // password.submit: the dots and terminal never draw the arrow.
       StudioToggle {
         objectName: "studioSubmit"
@@ -553,6 +590,41 @@ FocusScope {
           enabled: inspector.zonePlace.at >= 0 && inspector.zonePlace.at < inspector.zonePlace.count - 1
           onClicked: inspector.commit(Draft.moveInZone(inspector.app.draft, inspector.name, 1))
         }
+      }
+
+      // Its own alignment in the zone, or the zone's ("zone": no `align`).
+      // The label sits above: four segments leave no room beside it.
+      ColumnLayout {
+        width: parent.width
+        spacing: FoamyStyle.gapSmall
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.align")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        Segmented {
+          objectName: "studioAlign"
+          Layout.alignment: Qt.AlignLeft
+          name: FoamyI18n.t("studio.align")
+          options: ["zone"].concat(LockLayout.ALIGNS).map(function (a) {
+            return {
+              value: a,
+              label: FoamyI18n.t("studio.align." + a)
+            }
+          })
+          value: inspector.item && inspector.item.align !== undefined ? inspector.item.align : "zone"
+          onPicked: function (value) {
+            inspector.commit(Draft.setAlign(inspector.app.draft, inspector.name, value === "zone" ? null : value))
+          }
+        }
+      }
+      PaneNote {
+        text: FoamyI18n.t("studio.alignHint")
       }
 
       RowLayout {

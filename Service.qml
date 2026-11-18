@@ -2300,6 +2300,8 @@ Item {
     // backgroundDecor stays for older clients (a look may still say decor).
     // Version 5 added the field's width, height, textSize, submit, mask and
     // hint; a range key's options entry is { min, max, step, default }.
+    // Version 6 added every element's align (elementLimits: align) and
+    // the field's textAlign.
     function catalog(): string {
       var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
       var presets = []
@@ -2315,7 +2317,7 @@ Item {
       for (var e = 0; e < Layout.ELEMENTS.length; e++)
         keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
       return JSON.stringify({
-        version: 5,
+        version: 6,
         elements: Layout.ELEMENTS,
         elementKeys: Layout.ELEMENT_KEYS,
         elementKeysFor: keysFor,

@@ -64,7 +64,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 32] = [
+const CAPTURES: [&str; 34] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -97,6 +97,8 @@ const CAPTURES: [&str; 32] = [
     "studio-video-ready",
     "studio-field",
     "studio-field-size",
+    "studio-align",
+    "studio-text-align",
 ];
 /// The lock's entry the app reads (read-only) for the canvas.
 const SHELL_JSON: &str =
