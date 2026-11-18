@@ -1995,6 +1995,28 @@ Item {
     }
   }
 
+  // The compositor's input idle state while locked. Omarchy's idle service
+  // and Hyprland's DPMS settings light the display on input without
+  // runWake, and input the lock surface never sees (a key that only woke
+  // the display) left displayBlanked set with no countdown: the display
+  // stayed lit until unlock. This hears every input, so the first one after
+  // a blank wakes the lock, which counts down again. It ignores inhibitors,
+  // which would hide input (a fullscreen game or video behind the lock).
+  // Enabled for the whole lock, so it is already idle when the display
+  // blanks and the next input, however soon, reads as activity.
+  IdleMonitor {
+    id: lockInputMonitor
+    enabled: root.lockRequested
+    timeout: 1
+    respectInhibitors: false
+    onIsIdleChanged: {
+      if (isIdle || !root.lockRequested || !root.displayBlanked)
+        return
+      root.logEvent("wake: input while blanked")
+      root.runWake()
+    }
+  }
+
   Timer {
     id: sessionLockStabilizeTimer
     interval: 500

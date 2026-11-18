@@ -112,6 +112,12 @@ The automatic **lock** timeout remains Omarchy's `idle.lock` setting. This plugi
 password check and wake handling are preserved; a running password check pauses
 the blanking timer. Fingerprint waiting does not prevent blanking.
 
+Any input while the display is blanked starts the timer again, also input the lock
+screen itself never receives, such as a key press that Omarchy or Hyprland only
+uses to turn the display back on. The lock reads this from the compositor's input
+idle state (`ext-idle-notify`), ignoring idle inhibitors, so a fullscreen game or
+video behind the lock does not keep the display lit.
+
 The plugin reads the same `~/.config/omarchy/shell.json` and
 `~/.local/state/omarchy/current/background` paths as Omarchy. It stores its derived
 avatar thumbnail at `$XDG_CACHE_HOME/omarchy/foamy.lock/avatar.png`, falling back to

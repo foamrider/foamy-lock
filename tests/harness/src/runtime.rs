@@ -25,6 +25,7 @@ const SHELL: &str = include_str!("runtime.qml");
 const SESSION_LOCK: &str = include_str!("../fixtures/mocks/SessionLock.qml");
 const PAM_CONTEXT: &str = include_str!("../fixtures/mocks/PamContext.qml");
 const LOCK_VIEW: &str = include_str!("../fixtures/mocks/LockView.qml");
+const IDLE_MONITOR: &str = include_str!("../fixtures/mocks/IdleMonitor.qml");
 const PNG_MAGIC: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 /// shell.json's default: the stock lock plugin is disabled.
 const STOCK_OFF: &[&str] = &["omarchy.lock"];
@@ -136,6 +137,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
   property alias testWake: wakeProcess
   property alias testBlank: blankProcess
   property alias testIdleBlank: idleBlankTimer
+  property alias testInputIdle: lockInputMonitor
   property alias testPasswd: passwdIdentityProc
   property alias testAccounts: accountsIdentityProc
   property alias testFingerprintCheck: fingerprintCheckProc
@@ -153,6 +155,7 @@ fn patch_service(service: &str, pam: &Path) -> R<String> {
         ("    WlSessionLockSurface {", "    Rectangle {"),
         ("  PamContext {", "  Mock.PamContext {"),
         ("LockView {", "Mock.LockView {"),
+        ("  IdleMonitor {", "  Mock.IdleMonitor {"),
         ("  PanelWindow {", "  Rectangle {"),
         // A video wallpaper's still comes from the helper's video-probe; a
         // stand-in answers here ($HOME/fake-video-probe: missing is a
@@ -347,6 +350,7 @@ impl Test {
         write(&app.join("mocks/SessionLock.qml"), SESSION_LOCK)?;
         write(&app.join("mocks/PamContext.qml"), PAM_CONTEXT)?;
         write(&app.join("mocks/LockView.qml"), LOCK_VIEW)?;
+        write(&app.join("mocks/IdleMonitor.qml"), IDLE_MONITOR)?;
         let pam = base.join("pam-password");
         write(&pam, "")?;
         let service = read(&source.join("Service.qml"))?;
@@ -600,6 +604,7 @@ fn scenarios(test: &Test) -> R {
     stranded(test)?;
     display_commands(test)?;
     blank_after_resume(test)?;
+    blank_after_outside_wake(test)?;
     probe_deadlines(test)?;
     test.test("missingPam")?;
     ensure!(test.lock("lock")? == "missing-pam");
@@ -2580,6 +2585,99 @@ fn blank_after_resume(test: &Test) -> R {
     Ok(())
 }
 
+/// Input the lock surface never sees (a key that only wakes the display)
+/// still reaches the compositor's input idle state. Omarchy's idle service
+/// and Hyprland light the display on it without the lock; the lock wakes
+/// from that state too, so its countdown blanks the display again.
+fn blank_after_outside_wake(test: &Test) -> R {
+    let calls = test.path("calls");
+    let count = |name: &str| {
+        fs::read_to_string(&calls)
+            .map(|text| text.lines().filter(|line| *line == name).count())
+            .unwrap_or(0)
+    };
+    let wakes = || count("omarchy-system-wake");
+    let displays = || count("omarchy-brightness-display");
+    let display = || test.test_json("displayCommands");
+    let settled = || -> R {
+        test.wait_for(|_| {
+            let state = display()?;
+            Ok(!on(&state, "wake")? && !on(&state, "blank")?)
+        })
+        .map(drop)
+    };
+    let input_idle = |idle: bool| -> R {
+        test.test_args("inputIdle", &[if idle { "true" } else { "false" }])
+            .map(drop)
+    };
+    test.write_config(STOCK_OFF, json!({"blankAfterSec": 2}))?;
+    test.wait_for(|s| Ok(num(s, "settings.blankAfterSec")? == 2.0))?;
+    ensure!(
+        !on(&display()?, "inputWatched")?,
+        "no input watch while unlocked"
+    );
+    ensure!(test.lock("lock")? == "ok");
+    test.wait_for(|s| on(s, "secure"))?;
+    let state = display()?;
+    ensure!(
+        on(&state, "inputWatched")? && !on(&state, "inputRespectsInhibitors")?,
+        "the lock watches input, past inhibitors (a fullscreen game or video behind the lock): {state}"
+    );
+
+    // Input while lit is the lock surface's: no wake from the idle state.
+    // (A wake first: a fresh 2 s countdown for the checks below.)
+    test.test("wake")?;
+    settled()?;
+    let before = wakes();
+    input_idle(true)?;
+    input_idle(false)?;
+    ms(400);
+    ensure!(wakes() == before, "no wake while the display is lit");
+
+    // The countdown blanks the display, and the user is idle.
+    input_idle(true)?;
+    let blanks = displays();
+    test.wait_for(|_| {
+        let state = display()?;
+        Ok(displays() == blanks + 1 && on(&state, "blanked")? && !on(&state, "blank")?)
+    })?;
+
+    // Input outside the lock surface: the lock wakes and counts down again.
+    let before = wakes();
+    input_idle(false)?;
+    test.wait_for(|_| {
+        let state = display()?;
+        Ok(wakes() == before + 1 && !on(&state, "blanked")? && on(&state, "blankArmed")?)
+    })?;
+    input_idle(true)?;
+    test.wait_for(|_| Ok(displays() == blanks + 2 && on(&display()?, "blanked")?))?;
+    ensure!(wakes() == before + 1, "one wake for one input");
+
+    test.submit("test-password")?;
+    test.wait_for(|s| Ok(!on(s, "locked")?))?;
+    ensure!(
+        !on(&display()?, "inputWatched")?,
+        "the input watch ends with the lock"
+    );
+    // After the unlock, input wakes nothing from the idle state.
+    settled()?;
+    ms(400);
+    let before = wakes();
+    input_idle(true)?;
+    input_idle(false)?;
+    ms(400);
+    ensure!(
+        wakes() == before,
+        "no wake from the idle state after unlock"
+    );
+    test.write_config(STOCK_OFF, json!({}))?;
+    test.wait_for(|s| Ok(num(s, "settings.blankAfterSec")? == 30.0))?;
+    println!(
+        "PASS: input outside the lock surface (the compositor's input idle state, past inhibitors) wakes a blanked lock and it blanks again; no wake from it while lit or after unlock"
+    );
+    Ok(())
+}
+
 /// The account and fingerprint probes end at their deadlines (2 s here)
 /// with their children; later probes still run.
 fn probe_deadlines(test: &Test) -> R {
@@ -2675,6 +2773,8 @@ Item {
       }
     }
   }
+  IdleMonitor {
+  }
   PamContext { config: \"/etc/pam.d/omarchy-lock-password\" }
   PamContext { config: \"/etc/pam.d/omarchy-lock-fingerprint\" }
   PanelWindow {
@@ -2726,6 +2826,8 @@ Item {
             2
         );
         assert_eq!(patched.matches("Mock.LockView {").count(), 2);
+        assert_eq!(patched.matches("  Mock.IdleMonitor {").count(), 1);
+        assert!(patched.contains("property alias testInputIdle: lockInputMonitor\n"));
         assert!(
             patched
                 .contains("  Rectangle {\n    width: 800; height: 600\n      WlrLayershell.deeper")
