@@ -84,8 +84,15 @@ ShellRoot {
         blanked: service.displayBlanked,
         blankQueued: service.blankAfterWake,
         blankInterval: service.testIdleBlank.interval,
-        blankArmed: service.testIdleBlank.running
+        blankArmed: service.testIdleBlank.running,
+        inputWatched: service.testInputIdle.enabled,
+        inputRespectsInhibitors: service.testInputIdle.respectInhibitors
       })
+    }
+    // The compositor's input idle state, as the lock's IdleMonitor hears it.
+    function inputIdle(value: bool): string {
+      service.testInputIdle.isIdle = value
+      return "ok"
     }
     // runBlank, and the display commands as it left them (one call, so the
     // wake it may wait for is still the one that was running).
