@@ -1456,6 +1456,58 @@ Item {
       }
     },
     {
+      name: "inspector: the field's width, height, text, mask, hint and arrow",
+      wait: 0,
+      run: function (next) {
+        reset()
+        studio.selectModule("password")
+        find(studio.inspector, "studioStyles").picked("box")
+        var field = view.elementItem("password")
+        var width = find(studio.inspector, "studioWidth"), height = find(studio.inspector, "studioHeight")
+        var text = find(studio.inspector, "studioTextSize")
+        expect(width && height && text && width.visible && width.value === 1 && width.from === 0.75 && width.to === 1.75, "the field's sliders")
+        expect(text.valueText === FoamyI18n.t("studio.percent", 100), "shown in percent: " + text.valueText)
+        width.committed(1.3)
+        height.committed(1.2)
+        text.committed(0.85)
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","width":1.3,"height":1.2,"textSize":0.85}}}')
+        expect(field.width === Math.min(Math.round(360 * view.uiScale * 1.3), view.contentWidthAt(view.uiScale)), "the canvas field's width " + field.width)
+        // A drag previews without a step; the release commits one.
+        width.moved(1.5)
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","width":1.3,"height":1.2,"textSize":0.85}}}')
+        width.committed(1.3)
+        var mask = find(studio.inspector, "studioMask"), hint = find(studio.inspector, "studioHintTone")
+        expect(mask.value === "circle" && mask.options[0].label === "\u25cf" && mask.options[0].name === FoamyI18n.t("studio.mask.circle"), "the mask choice: " + json(mask.options))
+        mask.picked("square")
+        expect(hint.value === "normal", "the hint tone " + hint.value)
+        hint.picked("muted")
+        var submit = find(studio.inspector, "studioSubmit")
+        expect(submit.enabled && submit.checked, "the box's arrow")
+        submit.toggled()
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","width":1.3,"height":1.2,"textSize":0.85,"mask":"square","hint":"muted","submit":false}}}')
+        expect(field.input.passwordCharacter === "\u25a0" && field.mutedHint && !find(field, "boxDivider").visible, "the canvas field follows")
+        studio.inspector.reveal(submit)
+        capture("studio-field", function () {
+          studio.inspector.reveal(text)
+          capture("studio-field-size", function () {
+            // The dots and terminal have no arrow to leave out.
+            find(studio.inspector, "studioStyles").picked("terminal")
+            expect(!submit.enabled && find(studio.inspector, "studioSubmitNote").text === FoamyI18n.t("studio.submit.none", studio.styleLabel("terminal")), "the terminal's arrow note")
+            submit.toggled()
+            expect(studio.look.elements.password.submit === false, "a disabled switch changes nothing")
+            var undos = 0
+            while (Draft.canUndo(studio.history)) {
+              studio.undo()
+              undos++
+            }
+            // Committing the width it already had is no step.
+            expect(undos === 8, "undo steps " + undos)
+            next()
+          })
+        })
+      }
+    },
+    {
       name: "inspector: the status items",
       wait: 0,
       run: function (next) {

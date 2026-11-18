@@ -687,6 +687,28 @@ test('each element\'s own keys survive the sparse entry and drop out at their de
   assert.ok(Layout.parseLook(moved).valid && Layout.parseLook(typing).valid)
 })
 
+test('the field\'s width, height and text size: clamped to their range, on its steps', () => {
+  const base = { preset: 'foamy' }
+  for (const [key, min, max] of [['width', 0.75, 1.75], ['height', 0.8, 1.5], ['textSize', 0.75, 1.25]]) {
+    assert.deepEqual(plain(Draft.setOption(base, 'password', key, 1.2)), { preset: 'foamy', layout: { password: { [key]: 1.2 } } }, key)
+    // A slider's float noise and a value between steps land on a step.
+    assert.equal(plain(Draft.setOption(base, 'password', key, 1.1000000000000003)).layout.password[key], 1.1, key)
+    assert.equal(plain(Draft.setOption(base, 'password', key, 1.12)).layout.password[key], 1.1, key)
+    assert.equal(plain(Draft.setOption(base, 'password', key, 9)).layout.password[key], max, key)
+    assert.equal(plain(Draft.setOption(base, 'password', key, 0)).layout.password[key], min, key)
+    assert.deepEqual(plain(Draft.setOption(Draft.setOption(base, 'password', key, 1.2), 'password', key, 1)), base, key + ' back to the default')
+    for (const value of [null, '', 'wide', true, NaN, Infinity])
+      assert.equal(Draft.setOption(base, 'password', key, value), base, `${key} ${value}`)
+    assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', key), 1, key)
+  }
+  assert.equal(Draft.setOption(base, 'clock', 'width', 1.2), base, 'a key of another module is refused')
+  const own = Draft.setOption(Draft.setOption(Draft.setOption(base, 'password', 'submit', false), 'password', 'mask', 'bullet'), 'password', 'hint', 'muted')
+  assert.deepEqual(plain(own), { preset: 'foamy', layout: { password: { submit: false, mask: 'bullet', hint: 'muted' } } })
+  assert.equal(Draft.setOption(base, 'password', 'mask', '\u2022'), base, 'a glyph is not a mask name')
+  // Another edit and a style change keep them.
+  assert.deepEqual(plain(Draft.setStyle(own, 'password', 'box')).layout.password, { style: 'box', submit: false, mask: 'bullet', hint: 'muted' })
+})
+
 test('status items: an ordered checklist from the style\'s own contents', () => {
   const base = { preset: 'foamy' }
   assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(base))), ['network', 'battery'])

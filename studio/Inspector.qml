@@ -238,6 +238,85 @@ FocusScope {
         text: FoamyI18n.t("studio.reveal.hint")
       }
 
+      // password.mask: the typed characters' glyph, drawn as its own label.
+      RowLayout {
+        width: parent.width
+        visible: inspector.name === "password"
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.mask")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        Segmented {
+          objectName: "studioMask"
+          name: FoamyI18n.t("studio.mask")
+          options: inspector.options.password.options.mask.values.map(function (v) {
+            return {
+              value: v,
+              label: LockLayout.MASK_GLYPHS[v],
+              name: FoamyI18n.t("studio.mask." + v)
+            }
+          })
+          value: Draft.optionOf(inspector.look, "password", "mask")
+          onPicked: function (value) {
+            inspector.commit(Draft.setOption(inspector.app.draft, "password", "mask", value))
+          }
+        }
+      }
+
+      // password.hint: the unlock hint in the text colour or muted.
+      RowLayout {
+        width: parent.width
+        visible: inspector.name === "password"
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          text: FoamyI18n.t("studio.hintTone")
+          horizontalAlignment: Text.AlignLeft
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.body
+          wrapMode: Text.Wrap
+        }
+        Segmented {
+          objectName: "studioHintTone"
+          name: FoamyI18n.t("studio.hintTone")
+          options: inspector.options.password.options.hint.values.map(function (v) {
+            return {
+              value: v,
+              label: FoamyI18n.t("studio.hintTone." + v)
+            }
+          })
+          value: Draft.optionOf(inspector.look, "password", "hint")
+          onPicked: function (value) {
+            inspector.commit(Draft.setOption(inspector.app.draft, "password", "hint", value))
+          }
+        }
+      }
+
+      // password.submit: the dots and terminal never draw the arrow.
+      StudioToggle {
+        objectName: "studioSubmit"
+        width: parent.width
+        visible: inspector.name === "password"
+        enabled: !!inspector.item && inspector.item.style !== "dots" && inspector.item.style !== "terminal"
+        opacity: enabled ? 1 : FoamyStyle.disabledOpacity
+        text: FoamyI18n.t("studio.submit")
+        checked: Draft.optionOf(inspector.look, "password", "submit") === true
+        onToggled: if (enabled)
+          inspector.commit(Draft.setOption(inspector.app.draft, "password", "submit", !checked))
+      }
+      PaneNote {
+        objectName: "studioSubmitNote"
+        visible: inspector.name === "password"
+        text: inspector.item && (inspector.item.style === "dots" || inspector.item.style === "terminal") ? FoamyI18n.t("studio.submit.none", inspector.app ? inspector.app.styleLabel(inspector.item.style) : "") : FoamyI18n.t("studio.submit.hint")
+      }
+
       // status.items: an ordered checklist.
       ItemChecklist {
         id: itemChecklist
@@ -328,6 +407,28 @@ FocusScope {
         }
         onCommitted: function (v) {
           inspector.commit(Draft.setScale(inspector.app.draft, inspector.name, v))
+        }
+      }
+      // The field's own width, height and text size (password only).
+      Repeater {
+        model: inspector.name === "password" ? ["width", "height", "textSize"] : []
+        StudioSlider {
+          required property string modelData
+          readonly property var range: inspector.options.password.options[modelData]
+          objectName: "studio" + modelData.charAt(0).toUpperCase() + modelData.slice(1)
+          width: parent.width
+          label: FoamyI18n.t("studio.field." + modelData)
+          from: range.min
+          to: range.max
+          stepSize: range.step
+          value: Draft.optionOf(inspector.look, "password", modelData)
+          valueText: FoamyI18n.t("studio.percent", Math.round(shown * 100))
+          onMoved: function (v) {
+            inspector.preview(Draft.setOption(inspector.app.draft, "password", modelData, v))
+          }
+          onCommitted: function (v) {
+            inspector.commit(Draft.setOption(inspector.app.draft, "password", modelData, v))
+          }
         }
       }
       StudioSlider {

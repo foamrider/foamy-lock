@@ -2,7 +2,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "kit"
 
-// A segmented choice: `options` is [{ value, label }], `value` is bound by
+// A segmented choice: `options` is [{ value, label, name }] (`name`, optional,
+// is the segment's spoken name where the label is a glyph), `value` is bound by
 // the caller and `picked(value)` asks for a change (it never assigns
 // `value` itself). Left and Right move the choice (mirrored right-to-left).
 // `caption` (optional) titles the group inside it, before the first segment.
@@ -80,7 +81,7 @@ Rectangle {
         color: selected ? FoamyPalette.selectedFill : segmentMouse.containsMouse ? FoamyPalette.hoverFill : "transparent"
 
         Accessible.role: Accessible.PageTab
-        Accessible.name: modelData.label
+        Accessible.name: modelData.name || modelData.label
         Accessible.selected: selected
         Accessible.onPressAction: control.picked(modelData.value)
 

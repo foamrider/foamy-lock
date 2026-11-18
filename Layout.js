@@ -58,8 +58,30 @@ var STATUS_DEFAULT_ITEMS = {
 // - media.artwork: false shows the music icon in place of the player's
 //   cover in this look, and no artwork is prepared for it (default true;
 //   the showArtwork setting still decides whether there is any).
+// The field's shape and text, each optional:
+// - password.width and password.height: a multiple of the style's own
+//   width and height (default 1), in steps of 0.05. The field never grows
+//   past the centre column (contentWidthAt). The card's height is its
+//   inner pill's; the greeting above keeps its room.
+// - password.textSize: a multiple of the field's text (the hint, the
+//   placeholder and states, the dots, the prompt, the greeting and the
+//   notice), on top of `scale` (default 1). The arrow follows `scale` only.
+// - password.submit: false leaves out the submit arrow (Enter still
+//   submits; the dots and terminal never draw one).
+// - password.mask: the glyph each typed character shows as (MASK_GLYPHS).
+// - password.hint: "muted" draws the unlock hint in the theme's placeholder
+//   colour, as the field's other secondary text (default "normal").
+// A spec has `values` (one of a list), `range` ({ min, max, step }) or
+// `list` (status.items), and a `fallback` default except for `list`.
+var MASK_GLYPHS = { circle: "\u25cf", bullet: "\u2022", asterisk: "*", square: "\u25a0" }
 var ELEMENT_OPTIONS = {
-  password: { reveal: { values: ["always", "typing"], fallback: "always", styleDefaults: { pill: "typing", dots: "typing" } } },
+  password: { reveal: { values: ["always", "typing"], fallback: "always", styleDefaults: { pill: "typing", dots: "typing" } },
+    width: { range: { min: 0.75, max: 1.75, step: 0.05 }, fallback: 1 },
+    height: { range: { min: 0.8, max: 1.5, step: 0.05 }, fallback: 1 },
+    textSize: { range: { min: 0.75, max: 1.25, step: 0.05 }, fallback: 1 },
+    submit: { values: [true, false], fallback: true },
+    mask: { values: Object.keys(MASK_GLYPHS), fallback: "circle" },
+    hint: { values: ["normal", "muted"], fallback: "normal" } },
   status: { items: { list: STATUS_ITEMS } },
   media: { artwork: { values: [true, false], fallback: true } },
   weather: { details: { values: ["temperature", "full"], fallback: "temperature" },
@@ -434,8 +456,8 @@ function elementKeys(name) {
   return ELEMENT_KEYS.concat(Object.keys(ELEMENT_OPTIONS[name] || {}))
 }
 
-// One element-only key: a value from its list, or (status.items) an ordered
-// list of distinct names. "" when valid.
+// One element-only key: a value from its list, a number on its range's
+// steps, or (status.items) an ordered list of distinct names. "" when valid.
 function optionError(name, key, spec, value) {
   var path = "layout." + name + "." + key
   if (spec.list) {
@@ -445,6 +467,11 @@ function optionError(name, key, spec, value) {
       if (spec.list.indexOf(value[i]) === -1) return path + " must only name " + spec.list.join(", ")
       if (value.indexOf(value[i]) !== i) return path + " names " + value[i] + " twice"
     }
+    return ""
+  }
+  if (spec.range) {
+    if (!(inRange(value, spec.range) && onStep(value, spec.range.step)))
+      return path + " must be a number from " + spec.range.min + " to " + spec.range.max + " in steps of " + spec.range.step
     return ""
   }
   if (spec.values.indexOf(value) === -1) {
@@ -477,8 +504,9 @@ function onStep(value, step) {
 // What an editor may offer for each element: the numeric ranges, the
 // styles that draw glass (null: the element takes no `glass`), the
 // `screens` values (null: it takes none) and its own keys (`options`:
-// { key: { values, default } } or, for status.items, { items, defaults }
-// with each style's built-in contents; {} when it has none).
+// { key: { values, default } }, { key: { min, max, step, default } } for a
+// range or, for status.items, { items, defaults } with each style's
+// built-in contents; {} when it has none).
 function elementLimits() {
   var out = {}
   for (var i = 0; i < ELEMENTS.length; i++) {
@@ -498,6 +526,7 @@ function elementOptions(name) {
   for (var key in options) {
     var spec = options[key]
     out[key] = spec.list ? { items: spec.list.slice(), defaults: copy(STATUS_DEFAULT_ITEMS) }
+      : spec.range ? { min: spec.range.min, max: spec.range.max, step: spec.range.step, default: spec.fallback }
       : { values: spec.values.slice(), default: spec.fallback }
   }
   if (name === "password") {
@@ -527,7 +556,30 @@ function optionFollowsStyle(key) {
 
 // The field's effective reveal: its own, else its style's default.
 function revealOf(item) {
-  return item && item.reveal !== undefined ? item.reveal : optionDefault("reveal", item ? item.style : "")
+  return optionValue(item, "reveal")
+}
+
+// An element-only key's effective value: the item's own, else its default
+// for the item's style.
+function optionValue(item, key) {
+  return item && item[key] !== undefined ? item[key] : optionDefault(key, item ? item.style : "")
+}
+
+// The glyph the field masks each typed character with.
+function maskGlyph(item) {
+  var name = optionValue(item, "mask")
+  return MASK_GLYPHS.hasOwnProperty(name) ? MASK_GLYPHS[name] : MASK_GLYPHS.circle
+}
+
+// A range key's spec, by key (each key belongs to one element), or null.
+function optionRange(key) {
+  for (var name in ELEMENT_OPTIONS) if (ELEMENT_OPTIONS[name][key] && ELEMENT_OPTIONS[name][key].range) return ELEMENT_OPTIONS[name][key].range
+  return null
+}
+
+// A value on its range's step, without binary-fraction noise (1.15, not 1.1500000000000001).
+function onRangeStep(value, range) {
+  return Math.round(Math.round(value / range.step) * range.step * 1e6) / 1e6
 }
 
 // The element-only keys with a default (each key belongs to one element;
@@ -552,6 +604,8 @@ function canonicalElement(item) {
   }
   for (var o = 0; o < OPTION_KEYS.length; o++) {
     var option = OPTION_KEYS[o]
+    var range = optionRange(option)
+    if (range && typeof item[option] === "number") item[option] = onRangeStep(item[option], range)
     if (item[option] !== undefined && item[option] === optionDefault(option, item.style)) delete item[option]
   }
   if (Array.isArray(item.items)) item.items = item.items.slice()
@@ -813,11 +867,11 @@ if (typeof module !== "undefined") module.exports = {
   THEME_COLORS: THEME_COLORS, BLACK: BLACK, isColor: isColor, solidColor: solidColor,
   isVideoPath: isVideoPath, playsVideo: playsVideo, pausesOnBattery: pausesOnBattery, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
   ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
-  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
+  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, MASK_GLYPHS: MASK_GLYPHS, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, ARTWORK_STYLES: ARTWORK_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
   elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits,
-  optionDefault: optionDefault, optionFollowsStyle: optionFollowsStyle, revealOf: revealOf, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
+  optionDefault: optionDefault, optionFollowsStyle: optionFollowsStyle, revealOf: revealOf, optionValue: optionValue, maskGlyph: maskGlyph, optionRange: optionRange, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError,
   canonical: canonical, isOffset: isOffset, lookGeometryError: lookGeometryError
 }

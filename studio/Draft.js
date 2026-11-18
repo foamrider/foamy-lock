@@ -292,12 +292,21 @@ function setStyle(draft, name, style) {
 // --- an element's own keys (round 2) -----------------------------------------
 //
 // password.reveal, weather.details and weather.location take one value of
-// a list (Layout.ELEMENT_OPTIONS; the default drops out of the entry), and
-// status.items an ordered list of Layout.STATUS_ITEMS.
+// a list (Layout.ELEMENT_OPTIONS; the default drops out of the entry), the
+// field's width, height and textSize a number on their range's steps
+// (clamped to it, as a slider gives), and status.items an ordered list of
+// Layout.STATUS_ITEMS.
 
 function setOption(draft, name, key, value) {
   var spec = (Layout.ELEMENT_OPTIONS[name] || {})[key]
-  if (!spec || spec.list || spec.values.indexOf(value) === -1) return draft
+  if (!spec || spec.list) return draft
+  if (spec.range) {
+    if (value === null || value === "" || typeof value === "boolean" || !isFinite(Number(value))) return draft
+    var range = spec.range
+    var stepped = roundTo(Math.round(clamp(Number(value), range.min, range.max) / range.step) * range.step, 6)
+    return editElement(draft, name, function(item) { item[key] = stepped })
+  }
+  if (spec.values.indexOf(value) === -1) return draft
   return editElement(draft, name, function(item) { item[key] = value })
 }
 

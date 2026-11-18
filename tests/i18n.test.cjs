@@ -48,6 +48,9 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['mugshot', 'drag', 'keys'].map(t => 'tip.' + t),
   // Each element's own keys (Inspector.qml): their values, and the status items.
   ...Layout.ELEMENT_OPTIONS.password.reveal.values.map(v => 'reveal.' + v),
+  ...Layout.ELEMENT_OPTIONS.password.mask.values.map(v => 'mask.' + v),
+  ...Layout.ELEMENT_OPTIONS.password.hint.values.map(v => 'hintTone.' + v),
+  ...['width', 'height', 'textSize'].map(k => 'field.' + k),
   ...Layout.ELEMENT_OPTIONS.weather.details.values.map(v => 'details.' + v),
   ...Layout.STATUS_ITEMS.map(i => 'item.' + i),
   // Cover art (Inspector.qml): each mode's name and note.

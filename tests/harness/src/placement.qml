@@ -108,6 +108,10 @@ ShellRoot {
   function exact(a, b) {
     return Math.abs(a - b) < 1e-6
   }
+  // Two colours within a step of 8 bits (colours keep finer components).
+  function sameColor(a, b) {
+    return Math.abs(a.r - b.r) <= 1 / 255 && Math.abs(a.g - b.g) <= 1 / 255 && Math.abs(a.b - b.b) <= 1 / 255 && Math.abs(a.a - b.a) <= 1 / 255
+  }
   // The shapes drawn, in drawing order.
   function surfaces() {
     return findNamed(view, "decoration").surfaces
@@ -270,6 +274,114 @@ ShellRoot {
               fail("media glass " + media.color.a + " vs " + view.glass.a)
             if (!near(field.color.a * 1000, view.glassAt(0.5).a * 1000))
               fail("field glass " + field.color.a)
+          }
+        }
+      ]
+    },
+    {
+      name: "the field's width, height, text size, arrow, mask and hint",
+      phases: [
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "box"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), u = view.uiScale
+            if (field.width !== Math.round(360 * u) || field.height !== Math.round(56 * u))
+              fail("the box's own size " + [field.width, field.height])
+            if (!findNamed(field, "boxDivider").visible || !findNamed(field, "submitArrow").visible)
+              fail("the box draws its arrow segment by default")
+            if (findNamed(field, "passwordInput").passwordCharacter !== "\u25cf")
+              fail("the default mask " + findNamed(field, "passwordInput").passwordCharacter)
+            var hint = findNamed(field, "unlockHintText")
+            if (hint.font.pixelSize !== Math.round(14 * u) || !sameColor(hint.color, view.foreground))
+              fail("the default hint " + [hint.font.pixelSize, hint.color])
+            shellRoot.saved = findNamed(field, "unlockHint").limit
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "box",
+                  width: 1.3,
+                  height: 1.2,
+                  textSize: 0.85,
+                  submit: false,
+                  mask: "square",
+                  hint: "muted"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), u = view.uiScale
+            if (field.width !== Math.min(Math.round(360 * u * 1.3), view.contentWidthAt(u)) || field.height !== Math.round(56 * u * 1.2))
+              fail("the box's factors " + [field.width, field.height])
+            if (!sameRect(view.elementRects.password, view.drawnRect("password")) || !near(view.elementRects.password.width, field.width))
+              fail("the overlay rect doesn't follow the field " + JSON.stringify(view.elementRects.password))
+            if (findNamed(field, "boxDivider").visible || findNamed(field, "submitArrow").visible)
+              fail("submit false still draws the arrow segment")
+            if (findNamed(field, "passwordInput").passwordCharacter !== "\u25a0")
+              fail("the square mask " + findNamed(field, "passwordInput").passwordCharacter)
+            var hint = findNamed(field, "unlockHintText")
+            if (hint.font.pixelSize !== Math.round(14 * u * 0.85))
+              fail("the hint's text size " + hint.font.pixelSize)
+            if (!sameColor(hint.color, view.secondary) || hint.opacity !== 1)
+              fail("the muted hint " + [hint.color, hint.opacity])
+            // The arrow's segment is the hint's room now.
+            var limit = findNamed(field, "unlockHint").limit
+            if (hint.lineCount !== 1 || !(limit > shellRoot.saved))
+              fail("the hint got no room: " + [hint.lineCount, limit, shellRoot.saved])
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "card",
+                  height: 1.2,
+                  textSize: 1.25
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), u = view.uiScale
+            // The inner pill takes the factor; the greeting keeps its room.
+            if (field.height !== Math.round((88 + 50 * 1.2) * u) || findNamed(field, "cardPill").height !== Math.round(50 * u * 1.2))
+              fail("the card's height " + [field.height, findNamed(field, "cardPill").height])
+            if (findNamed(field, "cardGreeting").font.pixelSize !== Math.round(20 * u * 1.25))
+              fail("the greeting's text size " + findNamed(field, "cardGreeting").font.pixelSize)
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "terminal",
+                  width: 1.75
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField")
+            if (field.width !== view.contentWidthAt(view.uiScale))
+              fail("the widest terminal leaves the centre column: " + field.width)
           }
         }
       ]

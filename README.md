@@ -210,6 +210,11 @@ optional `scale`, `opacity`, `offset`, `glass` and `screens` (below the styles):
 | Key | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | `password.reveal` | `always`, `typing` | `typing` for `pill` and `dots`, `always` for the others (each style's drawing before 1.3.0) | `typing` shows only the unlock hint until you type or a failure or check shows: the field's surface, line, prompt, greeting and arrow (the pill's glass, the dots' track) come with the first key. `always` shows the field while it is empty too: the pill keeps its glass with the hint inside it, and the dots get a dotted track under the editor. Either way the unlock hint and the fingerprint notice stay, and the field is live and keeps its place. A value equal to the style's own is left out of the look. |
+| `password.width`, `password.height` | 0.75 to 1.75 (`width`), 0.8 to 1.5 (`height`), in steps of 0.05 | 1 | The field's width and height, as a multiple of its style's own size, on top of `scale`. The text, the arrow and the corners keep their size, and the pill stays round-ended. The field is never wider than the centre column (560 px at 1080p, times `scale`). The `card`'s height is its inner pill's; the greeting keeps its room. |
+| `password.textSize` | 0.75 to 1.25, in steps of 0.05 | 1 | The field's text (the unlock hint and its icon, the placeholder, the checking and failure text, the typed characters, the terminal's prompt, the card's greeting and the notice under the field), as a multiple on top of `scale`. A smaller text lets a long translation of the hint fit on one line. |
+| `password.submit` | `true`, `false` | `true` | `false` leaves out the submit arrow, and in the `box` its segment, so the editor and the hint get the room. Enter still unlocks. The `dots` and `terminal` never draw an arrow. |
+| `password.mask` | `circle` (●), `bullet` (•), `asterisk` (*), `square` (■) | `circle` | The glyph each typed character shows as. |
+| `password.hint` | `normal`, `muted` | `normal` | `muted` draws the unlock hint and its fingerprint icon in the theme's placeholder colour, like the field's other secondary text, instead of the text colour. |
 | `status.items` | An ordered list of `network`, `battery`, `volume`, `bluetooth`, `keyboard`, `uptime`, `load`, `memory`, each at most once | the style's own (network and battery; the `system` panel's four rows) | What the status shows, in that order, in any style. An item whose source has nothing (no battery, no PipeWire sink, no Bluetooth adapter) is left out. The volume (the default sink, PipeWire), Bluetooth (on or off and connected devices) and keyboard layout (Hyprland's active layout, read with `hyprctl -j devices`; nothing is switched) are read only while their item shows. A line wider than the centre column wraps. |
 | `weather.details` | `temperature`, `full` | `temperature` | `full` adds the condition and today's high and low (the `line` and `large` styles show the condition anyway; the `card` always shows everything). |
 | `weather.location` | `true`, `false` | `false` | Shows the forecast's place name. Off by default: anyone can see a lock screen. |
@@ -241,7 +246,8 @@ element draws exactly as its preset says.
 "layout": { "clock": { "scale": 1.25, "offset": { "x": -0.1, "y": 0.02 } }, "media": { "glass": 0.4, "screens": "primary" } }
 ```
 
-Each password style has a fixed size, so the field never moves while you type.
+Each password style has a fixed size (its own, times `width` and `height`), so
+the field never moves while you type.
 Every style reads the same with CPU rendering, except the artwork: the media
 pill, art, hero and disc then show it as a plain square instead of a round or rounded one,
 and the card's thumbnail still needs GPU rendering. Only the drawn backgrounds
@@ -437,8 +443,8 @@ every monitor, so a keystroke is never lost.
 the preview overlay with a preset without saving anything. `omarchy-shell lock
 preview` shows your saved look.
 
-Editors use three more calls on the same target: `catalog` (version 3) lists the elements, zones,
-styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), shapes (`shapeKinds`, `shapeLimits` and `templates`; `backgroundDecor` for older clients), glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
+Editors use three more calls on the same target: `catalog` (version 5) lists the elements, zones,
+styles, the element keys with their limits (`elementLimits`: ranges, glass styles, `screens`, and each element's own keys under `options` with their values and defaults, or `min`, `max` and `step` for a number; `elementKeysFor` names every key an element takes), the status items, whether Foamy Weather answers (`weather`), presets (with their thumbnails), background sources (`backgroundSources`, the animations among them in `backgroundAnimations`, the named colours in `backgroundColors`), shapes (`shapeKinds`, `shapeLimits` and `templates`; `backgroundDecor` for older clients), glass tints and the saved look; `previewLook '<json>'` previews an unsaved look;
 `saveLook '<json>'` saves one. Both take the look keys above, validated by the same
 rules; `saveLook` replaces only those keys in the `foamy.lock` entry and writes through
 Omarchy's own settings path, which keeps a symlinked `shell.json` a symlink.
@@ -507,7 +513,8 @@ a warning.
 
 **Element options.** The inspector also sets each element's own keys: the
 password field's **Show the field** (Always, or While typing; each style starts
-from its own), the status's items (a checklist: tick what it shows, reorder by
+from its own), **Typed characters**, **Hint colour** and **Show the arrow**, with
+its **Width**, **Height** and **Text** sliders under **Size**, the status's items (a checklist: tick what it shows, reorder by
 the grip or with Alt+Up and Alt+Down; a new style starts from its own contents),
 the weather's details and place name (off by default), and the media's
 **Cover art** (Off, From the player, Also online (Spotify): a lock screen setting

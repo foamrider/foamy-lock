@@ -2298,6 +2298,8 @@ Item {
     // shapeKinds, shapeLimits (Layout.shapeCatalog: keys, limits, defaults
     // and the values each key takes) and templates (each template's shapes);
     // backgroundDecor stays for older clients (a look may still say decor).
+    // Version 5 added the field's width, height, textSize, submit, mask and
+    // hint; a range key's options entry is { min, max, step, default }.
     function catalog(): string {
       var dir = FoamyNative.localPath(Qt.resolvedUrl("."))
       var presets = []
@@ -2313,7 +2315,7 @@ Item {
       for (var e = 0; e < Layout.ELEMENTS.length; e++)
         keysFor[Layout.ELEMENTS[e]] = Layout.elementKeys(Layout.ELEMENTS[e])
       return JSON.stringify({
-        version: 4,
+        version: 5,
         elements: Layout.ELEMENTS,
         elementKeys: Layout.ELEMENT_KEYS,
         elementKeysFor: keysFor,

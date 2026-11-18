@@ -989,6 +989,12 @@ Item {
       chromeVisible: root.primary
       styleName: root.placed.password.style
       reveal: Layout.revealOf(root.placed.password)
+      widthFactor: Layout.optionValue(root.placed.password, "width")
+      heightFactor: Layout.optionValue(root.placed.password, "height")
+      textSize: Layout.optionValue(root.placed.password, "textSize")
+      submit: Layout.optionValue(root.placed.password, "submit")
+      maskGlyph: Layout.maskGlyph(root.placed.password)
+      mutedHint: Layout.optionValue(root.placed.password, "hint") === "muted"
       alignment: root.elementAlignment("password")
       x: root.placeX("password", width)
       y: root.placeY("password")
