@@ -63,44 +63,6 @@ Item {
   visible: shapes.length > 0
   clip: true
 
-  // The wallpaper behind a shape, blurred.
-  Component {
-    id: frostComponent
-
-    Item {
-      id: frost
-      readonly property var shape: parent
-      anchors.fill: parent
-
-      ShaderEffectSource {
-        id: behind
-        anchors.fill: parent
-        visible: false
-        sourceItem: decoration.view.wallpaperItem
-        sourceRect: Qt.rect(frost.shape.x, frost.shape.y, frost.width, frost.height)
-      }
-
-      Rectangle {
-        id: frostMask
-        anchors.fill: parent
-        radius: frost.shape && frost.shape.spec ? frost.shape.spec.radius : 0
-        visible: false
-        layer.enabled: true
-      }
-
-      MultiEffect {
-        anchors.fill: parent
-        source: behind
-        blurEnabled: true
-        blur: 1
-        blurMax: 48
-        autoPaddingEnabled: false
-        maskEnabled: true
-        maskSource: frostMask
-      }
-    }
-  }
-
   // One item per shape drawn: the count makes the delegates, so a shape
   // that moves only updates its geometry.
   Repeater {
@@ -118,10 +80,46 @@ Item {
       width: !spec ? 0 : frame ? decoration.view.width : spec.width
       height: !spec ? 0 : frame ? decoration.view.height : spec.height
 
+      // The wallpaper behind the shape, blurred, within its corners. Declared
+      // here so it reads `shape` itself: a loaded item's parent is the
+      // Loader, which has neither the shape's spec (its radius) nor its place.
       Loader {
         anchors.fill: parent
         active: shape.spec !== null && !shape.frame && shape.spec.frost && decoration.canFrost
-        sourceComponent: frostComponent
+        sourceComponent: Component {
+          Item {
+            objectName: "shapeFrost"
+            anchors.fill: parent
+
+            ShaderEffectSource {
+              id: behind
+              anchors.fill: parent
+              visible: false
+              sourceItem: decoration.view.wallpaperItem
+              sourceRect: Qt.rect(shape.x, shape.y, shape.width, shape.height)
+            }
+
+            Rectangle {
+              id: frostMask
+              objectName: "shapeFrostMask"
+              anchors.fill: parent
+              radius: shape.spec ? shape.spec.radius : 0
+              visible: false
+              layer.enabled: true
+            }
+
+            MultiEffect {
+              anchors.fill: parent
+              source: behind
+              blurEnabled: true
+              blur: 1
+              blurMax: 48
+              autoPaddingEnabled: false
+              maskEnabled: true
+              maskSource: frostMask
+            }
+          }
+        }
       }
 
       Rectangle {
