@@ -921,9 +921,36 @@ fn look(test: &Test) -> R {
             }),
         "{catalog}"
     );
+    // Version 5: the field's shape and text keys, a range as min, max and step.
+    ensure!(
+        num(&catalog, "elementLimits.password.options.width.min")? == 0.75
+            && num(&catalog, "elementLimits.password.options.textSize.step")? == 0.05
+            && at(&catalog, "elementLimits.password.options.mask.values")?
+                .as_array()
+                .is_some_and(|v| v.len() == 4 && v[0] == "circle")
+            && at(&catalog, "elementKeysFor.password")?
+                .as_array()
+                .is_some_and(
+                    |k| ["width", "height", "textSize", "submit", "mask", "hint"]
+                        .iter()
+                        .all(|key| k.iter().any(|k| k == key))
+                ),
+        "{catalog}"
+    );
+    // Version 6: every element's align, and the field's textAlign.
+    ensure!(
+        at(&catalog, "elementKeys")?
+            .as_array()
+            .is_some_and(|k| k.iter().any(|k| k == "align"))
+            && at(&catalog, "elementLimits.media.align")? == &json!(["start", "center", "end"])
+            && at(&catalog, "elementLimits.password.options.textAlign.values")?
+                == &json!(["auto", "start", "center", "end"])
+            && text(&catalog, "elementLimits.password.options.textAlign.default")? == "auto",
+        "{catalog}"
+    );
     // Version 2: the placement keys and their limits, per element.
     ensure!(
-        num(&catalog, "version")? == 4.0
+        num(&catalog, "version")? == 6.0
             && at(&catalog, "elementKeys")?.as_array().is_some_and(|k| {
                 ["scale", "opacity", "offset", "glass", "screens"]
                     .iter()

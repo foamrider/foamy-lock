@@ -60,6 +60,17 @@ Item {
     if (!Draft.same(studio.draft, JSON.parse(expected)))
       fail("draft " + json(studio.draft) + ", expected " + expected)
   }
+  // A segmented choice inside the inspector's pane, every segment's label whole.
+  function expectFits(control, what) {
+    // Layouts place their items on the next polish; measure the new scale's.
+    control.parent.ensurePolished()
+    var x = control.mapToItem(studio.inspector, 0, 0).x
+    expect(x >= -0.5 && x + control.width <= studio.inspector.width + 0.5, what + ": " + [x, control.width, studio.inspector.width])
+    var labels = findAll(control, "segmentLabel")
+    expect(labels.length === control.options.length, what + ": " + labels.length + " labels")
+    for (var i = 0; i < labels.length; i++)
+      expect(!labels[i].truncated && labels[i].width >= labels[i].implicitWidth - 0.5, what + ": " + labels[i].text + " cut " + [labels[i].width, labels[i].implicitWidth])
+  }
   function near(a, b, slack) {
     return Math.abs(a - b) <= (slack === undefined ? 1 : slack)
   }
@@ -151,6 +162,18 @@ Item {
         return found
     }
     return null
+  }
+  // Every item under `item` with this objectName.
+  function findAll(item, name, out) {
+    out = out || []
+    if (!item)
+      return out
+    if (item.objectName === name)
+      out.push(item)
+    var children = item.children || []
+    for (var i = 0; i < children.length; i++)
+      findAll(children[i], name, out)
+    return out
   }
   // A point in `item`, or in the lock view (its pixels), in window pixels.
   function scenePoint(item, x, y) {
@@ -1453,6 +1476,112 @@ Item {
         }
         expect(undos === 9, "undo steps " + undos)
         next()
+      }
+    },
+    {
+      name: "inspector: the field's width, height, text, mask, hint and arrow",
+      wait: 0,
+      run: function (next) {
+        reset()
+        studio.selectModule("password")
+        find(studio.inspector, "studioStyles").picked("box")
+        var field = view.elementItem("password")
+        var width = find(studio.inspector, "studioWidth"), height = find(studio.inspector, "studioHeight")
+        var text = find(studio.inspector, "studioTextSize")
+        expect(width && height && text && width.visible && width.value === 1 && width.from === 0.75 && width.to === 1.75, "the field's sliders")
+        expect(text.valueText === FoamyI18n.t("studio.percent", 100), "shown in percent: " + text.valueText)
+        width.committed(1.3)
+        height.committed(1.2)
+        text.committed(0.85)
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","width":1.3,"height":1.2,"textSize":0.85}}}')
+        expect(field.width === Math.min(Math.round(360 * view.uiScale * 1.3), view.contentWidthAt(view.uiScale)), "the canvas field's width " + field.width)
+        // A drag previews without a step; the release commits one.
+        width.moved(1.5)
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","width":1.3,"height":1.2,"textSize":0.85}}}')
+        width.committed(1.3)
+        var mask = find(studio.inspector, "studioMask"), hint = find(studio.inspector, "studioHintTone")
+        expect(mask.value === "circle" && mask.options[0].label === "\u25cf" && mask.options[0].name === FoamyI18n.t("studio.mask.circle"), "the mask choice: " + json(mask.options))
+        mask.picked("square")
+        expect(hint.value === "normal", "the hint tone " + hint.value)
+        hint.picked("muted")
+        var submit = find(studio.inspector, "studioSubmit")
+        expect(submit.enabled && submit.checked, "the box's arrow")
+        submit.toggled()
+        expectDraft('{"preset":"foamy","layout":{"password":{"style":"box","width":1.3,"height":1.2,"textSize":0.85,"mask":"square","hint":"muted","submit":false}}}')
+        expect(field.input.passwordCharacter === "\u25a0" && field.mutedHint && !find(field, "boxDivider").visible, "the canvas field follows")
+        studio.inspector.reveal(submit)
+        capture("studio-field", function () {
+          studio.inspector.reveal(text)
+          capture("studio-field-size", function () {
+            // The dots and terminal have no arrow to leave out.
+            find(studio.inspector, "studioStyles").picked("terminal")
+            expect(!submit.enabled && find(studio.inspector, "studioSubmitNote").text === FoamyI18n.t("studio.submit.none", studio.styleLabel("terminal")), "the terminal's arrow note")
+            submit.toggled()
+            expect(studio.look.elements.password.submit === false, "a disabled switch changes nothing")
+            var undos = 0
+            while (Draft.canUndo(studio.history)) {
+              studio.undo()
+              undos++
+            }
+            // Committing the width it already had is no step.
+            expect(undos === 8, "undo steps " + undos)
+            next()
+          })
+        })
+      }
+    },
+    {
+      name: "inspector: alignment in the zone and the field's text",
+      wait: 0,
+      run: function (next) {
+        reset()
+        studio.selectModule("date")
+        var align = find(studio.inspector, "studioAlign")
+        expect(align && align.visible && align.value === "zone" && align.options.length === 4, "the alignment choice: " + (align ? json(align.options) : "missing"))
+        expect(align.options[2].label === FoamyI18n.t("studio.align.center"), "its labels " + json(align.options))
+        align.picked("start")
+        expectDraft('{"preset":"foamy","layout":{"date":{"align":"start"}}}')
+        var date = view.elementItem("date")
+        // The column's start: its left edge, its right one right-to-left.
+        var drawn = view.drawnRect("date"), columnStart = studio.rightToLeft ? (view.width + date.width) / 2 - drawn.width : (view.width - date.width) / 2
+        expect(date.alignment === "start" && near(drawn.x, columnStart, 1), "the canvas date at the column's start " + json(drawn))
+        expect(align.value === "start", "the choice follows " + align.value)
+        // At 1.5 times the text (a theme's base size 18), the choice still
+        // fits the pane with every label whole.
+        Commons.Style.fontBaseSize = 18
+        studio.inspector.reveal(align)
+        expectFits(align, "the alignment choice at 1.5x")
+        Commons.Style.fontBaseSize = 12
+        studio.inspector.reveal(align)
+        capture("studio-align", function () {
+          align.picked("zone")
+          expectDraft('{"preset":"foamy"}')
+          studio.selectModule("password")
+          var text = find(studio.inspector, "studioTextAlign")
+          expect(text && text.visible && text.value === "auto" && text.options.length === 4, "the field's text choice")
+          text.picked("end")
+          expectDraft('{"preset":"foamy","layout":{"password":{"textAlign":"end"}}}')
+          var field = view.elementItem("password"), hint = find(field, "unlockHint")
+          // The end: the right inset, the left one right-to-left.
+          var atEnd = studio.rightToLeft ? near(hint.x, field.fieldLeadingInset, 1) : near(hint.x + hint.width, field.width - field.fieldLeadingInset, 1)
+          expect(field.textAlign === "end" && atEnd, "the canvas field's hint at the end " + [hint.x, hint.width, field.width])
+          Commons.Style.fontBaseSize = 18
+          studio.inspector.reveal(text)
+          expectFits(text, "the field text choice at 1.5x")
+          Commons.Style.fontBaseSize = 12
+          studio.inspector.reveal(text)
+          capture("studio-text-align", function () {
+            text.picked("auto")
+            expectDraft('{"preset":"foamy"}')
+            var undos = 0
+            while (Draft.canUndo(studio.history)) {
+              studio.undo()
+              undos++
+            }
+            expect(undos === 4, "undo steps " + undos)
+            next()
+          })
+        })
       }
     },
     {

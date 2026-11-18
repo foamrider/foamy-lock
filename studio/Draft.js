@@ -292,12 +292,21 @@ function setStyle(draft, name, style) {
 // --- an element's own keys (round 2) -----------------------------------------
 //
 // password.reveal, weather.details and weather.location take one value of
-// a list (Layout.ELEMENT_OPTIONS; the default drops out of the entry), and
-// status.items an ordered list of Layout.STATUS_ITEMS.
+// a list (Layout.ELEMENT_OPTIONS; the default drops out of the entry), the
+// field's width, height and textSize a number on their range's steps
+// (clamped to it, as a slider gives), and status.items an ordered list of
+// Layout.STATUS_ITEMS.
 
 function setOption(draft, name, key, value) {
   var spec = (Layout.ELEMENT_OPTIONS[name] || {})[key]
-  if (!spec || spec.list || spec.values.indexOf(value) === -1) return draft
+  if (!spec || spec.list) return draft
+  if (spec.range) {
+    if (value === null || value === "" || typeof value === "boolean" || !isFinite(Number(value))) return draft
+    var range = spec.range
+    var stepped = roundTo(Math.round(clamp(Number(value), range.min, range.max) / range.step) * range.step, 6)
+    return editElement(draft, name, function(item) { item[key] = stepped })
+  }
+  if (spec.values.indexOf(value) === -1) return draft
   return editElement(draft, name, function(item) { item[key] = value })
 }
 
@@ -409,6 +418,17 @@ function hasGlass(look, name) {
 function setScreens(draft, name, screens) {
   if (Layout.SCREENS_ELEMENTS.indexOf(name) === -1 || Layout.SCREENS.indexOf(screens) === -1) return draft
   return editElement(draft, name, function(item) { item.screens = screens })
+}
+
+// How the element lines up in its zone (Layout.ALIGNS); null follows the
+// zone's column again.
+function setAlign(draft, name, align) {
+  var clear = align === null || align === undefined || align === ""
+  if (!clear && Layout.ALIGNS.indexOf(align) === -1) return draft
+  return editElement(draft, name, function(item) {
+    if (clear) delete item.align
+    else item.align = align
+  })
 }
 
 // Back to the zone position (no offset).
@@ -1056,7 +1076,7 @@ if (typeof module !== "undefined") module.exports = {
   place: place, setZone: setZone, setOffset: setOffset, setScale: setScale, scaleBy: scaleBy, setOrder: setOrder,
   setHidden: setHidden, setPreset: setPreset, presetKeeping: presetKeeping, cleanOffset: cleanOffset, cleanScale: cleanScale,
   setStyle: setStyle, setOpacity: setOpacity, cleanOpacity: cleanOpacity, setGlass: setGlass, glassOf: glassOf, hasGlass: hasGlass,
-  setScreens: setScreens, resetOffset: resetOffset, offsetPixels: offsetPixels, pixelsToSteps: pixelsToSteps, stepsToPixels: stepsToPixels,
+  setScreens: setScreens, setAlign: setAlign, resetOffset: resetOffset, offsetPixels: offsetPixels, pixelsToSteps: pixelsToSteps, stepsToPixels: stepsToPixels,
   SCENE_LIMITS: SCENE_LIMITS, setBackground: setBackground, setPicture: setPicture, setGlassLook: setGlassLook,
   SOURCE_CHOICES: SOURCE_CHOICES, sourceChoice: sourceChoice, chooseSource: chooseSource, hexColor: hexColor, setColor: setColor,
   history: history, push: push, undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo,

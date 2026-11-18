@@ -687,6 +687,46 @@ test('each element\'s own keys survive the sparse entry and drop out at their de
   assert.ok(Layout.parseLook(moved).valid && Layout.parseLook(typing).valid)
 })
 
+test('the field\'s width, height and text size: clamped to their range, on its steps', () => {
+  const base = { preset: 'foamy' }
+  for (const [key, min, max] of [['width', 0.75, 1.75], ['height', 0.8, 1.5], ['textSize', 0.75, 1.25]]) {
+    assert.deepEqual(plain(Draft.setOption(base, 'password', key, 1.2)), { preset: 'foamy', layout: { password: { [key]: 1.2 } } }, key)
+    // A slider's float noise and a value between steps land on a step.
+    assert.equal(plain(Draft.setOption(base, 'password', key, 1.1000000000000003)).layout.password[key], 1.1, key)
+    assert.equal(plain(Draft.setOption(base, 'password', key, 1.12)).layout.password[key], 1.1, key)
+    assert.equal(plain(Draft.setOption(base, 'password', key, 9)).layout.password[key], max, key)
+    assert.equal(plain(Draft.setOption(base, 'password', key, 0)).layout.password[key], min, key)
+    assert.deepEqual(plain(Draft.setOption(Draft.setOption(base, 'password', key, 1.2), 'password', key, 1)), base, key + ' back to the default')
+    for (const value of [null, '', 'wide', true, NaN, Infinity])
+      assert.equal(Draft.setOption(base, 'password', key, value), base, `${key} ${value}`)
+    assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', key), 1, key)
+  }
+  assert.equal(Draft.setOption(base, 'clock', 'width', 1.2), base, 'a key of another module is refused')
+  const own = Draft.setOption(Draft.setOption(Draft.setOption(base, 'password', 'submit', false), 'password', 'mask', 'bullet'), 'password', 'hint', 'muted')
+  assert.deepEqual(plain(own), { preset: 'foamy', layout: { password: { submit: false, mask: 'bullet', hint: 'muted' } } })
+  assert.equal(Draft.setOption(base, 'password', 'mask', '\u2022'), base, 'a glyph is not a mask name')
+  // Another edit and a style change keep them.
+  assert.deepEqual(plain(Draft.setStyle(own, 'password', 'box')).layout.password, { style: 'box', submit: false, mask: 'bullet', hint: 'muted' })
+})
+
+test('the field\'s text alignment and every module\'s align', () => {
+  const base = { preset: 'foamy' }
+  assert.deepEqual(plain(Draft.setOption(base, 'password', 'textAlign', 'end')), { preset: 'foamy', layout: { password: { textAlign: 'end' } } })
+  assert.deepEqual(plain(Draft.setOption(Draft.setOption(base, 'password', 'textAlign', 'end'), 'password', 'textAlign', 'auto')), base, 'auto is the default')
+  assert.equal(Draft.setOption(base, 'password', 'textAlign', 'right'), base)
+  assert.equal(Draft.optionOf(Draft.lookOf(base), 'password', 'textAlign'), 'auto')
+  // align: any module, one of Layout.ALIGNS; null follows the zone again.
+  for (const name of Layout.ELEMENTS) {
+    const aligned = Draft.setAlign(base, name, 'start')
+    assert.deepEqual(plain(aligned), { preset: 'foamy', layout: { [name]: { align: 'start' } } }, name)
+    assert.deepEqual(plain(Draft.setAlign(aligned, name, null)), base, name + ' cleared')
+    for (const value of ['left', 'Centre', 1, true]) assert.equal(Draft.setAlign(base, name, value), base, `${name} ${value}`)
+  }
+  // It stays when the module moves to another zone, also at the zone's own column.
+  const centred = Draft.setAlign(base, 'clock', 'center')
+  assert.equal(plain(Draft.setZone(centred, 'clock', 'top-start')).layout.clock.align, 'center')
+})
+
 test('status items: an ordered checklist from the style\'s own contents', () => {
   const base = { preset: 'foamy' }
   assert.deepEqual(plain(Draft.statusItems(Draft.lookOf(base))), ['network', 'battery'])

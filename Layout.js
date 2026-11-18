@@ -3,7 +3,7 @@
 // relies on. Pure functions over plain data; the view does the geometry.
 //
 // A layout maps each element to { zone, style, order, hidden } and the
-// optional scale, opacity, offset, glass and screens (see ELEMENT_KEYS), plus
+// optional scale, opacity, offset, glass, screens and align (see ELEMENT_KEYS), plus
 // a few keys of its own on some elements (ELEMENT_OPTIONS). Zones are a
 // 3×3 grid named by row (top, middle, bottom) and column (start, center,
 // end); start and end mean left and right in left-to-right languages and
@@ -32,7 +32,7 @@ var STYLES = {
 }
 // The field stays where a hand and an eye expect it: never in the top row.
 var PASSWORD_ZONES = ["middle-start", "middle-center", "middle-end", "bottom-start", "bottom-center", "bottom-end"]
-var ELEMENT_KEYS = ["zone", "style", "order", "hidden", "scale", "opacity", "offset", "glass", "screens"]
+var ELEMENT_KEYS = ["zone", "style", "order", "hidden", "scale", "opacity", "offset", "glass", "screens", "align"]
 // What the status element can show, in any of its styles (`status.items`).
 var STATUS_ITEMS = ["network", "battery", "volume", "bluetooth", "keyboard", "uptime", "load", "memory"]
 // What each status style shows without `items` (its built-in behaviour):
@@ -58,8 +58,36 @@ var STATUS_DEFAULT_ITEMS = {
 // - media.artwork: false shows the music icon in place of the player's
 //   cover in this look, and no artwork is prepared for it (default true;
 //   the showArtwork setting still decides whether there is any).
+// The field's shape and text, each optional:
+// - password.width and password.height: a multiple of the style's own
+//   width and height (default 1), in steps of 0.05. The field never grows
+//   past the centre column (contentWidthAt). The card's height is its
+//   inner pill's; the greeting above keeps its room.
+// - password.textSize: a multiple of the field's text (the hint, the
+//   placeholder and states, the dots, the prompt, the greeting and the
+//   notice), on top of `scale` (default 1). The arrow follows `scale` only.
+// - password.submit: false leaves out the submit arrow (Enter still
+//   submits; the dots and terminal never draw one).
+// - password.mask: the glyph each typed character shows as (MASK_GLYPHS).
+// - password.hint: "muted" draws the unlock hint in the theme's placeholder
+//   colour, as the field's other secondary text (default "normal").
+// - password.textAlign: "start", "center" or "end" lines up the hint, the
+//   placeholder and states and the typed characters inside the field
+//   (logical, like `align`). "auto" (the default) is each style's own: the
+//   hint centred (the terminal's at the start), the rest at the start (the
+//   dots' centred).
+// A spec has `values` (one of a list), `range` ({ min, max, step }) or
+// `list` (status.items), and a `fallback` default except for `list`.
+var MASK_GLYPHS = { circle: "\u25cf", bullet: "\u2022", asterisk: "*", square: "\u25a0" }
 var ELEMENT_OPTIONS = {
-  password: { reveal: { values: ["always", "typing"], fallback: "always", styleDefaults: { pill: "typing", dots: "typing" } } },
+  password: { reveal: { values: ["always", "typing"], fallback: "always", styleDefaults: { pill: "typing", dots: "typing" } },
+    width: { range: { min: 0.75, max: 1.75, step: 0.05 }, fallback: 1 },
+    height: { range: { min: 0.8, max: 1.5, step: 0.05 }, fallback: 1 },
+    textSize: { range: { min: 0.75, max: 1.25, step: 0.05 }, fallback: 1 },
+    submit: { values: [true, false], fallback: true },
+    mask: { values: Object.keys(MASK_GLYPHS), fallback: "circle" },
+    hint: { values: ["normal", "muted"], fallback: "normal" },
+    textAlign: { values: ["auto"].concat(COLUMNS), fallback: "auto" } },
   status: { items: { list: STATUS_ITEMS } },
   media: { artwork: { values: [true, false], fallback: true } },
   weather: { details: { values: ["temperature", "full"], fallback: "temperature" },
@@ -79,6 +107,13 @@ var REVEAL_STYLES = STYLES.password.slice()
 //   draw one; other styles of the element ignore it, and the date (which
 //   has none) rejects the key.
 // - screens: "all", or "primary" (only the screen that gets the keys).
+// - align: "start", "center" or "end" (ALIGNS; logical, they mirror in
+//   right-to-left languages): how the element lines up in its zone, in
+//   place of the zone's column. Its text aligns that way inside it, and an
+//   element narrower than its zone moves to that side: in the centre
+//   column, of the column; at the sides, of the zone's widest element.
+//   Absent, the zone's column decides (as before); once set it stays,
+//   also when the element moves to another zone.
 // The password field has tighter limits, so it stays legible and in reach.
 var LIMITS = {
   scale: { min: 0.5, max: 2, step: 0.05 },
@@ -93,6 +128,7 @@ var PASSWORD_LIMITS = {
   glass: { min: 0.08, max: 1 }
 }
 var SCREENS = ["all", "primary"]
+var ALIGNS = COLUMNS
 // The account and the field already follow the primary screen (see
 // isPrimary); they take no `screens`.
 var SCREENS_ELEMENTS = ["date", "clock", "media", "status", "calendar", "weather"]
@@ -426,6 +462,8 @@ function elementError(name, value) {
       return "layout." + name + ".screens isn't supported: the " + label(name) + " always follows the screen that gets the keys"
     if (SCREENS.indexOf(value.screens) === -1) return "layout." + name + ".screens must be one of " + SCREENS.join(", ")
   }
+  if (value.align !== undefined && ALIGNS.indexOf(value.align) === -1)
+    return "layout." + name + ".align must be one of " + ALIGNS.join(", ")
   return ""
 }
 
@@ -434,8 +472,8 @@ function elementKeys(name) {
   return ELEMENT_KEYS.concat(Object.keys(ELEMENT_OPTIONS[name] || {}))
 }
 
-// One element-only key: a value from its list, or (status.items) an ordered
-// list of distinct names. "" when valid.
+// One element-only key: a value from its list, a number on its range's
+// steps, or (status.items) an ordered list of distinct names. "" when valid.
 function optionError(name, key, spec, value) {
   var path = "layout." + name + "." + key
   if (spec.list) {
@@ -445,6 +483,11 @@ function optionError(name, key, spec, value) {
       if (spec.list.indexOf(value[i]) === -1) return path + " must only name " + spec.list.join(", ")
       if (value.indexOf(value[i]) !== i) return path + " names " + value[i] + " twice"
     }
+    return ""
+  }
+  if (spec.range) {
+    if (!(inRange(value, spec.range) && onStep(value, spec.range.step)))
+      return path + " must be a number from " + spec.range.min + " to " + spec.range.max + " in steps of " + spec.range.step
     return ""
   }
   if (spec.values.indexOf(value) === -1) {
@@ -476,9 +519,10 @@ function onStep(value, step) {
 
 // What an editor may offer for each element: the numeric ranges, the
 // styles that draw glass (null: the element takes no `glass`), the
-// `screens` values (null: it takes none) and its own keys (`options`:
-// { key: { values, default } } or, for status.items, { items, defaults }
-// with each style's built-in contents; {} when it has none).
+// `screens` values (null: it takes none), the `align` values and its own keys (`options`:
+// { key: { values, default } }, { key: { min, max, step, default } } for a
+// range or, for status.items, { items, defaults } with each style's
+// built-in contents; {} when it has none).
 function elementLimits() {
   var out = {}
   for (var i = 0; i < ELEMENTS.length; i++) {
@@ -487,6 +531,7 @@ function elementLimits() {
     out[name] = { scale: limits.scale, opacity: limits.opacity, offset: limits.offset,
       glass: GLASS_STYLES[name] ? { min: limits.glass.min, max: limits.glass.max, styles: GLASS_STYLES[name].slice() } : null,
       screens: SCREENS_ELEMENTS.indexOf(name) !== -1 ? SCREENS.slice() : null,
+      align: ALIGNS.slice(),
       options: elementOptions(name) }
   }
   return out
@@ -498,6 +543,7 @@ function elementOptions(name) {
   for (var key in options) {
     var spec = options[key]
     out[key] = spec.list ? { items: spec.list.slice(), defaults: copy(STATUS_DEFAULT_ITEMS) }
+      : spec.range ? { min: spec.range.min, max: spec.range.max, step: spec.range.step, default: spec.fallback }
       : { values: spec.values.slice(), default: spec.fallback }
   }
   if (name === "password") {
@@ -527,7 +573,30 @@ function optionFollowsStyle(key) {
 
 // The field's effective reveal: its own, else its style's default.
 function revealOf(item) {
-  return item && item.reveal !== undefined ? item.reveal : optionDefault("reveal", item ? item.style : "")
+  return optionValue(item, "reveal")
+}
+
+// An element-only key's effective value: the item's own, else its default
+// for the item's style.
+function optionValue(item, key) {
+  return item && item[key] !== undefined ? item[key] : optionDefault(key, item ? item.style : "")
+}
+
+// The glyph the field masks each typed character with.
+function maskGlyph(item) {
+  var name = optionValue(item, "mask")
+  return MASK_GLYPHS.hasOwnProperty(name) ? MASK_GLYPHS[name] : MASK_GLYPHS.circle
+}
+
+// A range key's spec, by key (each key belongs to one element), or null.
+function optionRange(key) {
+  for (var name in ELEMENT_OPTIONS) if (ELEMENT_OPTIONS[name][key] && ELEMENT_OPTIONS[name][key].range) return ELEMENT_OPTIONS[name][key].range
+  return null
+}
+
+// A value on its range's step, without binary-fraction noise (1.15, not 1.1500000000000001).
+function onRangeStep(value, range) {
+  return Math.round(Math.round(value / range.step) * range.step * 1e6) / 1e6
 }
 
 // The element-only keys with a default (each key belongs to one element;
@@ -552,6 +621,8 @@ function canonicalElement(item) {
   }
   for (var o = 0; o < OPTION_KEYS.length; o++) {
     var option = OPTION_KEYS[o]
+    var range = optionRange(option)
+    if (range && typeof item[option] === "number") item[option] = onRangeStep(item[option], range)
     if (item[option] !== undefined && item[option] === optionDefault(option, item.style)) delete item[option]
   }
   if (Array.isArray(item.items)) item.items = item.items.slice()
@@ -813,11 +884,11 @@ if (typeof module !== "undefined") module.exports = {
   THEME_COLORS: THEME_COLORS, BLACK: BLACK, isColor: isColor, solidColor: solidColor,
   isVideoPath: isVideoPath, playsVideo: playsVideo, pausesOnBattery: pausesOnBattery, DECORATIONS: DECORATIONS, BAND_DECORATIONS: BAND_DECORATIONS, GLASS_TINTS: GLASS_TINTS, GLASS_KEYS: GLASS_KEYS,
   ELEMENT_KEYS: ELEMENT_KEYS, ELEMENT_OPTIONS: ELEMENT_OPTIONS, STATUS_ITEMS: STATUS_ITEMS,
-  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS,
+  STATUS_DEFAULT_ITEMS: STATUS_DEFAULT_ITEMS, REVEAL_STYLES: REVEAL_STYLES, MASK_GLYPHS: MASK_GLYPHS, LIMITS: LIMITS, PASSWORD_LIMITS: PASSWORD_LIMITS, SCREENS: SCREENS, ALIGNS: ALIGNS,
   SCREENS_ELEMENTS: SCREENS_ELEMENTS, GLASS_STYLES: GLASS_STYLES, ARTWORK_STYLES: ARTWORK_STYLES, DEFAULT_PRESET: DEFAULT_PRESET, FALLBACK_PRESET: FALLBACK_PRESET,
   zoneRow: zoneRow, zoneColumn: zoneColumn, screenColumn: screenColumn, layoutError: layoutError,
   elementError: elementError, elementKeys: elementKeys, elementLimits: elementLimits,
-  optionDefault: optionDefault, optionFollowsStyle: optionFollowsStyle, revealOf: revealOf, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
+  optionDefault: optionDefault, optionFollowsStyle: optionFollowsStyle, revealOf: revealOf, optionValue: optionValue, maskGlyph: maskGlyph, optionRange: optionRange, merge: merge, preset: preset, defaults: defaults, parseLook: parseLook, stack: stack,
   isPrimary: isPrimary, fallbackAfter: fallbackAfter, intersects: intersects, geometryError: geometryError,
   canonical: canonical, isOffset: isOffset, lookGeometryError: lookGeometryError
 }

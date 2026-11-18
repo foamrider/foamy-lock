@@ -1,5 +1,5 @@
 // Placement shell: the free-placement keys (scale, opacity, offset, glass,
-// screens) on one view, case by case: what the geometry check reports, that
+// screens, align) on one view, case by case: what the geometry check reports, that
 // decorations keep fitting the un-offset zones, that offsets mirror and that
 // `latchFallback: false` only reports; late weather and status readings
 // re-run the check, and the status sources exist only while an item needs
@@ -107,6 +107,10 @@ ShellRoot {
   }
   function exact(a, b) {
     return Math.abs(a - b) < 1e-6
+  }
+  // Two colours within a step of 8 bits (colours keep finer components).
+  function sameColor(a, b) {
+    return Math.abs(a.r - b.r) <= 1 / 255 && Math.abs(a.g - b.g) <= 1 / 255 && Math.abs(a.b - b.b) <= 1 / 255 && Math.abs(a.a - b.a) <= 1 / 255
   }
   // The shapes drawn, in drawing order.
   function surfaces() {
@@ -270,6 +274,318 @@ ShellRoot {
               fail("media glass " + media.color.a + " vs " + view.glass.a)
             if (!near(field.color.a * 1000, view.glassAt(0.5).a * 1000))
               fail("field glass " + field.color.a)
+          }
+        }
+      ]
+    },
+    {
+      name: "the field's width, height, text size, arrow, mask and hint",
+      phases: [
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "box"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), u = view.uiScale
+            if (field.width !== Math.round(360 * u) || field.height !== Math.round(56 * u))
+              fail("the box's own size " + [field.width, field.height])
+            if (!findNamed(field, "boxDivider").visible || !findNamed(field, "submitArrow").visible)
+              fail("the box draws its arrow segment by default")
+            if (findNamed(field, "passwordInput").passwordCharacter !== "\u25cf")
+              fail("the default mask " + findNamed(field, "passwordInput").passwordCharacter)
+            var hint = findNamed(field, "unlockHintText")
+            if (hint.font.pixelSize !== Math.round(14 * u) || !sameColor(hint.color, view.foreground))
+              fail("the default hint " + [hint.font.pixelSize, hint.color])
+            shellRoot.saved = findNamed(field, "unlockHint").limit
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "box",
+                  width: 1.3,
+                  height: 1.2,
+                  textSize: 0.85,
+                  submit: false,
+                  mask: "square",
+                  hint: "muted"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), u = view.uiScale
+            if (field.width !== Math.min(Math.round(360 * u * 1.3), view.contentWidthAt(u)) || field.height !== Math.round(56 * u * 1.2))
+              fail("the box's factors " + [field.width, field.height])
+            if (!sameRect(view.elementRects.password, view.drawnRect("password")) || !near(view.elementRects.password.width, field.width))
+              fail("the overlay rect doesn't follow the field " + JSON.stringify(view.elementRects.password))
+            if (findNamed(field, "boxDivider").visible || findNamed(field, "submitArrow").visible)
+              fail("submit false still draws the arrow segment")
+            if (findNamed(field, "passwordInput").passwordCharacter !== "\u25a0")
+              fail("the square mask " + findNamed(field, "passwordInput").passwordCharacter)
+            var hint = findNamed(field, "unlockHintText")
+            if (hint.font.pixelSize !== Math.round(14 * u * 0.85))
+              fail("the hint's text size " + hint.font.pixelSize)
+            if (!sameColor(hint.color, view.secondary) || hint.opacity !== 1)
+              fail("the muted hint " + [hint.color, hint.opacity])
+            // The arrow's segment is the hint's room now.
+            var limit = findNamed(field, "unlockHint").limit
+            if (hint.lineCount !== 1 || !(limit > shellRoot.saved))
+              fail("the hint got no room: " + [hint.lineCount, limit, shellRoot.saved])
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "card",
+                  height: 1.2,
+                  textSize: 1.25
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), u = view.uiScale
+            // The inner pill takes the factor; the greeting keeps its room.
+            if (field.height !== Math.round((88 + 50 * 1.2) * u) || findNamed(field, "cardPill").height !== Math.round(50 * u * 1.2))
+              fail("the card's height " + [field.height, findNamed(field, "cardPill").height])
+            if (findNamed(field, "cardGreeting").font.pixelSize !== Math.round(20 * u * 1.25))
+              fail("the greeting's text size " + findNamed(field, "cardGreeting").font.pixelSize)
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "terminal",
+                  width: 1.75
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField")
+            if (field.width !== view.contentWidthAt(view.uiScale))
+              fail("the widest terminal leaves the centre column: " + field.width)
+          }
+        }
+      ]
+    },
+    {
+      name: "align: an element's own alignment in its zone, and the field's text",
+      phases: [
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "top-end",
+                  style: "caps",
+                  order: 5
+                },
+                clock: {
+                  zone: "top-end",
+                  style: "bold"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), clock = findNamed(view, "clockLabel")
+            var right = view.width - view.edgeMargin("top")
+            if (!(clock.width > date.width + 20))
+              fail("the case needs a clock wider than the date: " + [clock.width, date.width])
+            // Without align both keep to the zone's edge, as before.
+            if (!near(date.x + date.width, right) || !near(clock.x + clock.width, right) || date.alignment !== "end")
+              fail("the end zone's edge " + [date.x, date.width, clock.x, clock.width, date.alignment])
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "top-end",
+                  style: "caps",
+                  order: 5,
+                  align: "center"
+                },
+                clock: {
+                  zone: "top-end",
+                  style: "bold"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), clock = findNamed(view, "clockLabel")
+            var right = view.width - view.edgeMargin("top")
+            // Centred on the zone's widest element, the clock; it stays at the edge.
+            if (!near(date.x + date.width / 2, clock.x + clock.width / 2) || !near(clock.x + clock.width, right))
+              fail("not centred on the clock: " + [date.x, date.width, clock.x, clock.width])
+            if (date.alignment !== "center" || !sameRect(view.elementRects.date, view.drawnRect("date")) || !near(view.drawnRect("date").x, date.x))
+              fail("the date's alignment or rect " + date.alignment + " " + JSON.stringify(view.drawnRect("date")))
+            shellRoot.saved = {
+              x: date.x,
+              width: date.width
+            }
+          }
+        },
+        {
+          apply: function () {
+            view.rightToLeft = true
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), ltr = shellRoot.saved
+            if (!near(date.x, view.width - ltr.x - ltr.width))
+              fail("not mirrored: " + date.x + " for " + ltr.x)
+          }
+        },
+        {
+          apply: function () {
+            view.rightToLeft = false
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "top-end",
+                  style: "caps",
+                  order: 5,
+                  align: "start"
+                },
+                clock: {
+                  zone: "top-end",
+                  style: "bold"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), clock = findNamed(view, "clockLabel")
+            if (!near(date.x, clock.x))
+              fail("not at the zone's start: " + [date.x, clock.x])
+          }
+        },
+        {
+          // The centre column: text lines up at its start, and a narrower
+          // element (the field) moves to it.
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  align: "start"
+                },
+                password: {
+                  style: "box",
+                  align: "start",
+                  textAlign: "end"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var date = findNamed(view, "dateLabel"), field = findNamed(view, "inputField")
+            var dateColumn = view.contentWidthAt(view.elementScale("date")), fieldColumn = view.contentWidthAt(view.elementScale("password"))
+            if (date.width !== dateColumn || !near(view.drawnRect("date").x, (view.width - dateColumn) / 2) || !(view.drawnRect("date").width < dateColumn))
+              fail("the date at the column's start " + JSON.stringify(view.drawnRect("date")))
+            if (!near(field.x, (view.width - fieldColumn) / 2) || !sameRect(view.elementRects.password, view.drawnRect("password")))
+              fail("the field at the column's start " + field.x)
+            // The hint ends at the editor's trailing inset, before the box's arrow segment.
+            var hint = findNamed(field, "unlockHint")
+            if (!near(hint.x + hint.width, field.width - field.submitWidth - field.fieldLeadingInset) || findNamed(field, "unlockHintText").horizontalAlignment !== Text.AlignRight)
+              fail("the hint at the end " + [hint.x, hint.width, field.width])
+            if (findNamed(field, "passwordInput").horizontalAlignment !== TextInput.AlignRight)
+              fail("the typed characters at the end")
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                password: {
+                  style: "dots",
+                  textAlign: "start"
+                }
+              }
+            })
+          },
+          check: function () {
+            expectProblem("")
+            var field = findNamed(view, "inputField"), hint = findNamed(field, "unlockHint")
+            // Without align the field stays centred; its text starts at the inset.
+            if (!near(field.x, (view.width - field.width) / 2) || !near(hint.x, field.inset))
+              fail("the dots' hint at the start " + [field.x, hint.x])
+            if (findNamed(field, "passwordInput").horizontalAlignment !== TextInput.AlignLeft)
+              fail("the dots' typed characters at the start")
+          }
+        }
+      ]
+    },
+    {
+      name: "align on a narrow screen: the centred corner stack",
+      phases: [
+        {
+          apply: function () {
+            view.width = 800
+            view.height = 1000
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "bottom-start",
+                  style: "caps",
+                  order: -1
+                }
+              }
+            })
+          },
+          check: function () {
+            var date = findNamed(view, "dateLabel"), media = findNamed(view, "mediaRow")
+            if (!view.compactLayout || !(media.width > date.width + 20))
+              fail("the case needs a narrow view and a media wider than the date: " + [view.compactLayout, media.width, date.width])
+            // Without align each element is centred on its own, as before.
+            if (!near(date.x, Math.round((view.width - date.width) / 2)))
+              fail("the date not centred " + date.x)
+          }
+        },
+        {
+          apply: function () {
+            view.look = look({
+              layout: {
+                date: {
+                  zone: "bottom-start",
+                  style: "caps",
+                  order: -1,
+                  align: "start"
+                }
+              }
+            })
+          },
+          check: function () {
+            var date = findNamed(view, "dateLabel"), media = findNamed(view, "mediaRow")
+            // The stack is centred and the date starts where the media does.
+            if (!near(date.x, media.x) || !near(media.x, Math.round((view.width - media.width) / 2)))
+              fail("not at the centred stack's start: " + [date.x, media.x, media.width])
+            view.width = 1920
+            view.height = 1080
           }
         }
       ]
