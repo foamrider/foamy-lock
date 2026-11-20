@@ -1902,6 +1902,8 @@ Item {
         readonly property bool reduceMotion: true
         readonly property color accent: Commons.Color.accent
         readonly property color foreground: Commons.Color.foreground
+        readonly property color themeBackground: Commons.Color.background
+        readonly property color themeForeground: Commons.Color.foreground
         readonly property string passwordText: ""
       }
     }

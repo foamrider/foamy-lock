@@ -86,6 +86,12 @@ Item {
   readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
   readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
   readonly property color accent: Commons.Color.accent
+  // The theme colours the elements take from their view (Backdrop,
+  // PasswordElement), so they don't import the Omarchy shell themselves.
+  readonly property color themeBackground: Commons.Color.background
+  readonly property color themeForeground: Commons.Color.foreground
+  readonly property color lockBorderError: Commons.Color.lock.borderError
+  readonly property color lockTextError: Commons.Color.lock.textError
   // The look's glass: "none" keeps the white glass, "accent" draws the edges
   // in the theme accent over a darker glass, "solid" makes it opaque without
   // edges. The opacity scales the theme's (or default) glass alpha.
