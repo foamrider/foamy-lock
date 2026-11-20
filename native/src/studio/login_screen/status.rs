@@ -44,8 +44,6 @@ use std::path::{Path, PathBuf};
 use foamy_helper::Failure;
 use serde_json::{Map, Value, json};
 
-use crate::studio::Env;
-
 /// Test override of the system root.
 pub const ROOT_VAR: &str = "FOAMY_LOCK_SYSTEM_ROOT";
 /// The theme name, and the folder under SDDM's theme directory.
@@ -73,7 +71,7 @@ const CONFIG_DIR: &str = "etc/sddm.conf.d";
 const CONFIG_FILE: &str = "etc/sddm.conf";
 
 /// `studio login-screen status`.
-pub fn run(_env: &Env, _plugin_dir: &Path) -> Result<Value, Failure> {
+pub fn run() -> Result<Value, Failure> {
     status(&system_root(std::env::var_os(ROOT_VAR)))
 }
 

@@ -297,6 +297,17 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
    - `manifest.json` (schema version 1) is the contract between `stage`,
      the publisher and `status`: `{"version": 1, "plugin", "hash", "files":
      [{"name", "size", "sha256"}]}`. `status` refuses unknown keys.
+   - `stage` checks the look's shape, element names, sizes and that no
+     user path is left, and nothing more. The values are `Layout.js`'s job,
+     in the lock and again in the greeter. Studio sends `showsPicture`
+     (computed with `Layout.js`, which knows each preset's default source).
+   - For step 3: the greeter sets the background's `path` from
+     `files.background` before `parseLook`, since a `picture` source needs
+     one. The copied picture is already blurred, so the greeter must not
+     apply the look's `blur` again.
+   - For step 4: the publisher takes `stage.lock` (next to the `stage-*`
+     folders) while it reads a staging folder, so a new `stage` can't
+     remove the folder under it.
 3. **Publisher**, `bin/foamy-lock-login-screen`, a bash script modelled on
    `omarchy-plymouth-set`:
    - It refuses to run as root, stages as the user, then runs a fixed

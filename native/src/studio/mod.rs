@@ -33,7 +33,8 @@
 //! `REQUEST_TOO_LARGE`, `NO_HOME` (neither the XDG variable nor `HOME`),
 //! `PLUGIN_NOT_FOUND`, `COMMONS_MISSING`, `STUDIO_MISSING`, `QUICKSHELL_MISSING`,
 //! `START_FAILED`, `BUSY`, `IO`, `NO_SESSION_BUS`, `PORTAL_UNAVAILABLE`,
-//! `PORTAL_FAILED`, `INTERNAL`.
+//! `PORTAL_FAILED`, `BACKGROUND_MISSING`, `NO_RUNTIME_DIR`, `NO_USER`,
+//! `INTERNAL`.
 //!
 //! The plugin directory is two levels above the directory holding this
 //! binary (`<plugin>/bin/<arch>/foamy-lock-helper`, resolved through
@@ -405,7 +406,8 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
         ["pick-picture", title] => portal::pick(&env, title, portal::DEFAULT_FILTER, None),
         ["pick-picture", title, filter] => portal::pick(&env, title, filter, None),
         ["pick-picture", title, filter, media] => portal::pick(&env, title, filter, Some(media)),
-        ["login-screen", "status"] => login_screen::status::run(&env, &current_plugin_dir()?),
+        // Status reads only system files, so it works without the plugin folder.
+        ["login-screen", "status"] => login_screen::status::run(),
         ["login-screen", "stage"] => login_screen::stage::run(
             &env,
             &current_plugin_dir()?,
