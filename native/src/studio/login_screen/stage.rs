@@ -29,7 +29,7 @@
 //!   `themeLock` uses its own glass colours for the others), each at most
 //!   once; stored in [`COLOR_KEYS`] order.
 //! - `background`, `avatar`: null, or an absolute path to a regular file
-//!   (not a symlink at the last component) of this user's, at most 16 MiB,
+//!   (not a symlink at the last component) of this user's, at most 25 MiB,
 //!   with a PNG signature and an `IHDR` of at most 3840 × 2160: `avatar`
 //!   exactly `<cache>/omarchy/foamy.lock/avatar.png`, `background`
 //!   `<cache>/omarchy/foamy.lock/background/<64 hex>.png`, `<cache>` being
@@ -100,7 +100,10 @@ use crate::studio::{Env, check_look, io_failure, random_suffix};
 /// The largest request `stage` reads from stdin.
 pub const MAX_REQUEST: u64 = 256 * 1024;
 pub const MAX_SNAPSHOT: usize = 256 * 1024;
-pub const MAX_PICTURE: u64 = 16 * 1024 * 1024;
+/// Bytes in one picture. The helper's backgrounds are stored (uncompressed)
+/// RGB PNGs (`image::encode_rgb`), so the largest allowed one, 3840 × 2160,
+/// is 24,887,323 bytes.
+pub const MAX_PICTURE: u64 = 25 * 1024 * 1024;
 pub const MAX_WIDTH: u32 = 3840;
 pub const MAX_HEIGHT: u32 = 2160;
 const MAX_TAG: usize = 35;
@@ -1203,6 +1206,18 @@ mod tests {
         request["avatar"] = json!(avatar);
         setup.run(&request).unwrap();
         assert_eq!(setup.stages().len(), 1);
+        // The largest background the helper itself writes passes: an
+        // uncompressed RGB PNG at the size limit.
+        let largest = crate::image::encode_rgb(
+            MAX_WIDTH as usize,
+            MAX_HEIGHT as usize,
+            &vec![0; MAX_WIDTH as usize * MAX_HEIGHT as usize * 3],
+        )
+        .unwrap();
+        assert_eq!(largest.len(), 24_887_323);
+        setup.background(&largest);
+        setup.run(&request).unwrap();
+        setup.background(&png(1920, 1080));
         // A background for a look that shows none is refused.
         request["showsPicture"] = json!(false);
         let failure = setup.run(&request).unwrap_err();
