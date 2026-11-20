@@ -1,0 +1,5 @@
+singleton FoamyI18n 1.0 FoamyI18n.qml
+singleton FoamyPalette 1.0 FoamyPalette.qml
+singleton FoamyStyle 1.0 FoamyStyle.qml
+FoamyClipboard 1.0 FoamyClipboard.qml
+FoamyWallClock 1.0 FoamyWallClock.qml

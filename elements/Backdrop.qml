@@ -1,5 +1,4 @@
 import QtQuick
-import qs.Commons as Commons
 import "../kit"
 import "BackdropStill.js" as Still
 
@@ -17,7 +16,9 @@ import "BackdropStill.js" as Still
 // Every motion repeats exactly after `loop` seconds, so the loop has no seam.
 Item {
   id: backdrop
-  // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
+  // The host view (LockLayout: the lock or the login screen): data, scale and the
+  // theme colours themeBackground and themeForeground (its properties aren't
+  // visible to qmllint as Item).
   required property var view
   property string source: "aurora"
   // The animation drawn: the source, the older "constellation" as "stars".
@@ -42,8 +43,8 @@ Item {
   // paints over. Its ground is the theme's background when that already has
   // the right lightness; otherwise a tone of the theme's own text colour (a
   // light theme's dark text, deepened), so it still looks like the theme.
-  readonly property color themeBase: Commons.Color.background
-  readonly property color themeText: Commons.Color.foreground
+  readonly property color themeBase: view.themeBackground
+  readonly property color themeText: view.themeForeground
   readonly property bool lightText: lightness(view.foreground) >= 0.5
   readonly property bool themeDark: lightness(themeBase) < 0.5
   readonly property color base: lightText === themeDark ? themeBase : lightText ? scaled(themeText, Math.min(0.55, 0.12 / Math.max(0.01, lightness(themeText)))) : Qt.rgba(1 - (1 - themeText.r) * 0.25, 1 - (1 - themeText.g) * 0.25, 1 - (1 - themeText.b) * 0.25, 1)
