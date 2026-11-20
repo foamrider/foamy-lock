@@ -6,3 +6,10 @@ studio/elements  elements  # the lock's elements, linked into the studio root
 studio/LockView.qml  LockView.qml  # the lock view the studio previews, linked into the studio root
 studio/Layout.js  Layout.js  # the look model, linked into the studio root
 studio/Model.js  Model.js  # the lock's data helpers, linked into the studio root
+# The login screen's theme (sddm/bundle.txt) puts sddm/X at X and keeps every
+# other file's path, so sddm/Main.qml imports these beside itself.
+sddm/elements  elements  # the lock's layout and elements, beside Main.qml in the theme
+sddm/Layout.js  Layout.js  # the look model, beside Main.qml in the theme
+sddm/Model.js  Model.js  # the lock's data helpers, beside Main.qml in the theme
+sddm/kit/FoamyWallClock.qml  kit/FoamyWallClock.qml  # foamy-kit's clock, in the theme's kit/
+sddm/kit/FoamyI18nText.js  kit/FoamyI18nText.js  # foamy-kit's string helpers, in the theme's kit/
