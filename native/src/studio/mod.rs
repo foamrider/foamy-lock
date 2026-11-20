@@ -25,6 +25,8 @@
 //!   [`preset`].
 //! - `studio pick-picture [title [filter name [media filter name]]]`: see
 //!   [`portal`].
+//! - `studio login-screen status` / `studio login-screen stage`: see
+//!   [`login_screen`].
 //!
 //! Codes: `INVALID_ARGUMENT` (unknown subcommand or arguments),
 //! `INVALID_REQUEST` (stdin isn't what the subcommand takes),
@@ -56,6 +58,7 @@ pub mod apply;
 mod dbus;
 pub mod desktop;
 pub mod draft;
+pub mod login_screen;
 pub mod portal;
 pub mod preset;
 pub mod root;
@@ -372,7 +375,7 @@ pub fn iso8601(time: SystemTime) -> String {
     )
 }
 
-const USAGE: &str = "usage: foamy-lock-helper studio [open | install | ensure | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name [media filter name]]]]";
+const USAGE: &str = "usage: foamy-lock-helper studio [open | install | ensure | uninstall | draft-load | draft-save | draft-clear | apply | preset save | preset rename | preset delete | pick-picture [title [filter name [media filter name]]] | login-screen status | login-screen stage]";
 
 /// `foamy-lock-helper studio <args>`.
 pub fn main(args: &[OsString]) -> Result<Value, Failure> {
@@ -402,6 +405,12 @@ pub fn main(args: &[OsString]) -> Result<Value, Failure> {
         ["pick-picture", title] => portal::pick(&env, title, portal::DEFAULT_FILTER, None),
         ["pick-picture", title, filter] => portal::pick(&env, title, filter, None),
         ["pick-picture", title, filter, media] => portal::pick(&env, title, filter, Some(media)),
+        ["login-screen", "status"] => login_screen::status::run(&env, &current_plugin_dir()?),
+        ["login-screen", "stage"] => login_screen::stage::run(
+            &env,
+            &current_plugin_dir()?,
+            &read_stdin(login_screen::stage::MAX_REQUEST)?,
+        ),
         _ => Err(Failure::coded("INVALID_ARGUMENT", USAGE)),
     }
 }
