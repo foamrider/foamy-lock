@@ -49,6 +49,8 @@ Item {
   // The password field's "Enter password to unlock" (false in the preview
   // overlay, which isn't a lock).
   property bool showUnlockHint: true
+  // Its text without a fingerprint (the login screen's says "Enter password").
+  property string unlockHintText: FoamyI18n.t("Enter password to unlock")
   property bool loadBackground: true
   property var activePlayer: null
   property string artworkPath: ""

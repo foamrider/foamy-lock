@@ -38,7 +38,7 @@ Item {
   readonly property bool primary: primaryScreen
   readonly property var parsed: Greeter.parseSnapshot(config.snapshot)
   readonly property var snapshot: parsed.snapshot
-  readonly property string lastUser: String(users.lastUser || "")
+  readonly property string lastUser: Greeter.loginUser(snapshot, String(users.lastUser || ""))
 
   // The copied picture beside this file, as a path (LockLayout makes the URL).
   readonly property string backgroundFile: snapshot.background ? decodeURIComponent(Qt.resolvedUrl("background.png").toString().replace(/^file:\/\//, "")) : ""
@@ -186,7 +186,7 @@ Item {
     primary: root.primary
     now: clock.date
     timeFormat: root.snapshot.timeFormat
-    // No account without a last user (SDDM remembers none yet).
+    // No account without a user to log in.
     showUserInfo: root.snapshot.showUserInfo && root.lastUser !== ""
     userName: root.lastUser
     userDisplayName: root.lastUserRealName
@@ -194,6 +194,8 @@ Item {
     backgroundPath: root.backgroundFile
     // The helper already blurred the copied picture to the look's amount.
     backgroundPrepared: true
+    // A login, not an unlock.
+    unlockHintText: FoamyI18n.t("Enter password")
     // SDDM gives no feedback on a fingerprint: the field asks for the password.
     fingerprintConfigured: false
     fingerprintUnavailable: false

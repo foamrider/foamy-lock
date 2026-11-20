@@ -274,7 +274,7 @@ Rectangle {
     Text {
       objectName: "unlockHintText"
       textFormat: Text.PlainText
-      text: field.view.fingerprintConfigured && !field.view.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
+      text: field.view.fingerprintConfigured && !field.view.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : field.view.unlockHintText
       width: Math.min(implicitWidth, unlockHint.limit - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
       color: unlockHint.tone
       // The theme's placeholder colour carries its own alpha.

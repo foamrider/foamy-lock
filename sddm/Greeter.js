@@ -93,6 +93,13 @@ function lookEntry(snapshot, backgroundPath) {
   return entry
 }
 
+// Who logs in: SDDM's last user, else (a fresh system, where SDDM
+// remembers nobody yet) the user who copied the look, so the field can
+// always log someone in.
+function loginUser(snapshot, lastUser) {
+  return lastUser !== "" ? lastUser : snapshot.user
+}
+
 // The copied avatar shows only for the user who copied the look, so one
 // user's picture never shows over another user's login.
 function showsAvatar(snapshot, lastUser) {
@@ -115,6 +122,7 @@ if (typeof module !== "undefined") {
     fallbackEntry: fallbackEntry,
     parseSnapshot: parseSnapshot,
     lookEntry: lookEntry,
+    loginUser: loginUser,
     showsAvatar: showsAvatar,
     sessionIndex: sessionIndex
   }
