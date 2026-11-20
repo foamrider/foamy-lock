@@ -178,12 +178,14 @@ pub struct Config {
 ///   trimmed, and a later assignment replaces an earlier one, an empty
 ///   value included. Quotes are part of the value;
 /// - otherwise `[name]` starts a section; section and key names are
-///   case-sensitive, and each file starts in `General`.
+///   case-sensitive, and each file starts in `General`;
+/// - each line is decoded with `QString::fromUtf8`, which drops a leading
+///   UTF-8 byte-order mark, so a file may start with one.
 pub fn apply_config(config: &mut Config, bytes: &[u8], shown: &str) {
     let text = String::from_utf8_lossy(bytes);
     let mut section = "General";
     for line in text.split('\n') {
-        let line = line.trim();
+        let line = line.trim_start_matches('\u{feff}').trim();
         let line = line.find('#').map_or(line, |at| &line[..at]).trim();
         if let Some((name, value)) = line.split_once('=') {
             match (section, name.trim()) {
@@ -924,6 +926,7 @@ mod tests {
             ("[Autologin]\nUser=tomas\nUser=\n", "", ""),
             ("[Autologin]\n#User=tomas\n", "", ""),
             ("[Theme]\nCurrent=\u{d8}st\n", "\u{d8}st", ""),
+            ("\u{feff}[Theme]\nCurrent=breeze\n", "breeze", ""),
         ];
         for (text, theme, user) in cases {
             let mut config = Config::default();
