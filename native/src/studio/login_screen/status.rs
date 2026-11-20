@@ -69,6 +69,7 @@ const THEME_DIR: &str = "usr/share/sddm/themes/foamy-lock";
 const SYSTEM_CONFIG_DIR: &str = "usr/lib/sddm/sddm.conf.d";
 const CONFIG_DIR: &str = "etc/sddm.conf.d";
 const CONFIG_FILE: &str = "etc/sddm.conf";
+const LOCALE_CONF: &str = "etc/locale.conf";
 
 /// `studio login-screen status`.
 pub fn run() -> Result<Value, Failure> {
@@ -208,10 +209,9 @@ pub fn apply_config(config: &mut Config, bytes: &[u8], shown: &str) {
 /// open; here that is an `IO` failure, so the section never hides on a
 /// guess.
 ///
-/// The names are sorted by bytes. That matches the locale-aware order for
-/// names made of digits, lowercase letters, `-` and `.`, as SDDM's and
-/// Omarchy's drop-ins are.
+/// The names are sorted in the daemon's collation (see [`collation`]).
 fn config_files(root: &Path) -> Result<Vec<PathBuf>, Failure> {
+    let collation = collation(root)?;
     let mut files = Vec::new();
     for dir in [SYSTEM_CONFIG_DIR, CONFIG_DIR] {
         let path = root.join(dir);
@@ -236,11 +236,105 @@ fn config_files(root: &Path) -> Result<Vec<PathBuf>, Failure> {
                 names.push(name);
             }
         }
-        names.sort_by(|a, b| a.as_encoded_bytes().cmp(b.as_encoded_bytes()));
+        names.sort_by(|a, b| compare_names(collation, a.as_encoded_bytes(), b.as_encoded_bytes()));
         files.extend(names.into_iter().map(|name| Path::new(dir).join(name)));
     }
     files.push(PathBuf::from(CONFIG_FILE));
     Ok(files)
+}
+
+/// How SDDM's daemon orders the names in a config directory.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Collation {
+    /// The C or POSIX locale: byte order.
+    Bytes,
+    /// Any other locale: Qt's `QDir::LocaleAware` through ICU.
+    Root,
+}
+
+/// The daemon's collation. systemd gives services the locale in
+/// `/etc/locale.conf` (`LC_COLLATE`, else `LANG`); without one they run in
+/// the C locale.
+fn collation(root: &Path) -> Result<Collation, Failure> {
+    let path = root.join(LOCALE_CONF);
+    let bytes = match File::open(&path) {
+        Err(error) if absent(&error) => return Ok(Collation::Bytes),
+        file => {
+            let file = file.map_err(io_error(&path))?;
+            foamy_helper::io::read_limited(file, MAX_CONFIG_FILE).map_err(|error| {
+                if foamy_helper::io::is_over_limit(&error) {
+                    Failure::coded(
+                        "IO",
+                        format!("{} is larger than {MAX_CONFIG_FILE} bytes", path.display()),
+                    )
+                } else {
+                    io_error(&path)(error)
+                }
+            })?
+        }
+    };
+    Ok(collation_of(&String::from_utf8_lossy(&bytes)))
+}
+
+/// The collation a `locale.conf` text selects.
+pub fn collation_of(text: &str) -> Collation {
+    let (mut lang, mut collate) = (None, None);
+    for line in text.lines() {
+        let Some((key, value)) = line.trim().split_once('=') else {
+            continue;
+        };
+        let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
+        match key.trim() {
+            "LANG" => lang = Some(value.to_string()),
+            "LC_COLLATE" => collate = Some(value.to_string()),
+            _ => {}
+        }
+    }
+    let locale = collate
+        .filter(|v| !v.is_empty())
+        .or(lang)
+        .unwrap_or_default();
+    let c_locale = locale.is_empty()
+        || locale == "C"
+        || locale == "POSIX"
+        || locale.starts_with("C.")
+        || locale.starts_with("C@");
+    if c_locale {
+        Collation::Bytes
+    } else {
+        Collation::Root
+    }
+}
+
+/// ICU's root collation order of printable ASCII (letters folded to lower
+/// case), as Qt 6.12's `QDir::LocaleAware` sorted it under `nb_NO.UTF-8` and
+/// `en_US.UTF-8`: punctuation, then digits, then letters.
+const ROOT_ORDER: &[u8] = b" _-,;:!?.'\"()[]{}@*\\&#%`^+<=>|~$0123456789abcdefghijklmnopqrstuvwxyz";
+
+/// The primary weight of a byte: its place in [`ROOT_ORDER`], or after it.
+fn primary(byte: u8) -> u16 {
+    let folded = byte.to_ascii_lowercase();
+    ROOT_ORDER
+        .iter()
+        .position(|&c| c == folded)
+        .map_or(256 + u16::from(byte), |at| at as u16)
+}
+
+/// Orders two names as SDDM's daemon lists them. For ASCII names this is
+/// ICU's root order: letters compare without case first, then lower case
+/// before upper case. Locale tailorings (Norwegian and Danish sort "aa" as
+/// "å", after "z") and non-ASCII names aren't modelled; they fall back to
+/// the root order and byte values.
+pub fn compare_names(collation: Collation, a: &[u8], b: &[u8]) -> std::cmp::Ordering {
+    if collation == Collation::Bytes {
+        return a.cmp(b);
+    }
+    let tertiary = |byte: &u8| byte.is_ascii_uppercase();
+    a.iter()
+        .map(|&byte| primary(byte))
+        .cmp(b.iter().map(|&byte| primary(byte)))
+        .then_with(|| a.iter().map(tertiary).cmp(b.iter().map(tertiary)))
+        .then_with(|| a.cmp(b))
 }
 
 /// `[Theme] Current` and `[Autologin] User` after every config file.
@@ -856,6 +950,78 @@ mod tests {
         let mut config = Config::default();
         apply_config(&mut config, b"\xff\n[Theme]\nCurrent=a\n", "/c.conf");
         assert_eq!(config.theme, "a");
+    }
+
+    #[test]
+    fn names_sort_as_sddm_lists_them() {
+        // The orders Qt 6.12's QDir::LocaleAware gave for these files.
+        let names = [
+            "10-theme.conf",
+            "100-x.conf",
+            "5.conf",
+            "50_override.conf",
+            "50-foamy-lock.conf",
+            "50-Z.conf",
+            "50.conf",
+            "50.x.conf",
+            "50+x.conf",
+            "50~x.conf",
+            "50a.conf",
+            "50A.conf",
+            "9-x.conf",
+        ];
+        let c_order = [
+            "10-theme.conf",
+            "100-x.conf",
+            "5.conf",
+            "50+x.conf",
+            "50-Z.conf",
+            "50-foamy-lock.conf",
+            "50.conf",
+            "50.x.conf",
+            "50A.conf",
+            "50_override.conf",
+            "50a.conf",
+            "50~x.conf",
+            "9-x.conf",
+        ];
+        let ties = ["a_B", "a-b", "a-B", "A-b", "ab", "aB", "Ab"];
+        for (collation, input, expected) in [
+            (Collation::Root, &names[..], &names[..]),
+            (Collation::Bytes, &names[..], &c_order[..]),
+            (Collation::Root, &ties[..], &ties[..]),
+        ] {
+            let mut sorted = input.to_vec();
+            sorted.reverse();
+            sorted.sort_by(|a, b| compare_names(collation, a.as_bytes(), b.as_bytes()));
+            assert_eq!(sorted, expected, "{collation:?}");
+        }
+        for (text, collation) in [
+            ("", Collation::Bytes),
+            ("LANG=C.UTF-8\n", Collation::Bytes),
+            ("LANG=POSIX\n", Collation::Bytes),
+            ("LANG=nb_NO.UTF-8\n", Collation::Root),
+            ("LANG=\"en_US.UTF-8\"\n", Collation::Root),
+            ("LANG=nb_NO.UTF-8\nLC_COLLATE=C\n", Collation::Bytes),
+            ("LANG=C\nLC_COLLATE=nb_NO.UTF-8\n", Collation::Root),
+        ] {
+            assert_eq!(collation_of(text), collation, "{text:?}");
+        }
+        // The locale decides which of two drop-ins wins.
+        for (locale, state, effective) in [
+            ("LANG=nb_NO.UTF-8\n", "installed", THEME),
+            ("LANG=C.UTF-8\n", "overridden", "omarchy"),
+        ] {
+            let scratch = Scratch::new("login-status-order");
+            sddm(&scratch);
+            theme(&scratch);
+            select(&scratch, "etc/sddm.conf.d/50-foamy-lock.conf", THEME);
+            select(&scratch, "etc/sddm.conf.d/50_override.conf", "omarchy");
+            scratch.file(LOCALE_CONF, locale);
+            let reply = status(&scratch.0).unwrap();
+            assert_eq!(reply["state"], state, "{locale}");
+            assert_eq!(reply["theme"], effective, "{locale}");
+        }
     }
 
     #[test]

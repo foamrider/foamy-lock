@@ -285,14 +285,22 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
      complete folder that SDDM uses. Studio turns that into "matches" or
      "out of date" by comparing `installed.hash` with `stage`'s hash. It
      reads every file in SDDM's config folders, whatever the suffix (a
-     `.pacnew` too), as SDDM 0.21's `ConfigReader.cpp` does.
+     `.pacnew` too), as SDDM 0.21's `ConfigReader.cpp` does, in Qt's
+     locale-aware order under the locale systemd gives the daemon
+     (`/etc/locale.conf`). Under `nb_NO` that puts `_` before `-`, so
+     `50_x.conf` comes before `50-foamy-lock.conf`. Locale rules such as
+     Norwegian "aa" sorting as "å" aren't modelled.
    - `stage`: Studio sends the look the lock confirmed it applied, the
      resolved theme colours, the language, and the paths of the background
      and avatar the lock already prepared in its sandbox. The helper
      doesn't read `shell.json`, as it doesn't today. `stage` checks and
      filters them and writes `snapshot.json`, byte copies of the pictures
      and `manifest.json` into a new `0700` folder in `$XDG_RUNTIME_DIR`.
-     Limits: each picture ≤ 16 MiB and ≤ 3840 × 2160, a fixed file list.
+     Limits: each picture ≤ 25 MiB and ≤ 3840 × 2160, a fixed file list.
+     The helper writes backgrounds as uncompressed PNGs, so 3840 × 2160 is
+     24.9 MB. The lock may prepare larger ones for bigger screens; Studio
+     asks the `background` kind for a copy capped at 3840 × 2160 for the
+     login screen (step 5).
      The greeter bundle is added to the folder in step 3.
    - `manifest.json` (schema version 1) is the contract between `stage`,
      the publisher and `status`: `{"version": 1, "plugin", "hash", "files":
