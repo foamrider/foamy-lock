@@ -385,7 +385,8 @@ else `{}`), copied as an object. The greeter's `FoamyI18n` reads it, falling
 back to the English key.
 
 **`theme.conf`:** `[General]` and one line
-`snapshot="<snapshot.json's compact text, with \ and " escaped>"`. The
+`snapshot="<snapshot.json's compact text>"`, in which each `\` becomes
+`\\` and each `"` becomes `\"` (QSettings' quoted-string escapes). The
 greeter reads `config.snapshot` and `JSON.parse`s it. The publisher (step 4)
 writes it; the greeter part's test tooling writes it the same way.
 
