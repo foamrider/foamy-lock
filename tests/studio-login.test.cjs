@@ -186,7 +186,9 @@ test('the publisher: 0 and 1 with JSON, 126 and 127 from pkexec, and never succe
     [3, '', 'failed', 'exit-3'],
     [124, '', 'failed', 'timeout'],
     [137, '', 'failed', 'timeout'],
-    [-1, '', 'failed', 'start-failed']
+    [-1, '', 'failed', 'start-failed'],
+    // The publisher isn't an executable file (checked before exec).
+    [70, '', 'failed', 'start-failed']
   ]
   for (const [exit, text, result, code] of cases)
     assert.deepEqual(plain(Login.publishReport(exit, text)), { result, code }, `${exit} ${text}`)

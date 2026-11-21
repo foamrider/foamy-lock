@@ -748,6 +748,26 @@ Item {
         }
       },
       {
+        // An earlier match says nothing once a comparison fails.
+        name: "login: a failed comparison doesn't keep saying it matches",
+        wait: 0,
+        run: function (next) {
+          setLoginMode("stage-fail")
+          login.refresh()
+          waitFor(function () {
+            return loginIdle()
+          }, "the check with stage failing", function () {
+            expect(login.sectionState === "installed" && login.compareHash === "" && login.compareError === "BUNDLE_INVALID", "not compared: " + login.sectionState + " " + login.compareHash + " " + login.compareError)
+            expect(loginButton("studioLoginCopy").enabled, "Copy offered again")
+            setLoginMode("ok")
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "current"
+            }, "matching again", next, 40000)
+          }, 40000)
+        }
+      },
+      {
         name: "login: another applied look is out of date",
         wait: 0,
         run: function (next) {
@@ -837,6 +857,24 @@ Item {
               })
             })
           })
+        }
+      },
+      {
+        // timeout's own 126 and 127 must never read as pkexec's.
+        name: "login: a missing publisher is a failed start, not a cancel",
+        wait: 0,
+        run: function (next) {
+          var fake = login.publisher
+          login.publisher = fake + ".missing"
+          studio.askLogin("copy")
+          find(studio, "studioLoginConfirm").clicked()
+          waitFor(function () {
+            return loginIdle() && login.result !== null
+          }, "copy with a missing publisher", function () {
+            login.publisher = fake
+            expectResult("failed", "start-failed", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.start-failed")))
+            next()
+          }, 40000)
         }
       },
       {

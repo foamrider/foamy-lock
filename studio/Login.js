@@ -56,7 +56,9 @@ function replyOf(text) {
 // the bundled helper isn't there for this CPU (126, 127).
 function exitProblem(exitCode) {
   if (exitCode === 124 || exitCode === 137) return "timeout"
-  if (exitCode === -1) return "start-failed"
+  // -1: Quickshell couldn't start it; 70: the publisher isn't an executable
+  // file (LoginScreen.runPublisher checks before exec).
+  if (exitCode === -1 || exitCode === 70) return "start-failed"
   if (exitCode === 126 || exitCode === 127) return "helper-unavailable"
   return ""
 }

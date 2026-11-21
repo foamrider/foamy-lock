@@ -316,8 +316,11 @@ Item {
 
   function prepareFailed(code) {
     if (op === "check") {
-      // Foamy's theme is in use, but this look couldn't be compared.
+      // Foamy's theme is in use, but this look couldn't be compared: an
+      // earlier comparison no longer says anything about it.
       compareError = code
+      compareHash = ""
+      compareKey = ""
       return finish()
     }
     finish("failed", code, true)
@@ -424,12 +427,15 @@ Item {
       }))
   }
 
-  // The plugin's publisher, through the app root's `sddm` link. A missing
-  // one fails to start, which is a failure, never pkexec's 126 or 127.
+  // The plugin's publisher, through the app root's `sddm` link. Its exits
+  // 126 and 127 are pkexec's, and `timeout` exits 126 or 127 too when the
+  // command can't run, so a publisher that isn't an executable file exits
+  // 70 here (a failed start) before exec. After authentication the root
+  // side bounds itself; the deadline ends a prompt left open.
   function runPublisher(action, dir) {
     var args = dir ? [action, dir] : [action]
-    var command = [publisher || pluginDir + "/sddm/foamy-lock-login-screen"].concat(args)
-    run(action, "1830s", command, "", false, ({}))
+    var script = publisher || pluginDir + "/sddm/foamy-lock-login-screen"
+    run(action, "1830s", ["bash", "-c", '[[ -f $1 && -x $1 ]] || exit 70; exec -- "$@"', "foamy-lock-studio-publish", script].concat(args), "", false, ({}))
   }
 
   Process {
