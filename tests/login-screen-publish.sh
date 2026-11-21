@@ -11,7 +11,8 @@ set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." || exit 1
 repo=$PWD
 publisher=$repo/sddm/foamy-lock-login-screen
-helper=$repo/bin/x86_64/foamy-lock-helper
+# The bundled helper for this machine (bin/x86_64 or bin/aarch64).
+helper=$repo/bin/$(uname -m)/foamy-lock-helper
 for tool in jq flock setpriv sha256sum python3 "$helper"; do
   command -v "$tool" >/dev/null || {
     echo "login-screen-publish.sh: $tool is missing" >&2
