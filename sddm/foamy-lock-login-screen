@@ -19,16 +19,31 @@
 #     On failure the previous theme folder and drop-in are put back.
 #   restore: moves that drop-in aside, then the theme folder, and deletes
 #     both. If the second move fails, the drop-in goes back.
+# Rescue folders: until the change is committed, the hidden folder that
+# holds the previous theme (publish's new folder, renamed before the
+# exchange; restore's folder the theme is moved into) has a rescue name,
+# .foamy-lock.rescue-XXXXXX. If the rollback can't put the theme back, it
+# stays there, and no later run sweeps a rescue folder: a later run puts
+# one back only when the theme folder is missing, our drop-in is there and
+# it passes theme_ok; otherwise it is left for the administrator. Right
+# after the commit it takes a leftover name (.foamy-lock.old-XXXXXX), so a
+# delete that fails leaves an ordinary leftover. A drop-in backup needs no
+# rescue name: its text is always the fixed one that dropin_ok accepts,
+# which every publish writes again.
 # Both change a theme folder or drop-in only when it is exactly what this
 # publisher wrote (see theme_ok and dropin_ok), checked under the lock right
 # before the change; anything else is NOT_OURS and left alone.
 # Output: one JSON line on stdout, {"ok": true} or {"ok": false, "code",
 # "error"}, exit 0 or 1. {"ok": true, "leftovers": true}: the change was
-# made, but hidden temporary entries remain (the next run clears them). Exit 126 and 127 are pkexec's own (the prompt was
-# dismissed; not authorized or no polkit agent), with no JSON line. Exit
-# 137: the deadline's SIGKILL (below), with no JSON line.
+# made, but hidden temporary entries remain (the next run clears them).
+# A failure's line comes after the rollback has run: when the rollback
+# couldn't put everything back, the code is ROLLBACK_FAILED and the error
+# names the first failure and each thing that wasn't put back. Exit 126
+# and 127 are pkexec's own (the prompt was dismissed; not authorized or no
+# polkit agent), with no JSON line. Exit 137: the deadline's SIGKILL
+# (below), with no JSON line.
 # Codes: INVALID_ARGUMENT, INVALID_STAGE, NOT_OURS, BUSY, IO, TIMEOUT,
-# INTERNAL.
+# INTERNAL, ROLLBACK_FAILED.
 #
 # Deadline: the root side runs under its own `timeout` (120 s, then SIGKILL
 # 5 s later), since the caller's own timeout runs as the user and can't
@@ -63,6 +78,10 @@ transaction() {
   # failing command then reaches the ERR trap, which reports them.
   code=INTERNAL
   context="the login-screen transaction failed"
+  # The failure to report, kept for cleanup, which prints it once the
+  # rollback has run (see refuse).
+  reply_code=
+  reply_error=
   replied=
   committed=
   main_pid=$$
@@ -88,15 +107,17 @@ transaction() {
     printf '%s' "$text"
   }
 
-  # One JSON error line, once, then exit 1. In a subshell (a command
-  # substitution or a pipeline) only exit: the main shell reports it.
+  # Notes the failure, the first one only, then exits 1; cleanup (the EXIT
+  # trap) prints it after the rollback, which may turn it into
+  # ROLLBACK_FAILED. In a subshell (a command substitution or a pipeline)
+  # only exit: the main shell reports it.
   refuse() {
     if ((BASHPID != main_pid)); then
       exit 1
     fi
-    if [[ -z $replied ]]; then
-      replied=1
-      printf '{"ok": false, "code": "%s", "error": "%s"}\n' "$1" "$(json_text "$2")"
+    if [[ -z $replied && -z $reply_code ]]; then
+      reply_code=$1
+      reply_error=$2
     fi
     exit 1
   }
@@ -116,9 +137,11 @@ transaction() {
 
   # Ends the transaction, once: called at the end of a success, else by the
   # EXIT trap. Until the change is committed, it puts the previous theme
-  # folder and drop-in back and removes what this run made.
+  # folder and drop-in back and removes what this run made, then prints
+  # the failure that refuse noted. What it couldn't put back goes into
+  # `unrestored`, and the failure becomes ROLLBACK_FAILED.
   cleanup() {
-    local rc=$?
+    local rc=$? unrestored=() keep_new='' joined
     # A signal now would stop the rollback halfway.
     trap '' HUP INT TERM
     trap - ERR EXIT
@@ -127,38 +150,48 @@ transaction() {
       if [[ -n $dropin_written ]]; then
         if [[ -n $dropin_backup ]]; then
           mv --no-copy -fT -- "$dropin_backup" "$dropin" \
-            || echo "foamy-lock-login-screen: cannot put $dropin back" >&2
+            || unrestored+=("$dropin couldn't be put back")
         else
-          rm -f -- "$dropin" || echo "foamy-lock-login-screen: cannot remove $dropin" >&2
+          rm -f -- "$dropin" || unrestored+=("the new $dropin couldn't be removed")
         fi
       elif [[ -n $dropin_moved ]]; then
         mv --no-copy -T -- "$dropin_backup" "$dropin" \
-          || echo "foamy-lock-login-screen: cannot put $dropin back; it is $dropin_backup" >&2
+          || unrestored+=("$dropin couldn't be put back (it is $dropin_backup)")
       elif [[ -n $dropin_backup ]]; then
         rm -f -- "$dropin_backup"
       fi
       [[ -z $dropin_tmp ]] || rm -f -- "$dropin_tmp"
       # After an exchange $new_dir holds the previous theme: exchange back.
-      keep_new=
       if [[ -n $exchanged ]]; then
         # If this fails, $new_dir is the only copy of the previous theme:
-        # it stays (hidden; the next run's recovery can put it back).
+        # it stays under its rescue name (see "Rescue folders").
         mv --exchange --no-copy -T -- "$new_dir" "$theme" \
           || {
-            echo "foamy-lock-login-screen: cannot put $theme back; it is in $new_dir" >&2
+            unrestored+=("$theme couldn't be put back (the previous theme is kept in $new_dir)")
             keep_new=1
           }
       elif [[ -n $new_placed ]]; then
         mv --no-copy -T -- "$theme" "$new_dir" \
-          || echo "foamy-lock-login-screen: cannot remove the new $theme" >&2
+          || unrestored+=("the new $theme couldn't be removed")
       fi
       if [[ -n $old_moved ]]; then
+        # A failure keeps $aside_dir, a rescue folder, as it is.
         mv --no-copy -T -- "$aside_dir" "$theme" \
-          || echo "foamy-lock-login-screen: cannot put $theme back; it is in $aside_dir" >&2
+          || unrestored+=("$theme couldn't be put back (it is kept in $aside_dir)")
       elif [[ -n $aside_dir ]]; then
         rmdir -- "$aside_dir"
       fi
       [[ -z $new_dir || -n $keep_new ]] || rm -rf -- "$new_dir"
+    fi
+    if [[ -z $replied ]] && ((${#unrestored[@]})); then
+      replied=1
+      rc=1
+      printf -v joined '%s; ' "${unrestored[@]}"
+      printf '{"ok": false, "code": "ROLLBACK_FAILED", "error": "%s"}\n' "$(json_text \
+        "${reply_error:-$context} (${reply_code:-$code}), and putting back what it had changed failed too: ${joined%; }")"
+    elif [[ -z $replied && -n $reply_code ]]; then
+      replied=1
+      printf '{"ok": false, "code": "%s", "error": "%s"}\n' "$reply_code" "$(json_text "$reply_error")"
     fi
     exit "$rc"
   }
@@ -174,7 +207,7 @@ transaction() {
     fi
     if [[ $1 == TERM ]]; then
       [[ -z $committed ]] || succeed_with_leftovers
-      refuse TIMEOUT "the login-screen change took too long and was stopped; what it had changed is put back"
+      refuse TIMEOUT "the login-screen change took too long and was stopped"
     fi
     refuse INTERNAL "the transaction was interrupted"
   }
@@ -191,6 +224,19 @@ transaction() {
   step_end() {
     in_step=
     [[ -z $pending ]] || on_signal "$pending"
+  }
+
+  # Right after the commit, in the commit's step (so no signal comes
+  # between): the rescue folder that the variable named $1 holds takes a
+  # leftover name, which a later run clears (see "Rescue folders"). Can't
+  # fail: if the rename does, the folder keeps its rescue name.
+  leftover_name() {
+    local -n folder=$1
+    local name
+    name=$(mktemp -u -- "$themes/.foamy-lock.old-XXXXXX") || return 0
+    if shielded mv --no-copy -T -- "$folder" "$name"; then
+      folder=$name
+    fi
   }
 
   # Runs "$@" with HUP, INT and TERM ignored, which an exec keeps, so the
@@ -428,9 +474,11 @@ transaction() {
   # entries. Under the lock no other run owns them, and in these folders
   # only their owner (root) can have made them. If one is the only copy of
   # the theme our drop-in selects, it goes back first (a previous theme
-  # set aside before an older publisher placed the new one).
+  # set aside before an older publisher placed the new one, or one that a
+  # failed rollback kept under a rescue name).
   if [[ ! -e $theme && ! -L $theme ]] && dropin_ok; then
-    for candidate in "$themes"/.foamy-lock.old-?????? "$themes"/.foamy-lock.new-??????; do
+    for candidate in "$themes"/.foamy-lock.old-?????? "$themes"/.foamy-lock.new-?????? \
+      "$themes"/.foamy-lock.rescue-??????; do
       if [[ $(stat -c %u -- "$candidate" 2>/dev/null) == "$EUID" ]] && theme_ok "$candidate"; then
         context="cannot put $candidate back as $theme"
         mv --no-copy -T -- "$candidate" "$theme"
@@ -443,7 +491,8 @@ transaction() {
   # Only what is provably this publisher's goes, under mktemp's names: a
   # theme folder that passes theme_ok, a drop-in file whose text is ours
   # or the start of it (a write cut short). Anything else stays; it is
-  # hidden, and SDDM skips hidden entries.
+  # hidden, and SDDM skips hidden entries. A rescue folder never goes:
+  # it can be the only copy of a previous theme (see "Rescue folders").
   local leftover text
   while IFS= read -r -d '' leftover; do
     if theme_ok "$leftover"; then
@@ -484,7 +533,7 @@ transaction() {
       # where SDDM looks.
       context="cannot remove $theme"
       step_begin
-      aside_dir=$(shielded mktemp -d -- "$themes/.foamy-lock.old-XXXXXX") || :
+      aside_dir=$(shielded mktemp -d -- "$themes/.foamy-lock.rescue-XXXXXX") || :
       step_end
       [[ -n $aside_dir ]]
       step_begin
@@ -495,7 +544,10 @@ transaction() {
       step_end
       [[ -n $old_moved ]]
     fi
+    step_begin
     committed=1
+    [[ -z $old_moved ]] || leftover_name aside_dir
+    step_end
     # Restored. What is left is deleting what was moved aside; a failure
     # can't undo the restore, and the next run clears the hidden entries.
     left=
@@ -614,9 +666,19 @@ transaction() {
   check_theme
   check_dropin
   # Publish: the new folder into place in one step, then the drop-in. After
-  # the exchange $new_dir holds the previous theme until it is deleted last.
+  # the exchange $new_dir holds the previous theme until it is deleted last,
+  # so it takes its rescue name first (see "Rescue folders").
   code=IO
   context="cannot replace $theme"
+  if [[ -n $theme_present ]]; then
+    rescue=$(mktemp -u -- "$themes/.foamy-lock.rescue-XXXXXX")
+    step_begin
+    if shielded mv --no-copy -T -- "$new_dir" "$rescue"; then
+      new_dir=$rescue
+    fi
+    step_end
+    [[ $new_dir == "$rescue" ]]
+  fi
   step_begin
   if [[ -n $theme_present ]]; then
     if shielded mv --exchange --no-copy -T -- "$new_dir" "$theme"; then
@@ -660,7 +722,10 @@ transaction() {
   fi
   step_end
   [[ -n $dropin_written ]]
+  step_begin
   committed=1
+  [[ -z $exchanged ]] || leftover_name new_dir
+  step_end
 
   # Published. What is left is tidying; it can't undo the copy.
   if [[ -n $dropin_backup ]]; then

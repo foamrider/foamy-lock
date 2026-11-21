@@ -671,24 +671,86 @@ case_term_after_rename() {
   ((failed == 0))
 }
 
-# The rollback can't exchange the theme back (the themes folder became
-# read-only after the exchange): the previous theme stays in its hidden
-# folder instead of being deleted.
-case_rollback_exchange_fails() {
-  new_root rollback-exchange
+# A publish of a second look whose rollback can't exchange the theme back
+# (the themes folder became read-only after the exchange). Sets first (the
+# previous look's hash) and kept (the one hidden folder left, which holds
+# it).
+fail_rollback_exchange() {
   stage
   publish publish "$stage_dir"
   expect ok
-  local first=$stage_hash kept
+  first=$stage_hash
   stage '.timeFormat = "12h"'
   at_pause() { chmod 0555 -- "$themes"; }
   publish_term_at publish-exchange publish "$stage_dir"
   chmod 0755 -- "$themes"
-  expect TIMEOUT
-  kept=$(find "$themes" -mindepth 1 -maxdepth 1 -name '.foamy-lock.new-*' -print -quit)
+  kept=$(find "$themes" -mindepth 1 -maxdepth 1 -name '.foamy-lock.*' -print -quit)
+}
+
+# The previous theme stays in its rescue folder instead of being deleted,
+# and the answer says the rollback failed, not only why the run stopped.
+case_rollback_exchange_fails() {
+  new_root rollback-exchange
+  local first kept
+  fail_rollback_exchange
+  expect ROLLBACK_FAILED "took too long"
   [[ -n $kept && -f $kept/manifest.json ]] || fail "the previous theme was deleted"
+  [[ $kept == "$themes"/.foamy-lock.rescue-?????? ]] || fail "kept under a name the sweep matches: $kept"
   jq -e --arg hash "$first" '.hash == $hash' "$kept/manifest.json" >/dev/null \
     || fail "the hidden folder isn't the previous theme"
+  jq -e --arg text "$theme couldn't be put back (the previous theme is kept in $kept)" \
+    '.error | contains("(TIMEOUT)") and contains($text)' <<<"$out" >/dev/null \
+    || fail "the error doesn't name both failures: $out"
+}
+
+# Later runs never sweep the rescue folder: one that fails keeps it while
+# the theme folder is there, and one without the theme folder puts it back.
+case_rescue_kept() {
+  new_root rescue
+  local first kept
+  fail_rollback_exchange
+  [[ -n $kept ]] || fail "no rescue folder"
+  stage '.timeFormat = "24h"'
+  printf 'x' >>"$stage_dir/Main.qml"
+  publish publish "$stage_dir"
+  expect INVALID_STAGE "Main.qml"
+  [[ -d $kept ]] || fail "a later run removed the rescue folder"
+  jq -e --arg hash "$first" '.hash == $hash' "$kept/manifest.json" >/dev/null \
+    || fail "the rescue folder changed"
+  rm -rf -- "$theme"
+  publish publish "$stage_dir"
+  expect INVALID_STAGE "Main.qml"
+  [[ ! -e $kept ]] || fail "the rescue folder wasn't put back"
+  jq -e --arg hash "$first" '.state == "installed" and .installed.hash == $hash' <<<"$(status)" >/dev/null \
+    || fail "status: $(status)"
+  expect_no_leftovers
+}
+
+# Restore moved both aside, then can't put either back (both folders
+# became read-only): the theme stays in its rescue folder, which a later
+# run doesn't sweep although no drop-in selects it any more.
+case_restore_rollback_fails() {
+  new_root restore-rescue
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  local first=$stage_hash kept
+  at_pause() { chmod 0555 -- "$themes" "$confd"; }
+  publish_term_at restore-theme restore
+  chmod 0755 -- "$themes" "$confd"
+  expect ROLLBACK_FAILED "took too long"
+  kept=$(find "$themes" -mindepth 1 -maxdepth 1 -name '.foamy-lock.*' -print -quit)
+  [[ $kept == "$themes"/.foamy-lock.rescue-?????? && -f $kept/manifest.json ]] \
+    || fail "the theme isn't kept in a rescue folder: $kept"
+  jq -e --arg text "$theme couldn't be put back (it is kept in $kept)" '.error | contains($text)' <<<"$out" >/dev/null \
+    || fail "the error doesn't name the theme: $out"
+  [[ ! -e $theme && ! -e $dropin ]] || fail "the theme or drop-in is back"
+  stage '.timeFormat = "12h"'
+  printf 'x' >>"$stage_dir/Main.qml"
+  publish publish "$stage_dir"
+  expect INVALID_STAGE "Main.qml"
+  [[ -d $kept ]] || fail "a later run removed the rescue folder"
+  jq -e --arg hash "$first" '.hash == $hash' "$kept/manifest.json" >/dev/null || fail "the rescue folder changed"
 }
 
 case_untrusted_folder() {
@@ -725,7 +787,8 @@ case_busy() {
 cases=(good_publish theme_conf_escapes second_publish_replaces missing_config_folder
   leftovers_removed restore symlink_same_content symlink_other_content symlink_unreadable file_mismatch
   bad_manifest bad_snapshot bad_arguments not_ours failure_after_swap restore_rollback restore_leftover
-  interrupted_recovered deadline term_after_rename rollback_exchange_fails untrusted_folder busy)
+  interrupted_recovered deadline term_after_rename rollback_exchange_fails rescue_kept restore_rollback_fails
+  untrusted_folder busy)
 (($#)) && cases=("$@")
 failed=()
 for name in "${cases[@]}"; do

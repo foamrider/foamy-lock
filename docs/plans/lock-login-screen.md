@@ -445,6 +445,15 @@ writes it; the greeter part's test tooling writes it the same way.
   previous state back and answers `TIMEOUT`.
 - `{"ok": true, "leftovers": true}`: the change was made, but hidden
   temporary entries remain; SDDM ignores them and the next run clears them.
+- A failure's line comes after the rollback. When the rollback can't put
+  everything back, the code is `ROLLBACK_FAILED` (exit 1) and the error
+  names the first failure and what wasn't put back. Until the commit, the
+  hidden folder that holds the previous theme (publish's after the
+  exchange, restore's after the move) has a `.foamy-lock.rescue-*` name,
+  so a theme the rollback couldn't put back stays there; no later run
+  sweeps it, and a later run puts it back only when the theme folder is
+  missing, Foamy's drop-in is there and the folder is exactly a theme
+  Foamy installed. Studio never says "Nothing was changed" for it.
 
 **Studio** (step 5) runs `studio login-screen status` to show the section
 and its state, `studio login-screen stage` with the applied look (with
@@ -454,10 +463,11 @@ the avatar the lock shows now — asked with `omarchy-shell foamy.lock status`
 the cached file alone, which outlives a removed photo — and a background
 prepared by the `background` kind at most 3840 × 2160), then the publisher
 with the returned folder, then `status` again, and compares
-`installed.hash` with `stage`'s hash. A change to the lock's rendered
-avatar file, or to the photo it comes from (the lock's `avatarPath`, learnt
-from the same `status`; one watch, moved when the path changes), makes
-Studio check again.
+`installed.hash` with `stage`'s hash; when the applied look or another
+input changed while the copy ran, it checks again with the inputs as they
+are now. A change to the lock's rendered avatar file, or to the photo it
+comes from (the lock's `avatarPath`, learnt from the same `status`; one
+watch, moved when the path changes), makes Studio check again.
 
 ## Steps
 
