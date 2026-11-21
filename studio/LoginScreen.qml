@@ -71,15 +71,15 @@ Item {
   readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME") || home + "/.cache"
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
   readonly property string loginCache: cacheHome + "/foamy-lock-studio/login"
-  // Where the lock renders the avatar, and the photo it renders it from
-  // (`avatarPath` in the lock's last status, "" before one): both watched,
-  // so a changed, replaced or removed photo makes the comparison old
-  // (`avatarRevision` is in `key`). The lock clears its render path for a
-  // removed photo without touching avatar.png, so the render alone misses
-  // that.
+  // Where the lock renders the avatar (not copied: Studio decodes the
+  // photo itself), and the photo (`avatarPath` in the lock's last status,
+  // "" before one), watched so a changed, replaced or removed photo makes
+  // the comparison old (`avatarRevision` is in `key`). A picture
+  // background's file is watched the same way (`backgroundRevision`).
   readonly property string lockAvatar: cacheHome + "/omarchy/foamy.lock/avatar.png"
   property string lockAvatarSource: ""
   property int avatarRevision: 0
+  property int backgroundRevision: 0
   readonly property string videoDirectory: cacheHome + "/omarchy/foamy.lock/video/"
 
   // The last `status` (Login.statusReport, ok) and the last failure's code
@@ -153,6 +153,7 @@ Item {
     showUserInfo: settings.showUserInfo,
     wallpaper: showsPicture && look.background.source === "omarchy" ? wallpaperKey : "",
     avatar: avatarRevision,
+    picture: showsPicture && look.background.source === "picture" ? backgroundRevision : 0,
     size: showsPicture ? size : null,
     colors: Object.keys(colors).map(function (name) {
       return String(colors[name])
@@ -476,23 +477,24 @@ Item {
     run(action, "1830s", ["bash", "-c", '[[ -f $1 && -x $1 ]] || exit 70; exec -- "$@"', "foamy-lock-studio-publish", script].concat(args), "", false, ({}))
   }
 
-  // Not read (preload off): only its changes count. The lock renames each
-  // new render into place; Quickshell's watch follows the path.
-  FileView {
-    path: login.lockAvatar
-    preload: false
-    watchChanges: true
-    printErrors: false
-    onFileChanged: login.avatarRevision += 1
-  }
-  // The source photo the same way: one watch, moved when the lock names
-  // another photo; none ("") before the lock's first status.
+  // Not read (preload off): only their changes count. Quickshell's watch
+  // follows the path, so a file renamed into place counts too.
+  // The photo: one watch, moved when the lock names another photo; none
+  // ("") before the lock's first status.
   FileView {
     path: login.lockAvatarSource
     preload: false
     watchChanges: true
     printErrors: false
     onFileChanged: login.avatarRevision += 1
+  }
+  // A picture background's file (or video), replaced or deleted.
+  FileView {
+    path: login.showsPicture && login.look.background.source === "picture" ? String(login.look.background.path || "") : ""
+    preload: false
+    watchChanges: true
+    printErrors: false
+    onFileChanged: login.backgroundRevision += 1
   }
 
   Process {

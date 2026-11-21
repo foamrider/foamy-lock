@@ -832,7 +832,7 @@ Item {
           // A new photo where the lock reads it (~/.face), written in place
           // as a user's tool would; Studio decodes the photo itself.
           var asked = lockStatusCalls()
-          var face = Quickshell.env("HOME") + "/.face"
+          var face = Quickshell.env("HOME") + "/.face";
           sh('cp "$1" "$3/avatar.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [face, fake + "/poster.png", fake], function () {
             waitFor(function () {
               return loginIdle() && login.sectionState === "outdated"
@@ -915,6 +915,45 @@ Item {
               }, "matching once the lock answers", next, 40000)
             })
           }, 40000)
+        }
+      },
+      {
+        // A picture background replaced in place while Studio is open: the
+        // watch on it makes the comparison old, and the old one comes back.
+        name: "login: a replaced background picture makes it check again",
+        wait: 0,
+        run: function (next) {
+          var picture = fake + "/login-picture.png";
+          sh('cp "$1" "$2"', [fake + "/poster.png", picture], function () {
+            studio.savedDraft = {
+              preset: "foamy",
+              background: {
+                source: "picture",
+                path: picture
+              }
+            }
+            studio.history = Draft.history(studio.savedDraft)
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated"
+            }, "out of date with the picture look", function () {
+              confirmLogin("copy", "ok", function () {
+                expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                sh('cp "$1" "$3/picture.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [picture, login.lockAvatar, fake], function () {
+                  waitFor(function () {
+                    return loginIdle() && login.sectionState === "outdated"
+                  }, function () {
+                    return "out of date after a new picture: " + login.sectionState + " " + login.backgroundRevision
+                  }, function () {
+                    sh('mv "$2/picture.before" "$1"', [picture, fake], function () {
+                      waitFor(function () {
+                        return loginIdle() && login.sectionState === "current"
+                      }, "matching again with the old picture", next, 40000)
+                    })
+                  }, 40000)
+                })
+              })
+            }, 40000)
+          })
         }
       },
       {
