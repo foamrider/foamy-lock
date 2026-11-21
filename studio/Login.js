@@ -216,6 +216,18 @@ function avatarPathOk(path) {
 // true, path, source } or { ok: false, path: "", source: "", code:
 // "lock-status" } when the lock didn't answer or said no usable path: the
 // copy then stops, it never guesses an avatar.
+// Avatar outcomes for which the lock shows the initial (the photo is gone
+// or isn't a usable picture): the login screen gets no avatar either. Any
+// other failure (the sandbox, the cache, the helper) fails the copy, which
+// then can't vouch for the photo.
+var NO_AVATAR = ["avatar-missing", "invalid-avatar-path", "not-owned-regular-file", "not-regular-file",
+  "source-unavailable", "input-too-large", "unsupported-format", "animated-image", "invalid-png",
+  "decode-failed", "decode-timeout", "invalid-pixels"]
+
+function avatarAbsent(code) {
+  return NO_AVATAR.indexOf(code) !== -1
+}
+
 function lockAvatarReport(exitCode, text) {
   var data = exitCode === 0 ? replyOf(text) : null
   if (!data || !avatarPathOk(data.avatarRenderPath) || !avatarPathOk(data.avatarPath))
@@ -301,6 +313,6 @@ if (typeof module !== "undefined") module.exports = {
   STATES: STATES, COLOR_KEYS: COLOR_KEYS, THEMED_KEYS: THEMED_KEYS, LEFT_OUT: LEFT_OUT, MAX_WIDTH: MAX_WIDTH, MAX_HEIGHT: MAX_HEIGHT,
   replyOf: replyOf, exitProblem: exitProblem, statusReport: statusReport, showsPicture: showsPicture, pictureSize: pictureSize,
   colorText: colorText, stageRequest: stageRequest, stageReport: stageReport, pictureReport: pictureReport,
-  lockAvatarReport: lockAvatarReport, hasManaged: hasManaged, restoreOffered: restoreOffered,
+  lockAvatarReport: lockAvatarReport, avatarAbsent: avatarAbsent, hasManaged: hasManaged, restoreOffered: restoreOffered,
   publishReport: publishReport, sectionState: sectionState, leftOut: leftOut, confirmed: confirmed
 }

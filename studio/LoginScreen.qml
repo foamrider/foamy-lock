@@ -290,7 +290,10 @@ Item {
       shown = Login.lockAvatarReport(exitCode, text)
       if (!shown.ok)
         return prepareFailed(shown.code)
-      job.lockAvatar = shown.path
+      // The photo itself, decoded here as the lock decodes it: the lock
+      // re-reads its photo only when it locks, so its rendered copy can be
+      // older than the photo (removed or replaced since).
+      job.lockAvatar = shown.source
       lockAvatarSource = shown.source
       if (job.source && Layout.isVideoPath(job.source))
         return runPoster(job.source)
@@ -310,9 +313,9 @@ Item {
       return runAvatar()
     case "avatar":
       avatar = Login.pictureReport("avatar", exitCode, text, loginCache)
-      // The lock said it shows this avatar: without it the copy would not
-      // match the lock.
-      if (!avatar.ok)
+      // No usable photo: the lock shows the initial, and so does the login
+      // screen. Anything else stops the copy.
+      if (!avatar.ok && !Login.avatarAbsent(avatar.code))
         return prepareFailed(avatar.code)
       job.avatar = avatar.path
       return runStage()

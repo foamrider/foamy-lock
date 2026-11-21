@@ -139,7 +139,9 @@ const SHELL_JSON: &str =
 /// lock's avatar as `$dir/lock-status` says (`avatar` by default: the
 /// photo `$HOME/.face` as `avatarPath`, and the lock's cache `avatar.png`
 /// as `avatarRenderPath` while that photo exists, "" as the lock says once
-/// it is removed; `fail`: like a lock that isn't running) and counts in
+/// it is removed; `stale`: the render always, as the real lock reports until
+/// it locks again and re-reads the photo; `fail`: like a lock that isn't
+/// running) and counts in
 /// `$dir/status-count`, also apart. Anything but `foamy.lock saveLook`,
 /// `previewLook`, `savePreset`, `deletePreset` or `setCoverArt` with one argument, or
 /// `renamePreset` with two, is refused.
@@ -159,6 +161,8 @@ if [[ $1:$2:$# == foamy.lock:status:2 ]]; then
       render=""
       [[ -e $HOME/.face ]] && render="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png"
       printf '{"userName":"sample","avatarPath":"%s","avatarRenderPath":"%s"}\n' "$HOME/.face" "$render" ;;
+    stale)
+      printf '{"userName":"sample","avatarPath":"%s","avatarRenderPath":"%s"}\n' "$HOME/.face" "${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png" ;;
     fail) echo 'omarchy-shell is not running' >&2; exit 1 ;;
     *) echo "fake omarchy-shell: unknown lock-status" >&2; exit 2 ;;
   esac

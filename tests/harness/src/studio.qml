@@ -829,15 +829,18 @@ Item {
         name: "login: a changed profile photo makes it check again",
         wait: 0,
         run: function (next) {
+          // A new photo where the lock reads it (~/.face), written in place
+          // as a user's tool would; Studio decodes the photo itself.
           var asked = lockStatusCalls()
-          sh('cp "$1" "$3/avatar.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [login.lockAvatar, fake + "/poster.png", fake], function () {
+          var face = Quickshell.env("HOME") + "/.face"
+          sh('cp "$1" "$3/avatar.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [face, fake + "/poster.png", fake], function () {
             waitFor(function () {
               return loginIdle() && login.sectionState === "outdated"
             }, function () {
               return "out of date after a new photo: " + login.sectionState + " " + login.avatarRevision
             }, function () {
               expect(lockStatusCalls() > asked, "the lock was asked again")
-              sh('mv "$2/avatar.before" "$1"', [login.lockAvatar, fake], function () {
+              sh('mv "$2/avatar.before" "$1"', [face, fake], function () {
                 waitFor(function () {
                   return loginIdle() && login.sectionState === "current"
                 }, "matching again with the old photo", next, 40000)
@@ -847,15 +850,18 @@ Item {
         }
       },
       {
-        // The photo was removed: the lock shows the initial, but its old
-        // avatar.png is still in the cache. No refresh is asked for: the
-        // watch on the photo notices. The old avatar.png is never copied.
+        // The photo was removed: the lock's old avatar.png is still in the
+        // cache, and the lock still reports it until it locks again (the
+        // fake's `stale`). No refresh is asked for: the watch on the photo
+        // notices. Studio decodes the photo itself, so the old avatar.png is
+        // never copied.
         name: "login: the lock shows no avatar, so none is copied",
         wait: 0,
         run: function (next) {
           var face = Quickshell.env("HOME") + "/.face";
           expect(login.sectionState === "current" && login.lockAvatarSource === face, "matches, the photo watched: " + login.sectionState + " " + login.lockAvatarSource)
           var asked = lockStatusCalls()
+          setLockStatus("stale")
           sh('test -s "$1"; mv "$2" "$2.away"', [login.lockAvatar, face], function () {
             waitFor(function () {
               return loginIdle() && login.sectionState === "outdated"
@@ -870,6 +876,7 @@ Item {
                 expect(login.sectionState === "current", "matches without it")
                 // The photo is back: the watch notices that too, and the
                 // lock's next answer counts.
+                setLockStatus("avatar")
                 sh('mv "$1.away" "$1"', [face], function () {
                   waitFor(function () {
                     return loginIdle() && login.sectionState === "outdated"

@@ -272,3 +272,10 @@ test('the publisher\'s ok counts only when status agrees', () => {
   assert.equal(Login.confirmed('restore', Login.statusReport(0, line(status({ state: 'broken' }))), ''), 'unconfirmed')
   assert.equal(Login.confirmed('restore', null, ''), 'unconfirmed')
 })
+
+test('the avatar: a gone or unusable photo is no avatar, a failing sandbox stops the copy', () => {
+  for (const code of ['avatar-missing', 'not-owned-regular-file', 'unsupported-format', 'animated-image', 'decode-failed', 'input-too-large'])
+    assert.equal(Login.avatarAbsent(code), true, code)
+  for (const code of ['decoder-unavailable', 'sandbox-architecture-unsupported', 'job-timeout', 'timeout', 'helper-failed', 'avatar-helper-failed', 'cache-busy', 'start-failed'])
+    assert.equal(Login.avatarAbsent(code), false, code)
+})
