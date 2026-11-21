@@ -33,7 +33,9 @@
 # Deadline: the root side runs under its own `timeout` (120 s, then SIGKILL
 # 5 s later), since the caller's own timeout runs as the user and can't
 # signal a root process. On the SIGTERM the transaction puts the previous
-# state back and reports TIMEOUT. A caller that kills pkexec while the
+# state back and reports TIMEOUT. Each rename and its note in the rollback
+# state are one step that the SIGTERM can't split (see step_begin), so the
+# rollback always knows what was moved. A caller that kills pkexec while the
 # password prompt is open cancels cleanly: nothing ran as root yet. After
 # authentication pkexec has become the root process (it execs), so the run
 # finishes or stops at this deadline on its own.
@@ -41,7 +43,10 @@
 # Tests: with FOAMY_LOCK_PUBLISH_ROOT set to an absolute folder, a non-root
 # run skips pkexec and setpriv and runs the same transaction text directly,
 # with every system path under that folder, and takes the deadline from
-# FOAMY_LOCK_PUBLISH_DEADLINE (seconds) when set. As root both are ignored.
+# FOAMY_LOCK_PUBLISH_DEADLINE (seconds) when set. FOAMY_LOCK_PUBLISH_PAUSE
+# names a point right after a rename (publish-place, publish-exchange,
+# publish-dropin, restore-dropin, restore-theme) where the run waits on the
+# FIFO <test root>/pause (see pause_at). As root all three are ignored.
 set -euo pipefail
 
 # The privileged transaction. It runs in a fresh `bash -c` from
@@ -71,6 +76,9 @@ transaction() {
   dropin_backup=
   dropin_written=
   dropin_moved=
+  # Set inside a step (see step_begin), and the signal that came meanwhile.
+  in_step=
+  pending=
 
   json_text() {
     local text=$1
@@ -151,12 +159,49 @@ transaction() {
 
   # Only root can signal this process: SIGTERM is the deadline's (see the
   # header), or a shutdown. Once committed, only deleting hidden leftovers
-  # remains, so the change stands.
+  # remains, so the change stands. Inside a step the signal is only
+  # recorded; step_end handles it.
+  on_signal() {
+    if [[ -n $in_step ]]; then
+      pending=$1
+      return 0
+    fi
+    if [[ $1 == TERM ]]; then
+      [[ -z $committed ]] || succeed_with_leftovers
+      refuse TIMEOUT "the login-screen change took too long and was stopped; what it had changed is put back"
+    fi
+    refuse INTERNAL "the transaction was interrupted"
+  }
+
+  # A step is one change on disk and its note in the rollback state, which a
+  # signal must not split: a note that lags its change makes cleanup act on
+  # the wrong picture (after an exchange $new_dir holds the previous theme,
+  # which cleanup would delete). Between step_begin and step_end a signal is
+  # only recorded. The change runs through `shielded`, and its status
+  # decides the note; nothing between the change and its note can fail.
+  step_begin() {
+    in_step=1
+  }
+  step_end() {
+    in_step=
+    [[ -z $pending ]] || on_signal "$pending"
+  }
+
+  # Runs "$@" with HUP, INT and TERM ignored, which an exec keeps, so the
+  # deadline's SIGTERM to the process group can't stop the command between
+  # its change and its exit. A signal before that stops only the subshell,
+  # before the command ran; either way the status tells what happened.
+  shielded() {
+    (
+      trap '' HUP INT TERM
+      exec "$@"
+    )
+  }
+
   trap cleanup EXIT
   trap 'refuse "$code" "$context"' ERR
-  trap 'refuse INTERNAL "the transaction was interrupted"' HUP INT
-  trap '[[ -z $committed ]] || succeed_with_leftovers
-    refuse TIMEOUT "the login-screen change took too long and was stopped; what it had changed is put back"' TERM
+  trap 'on_signal INT' HUP INT
+  trap 'on_signal TERM' TERM
 
   mode=${1-}
   stage=${2-}
@@ -171,6 +216,7 @@ transaction() {
   if ((EUID == 0)); then
     root=
     owner=0
+    pause=
     uid=${PKEXEC_UID-}
     [[ $uid =~ ^[1-9][0-9]{0,9}$ ]] \
       || refuse INVALID_ARGUMENT "run through pkexec as a user other than root (PKEXEC_UID)"
@@ -181,6 +227,7 @@ transaction() {
     context="the test root $root isn't a folder without symlinks"
     [[ $(realpath -e -- "$root") == "$root" && -d $root ]]
     owner=$EUID
+    pause=${FOAMY_LOCK_PUBLISH_PAUSE-}
     uid=${PKEXEC_UID-}
     [[ $uid == "$EUID" ]] || refuse INTERNAL "a test run needs PKEXEC_UID set to its own uid"
   fi
@@ -195,6 +242,15 @@ transaction() {
   if ((EUID == 0)); then
     as_user=(setpriv "--reuid=$uid" "--regid=$gid" --clear-groups --no-new-privs --)
   fi
+
+  # Tests only (see the header): at the point that $pause names, says so
+  # through the FIFO $root/pause and waits until the test writes a line
+  # there, so the test can signal the run at that point.
+  pause_at() {
+    [[ -n $pause && $pause == "$1" ]] || return 0
+    printf '%s\n' "$1" >"$root/pause" || :
+    shielded head -n 1 -- "$root/pause" >/dev/null || :
+  }
 
   themes=$root/usr/share/sddm/themes
   confd=$root/etc/sddm.conf.d
@@ -390,16 +446,29 @@ transaction() {
     if [[ -n $dropin_present ]]; then
       context="cannot remove $dropin"
       dropin_backup=$(mktemp -u -- "$confd/.99-zz-foamy-lock.conf.old-XXXXXX")
-      mv --no-copy -T -- "$dropin" "$dropin_backup"
-      dropin_moved=1
+      step_begin
+      if shielded mv --no-copy -T -- "$dropin" "$dropin_backup"; then
+        pause_at restore-dropin
+        dropin_moved=1
+      fi
+      step_end
+      [[ -n $dropin_moved ]]
     fi
     if [[ -n $theme_present ]]; then
       # Moved aside, so a removal that stops halfway leaves no broken theme
       # where SDDM looks.
       context="cannot remove $theme"
-      aside_dir=$(mktemp -d -- "$themes/.foamy-lock.old-XXXXXX")
-      mv --no-copy -T -- "$theme" "$aside_dir"
-      old_moved=1
+      step_begin
+      aside_dir=$(shielded mktemp -d -- "$themes/.foamy-lock.old-XXXXXX") || :
+      step_end
+      [[ -n $aside_dir ]]
+      step_begin
+      if shielded mv --no-copy -T -- "$theme" "$aside_dir"; then
+        pause_at restore-theme
+        old_moved=1
+      fi
+      step_end
+      [[ -n $old_moved ]]
     fi
     committed=1
     # Restored. What is left is deleting what was moved aside; a failure
@@ -451,7 +520,10 @@ transaction() {
 
   code=IO
   context="cannot make a folder in $themes"
-  new_dir=$(mktemp -d -- "$themes/.foamy-lock.new-XXXXXX")
+  step_begin
+  new_dir=$(shielded mktemp -d -- "$themes/.foamy-lock.new-XXXXXX") || :
+  step_end
+  [[ -n $new_dir ]]
   # A name no manifest can list (names never start with ".").
   staged_manifest=$new_dir/.manifest.staged
   read_staged manifest.json $((max_manifest + 1)) "$staged_manifest"
@@ -520,13 +592,18 @@ transaction() {
   # the exchange $new_dir holds the previous theme until it is deleted last.
   code=IO
   context="cannot replace $theme"
+  step_begin
   if [[ -n $theme_present ]]; then
-    mv --exchange --no-copy -T -- "$new_dir" "$theme"
-    exchanged=1
-  else
-    mv --no-copy -T -- "$new_dir" "$theme"
+    if shielded mv --exchange --no-copy -T -- "$new_dir" "$theme"; then
+      pause_at publish-exchange
+      exchanged=1
+    fi
+  elif shielded mv --no-copy -T -- "$new_dir" "$theme"; then
+    pause_at publish-place
     new_placed=1
   fi
+  step_end
+  [[ -n $exchanged || -n $new_placed ]]
 
   context="cannot write $dropin"
   if [[ ! -d $confd ]]; then
@@ -536,19 +613,28 @@ transaction() {
   fi
   trusted_dir "$confd"
   context="cannot write $dropin"
-  dropin_tmp=$(mktemp -- "$confd/.99-zz-foamy-lock.conf.XXXXXX")
+  step_begin
+  dropin_tmp=$(shielded mktemp -- "$confd/.99-zz-foamy-lock.conf.XXXXXX") || :
+  step_end
+  [[ -n $dropin_tmp ]]
   printf '%s' "$dropin_text" >"$dropin_tmp"
   chmod 0644 -- "$dropin_tmp"
   sync -f -- "$dropin_tmp"
   if [[ -n $dropin_present ]]; then
     # A hard link keeps the old drop-in for a rollback; SDDM skips hidden
-    # files.
+    # files. Named before the link, so cleanup removes it whether or not a
+    # signal let ln make it; no step is needed.
     dropin_backup=$(mktemp -u -- "$confd/.99-zz-foamy-lock.conf.old-XXXXXX")
     ln -- "$dropin" "$dropin_backup"
   fi
-  mv --no-copy -fT -- "$dropin_tmp" "$dropin"
-  dropin_tmp=
-  dropin_written=1
+  step_begin
+  if shielded mv --no-copy -fT -- "$dropin_tmp" "$dropin"; then
+    pause_at publish-dropin
+    dropin_tmp=
+    dropin_written=1
+  fi
+  step_end
+  [[ -n $dropin_written ]]
   committed=1
 
   # Published. What is left is tidying; it can't undo the copy.

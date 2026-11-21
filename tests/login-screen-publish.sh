@@ -129,11 +129,12 @@ expect() {
   fi
 }
 
-# Every path under usr and etc with its type, mode and content hash.
+# Every path under usr and etc with its type, mode, inode and content hash.
+# The inode tells a put-back original from a copy with the same text.
 system_state() {
   (
     cd "$root" || exit 1
-    find usr etc -printf '%p %y %m %l\n' | sort
+    find usr etc -printf '%p %y %m %i %l\n' | sort
     find usr etc -type f -exec sha256sum -- {} + | sort
   )
 }
@@ -573,6 +574,83 @@ case_deadline() {
   expect_no_leftovers
 }
 
+# Like publish, with the transaction paused at the test-only point $1
+# (FOAMY_LOCK_PUBLISH_PAUSE): once the transaction says through the FIFO
+# $root/pause that it is there, the root side's timeout gets SIGTERM, as on
+# its deadline (it sends it on to its whole process group), and only then
+# may the transaction go on. Sets out and rc.
+publish_term_at() {
+  local point=$1 pid fd here
+  shift
+  [[ ${root-} == "$tmp"/?* ]] || fail "no test root"
+  mkfifo -- "$root/pause"
+  # Read and write, so neither side's open of the FIFO blocks, even when the
+  # transaction stops before it waits.
+  exec {fd}<>"$root/pause"
+  FOAMY_LOCK_PUBLISH_ROOT=$root FOAMY_LOCK_PUBLISH_PAUSE=$point FOAMY_LOCK_PUBLISH_DEADLINE=60 \
+    "$publisher" "$@" >"$tmp/out" 2>"$tmp/stderr" {fd}<&- &
+  # The publisher execs the root side's timeout, so this is its pid.
+  pid=$!
+  here=
+  read -r -t 30 here <&"$fd" || :
+  if [[ $here != "$point" ]]; then
+    kill -KILL "$pid" 2>/dev/null
+    wait "$pid"
+    exec {fd}>&-
+    fail "the transaction didn't reach $point: $(cat "$tmp/out") $(cat "$tmp/stderr")"
+  fi
+  kill -TERM "$pid"
+  printf 'go\n' >&"$fd"
+  wait "$pid"
+  rc=$?
+  exec {fd}>&-
+  rm -f -- "$root/pause"
+  out=$(cat "$tmp/out")
+}
+
+# SIGTERM right after each rename, before the transaction has noted it: the
+# run answers TIMEOUT and the system is as it was before the run, the
+# previous theme folder and drop-in themselves (not copies) back in place.
+# Each row: command, pause point, and what is installed before the run.
+term_rows=(
+  'publish publish-place none'
+  'publish publish-dropin none'
+  'publish publish-exchange installed'
+  'publish publish-dropin installed'
+  'restore restore-dropin installed'
+  'restore restore-theme installed'
+)
+
+case_term_after_rename() {
+  local row mode point before args failed=0
+  for row in "${term_rows[@]}"; do
+    read -r mode point before <<<"$row"
+    (
+      new_root "term-$mode-$point-$before"
+      stage
+      if [[ $before == installed ]]; then
+        publish publish "$stage_dir"
+        expect ok
+        stage '.timeFormat = "12h"'
+      fi
+      local state
+      state=$(system_state)
+      args=("$mode")
+      [[ $mode == restore ]] || args+=("$stage_dir")
+      publish_term_at "$point" "${args[@]}"
+      expect TIMEOUT "took too long"
+      [[ $(system_state) == "$state" ]] \
+        || fail "the system isn't as it was; first differences:" \
+          "$(diff <(echo "$state") <(system_state) | grep -v '^[<>] [0-9a-f]\{64\} ' | head -n 6)"
+      expect_no_leftovers
+    ) || {
+      echo "    row: $row" >&2
+      failed=1
+    }
+  done
+  ((failed == 0))
+}
+
 case_untrusted_folder() {
   new_root untrusted
   stage
@@ -607,7 +685,7 @@ case_busy() {
 cases=(good_publish theme_conf_escapes second_publish_replaces missing_config_folder
   leftovers_removed restore symlink_same_content symlink_other_content symlink_unreadable file_mismatch
   bad_manifest bad_snapshot bad_arguments not_ours failure_after_swap restore_rollback restore_leftover
-  interrupted_recovered deadline untrusted_folder busy)
+  interrupted_recovered deadline term_after_rename untrusted_folder busy)
 (($#)) && cases=("$@")
 failed=()
 for name in "${cases[@]}"; do
