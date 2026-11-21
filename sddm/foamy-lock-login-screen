@@ -1,0 +1,473 @@
+#!/bin/bash
+# Foamy Lock's login-screen publisher (docs/plans/lock-login-screen.md,
+# "Parts" item 3 and "Steps 4 and 5 contract"). Lock Studio runs it as the
+# user:
+#   foamy-lock-login-screen publish <staging-folder>
+#   foamy-lock-login-screen restore
+# It checks its arguments, then runs one fixed transaction (the function
+# `transaction` below, passed as text) as root through a single pkexec call,
+# as omarchy-plymouth-set does with sudo. The transaction:
+#   publish: reads the staging folder that `studio login-screen stage` made
+#     (/run/user/<uid>/foamy-lock/login-screen/stage-<8 letters or digits>)
+#     with the invoking user's rights, under that user's stage.lock, into a
+#     new root-owned folder next to the theme; checks manifest.json (schema
+#     version 1, as status.rs reads it), every file's size and SHA-256, and
+#     snapshot.json; writes theme.conf and the installed manifest.json; then
+#     replaces /usr/share/sddm/themes/foamy-lock in one rename and writes
+#     /etc/sddm.conf.d/99-zz-foamy-lock.conf. On failure the previous theme
+#     folder and drop-in are put back.
+#   restore: removes that drop-in and theme folder, each only when it is
+#     Foamy Lock's.
+# Output: one JSON line on stdout, {"ok": true} or {"ok": false, "code",
+# "error"}, exit 0 or 1. Exit 126 and 127 are pkexec's own (the prompt was
+# dismissed; not authorized or no polkit agent), with no JSON line.
+# Codes: INVALID_ARGUMENT, INVALID_STAGE, NOT_OURS, BUSY, IO, INTERNAL.
+#
+# Tests: with FOAMY_LOCK_PUBLISH_ROOT set to an absolute folder, a non-root
+# run skips pkexec and setpriv and runs the same transaction text directly,
+# with every system path under that folder. As root the variable is ignored.
+set -euo pipefail
+
+# The privileged transaction. It runs in a fresh `bash -c` from
+# `declare -f transaction`, so it must use nothing defined outside it.
+# Arguments: publish <staging-folder> | restore.
+transaction() {
+  set -eEuo pipefail
+  PATH=/usr/bin
+  LC_ALL=C
+  export PATH LC_ALL
+  umask 077
+
+  # Each check names its failure in `code` and `context` before it runs; a
+  # failing command then reaches the ERR trap, which reports them.
+  code=INTERNAL
+  context="the login-screen transaction failed"
+  replied=
+  committed=
+  main_pid=$$
+  # Rollback state (see cleanup).
+  new_dir=
+  aside_dir=
+  old_moved=
+  new_placed=
+  dropin_tmp=
+  dropin_backup=
+  dropin_written=
+
+  json_text() {
+    local text=$1
+    text=${text//\\/\\\\}
+    text=${text//\"/\\\"}
+    text=${text//[$'\001'-$'\037']/ }
+    printf '%s' "$text"
+  }
+
+  # One JSON error line, once, then exit 1. In a subshell (a command
+  # substitution or a pipeline) only exit: the main shell reports it.
+  refuse() {
+    if ((BASHPID != main_pid)); then
+      exit 1
+    fi
+    if [[ -z $replied ]]; then
+      replied=1
+      printf '{"ok": false, "code": "%s", "error": "%s"}\n' "$1" "$(json_text "$2")"
+    fi
+    exit 1
+  }
+
+  # Ends the transaction, once: called at the end of a success, else by the
+  # EXIT trap. Until the change is committed, it puts the previous theme
+  # folder and drop-in back and removes what this run made.
+  cleanup() {
+    local rc=$?
+    # A signal now would stop the rollback halfway.
+    trap '' HUP INT TERM
+    trap - ERR EXIT
+    set +e
+    if [[ -z $committed ]]; then
+      if [[ -n $dropin_written ]]; then
+        if [[ -n $dropin_backup ]]; then
+          mv --no-copy -fT -- "$dropin_backup" "$dropin" \
+            || echo "foamy-lock-login-screen: cannot put $dropin back" >&2
+        else
+          rm -f -- "$dropin" || echo "foamy-lock-login-screen: cannot remove $dropin" >&2
+        fi
+      elif [[ -n $dropin_backup ]]; then
+        rm -f -- "$dropin_backup"
+      fi
+      [[ -z $dropin_tmp ]] || rm -f -- "$dropin_tmp"
+      if [[ -n $new_placed ]]; then
+        mv --no-copy -T -- "$theme" "$new_dir" \
+          || echo "foamy-lock-login-screen: cannot remove the new $theme" >&2
+      fi
+      if [[ -n $old_moved ]]; then
+        mv --no-copy -T -- "$aside_dir" "$theme" \
+          || echo "foamy-lock-login-screen: cannot put $theme back; it is in $aside_dir" >&2
+      elif [[ -n $aside_dir ]]; then
+        rmdir -- "$aside_dir"
+      fi
+      [[ -z $new_dir ]] || rm -rf -- "$new_dir"
+    fi
+    exit "$rc"
+  }
+
+  trap cleanup EXIT
+  trap 'refuse "$code" "$context"' ERR
+  trap 'refuse INTERNAL "the transaction was interrupted"' HUP INT TERM
+
+  mode=${1-}
+  stage=${2-}
+  case $mode in
+    publish) (($# == 2)) || refuse INVALID_ARGUMENT "publish takes one staging folder" ;;
+    restore) (($# == 1)) || refuse INVALID_ARGUMENT "restore takes no arguments" ;;
+    *) refuse INVALID_ARGUMENT "unknown command; use publish <staging-folder> or restore" ;;
+  esac
+
+  # As root every path is the system's. A test run (not root) uses its own
+  # root folder, and the files it creates are its own user's.
+  if ((EUID == 0)); then
+    root=
+    owner=0
+    uid=${PKEXEC_UID-}
+    [[ $uid =~ ^[1-9][0-9]{0,9}$ ]] \
+      || refuse INVALID_ARGUMENT "run through pkexec as a user other than root (PKEXEC_UID)"
+  else
+    root=${FOAMY_LOCK_PUBLISH_ROOT-}
+    [[ $root == /?* && $root != */ ]] \
+      || refuse INTERNAL "not running as root, and FOAMY_LOCK_PUBLISH_ROOT isn't a test root"
+    context="the test root $root isn't a folder without symlinks"
+    [[ $(realpath -e -- "$root") == "$root" && -d $root ]]
+    owner=$EUID
+    uid=${PKEXEC_UID-}
+    [[ $uid == "$EUID" ]] || refuse INTERNAL "a test run needs PKEXEC_UID set to its own uid"
+  fi
+  context="the invoking user has no passwd entry"
+  code=INVALID_ARGUMENT
+  passwd=$(getent passwd "$uid")
+  IFS=: read -r _ _ _ gid _ <<<"$passwd"
+  [[ $gid =~ ^[0-9]{1,10}$ ]]
+  # Every read of the user's files runs with the user's rights, so a
+  # symlink in the staging folder can't make root read a file the user can't.
+  as_user=()
+  if ((EUID == 0)); then
+    as_user=(setpriv "--reuid=$uid" "--regid=$gid" --clear-groups --no-new-privs --)
+  fi
+
+  themes=$root/usr/share/sddm/themes
+  confd=$root/etc/sddm.conf.d
+  theme=$themes/foamy-lock
+  dropin=$confd/99-zz-foamy-lock.conf
+  marker='# Foamy Lock login screen (foamy-lock-login-screen)'
+  max_manifest=65536
+  max_file=$((25 * 1024 * 1024))
+  max_total=$((64 * 1024 * 1024))
+  max_snapshot=$((256 * 1024))
+  read_seconds=20
+
+  # A folder root can trust: no symlink on the way, and it and every folder
+  # above it (up to the root) owned by root and not writable by others.
+  trusted_dir() {
+    local dir=$1
+    code=IO
+    context="$dir must be a folder owned by root and not writable by others"
+    [[ -d $dir && ! -L $dir ]]
+    [[ $(realpath -e -- "$dir") == "$dir" ]]
+    while :; do
+      [[ ! -L $dir ]]
+      (($(stat -c %u -- "$dir") == owner))
+      (((8#$(stat -c %a -- "$dir") & 8#022) == 0))
+      if [[ $dir == "${root:-/}" ]]; then
+        break
+      fi
+      dir=${dir%/*}
+      [[ -n $dir ]] || dir=/
+    done
+  }
+
+  # The version-1 manifest rules of status.rs's parse_manifest, as jq:
+  # `why` gives the first problem as text, or nothing. `staged` adds the
+  # publisher's rules for a staging folder's manifest: theme.conf is added
+  # to it, and the result must still pass `why` (at most 255 files).
+  # "ok", or the first problem of the one JSON value on stdin.
+  manifest_why() {
+    jq -n -r --argjson max_file "$max_file" --argjson max_snapshot "$max_snapshot" \
+      --argjson max_total "$max_total" --arg mode "$1" \
+      '
+    def plain: test("\\A[A-Za-z0-9._-]{1,255}\\z") and (startswith(".") | not);
+    def path_ok: type == "string" and (split("/") | length <= 4 and all(.[]; plain));
+    def count: type == "number" and (tostring | test("\\A(0|[1-9][0-9]*)\\z"));
+    def hex: type == "string" and test("\\A[0-9a-f]{64}\\z");
+    def entry_why($w):
+      if type != "object" then "\($w) is not an object"
+      elif (keys - ["name", "sha256", "size"]) != [] then "\($w) has an unknown key"
+      elif (.name | path_ok | not) then "\($w) is not a relative path of plain names, at most 4 levels"
+      elif .name == "manifest.json" then "\($w) is the manifest itself"
+      elif (.size | count | not) then "\($w) has no size"
+      elif (.sha256 | hex | not) then "\($w) has no sha256 of 64 lowercase hex digits"
+      else empty end;
+    def why:
+      if type != "object" then "is not a JSON object"
+      elif (keys - ["files", "hash", "plugin", "version"]) != [] then "has an unknown key"
+      elif (.version | count | not) or .version != 1 then "has an unknown version"
+      elif (.plugin | type != "string" or utf8bytelength < 1 or utf8bytelength > 64) then "has no plugin version"
+      elif (.hash | hex | not) then "has no hash of 64 lowercase hex digits"
+      elif (.files | type != "array") then "has no files array"
+      elif (.files | length > 255) then "lists more than 255 files"
+      else
+        first(.files | to_entries[] | .key as $k | .value | entry_why("files[\($k)]"))
+          // (if (.files | map(.name) | unique | length) != (.files | length)
+              then "lists a file twice" else empty end)
+      end;
+    def staged:
+      .files as $files
+      | ($files | map(.name)) as $names
+      | [$names[] | split("/") as $p | range(1; $p | length) | $p[:.] | join("/")] as $dirs
+      | if ($files | length) > 254 then "lists more than 254 files"
+        elif any($names[]; . == "snapshot.json") | not then "does not list snapshot.json"
+        elif any($names[]; . == "theme.conf" or . == "theme.conf.user") then "lists theme.conf, which the publisher writes"
+        elif any($dirs[]; IN($names[])) then "lists a file that is also a folder"
+        elif any($files[]; .size > $max_file) then "lists a file over 25 MiB"
+        elif any($files[]; .name == "snapshot.json" and .size > $max_snapshot) then "lists a snapshot.json over 256 KiB"
+        elif ($files | map(.size) | add // 0) > $max_total then "lists more than 64 MiB"
+        else empty end;
+        [inputs]
+        | if length != 1 then "is not one JSON value"
+          else .[0] | first(why, (if $mode == "staged" then staged else empty end)) // "ok"
+          end'
+  }
+
+  # Sets theme_present, or refuses with NOT_OURS when the theme folder is
+  # there and isn't one this publisher wrote.
+  check_theme() {
+    theme_present=
+    [[ -e $theme || -L $theme ]] || return 0
+    local manifest=$theme/manifest.json why
+    code=NOT_OURS
+    context="$theme isn't Foamy Lock's login theme, so it was left as it is"
+    [[ -d $theme && ! -L $theme && -f $manifest && ! -L $manifest ]]
+    (($(stat -c %s -- "$manifest") <= max_manifest))
+    why=$(manifest_why installed <"$manifest") || why=invalid
+    [[ $why == ok ]]
+    theme_present=1
+  }
+
+  # Sets dropin_present, or refuses with NOT_OURS when the drop-in is there
+  # without this publisher's first line.
+  check_dropin() {
+    dropin_present=
+    [[ -e $dropin || -L $dropin ]] || return 0
+    local first=
+    code=NOT_OURS
+    context="$dropin isn't Foamy Lock's, so it was left as it is"
+    [[ -f $dropin && ! -L $dropin ]]
+    (($(stat -c %s -- "$dropin") <= 65536))
+    IFS= read -r first <"$dropin" || :
+    [[ $first == "$marker" ]]
+    dropin_present=1
+  }
+
+  # One file of the staging folder, read as the user, at most $2 bytes,
+  # into $3. A FIFO or a stopped reader can't hold the transaction: timeout.
+  read_staged() {
+    code=INVALID_STAGE
+    context="cannot read $1 from the staging folder"
+    timeout -k 2 "$read_seconds" "${as_user[@]}" head -c "$2" -- "$stage/$1" >"$3" {themes_lock}<&-
+  }
+
+  trusted_dir "$themes"
+  [[ ! -d $confd ]] || trusted_dir "$confd"
+  # Only one publish or restore at a time, on any account.
+  code=IO
+  context="cannot open $themes"
+  exec {themes_lock}<"$themes"
+  status=0
+  flock -x -w 5 -E 75 "$themes_lock" || status=$?
+  ((status != 75)) || refuse BUSY "another login-screen copy or restore is running"
+  ((status == 0)) || refuse IO "cannot lock $themes"
+  check_theme
+  check_dropin
+
+  if [[ $mode == restore ]]; then
+    code=IO
+    if [[ -n $dropin_present ]]; then
+      context="cannot remove $dropin"
+      rm -f -- "$dropin"
+    fi
+    if [[ -n $theme_present ]]; then
+      # Moved aside first, so a removal that stops halfway leaves no broken
+      # theme where SDDM looks.
+      context="cannot remove $theme"
+      aside_dir=$(mktemp -d -- "$themes/.foamy-lock.old-XXXXXX")
+      mv --no-copy -T -- "$theme" "$aside_dir"
+      rm -rf -- "$aside_dir" || echo "foamy-lock-login-screen: cannot remove $aside_dir" >&2
+    fi
+    committed=1
+    printf '{"ok": true}\n'
+    cleanup
+  fi
+
+  code=INVALID_STAGE
+  context="the staging folder isn't one that studio login-screen stage made for this user"
+  [[ $stage =~ ^"$root"/run/user/"$uid"/foamy-lock/login-screen/stage-[a-z0-9]{8}$ ]]
+
+  # The user's stage.lock, held by a process running as the user, so a new
+  # `stage` can't remove this folder while it is read. Root never opens the
+  # user's lock file itself. The holder prints a line once it has the lock
+  # and keeps it until its input closes, which happens when this shell
+  # exits; no child that outlives a read inherits that input.
+  coproc stage_lock {
+    trap - ERR
+    "${as_user[@]}" flock -x -w 5 -E 75 -- "${stage%/*}/stage.lock" \
+      bash -c 'echo locked; read -r _ || :' {themes_lock}<&-
+  }
+  # Saved now: bash unsets the coproc's variables once it has exited.
+  lock_pid=$!
+  lock_out=${stage_lock[0]}
+  line=
+  read -r -t 15 line <&"$lock_out" || :
+  if [[ $line != locked ]]; then
+    status=0
+    wait "$lock_pid" || status=$?
+    ((status != 75)) || refuse BUSY "the staging folder is in use (stage.lock)"
+    refuse INVALID_STAGE "cannot take the staging folder's stage.lock"
+  fi
+
+  code=IO
+  context="cannot make a folder in $themes"
+  new_dir=$(mktemp -d -- "$themes/.foamy-lock.new-XXXXXX")
+  # A name no manifest can list (names never start with ".").
+  staged_manifest=$new_dir/.manifest.staged
+  read_staged manifest.json $((max_manifest + 1)) "$staged_manifest"
+  context="the staging folder's manifest.json is larger than 64 KiB"
+  (($(stat -c %s -- "$staged_manifest") <= max_manifest))
+  context="the staging folder's manifest.json isn't valid"
+  why=$(manifest_why staged <"$staged_manifest") || why="isn't JSON"
+  [[ $why == ok ]] || refuse INVALID_STAGE "the staging folder's manifest.json $why"
+  # The hash is stage's, over the plugin version and the listed files; check
+  # it so the installed hash that status reports stands for these files.
+  context="the staging folder's manifest.json has a wrong hash"
+  hash=$(jq -r .hash <"$staged_manifest")
+  actual=$(jq -j '"plugin \(.plugin)\n" + (.files | map("\(.name) \(.size) \(.sha256)\n") | join(""))' \
+    <"$staged_manifest" | sha256sum)
+  [[ ${actual%% *} == "$hash" ]]
+
+  # Each file at most its listed size plus one byte, read as the user, so
+  # the total stays within the 64 MiB the manifest check allowed.
+  copied=0
+  while read -r size sha name; do
+    if [[ $name == */* ]]; then
+      code=IO
+      context="cannot make a folder in $new_dir"
+      mkdir -p -- "$new_dir/${name%/*}"
+    fi
+    read_staged "$name" $((size + 1)) "$new_dir/$name"
+    context="$name in the staging folder doesn't match its size in manifest.json"
+    (($(stat -c %s -- "$new_dir/$name") == size))
+    context="$name in the staging folder doesn't match its sha256 in manifest.json"
+    actual=$(sha256sum -- "$new_dir/$name")
+    [[ ${actual%% *} == "$sha" ]]
+    copied=$((copied + 1))
+  done < <(jq -r '.files[] | "\(.size) \(.sha256) \(.name)"' <"$staged_manifest")
+  code=INTERNAL
+  context="not every file in manifest.json was copied"
+  (($(jq '.files | length' <"$staged_manifest") == copied))
+
+  # theme.conf: the snapshot as one QSettings quoted string, each \ as \\
+  # and each " as \" ("Step 3 contract"), from JSON jq has checked.
+  code=INVALID_STAGE
+  context="the staging folder's snapshot.json isn't a version-1 snapshot"
+  jq -e 'type == "object" and .version == 1' <"$new_dir/snapshot.json" >/dev/null
+  snapshot=$(jq -c . <"$new_dir/snapshot.json")
+  snapshot=${snapshot//\\/\\\\}
+  snapshot=${snapshot//\"/\\\"}
+  code=IO
+  context="cannot write the theme's files"
+  printf '[General]\nsnapshot="%s"\n' "$snapshot" >"$new_dir/theme.conf"
+  conf_size=$(stat -c %s -- "$new_dir/theme.conf")
+  conf_sha=$(sha256sum -- "$new_dir/theme.conf")
+  jq -c --argjson size "$conf_size" --arg sha "${conf_sha%% *}" \
+    '.files += [{"name": "theme.conf", "size": $size, "sha256": $sha}]' \
+    <"$staged_manifest" >"$new_dir/manifest.json"
+  rm -f -- "$staged_manifest"
+  code=INVALID_STAGE
+  context="the staging folder's manifest.json leaves no room for theme.conf (64 KiB)"
+  (($(stat -c %s -- "$new_dir/manifest.json") <= max_manifest))
+  # The sddm user reads the theme, and status (as the user) its manifest.
+  chmod -R u=rwX,go=rX -- "$new_dir"
+  sync -f -- "$new_dir/manifest.json"
+
+  # Publish: the old folder aside, the new one into place, then the drop-in.
+  context="cannot replace $theme"
+  if [[ -n $theme_present ]]; then
+    aside_dir=$(mktemp -d -- "$themes/.foamy-lock.old-XXXXXX")
+    mv --no-copy -T -- "$theme" "$aside_dir"
+    old_moved=1
+  fi
+  mv --no-copy -T -- "$new_dir" "$theme"
+  new_placed=1
+
+  context="cannot write $dropin"
+  if [[ ! -d $confd ]]; then
+    trusted_dir "${confd%/*}"
+    context="cannot make $confd"
+    mkdir -m 0755 -- "$confd"
+  fi
+  trusted_dir "$confd"
+  context="cannot write $dropin"
+  dropin_tmp=$(mktemp -- "$confd/.99-zz-foamy-lock.conf.XXXXXX")
+  printf '%s\n' "$marker" '[Theme]' 'Current=foamy-lock' 'ThemeDir=/usr/share/sddm/themes' >"$dropin_tmp"
+  chmod 0644 -- "$dropin_tmp"
+  sync -f -- "$dropin_tmp"
+  if [[ -n $dropin_present ]]; then
+    # A hard link keeps the old drop-in for a rollback; SDDM skips hidden
+    # files.
+    dropin_backup=$(mktemp -u -- "$confd/.99-zz-foamy-lock.conf.old-XXXXXX")
+    ln -- "$dropin" "$dropin_backup"
+  fi
+  mv --no-copy -fT -- "$dropin_tmp" "$dropin"
+  dropin_tmp=
+  dropin_written=1
+  committed=1
+
+  # Published. What is left is tidying; it can't undo the copy.
+  if [[ -n $dropin_backup ]]; then
+    rm -f -- "$dropin_backup" || echo "foamy-lock-login-screen: cannot remove $dropin_backup" >&2
+  fi
+  if [[ -n $aside_dir ]]; then
+    rm -rf -- "$aside_dir" || echo "foamy-lock-login-screen: cannot remove $aside_dir" >&2
+  fi
+  printf '{"ok": true}\n'
+  cleanup
+}
+
+fail() {
+  printf '{"ok": false, "code": "%s", "error": "%s"}\n' "$1" "$2"
+  exit 1
+}
+
+if ((EUID == 0)); then
+  fail INVALID_ARGUMENT "run foamy-lock-login-screen as your user, not as root"
+fi
+# A test root replaces every system path (see the header).
+test_root=${FOAMY_LOCK_PUBLISH_ROOT-}
+case ${1-} in
+  publish)
+    (($# == 2)) || fail INVALID_ARGUMENT "usage: foamy-lock-login-screen publish <staging-folder>"
+    # Checked again as root; here it saves a password prompt.
+    [[ $2 =~ ^"$test_root"/run/user/"$EUID"/foamy-lock/login-screen/stage-[a-z0-9]{8}$ ]] \
+      || fail INVALID_STAGE "the staging folder isn't one that studio login-screen stage made for this user"
+    ;;
+  restore)
+    (($# == 1)) || fail INVALID_ARGUMENT "usage: foamy-lock-login-screen restore"
+    ;;
+  *)
+    fail INVALID_ARGUMENT "usage: foamy-lock-login-screen publish <staging-folder> | restore"
+    ;;
+esac
+
+script="$(declare -f transaction)"$'\ntransaction "$@"\n'
+if [[ -n $test_root ]]; then
+  PKEXEC_UID=$EUID exec /usr/bin/bash -c "$script" bash "$@" </dev/null
+fi
+[[ -x /usr/bin/pkexec ]] || fail INTERNAL "pkexec is missing (polkit)"
+exec /usr/bin/pkexec /usr/bin/bash -c "$script" bash "$@" </dev/null

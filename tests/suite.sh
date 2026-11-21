@@ -37,9 +37,13 @@ else
 fi
 if ((ci)); then
   skip "the harness's unit tests: Rust (tests/harness) isn't on the CI runner"
+  skip "tests/login-screen-publish.sh: checked on the Omarchy host only"
   skip "artwork_runtime.py, the i18n check, tests/harness.sh: offscreen Quickshell"
   exit $status
 fi
+# The login-screen publisher's transaction against temporary roots (no root,
+# no pkexec); it needs the Omarchy host's coreutils, util-linux and jq.
+run bash tests/login-screen-publish.sh
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-${FOAMY_NATIVE_CACHE:-$HOME/.cache/foamy-native}/foamy-lock-harness}
 run cargo test --quiet --manifest-path tests/harness/Cargo.toml
 if ((fast)); then
