@@ -4,6 +4,7 @@
 //! Reply (exit 0): `{"ok": true, "state": <state>, "theme": <effective
 //! [Theme] Current, "" when unset>, "themeSetIn": <the file that set it, as
 //! the system sees it ("/etc/sddm.conf.d/10-theme.conf"), or null>,
+//! "themeDir": <the folder SDDM looks for themes in, see below>,
 //! "autologin": <[Autologin] User is set>, "installed": {"plugin": …,
 //! "hash": …} | null}`, plus `"reason"` for `unavailable` and `"detail"`
 //! (English) for `broken`.
@@ -12,19 +13,33 @@
 //!   `/etc/systemd/system/display-manager.service` isn't a symlink to an
 //!   `sddm.service` (the alias `systemctl enable` makes), `greeter-missing`
 //!   when `/usr/bin/sddm-greeter-qt6` isn't an executable file. Nothing
-//!   else is read, so `theme` is `""`, `themeSetIn` null and `autologin`
-//!   false.
+//!   else is read, so `theme` is `""`, `themeSetIn` null, `themeDir`
+//!   SDDM's default and `autologin` false.
 //! - `not-installed`: no theme folder, and the effective theme isn't ours.
 //! - `installed`: the folder is complete and the effective theme is ours.
 //! - `overridden`: the folder is complete, but SDDM uses another theme.
 //! - `broken`: the effective theme is ours and the folder is missing or
 //!   incomplete, or the folder exists and is incomplete.
 //!
-//! The folder is `/usr/share/sddm/themes/foamy-lock`. It is complete when
-//! its `manifest.json` (written by the publisher from `stage`'s manifest)
-//! is valid and each file it lists is a regular file of the listed size.
-//! The files aren't hashed. Nothing in the folder is followed through a
-//! symlink: a symlinked folder, manifest or file makes it `broken`.
+//! The folder is `foamy-lock` in the effective `[Theme] ThemeDir`, read
+//! from the same files, with the same precedence and parsing as `Current`.
+//! Unset, it is SDDM's default `/usr/share/sddm/themes`. SDDM 0.21 uses the
+//! value as it is (`ConfigEntry<QString>::setValue` only trims it), and
+//! `Display::findGreeterTheme` looks for the theme with
+//! `QDir(ThemeDir).exists(Current)`
+//! (<https://github.com/sddm/sddm/blob/v0.21.0/src/daemon/Display.cpp>,
+//! lines 334-351). So an empty or relative value is not the default: Qt
+//! resolves it against the daemon's working folder, which is `/` for a
+//! systemd service without `WorkingDirectory=` (SDDM's `sddm.service` sets
+//! none). `themeDir` reports the folder as SDDM resolves it: an empty value
+//! is `/`, a relative one is joined onto `/`.
+//!
+//! The folder is complete when its `manifest.json` (written by the
+//! publisher from `stage`'s manifest) is valid and each file it lists is a
+//! regular file of the listed size. The files aren't hashed. Nothing in the
+//! folder is followed through a symlink: a symlinked folder (the theme
+//! folder or one inside it), manifest or file makes it `broken`. The
+//! folders above it (`ThemeDir` itself) are followed, as SDDM does.
 //! `installed` is set only for `installed` and `overridden`.
 //!
 //! A read that fails other than with "not found" is `IO` (exit 1), never
@@ -38,10 +53,13 @@
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind};
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use foamy_helper::Failure;
+use rustix::fs::{AtFlags, FileType, Mode, OFlags};
+use rustix::io::Errno;
 use serde_json::{Map, Value, json};
 
 /// Test override of the system root.
@@ -54,8 +72,11 @@ pub const MAX_CONFIG_FILES: usize = 64;
 pub const MAX_CONFIG_FILE: u64 = 64 * 1024;
 /// Bytes in the theme's `manifest.json`.
 pub const MAX_MANIFEST: u64 = 64 * 1024;
-/// Files a manifest lists.
-pub const MAX_MANIFEST_FILES: usize = 64;
+/// Files a manifest lists: the bundle (`stage::MAX_BUNDLE_ENTRIES`), the
+/// snapshot, the two pictures and `theme.conf`, with room to spare.
+pub const MAX_MANIFEST_FILES: usize = 255;
+/// Components in a manifest name (`kit/FoamyStyle.qml` has two).
+pub const MAX_LEVELS: usize = 4;
 const MANIFEST: &str = "manifest.json";
 const MANIFEST_VERSION: u64 = 1;
 const MAX_PLUGIN_VERSION: usize = 64;
@@ -63,7 +84,9 @@ const MAX_NAME: usize = 255;
 
 const DISPLAY_MANAGER: &str = "etc/systemd/system/display-manager.service";
 const GREETER: &str = "usr/bin/sddm-greeter-qt6";
-const THEME_DIR: &str = "usr/share/sddm/themes/foamy-lock";
+/// SDDM's default `[Theme] ThemeDir` (`DATA_INSTALL_DIR "/themes"` in
+/// src/common/Configuration.h, line 53).
+pub const DEFAULT_THEME_DIR: &str = "/usr/share/sddm/themes";
 /// SDDM 0.21's config locations, lowest precedence first (its CMake
 /// defaults `SYSTEM_CONFIG_DIR`, `CONFIG_DIR`, `CONFIG_FILE`).
 const SYSTEM_CONFIG_DIR: &str = "usr/lib/sddm/sddm.conf.d";
@@ -90,12 +113,15 @@ pub fn status(root: &Path) -> Result<Value, Failure> {
     if let Some(reason) = unavailable(root)? {
         return Ok(json!({
             "ok": true, "state": "unavailable", "reason": reason,
-            "theme": "", "themeSetIn": null, "autologin": false, "installed": null,
+            "theme": "", "themeSetIn": null, "themeDir": DEFAULT_THEME_DIR,
+            "autologin": false, "installed": null,
         }));
     }
     let config = effective_config(root)?;
     let ours = config.theme == THEME;
-    let (state, installed, detail) = match theme_folder(root)? {
+    let theme_dir = config.theme_dir();
+    let folder = theme_dir.join(THEME);
+    let (state, installed, detail) = match theme_folder(root, &folder)? {
         Folder::Complete { plugin, hash } => (
             if ours { "installed" } else { "overridden" },
             json!({"plugin": plugin, "hash": hash}),
@@ -105,13 +131,17 @@ pub fn status(root: &Path) -> Result<Value, Failure> {
         Folder::Missing => (
             "broken",
             Value::Null,
-            Some(format!("SDDM uses {THEME}, but /{THEME_DIR} is missing")),
+            Some(format!(
+                "SDDM uses {THEME}, but {} is missing",
+                folder.display()
+            )),
         ),
         Folder::Incomplete(why) => ("broken", Value::Null, Some(why)),
     };
     let mut reply = json!({
         "ok": true, "state": state, "theme": config.theme,
-        "themeSetIn": config.theme_set_in, "autologin": !config.autologin_user.is_empty(),
+        "themeSetIn": config.theme_set_in, "themeDir": theme_dir,
+        "autologin": !config.autologin_user.is_empty(),
         "installed": installed,
     });
     if let (Some(detail), Value::Object(reply)) = (detail, &mut reply) {
@@ -164,6 +194,19 @@ pub struct Config {
     /// `[Autologin] User`. SDDM logs in automatically when it is set
     /// (`Display::start` in src/daemon/Display.cpp, lines 275-276).
     pub autologin_user: String,
+    /// `[Theme] ThemeDir` as written, or None when no file sets it.
+    pub theme_dir: Option<String>,
+}
+
+impl Config {
+    /// The absolute folder SDDM looks for themes in (see the module doc):
+    /// the default when unset, else the value resolved against `/`.
+    pub fn theme_dir(&self) -> PathBuf {
+        match &self.theme_dir {
+            None => PathBuf::from(DEFAULT_THEME_DIR),
+            Some(dir) => Path::new("/").join(dir),
+        }
+    }
 }
 
 /// Applies one config file to `config` the way SDDM 0.21's
@@ -193,6 +236,7 @@ pub fn apply_config(config: &mut Config, bytes: &[u8], shown: &str) {
                     config.theme = value.trim().to_string();
                     config.theme_set_in = Some(shown.to_string());
                 }
+                ("Theme", "ThemeDir") => config.theme_dir = Some(value.trim().to_string()),
                 ("Autologin", "User") => config.autologin_user = value.trim().to_string(),
                 _ => {}
             }
@@ -404,16 +448,33 @@ fn only_keys(object: &Map<String, Value>, keys: &[&str], what: &str) -> Result<(
     Ok(())
 }
 
-/// A plain file name in the theme folder, other than the manifest.
+/// A relative path of plain components, shared by manifest names and the
+/// paths in `sddm/bundle.txt`: 1 to [`MAX_LEVELS`] components separated by
+/// `/`, each 1 to 255 of `[A-Za-z0-9._-]` and not starting with `.` (so
+/// never `.` or `..`).
+pub fn check_path(path: &str) -> Result<(), String> {
+    let parts: Vec<&str> = path.split('/').collect();
+    if parts.len() > MAX_LEVELS {
+        return Err(format!("{path:?} has more than {MAX_LEVELS} levels"));
+    }
+    let plain = |part: &&str| {
+        (1..=MAX_NAME).contains(&part.len())
+            && !part.starts_with('.')
+            && part
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    };
+    if !parts.iter().all(plain) {
+        return Err(format!("{path:?} isn't a relative path of plain names"));
+    }
+    Ok(())
+}
+
+/// A manifest name: a [`check_path`] path other than the manifest.
 fn check_name(name: &str) -> Result<(), String> {
-    if name.is_empty()
-        || name.len() > MAX_NAME
-        || name == "."
-        || name == ".."
-        || name == MANIFEST
-        || name.contains(['/', '\0'])
-    {
-        return Err(format!("{name:?} isn't a plain file name"));
+    check_path(name)?;
+    if name == MANIFEST {
+        return Err(format!("{name:?} is the manifest itself"));
     }
     Ok(())
 }
@@ -421,8 +482,8 @@ fn check_name(name: &str) -> Result<(), String> {
 /// Checks a manifest (schema version 1, shared with `stage` and the
 /// publisher): `{"version": 1, "plugin": <1-64 bytes>, "hash": <64
 /// lowercase hex>, "files": [{"name", "size", "sha256"}, …]}`, at most
-/// [`MAX_MANIFEST_FILES`] files with distinct plain names. Unknown keys are
-/// refused.
+/// [`MAX_MANIFEST_FILES`] files with distinct [`check_path`] names. Unknown
+/// keys are refused.
 pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, String> {
     let manifest: Map<String, Value> = match serde_json::from_slice(bytes) {
         Ok(Value::Object(object)) => object,
@@ -510,17 +571,19 @@ fn read_manifest(path: &Path) -> Result<Result<Vec<u8>, String>, Failure> {
     }
 }
 
-/// The theme folder: missing, incomplete (why) or complete.
-fn theme_folder(root: &Path) -> Result<Folder, Failure> {
-    let dir = root.join(THEME_DIR);
+/// The theme folder at `folder` (absolute, as SDDM sees it) under `root`:
+/// missing, incomplete (why) or complete.
+fn theme_folder(root: &Path, folder: &Path) -> Result<Folder, Failure> {
+    let shown = folder.display();
+    let dir = root.join(folder.strip_prefix("/").unwrap_or(folder));
     match fs::symlink_metadata(&dir) {
         Err(error) if absent(&error) => return Ok(Folder::Missing),
         Err(error) => return Err(io_error(&dir)(error)),
         Ok(meta) if meta.file_type().is_symlink() => {
-            return Ok(Folder::Incomplete(format!("/{THEME_DIR} is a symlink")));
+            return Ok(Folder::Incomplete(format!("{shown} is a symlink")));
         }
         Ok(meta) if !meta.is_dir() => {
-            return Ok(Folder::Incomplete(format!("/{THEME_DIR} isn't a folder")));
+            return Ok(Folder::Incomplete(format!("{shown} isn't a folder")));
         }
         Ok(_) => {}
     }
@@ -532,28 +595,76 @@ fn theme_folder(root: &Path) -> Result<Folder, Failure> {
         Ok(manifest) => manifest,
         Err(why) => return Ok(Folder::Incomplete(why)),
     };
-    for (name, size) in &manifest.files {
-        let path = dir.join(name);
-        let meta = match fs::symlink_metadata(&path) {
-            Err(error) if absent(&error) => {
-                return Ok(Folder::Incomplete(format!("{name} is missing")));
-            }
-            meta => meta.map_err(io_error(&path))?,
-        };
-        if !meta.file_type().is_file() {
-            return Ok(Folder::Incomplete(format!("{name} isn't a regular file")));
+    // Opened without following a symlink, so a folder swapped for a link
+    // after the check above can't lead outside.
+    let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let top = match rustix::fs::open(&dir, flags, Mode::empty()) {
+        Ok(fd) => fd,
+        Err(Errno::LOOP | Errno::NOTDIR) => {
+            return Ok(Folder::Incomplete(format!("{shown} is a symlink")));
         }
-        if meta.len() != *size {
-            return Ok(Folder::Incomplete(format!(
-                "{name} is {} bytes, the manifest says {size}",
-                meta.len()
-            )));
+        Err(error) => return Err(io_error(&dir)(error.into())),
+    };
+    for (name, size) in &manifest.files {
+        if let Some(why) =
+            listed_file(&top, name, *size).map_err(|error| io_error(&dir.join(name))(error))?
+        {
+            return Ok(Folder::Incomplete(why));
         }
     }
     Ok(Folder::Complete {
         plugin: manifest.plugin,
         hash: manifest.hash,
     })
+}
+
+/// Why the listed file `name` (a [`check_path`] path) under `top` isn't a
+/// regular file of `size` bytes, or None when it is. No component is
+/// followed through a symlink.
+fn listed_file(top: &OwnedFd, name: &str, size: u64) -> io::Result<Option<String>> {
+    let parts: Vec<&str> = name.split('/').collect();
+    let (last, folders) = parts.split_last().expect("split yields one piece");
+    let mut owned: Option<OwnedFd> = None;
+    let mut seen = String::new();
+    for part in folders {
+        if !seen.is_empty() {
+            seen.push('/');
+        }
+        seen.push_str(part);
+        let dir = owned.as_ref().unwrap_or(top);
+        let stat = match rustix::fs::statat(dir, *part, AtFlags::SYMLINK_NOFOLLOW) {
+            Err(Errno::NOENT) => return Ok(Some(format!("{name} is missing"))),
+            stat => stat?,
+        };
+        match FileType::from_raw_mode(stat.st_mode) {
+            FileType::Directory => {}
+            FileType::Symlink => return Ok(Some(format!("{seen} is a symlink"))),
+            _ => return Ok(Some(format!("{seen} isn't a folder"))),
+        }
+        let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+        owned = Some(match rustix::fs::openat(dir, *part, flags, Mode::empty()) {
+            // Changed since the stat: a symlink or a file now.
+            Err(Errno::LOOP | Errno::NOTDIR) => {
+                return Ok(Some(format!("{seen} isn't a folder")));
+            }
+            fd => fd?,
+        });
+    }
+    let dir = owned.as_ref().unwrap_or(top);
+    let stat = match rustix::fs::statat(dir, *last, AtFlags::SYMLINK_NOFOLLOW) {
+        Err(Errno::NOENT) => return Ok(Some(format!("{name} is missing"))),
+        stat => stat?,
+    };
+    if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile {
+        return Ok(Some(format!("{name} isn't a regular file")));
+    }
+    let len = stat.st_size as u64;
+    if len != size {
+        return Ok(Some(format!(
+            "{name} is {len} bytes, the manifest says {size}"
+        )));
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -563,6 +674,8 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    /// Our folder in SDDM's default theme folder, relative to the root.
+    const THEME_DIR: &str = "usr/share/sddm/themes/foamy-lock";
 
     /// A change that breaks a fake system.
     type Break<'a> = dyn Fn(&Scratch) + 'a;
@@ -586,13 +699,22 @@ mod tests {
         json!({"version": 1, "plugin": "1.4.1", "hash": HASH, "files": files}).to_string()
     }
 
-    /// A complete theme folder.
+    /// A complete theme folder, with files in subfolders as the bundle has.
     fn theme(scratch: &Scratch) {
-        let files = [("Main.qml", "Item {}\n"), ("theme.conf", "[General]\n")];
+        theme_in(scratch, THEME_DIR);
+    }
+
+    fn theme_in(scratch: &Scratch, dir: &str) {
+        let files = [
+            ("Main.qml", "Item {}\n"),
+            ("theme.conf", "[General]\n"),
+            ("kit/FoamyStyle.qml", "QtObject {}\n"),
+            ("elements/shaders/aurora.frag.qsb", "qsb"),
+        ];
         for (name, text) in files {
-            scratch.file(&format!("{THEME_DIR}/{name}"), text);
+            scratch.file(&format!("{dir}/{name}"), text);
         }
-        scratch.file(&format!("{THEME_DIR}/{MANIFEST}"), &manifest(&files));
+        scratch.file(&format!("{dir}/{MANIFEST}"), &manifest(&files));
     }
 
     fn select(scratch: &Scratch, rel: &str, theme: &str) {
@@ -880,6 +1002,11 @@ mod tests {
             assert_eq!(reply["state"], json!(case.state), "{name}: {reply}");
             assert_eq!(reply["theme"], json!(case.theme), "{name}: {reply}");
             assert_eq!(reply["themeSetIn"], json!(case.set_in), "{name}: {reply}");
+            assert_eq!(
+                reply["themeDir"],
+                json!(DEFAULT_THEME_DIR),
+                "{name}: {reply}"
+            );
             match case.state {
                 "unavailable" => assert_eq!(reply["reason"], json!(case.note), "{name}"),
                 "broken" => assert!(
@@ -947,6 +1074,7 @@ mod tests {
                 theme: "a".into(),
                 theme_set_in: Some("/a.conf".into()),
                 autologin_user: "me".into(),
+                theme_dir: None,
             }
         );
         // Invalid UTF-8 doesn't stop the file.
@@ -1071,8 +1199,19 @@ mod tests {
             with(|m| m["hash"] = json!(HASH.to_uppercase())),
             with(|m| m["hash"] = json!(&HASH[1..])),
             with(|m| m["files"] = json!({})),
-            with(|m| m["files"][0]["name"] = json!("kit/Style.qml")),
             with(|m| m["files"][0]["name"] = json!("..")),
+            with(|m| m["files"][0]["name"] = json!("a/b/c/d/e.qml")),
+            with(|m| m["files"][0]["name"] = json!("/Main.qml")),
+            with(|m| m["files"][0]["name"] = json!("kit/")),
+            with(|m| m["files"][0]["name"] = json!("kit//a.qml")),
+            with(|m| m["files"][0]["name"] = json!("kit/../Main.qml")),
+            with(|m| m["files"][0]["name"] = json!("kit/./Main.qml")),
+            with(|m| m["files"][0]["name"] = json!(".hidden")),
+            with(|m| m["files"][0]["name"] = json!("kit/.x.qml")),
+            with(|m| m["files"][0]["name"] = json!("a b.qml")),
+            with(|m| m["files"][0]["name"] = json!("kit\\a.qml")),
+            with(|m| m["files"][0]["name"] = json!("\u{e5}.qml")),
+            with(|m| m["files"][0]["name"] = json!("x".repeat(256))),
             with(|m| m["files"][0]["name"] = json!(".")),
             with(|m| m["files"][0]["name"] = json!("")),
             with(|m| m["files"][0]["name"] = json!("a\u{0}b")),
@@ -1093,6 +1232,18 @@ mod tests {
         ];
         for text in bad {
             assert!(parse_manifest(text.as_bytes()).is_err(), "{text}");
+        }
+        // Nested names of up to four levels, and as many files as allowed.
+        let nested = with(|m| {
+            m["files"] = (0..MAX_MANIFEST_FILES)
+                .map(|i| json!({"name": format!("a/b-{i}/c_d/e.{i}.qml"), "size": 0, "sha256": HASH}))
+                .collect();
+        });
+        let parsed = parse_manifest(nested.as_bytes()).unwrap();
+        assert_eq!(parsed.files.len(), MAX_MANIFEST_FILES);
+        assert_eq!(parsed.files[0].0, "a/b-0/c_d/e.0.qml");
+        for name in ["kit/FoamyStyle.qml", "x".repeat(255).as_str(), "a.b-c_D9"] {
+            assert_eq!(check_path(name), Ok(()), "{name}");
         }
     }
 
@@ -1173,6 +1324,59 @@ mod tests {
                     symlink(s.path("real-theme"), s.path(THEME_DIR)).unwrap();
                 },
                 "is a symlink",
+            ),
+            (
+                "a missing file in a subfolder",
+                &|s| fs::remove_file(s.path(&format!("{THEME_DIR}/kit/FoamyStyle.qml"))).unwrap(),
+                "kit/FoamyStyle.qml is missing",
+            ),
+            (
+                "a missing subfolder",
+                &|s| fs::remove_dir_all(s.path(&format!("{THEME_DIR}/elements"))).unwrap(),
+                "elements/shaders/aurora.frag.qsb is missing",
+            ),
+            (
+                "a symlinked subfolder",
+                &|s| {
+                    let kit = s.path(&format!("{THEME_DIR}/kit"));
+                    fs::rename(&kit, s.path("real-kit")).unwrap();
+                    symlink(s.path("real-kit"), &kit).unwrap();
+                },
+                "kit is a symlink",
+            ),
+            (
+                "a symlinked folder deeper down",
+                &|s| {
+                    let shaders = s.path(&format!("{THEME_DIR}/elements/shaders"));
+                    fs::rename(&shaders, s.path("real-shaders")).unwrap();
+                    symlink(s.path("real-shaders"), &shaders).unwrap();
+                },
+                "elements/shaders is a symlink",
+            ),
+            (
+                "a file in a subfolder's place",
+                &|s| {
+                    fs::remove_dir_all(s.path(&format!("{THEME_DIR}/kit"))).unwrap();
+                    s.file(&format!("{THEME_DIR}/kit"), "");
+                },
+                "kit isn't a folder",
+            ),
+            (
+                "a symlinked file in a subfolder",
+                &|s| {
+                    let style = s.path(&format!("{THEME_DIR}/kit/FoamyStyle.qml"));
+                    let target = s.file("style.qml", "QtObject {}\n");
+                    fs::remove_file(&style).unwrap();
+                    symlink(target, &style).unwrap();
+                },
+                "kit/FoamyStyle.qml isn't a regular file",
+            ),
+            (
+                "a file in a subfolder of the wrong size",
+                &|s| {
+                    s.file(&format!("{THEME_DIR}/kit/FoamyStyle.qml"), "");
+                },
+                "kit/FoamyStyle.qml is 0 bytes, the manifest says 12",
             ),
             (
                 "a file for a theme folder",
@@ -1276,6 +1480,119 @@ mod tests {
         }
         select(&scratch, "etc/sddm.conf.d/99-theme.conf", "omarchy");
         assert_eq!(status(&scratch.0).unwrap()["theme"], json!("omarchy"));
+    }
+
+    #[test]
+    fn the_theme_dir_follows_the_config() {
+        const MOVED: &str = "usr/local/share/sddm/themes";
+        /// Drop-ins as (path, text).
+        type Files<'a> = &'a [(&'a str, &'a str)];
+        // (name, extra drop-ins, folder to install in, state, themeDir)
+        let cases: &[(&str, Files<'_>, &str, &str, &str)] = &[
+            ("unset", &[], THEME_DIR, "installed", DEFAULT_THEME_DIR),
+            (
+                "moved by a later drop-in, our folder in the default",
+                &[(
+                    "etc/sddm.conf.d/99-z-admin.conf",
+                    "[Theme]\nThemeDir=/usr/local/share/sddm/themes\n",
+                )],
+                THEME_DIR,
+                "broken",
+                "/usr/local/share/sddm/themes",
+            ),
+            (
+                "moved by a later drop-in, our folder there",
+                &[(
+                    "etc/sddm.conf.d/99-z-admin.conf",
+                    "[Theme]\nThemeDir = /usr/local/share/sddm/themes # moved\n",
+                )],
+                "usr/local/share/sddm/themes/foamy-lock",
+                "installed",
+                "/usr/local/share/sddm/themes",
+            ),
+            (
+                "moved by an earlier drop-in, set back by ours",
+                &[
+                    (
+                        "etc/sddm.conf.d/10-admin.conf",
+                        "[Theme]\nThemeDir=/usr/local/share/sddm/themes\n",
+                    ),
+                    (
+                        "etc/sddm.conf.d/99-zz-foamy-lock.conf",
+                        "[Theme]\nCurrent=foamy-lock\nThemeDir=/usr/share/sddm/themes\n",
+                    ),
+                ],
+                THEME_DIR,
+                "installed",
+                DEFAULT_THEME_DIR,
+            ),
+            (
+                "moved by /etc/sddm.conf",
+                &[
+                    (
+                        "etc/sddm.conf.d/99-zz-foamy-lock.conf",
+                        "[Theme]\nCurrent=foamy-lock\nThemeDir=/usr/share/sddm/themes\n",
+                    ),
+                    (
+                        "etc/sddm.conf",
+                        "[Theme]\nThemeDir=/usr/local/share/sddm/themes\n",
+                    ),
+                ],
+                "usr/local/share/sddm/themes/foamy-lock",
+                "installed",
+                "/usr/local/share/sddm/themes",
+            ),
+            (
+                "outside [Theme] it doesn't count",
+                &[(
+                    "etc/sddm.conf.d/99-z-admin.conf",
+                    "[General]\nThemeDir=/usr/local/share/sddm/themes\n",
+                )],
+                THEME_DIR,
+                "installed",
+                DEFAULT_THEME_DIR,
+            ),
+            // SDDM keeps an empty or relative value and resolves it against
+            // its working folder, /.
+            (
+                "empty",
+                &[("etc/sddm.conf.d/99-z-admin.conf", "[Theme]\nThemeDir=\n")],
+                "foamy-lock",
+                "installed",
+                "/",
+            ),
+            (
+                "relative",
+                &[(
+                    "etc/sddm.conf.d/99-z-admin.conf",
+                    "[Theme]\nThemeDir=themes\n",
+                )],
+                "themes/foamy-lock",
+                "installed",
+                "/themes",
+            ),
+        ];
+        for (name, files, folder, state, theme_dir) in cases {
+            let scratch = Scratch::new("login-theme-dir");
+            sddm(&scratch);
+            ours(&scratch);
+            for (rel, text) in *files {
+                scratch.file(rel, text);
+            }
+            theme_in(&scratch, folder);
+            let reply = status(&scratch.0).unwrap();
+            assert_eq!(reply["state"], json!(state), "{name}: {reply}");
+            assert_eq!(reply["themeDir"], json!(theme_dir), "{name}: {reply}");
+            if *state == "broken" {
+                assert_eq!(
+                    reply["detail"],
+                    json!(format!(
+                        "SDDM uses {THEME}, but /{MOVED}/{THEME} is missing"
+                    )),
+                    "{name}"
+                );
+            }
+        }
     }
 
     #[test]

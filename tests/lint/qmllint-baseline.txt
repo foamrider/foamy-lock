@@ -6,45 +6,22 @@ Artwork.qml: block-scope-var-declaration: var declaration in block scope is hois
 Artwork.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var code = typeof result.error === "string" && /^[a-z-]{1,48}$/.test(result.error) ? result.error : "invalid-helper-result"
 Artwork.qml: incompatible-type: Cannot assign binding of type QVariantMap to QVariantHash | HOME: Quickshell.env("HOME"),
 Artwork.qml: property-override: Property "state" already exists in base type "QQuickItem", use a different name. | property string state: "empty"
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.ELEMENTS.length; i++) {
 LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < devices.length; i++) {
 LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < devices.length; i++) {
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < item.children.length; i++)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < names.length && names[i] !== name; i++)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < names.length; i++)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var name in rects) {
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var above = stackHeight("middle-start", own === "start" ? name : undefined)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var below = stackHeight("bottom-start")
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var dx = offsetX(name), dy = offsetY(name)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var dx = offsetX(name), dy = offsetY(name)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var first = Math.round((height - above - 2 * zoneGap - stackHeight("middle-end", own === "end" ? name : undefined)) / 2)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var item = elementItem(Layout.ELEMENTS[i])
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var item = elementItem(name)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.ELEMENTS[i]
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.ELEMENTS[i]
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var name = Layout.ELEMENTS[i]
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var own = Layout.zoneColumn(zone)
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var plainFoamy = JSON.stringify(Layout.canonical(look)) === JSON.stringify(Layout.defaults())
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var r = rects[name]
-LockView.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var r = reservedRect(name)
 LockView.qml: missing-property: Member "available" not found on type "QObject" | property bool hasBluetooth: bluetoothLoader.item ? bluetoothLoader.item.available : false
 LockView.qml: missing-property: Member "available" not found on type "QObject" | property bool hasVolume: volumeLoader.item ? volumeLoader.item.available : false
-LockView.qml: missing-property: Member "background" not found on type "QObject" | readonly property color glassBase: themeLock("background", Commons.Color.lock.background, Qt.rgba(0.025, 0.035, 0.065, 0.34))
-LockView.qml: missing-property: Member "border" not found on type "QObject" | readonly property color glassEdge: themeLock("border", Commons.Color.lock.border, Qt.rgba(0.95, 0.96, 1, 0.18))
+LockView.qml: missing-property: Member "background" not found on type "QObject" | lockBackground: Commons.Color.lock.background
+LockView.qml: missing-property: Member "border" not found on type "QObject" | lockBorder: Commons.Color.lock.border
+LockView.qml: missing-property: Member "borderError" not found on type "QObject" | lockBorderError: Commons.Color.lock.borderError
 LockView.qml: missing-property: Member "connected" not found on type "QObject" | property int bluetoothConnected: bluetoothLoader.item ? bluetoothLoader.item.connected : 0
 LockView.qml: missing-property: Member "enabled" not found on type "QObject" | property bool bluetoothEnabled: bluetoothLoader.item ? bluetoothLoader.item.enabled : false
-LockView.qml: missing-property: Member "frameSeen" not found on type "QObject" | readonly property bool videoShown: videoLoader.status === Loader.Ready && videoLoader.item !== null && videoLoader.item.frameSeen
 LockView.qml: missing-property: Member "layout" not found on type "QObject" | property string keyboardLayout: keyboardLoader.item ? keyboardLoader.item.layout : ""
 LockView.qml: missing-property: Member "muted" not found on type "QObject" | property bool volumeMuted: volumeLoader.item ? volumeLoader.item.muted : false
 LockView.qml: missing-property: Member "percent" not found on type "QObject" | property int volumePercent: volumeLoader.item ? volumeLoader.item.percent : 0
-LockView.qml: missing-property: Member "placeholder" not found on type "QObject" | readonly property color secondary: themeLock("placeholder", Commons.Color.lock.placeholder, Qt.rgba(0.94, 0.95, 1, 0.68))
-LockView.qml: missing-property: Member "selection" not found on type "QObject" | readonly property color selection: themeLock("selection", Commons.Color.lock.selection, Qt.rgba(1, 1, 1, 0.25))
-LockView.qml: missing-property: Member "text" not found on type "QObject" | readonly property color foreground: themeLock("text", Commons.Color.lock.text, Qt.rgba(0.98, 0.98, 1, 0.96))
-LockView.qml: unqualified: Unqualified access | blur: wallpaper.blurAmount
+LockView.qml: missing-property: Member "placeholder" not found on type "QObject" | lockPlaceholder: Commons.Color.lock.placeholder
+LockView.qml: missing-property: Member "selection" not found on type "QObject" | lockSelection: Commons.Color.lock.selection
+LockView.qml: missing-property: Member "text" not found on type "QObject" | lockText: Commons.Color.lock.text
+LockView.qml: missing-property: Member "textError" not found on type "QObject" | lockTextError: Commons.Color.lock.textError
 Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var e = 0; e < Layout.ELEMENTS.length; e++)
 Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var existing in base)
 Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Layout.SELECTABLE_PRESETS.length; i++) {
@@ -217,13 +194,9 @@ elements/ClockElement.qml: unqualified: Unqualified access | x: index * (flip.ca
 elements/ClockElement.qml: unqualified: Unqualified access | x: index * (flip.cardWidth + flip.gap)
 elements/ClockElement.qml: unqualified: Unqualified access | y: parent.height - height - Math.round(8 * clock.uiScale)
 elements/MediaElement.qml: unqualified: Unqualified access | maskSource: artworkMask
-elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | border.color: field.view.errorState ? Commons.Color.lock.borderError : field.view.glassBorder
-elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
-elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
-elements/PasswordElement.qml: missing-property: Member "borderError" not found on type "QObject" | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
-elements/PasswordElement.qml: missing-property: Member "textError" not found on type "QObject" | color: field.view.authenticatingPassword ? field.view.foreground : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
-elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
-elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? field.view.lockBorderError : field.view.foreground
+elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? field.view.lockBorderError : field.view.foreground
+elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.errorState ? field.view.lockBorderError : field.view.foreground
 elements/PasswordElement.qml: unqualified: Unqualified access | color: field.view.foreground
 elements/PasswordElement.qml: unqualified: Unqualified access | opacity: field.terminal ? 0.7 : 1
 elements/PasswordElement.qml: unqualified: Unqualified access | opacity: field.view.errorState ? 1 : field.view.showPassword ? 0.6 : 0.38
@@ -240,6 +213,14 @@ elements/StatusElement.qml: block-scope-var-declaration: var declaration in bloc
 elements/StatusElement.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var out = []
 elements/sources/BluetoothSource.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < devices.length; i++)
 elements/sources/BluetoothSource.qml: property-override: Member "enabled" shadows member "enabled" from base type "QQuickItem", use a different name or add a final or override specifier. | readonly property bool enabled: available && adapter.enabled === true
+sddm/Main.qml: unqualified: Unqualified access | readonly property bool primary: primaryScreen
+sddm/Main.qml: unqualified: Unqualified access | readonly property var greeter: sddm
+sddm/Main.qml: unqualified: Unqualified access | readonly property var parsed: Greeter.parseSnapshot(config.snapshot)
+sddm/Main.qml: unqualified: Unqualified access | readonly property var sessions: sessionModel
+sddm/Main.qml: unqualified: Unqualified access | readonly property var users: userModel
+sddm/kit/FoamyI18n.qml: import: Type FoamyI18n not declared as singleton in qmldir but using pragma Singleton
+sddm/kit/FoamyPalette.qml: import: Type FoamyPalette not declared as singleton in qmldir but using pragma Singleton
+sddm/kit/FoamyStyle.qml: import: Type FoamyStyle not declared as singleton in qmldir but using pragma Singleton
 studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < all.length; i++)
 studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < anchors.length; i++)
 studio/Canvas.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < anchors.length; i++)
@@ -351,3 +332,5 @@ studio/StyleArt.qml: missing-property: Member "size" not found on type "Repeater
 studio/ZonePicker.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var tries = 0; tries < 3; tries++) {
 studio/shell.qml: missing-property: Member "catchQuit" not found on type "QObject" | if (testDriver.item && typeof testDriver.item.catchQuit === "function")
 studio/shell.qml: missing-property: Member "catchQuit" not found on type "QObject" | testDriver.item.catchQuit()
+tests/greeter/Shot.qml: unqualified: Unqualified access | readonly property var greeter: sddm
+tests/greeter/Shot.qml: unqualified: Unqualified access | readonly property var settings: config

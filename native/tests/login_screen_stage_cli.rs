@@ -22,6 +22,19 @@ impl Home {
         }
         fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
         fs::write(path.join("plugin/LockView.qml"), "").unwrap();
+        for (rel, text) in [
+            ("plugin/sddm/Main.qml", "Item {}\n"),
+            ("plugin/sddm/kit/FoamyI18n.qml", "QtObject {}\n"),
+            ("plugin/Layout.js", "// layout\n"),
+            ("plugin/i18n/en.json", "{\"lock.password\": \"Password\"}"),
+            (
+                "plugin/sddm/bundle.txt",
+                "# greeter\nsddm/Main.qml\nsddm/kit/FoamyI18n.qml\nLayout.js\n",
+            ),
+        ] {
+            fs::create_dir_all(path.join(rel).parent().unwrap()).unwrap();
+            fs::write(path.join(rel), text).unwrap();
+        }
         fs::write(
             path.join("plugin/manifest.json"),
             "{\"id\": \"foamy.lock\", \"version\": \"1.4.1\"}",
@@ -126,7 +139,16 @@ fn a_stage_exits_0_with_its_folder() {
         Some(&runtime),
     );
     assert_eq!((reply["ok"].as_bool(), code), (Some(true), 0), "{reply}");
-    assert_eq!(reply["files"], json!(["snapshot.json", "background.png"]));
+    assert_eq!(
+        reply["files"],
+        json!([
+            "snapshot.json",
+            "background.png",
+            "Layout.js",
+            "Main.qml",
+            "kit/FoamyI18n.qml"
+        ])
+    );
     let dir = PathBuf::from(reply["dir"].as_str().unwrap());
     assert_eq!(
         dir.parent(),
@@ -142,6 +164,20 @@ fn a_stage_exits_0_with_its_folder() {
         snapshot["files"],
         json!({"background": "background.png", "avatar": null})
     );
+    // "en" from the request's language.
+    assert_eq!(snapshot["strings"], json!({"lock.password": "Password"}));
+    assert_eq!(
+        fs::read_to_string(dir.join("kit/FoamyI18n.qml")).unwrap(),
+        "QtObject {}\n"
+    );
+    let mode = |rel: &str| {
+        fs::symlink_metadata(dir.join(rel))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777
+    };
+    assert_eq!((mode("kit"), mode("kit/FoamyI18n.qml")), (0o700, 0o600));
     let manifest: Value =
         serde_json::from_slice(&fs::read(dir.join("manifest.json")).unwrap()).unwrap();
     assert_eq!(manifest["hash"], reply["hash"]);
@@ -190,6 +226,18 @@ fn failures_exit_1_with_a_code() {
     );
     let (reply, code) = home.run(&request(json!({"preset": "zen"}), false, None), None);
     assert_eq!((reply["code"].as_str(), code), (Some("NO_RUNTIME_DIR"), 1));
+    // A broken plugin: a listed file that isn't there.
+    fs::write(
+        home.path("plugin/sddm/bundle.txt"),
+        "sddm/Main.qml\nsddm/Gone.qml\n",
+    )
+    .unwrap();
+    let (reply, code) = home.run(
+        &request(json!({"preset": "zen"}), false, None),
+        Some(&runtime),
+    );
+    assert_eq!((reply["code"].as_str(), code), (Some("BUNDLE_INVALID"), 1));
+    assert_eq!(reply["error"], "sddm/Gone.qml is missing", "{reply}");
     let (reply, code) = home.run(&vec![b' '; 300 * 1024], Some(&runtime));
     assert_eq!(
         (reply["code"].as_str(), code),

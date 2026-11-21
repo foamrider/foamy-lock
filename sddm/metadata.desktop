@@ -1,0 +1,8 @@
+[SddmGreeterTheme]
+Name=Foamy Lock
+Description=The Foamy Lock look on the login screen, copied from Lock Studio
+Type=sddm-theme
+Version=1
+QtVersion=6
+MainScript=Main.qml
+ConfigFile=theme.conf

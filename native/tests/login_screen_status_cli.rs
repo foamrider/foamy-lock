@@ -50,10 +50,15 @@ impl System {
     }
 
     fn theme(&self) {
-        let dir = "usr/share/sddm/themes/foamy-lock";
+        self.theme_in("usr/share/sddm/themes/foamy-lock");
+    }
+
+    fn theme_in(&self, dir: &str) {
         self.file(&format!("{dir}/Main.qml"), "Item {}\n");
+        self.file(&format!("{dir}/kit/FoamyStyle.qml"), "QtObject {}\n");
         let manifest = json!({"version": 1, "plugin": "1.4.1", "hash": HASH,
-            "files": [{"name": "Main.qml", "size": 8, "sha256": HASH}]});
+            "files": [{"name": "Main.qml", "size": 8, "sha256": HASH},
+                      {"name": "kit/FoamyStyle.qml", "size": 12, "sha256": HASH}]});
         self.file(&format!("{dir}/manifest.json"), &manifest.to_string());
     }
 
@@ -97,7 +102,8 @@ fn status_follows_the_fake_system() {
         system.status(),
         (
             json!({"ok": true, "state": "unavailable", "reason": "not-sddm", "theme": "",
-                   "themeSetIn": null, "autologin": false, "installed": null}),
+                   "themeSetIn": null, "themeDir": "/usr/share/sddm/themes", "autologin": false,
+                   "installed": null}),
             0
         )
     );
@@ -110,8 +116,8 @@ fn status_follows_the_fake_system() {
         system.status(),
         (
             json!({"ok": true, "state": "not-installed", "theme": "omarchy",
-                   "themeSetIn": "/etc/sddm.conf.d/10-theme.conf", "autologin": true,
-                   "installed": null}),
+                   "themeSetIn": "/etc/sddm.conf.d/10-theme.conf",
+                   "themeDir": "/usr/share/sddm/themes", "autologin": true, "installed": null}),
             0
         )
     );
@@ -124,7 +130,8 @@ fn status_follows_the_fake_system() {
         system.status(),
         (
             json!({"ok": true, "state": "installed", "theme": "foamy-lock",
-                   "themeSetIn": "/etc/sddm.conf.d/50-foamy-lock.conf", "autologin": true,
+                   "themeSetIn": "/etc/sddm.conf.d/50-foamy-lock.conf",
+                   "themeDir": "/usr/share/sddm/themes", "autologin": true,
                    "installed": {"plugin": "1.4.1", "hash": HASH}}),
             0
         )
@@ -143,6 +150,17 @@ fn status_follows_the_fake_system() {
             0
         )
     );
+    // A symlinked folder inside the theme is broken.
+    let kit = system.root().join("usr/share/sddm/themes/foamy-lock/kit");
+    fs::rename(&kit, system.0.join("kit")).unwrap();
+    symlink(system.0.join("kit"), &kit).unwrap();
+    let (reply, code) = system.status();
+    assert_eq!(
+        (reply["state"].as_str(), reply["detail"].as_str(), code),
+        (Some("broken"), Some("kit is a symlink"), 0)
+    );
+    fs::remove_file(&kit).unwrap();
+    fs::rename(system.0.join("kit"), &kit).unwrap();
     fs::remove_file(
         system
             .root()
@@ -151,6 +169,42 @@ fn status_follows_the_fake_system() {
     .unwrap();
     let (reply, code) = system.status();
     assert_eq!((reply["state"].as_str(), code), (Some("broken"), 0));
+}
+
+#[test]
+fn status_looks_in_the_effective_theme_dir() {
+    let system = System::new("theme-dir");
+    system.sddm();
+    system.theme();
+    system.file(
+        "etc/sddm.conf.d/99-z-admin.conf",
+        "[Theme]\nCurrent=foamy-lock\nThemeDir=/usr/local/share/sddm/themes\n",
+    );
+    let (reply, code) = system.status();
+    assert_eq!(
+        (
+            reply["state"].as_str(),
+            reply["themeDir"].as_str(),
+            reply["detail"].as_str(),
+            code
+        ),
+        (
+            Some("broken"),
+            Some("/usr/local/share/sddm/themes"),
+            Some("SDDM uses foamy-lock, but /usr/local/share/sddm/themes/foamy-lock is missing"),
+            0
+        )
+    );
+    // Our later drop-in sets it back.
+    system.file(
+        "etc/sddm.conf.d/99-zz-foamy-lock.conf",
+        "[Theme]\nCurrent=foamy-lock\nThemeDir=/usr/share/sddm/themes\n",
+    );
+    let (reply, code) = system.status();
+    assert_eq!(
+        (reply["state"].as_str(), reply["themeDir"].as_str(), code),
+        (Some("installed"), Some("/usr/share/sddm/themes"), 0)
+    );
 }
 
 #[test]

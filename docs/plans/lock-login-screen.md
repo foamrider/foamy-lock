@@ -1,9 +1,9 @@
 # Plan: copy the lock look to the SDDM login screen
 
-Status: draft 3 (2026-11-20). The spike (step 1) is done; see "Spike
-results". Calling `pkexec` from Studio's own process is checked in step 5.
-Step 2 (the helper's `status` and `stage`) is being built. The user accepted every
-recommendation under "Open decisions".
+Status: draft 4 (2026-11-20). Steps 1 and 2 are done; step 2 is on `dev`
+(`5840ebe`). Step 3 (the greeter bundle) is being built; see "Step 3
+contract". Calling `pkexec` from Studio's own process is checked in step 5.
+The user accepted every recommendation under "Decisions".
 
 ## Goal
 
@@ -37,6 +37,16 @@ only after a dialog and a password prompt.
   JetBrainsMono Nerd Font. `QtQuick.Effects` is installed.
 - **Autologin is on** (`/etc/sddm.conf.d/autologin.conf`). The greeter shows
   only after logging out.
+- **Omarchy's installer can select the theme in a `99-` drop-in.** On
+  miriam-pc (an Omarchy 4.5 ISO install, 2026-09-05) the installer wrote
+  `/etc/sddm.conf.d/99-omarchy-login.conf` with `[Theme] Current=omarchy`
+  as well as `[Users]`. No package owns it. On this PC the same file has
+  only `[Users]`. A drop-in that should win must sort after it.
+- **An admin can move SDDM's theme folder.** miriam-pc had
+  `99-z-miriam-login.conf` with `Current=miriam-lock` and
+  `ThemeDir=/usr/local/share/sddm/themes`. SDDM then looks for every theme
+  there. (That file is now `/etc/sddm-99-z-miriam-login.conf.bak`, so
+  miriam-pc runs Omarchy's setup for testing.)
 - **The polkit agent is Omarchy's shell.** The `omarchy.polkit` service
   plugin (Quickshell's `PolkitAgent`) runs inside `omarchy-shell` and draws
   the password prompt. It replaced `polkit-gnome-authentication-agent-1`.
@@ -77,7 +87,7 @@ the kit and `qs.Commons`.
 4. **Config order:** `man sddm.conf` says SDDM reads
    `/usr/lib/sddm/sddm.conf.d`, then `/etc/sddm.conf.d`, then
    `/etc/sddm.conf`, with the last one winning. `/etc/sddm.conf` doesn't
-   exist here. `50-foamy-lock.conf` sorts after Omarchy's `10-theme.conf`.
+   exist here. Our drop-in is `99-zz-foamy-lock.conf` (Decision 4).
    `status` computes the effective `[Theme] Current` in that order and
    reports `overridden` when `/etc/sddm.conf` or a later drop-in sets a
    different theme.
@@ -231,7 +241,10 @@ confirms that order.
 > - copy the layout, colours, background picture, your name and your
 >   profile picture there. Anyone at this computer can see them on the login
 >   screen.
-> - select the theme in `/etc/sddm.conf.d/50-foamy-lock.conf`
+> - select the theme in `/etc/sddm.conf.d/99-zz-foamy-lock.conf`
+>
+> *(Only when SDDM uses another theme:)* This replaces the login theme
+> `<theme>`, set in `<file>`. Restoring brings it back.
 >
 > Not shown on the login screen: media, weather, fingerprint, network and
 > battery status, the system panel and video backgrounds.
@@ -248,9 +261,10 @@ The list of left-out items is computed from the current look, so it names
 only what this look actually uses.
 
 **Restore Omarchy login screen** gets its own dialog with the same
-structure: it removes `/etc/sddm.conf.d/50-foamy-lock.conf` and
-`/usr/share/sddm/themes/foamy-lock`, and SDDM uses `omarchy` again. Root
-permission, password prompt.
+structure: it removes `/etc/sddm.conf.d/99-zz-foamy-lock.conf` and
+`/usr/share/sddm/themes/foamy-lock`, and SDDM uses whatever the other
+drop-ins select again (usually `omarchy`). Root permission, password
+prompt.
 
 **Results.** After the prompt, Studio shows one of: copied; cancelled (the
 prompt was closed or the password was wrong, nothing changed); failed with
@@ -316,7 +330,9 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
    - For step 4: the publisher takes `stage.lock` (next to the `stage-*`
      folders) while it reads a staging folder, so a new `stage` can't
      remove the folder under it.
-3. **Publisher**, `bin/foamy-lock-login-screen`, a bash script modelled on
+3. **Publisher**, `sddm/foamy-lock-login-screen` (not `bin/`, which holds
+   only the verified helper binaries; not in `bundle.txt`), a bash script
+   modelled on
    `omarchy-plymouth-set`:
    - It refuses to run as root, stages as the user, then runs a fixed
      privileged transaction through `pkexec`.
@@ -334,11 +350,90 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
    - The published folder is `0755` with `0644` files: the `sddm` user
      must read it, and `status` (as the user) reads the manifest and file
      sizes. With `umask 077` alone, `status` reports `IO`.
-   - Known limit: `status` and the publisher assume SDDM's default theme
-     folder. An admin's `[Theme] ThemeDir` elsewhere isn't followed.
+   - The drop-in `/etc/sddm.conf.d/99-zz-foamy-lock.conf` holds
+     `[Theme]`, `Current=foamy-lock` and `ThemeDir=/usr/share/sddm/themes`
+     (Decision 4).
 4. **Studio:** the section, the two dialogs, the states and results.
 5. **Docs:** a README section covering what is copied, the root step, the
    Unlock menu interplay, autologin, and how to restore.
+
+## Step 3 contract
+
+Two parts are built in parallel. These are the interfaces between them.
+
+**Theme folder layout.** The installed theme mirrors the plugin's layout, so
+the element files keep their relative imports (`../kit`, `shaders/…`):
+
+- `Main.qml`, `metadata.desktop` and `kit/*` come from the plugin's `sddm/`
+  folder (`sddm/Main.qml` → `Main.qml`, `sddm/kit/X` → `kit/X`);
+- everything else keeps its plugin path (`Layout.js`,
+  `elements/ClockElement.qml`, `elements/shaders/aurora.frag.qsb`, …);
+- plus `snapshot.json`, `background.png`, `avatar.png`, `manifest.json`
+  from `stage`, and `theme.conf`, which the publisher writes.
+
+**`sddm/bundle.txt`** (owned by the greeter part) lists the plugin files
+the theme needs, one plugin-relative path per line, mapped as above. Blank
+lines and lines starting with `#` are skipped. `stage` copies exactly these
+files into the staging folder and lists them in `manifest.json`.
+
+**Manifest names** may contain `/`: a relative path of plain components
+(`[A-Za-z0-9._-]`, not `.` or `..`, not starting with `.`), at most 4
+levels, at most 255 entries. `status` checks each one without following a
+symlink in any component.
+
+**Snapshot additions:** `strings`, the plugin's translation catalog for the
+snapshot's `language` (`i18n/<language>.json`, else the part before `-`,
+else `{}`), copied as an object. The greeter's `FoamyI18n` reads it, falling
+back to the English key.
+
+**`theme.conf`:** `[General]` and one line
+`snapshot="<snapshot.json's compact text>"`, in which each `\` becomes
+`\\` and each `"` becomes `\"` (QSettings' quoted-string escapes). The
+greeter reads `config.snapshot` and `JSON.parse`s it. The publisher (step 4)
+writes it; the greeter part's test tooling writes it the same way.
+
+**Greeter behaviour** (the greeter part):
+
+- `Main.qml` builds a view with the members the elements read (as
+  `LockView` does), runs `Layout.js` on the snapshot's look, and draws only
+  date, clock, account, password, calendar and the background.
+- Background: `picture` uses `background.png` (already blurred: no second
+  blur), else the look's own source.
+- Login: `sddm.login(userModel.lastUser, password, session)`, with the
+  session picked as Omarchy's theme does (the `uwsm` one, else
+  `sessionModel.lastIndex`); `loginFailed` shows the failure in the field.
+- Account: the copied name and avatar only when `lastUser` equals the
+  snapshot's `user`; otherwise `userModel`'s name for `lastUser` and the
+  initial.
+- No fingerprint text. Every screen draws the theme; only the primary
+  screen's field takes the keys, like the lock.
+
+## Steps 4 and 5 contract
+
+**Publisher CLI** (step 4), run by Studio as the user:
+
+- `sddm/foamy-lock-login-screen publish <staging-folder>`: `<staging-folder>`
+  is a folder `stage` returned. It asks for root once through `pkexec`.
+- `sddm/foamy-lock-login-screen restore`: removes our drop-in and theme
+  folder through `pkexec`.
+- stdout: one JSON line, `{"ok": true}` or `{"ok": false, "code": "<CODE>",
+  "error": "<English>"}`, with exit 0 or 1. Its own exits are never 126 or
+  127, which are `pkexec`'s: 126 the prompt was dismissed, 127 not
+  authorized or no polkit agent (no JSON line then).
+- As root, the files are read from the staging folder with the invoking
+  user's rights (`setpriv` to `PKEXEC_UID`), so a symlink there can't make
+  root read a file the user can't; root then checks each copy's size and
+  SHA-256 against `manifest.json`.
+- It replaces only a theme folder whose `manifest.json` is Foamy's, and only
+  a drop-in with Foamy's marker line; anything else named the same is
+  refused (`NOT_OURS`) and left alone.
+
+**Studio** (step 5) runs `studio login-screen status` to show the section
+and its state, `studio login-screen stage` with the applied look (with
+`showsPicture` from `Layout.js`, the colours from `Commons`, the language,
+the avatar the lock rendered and a background prepared by the `background`
+kind at most 3840 × 2160), then the publisher with the returned folder, then
+`status` again, and compares `installed.hash` with `stage`'s hash.
 
 ## Steps
 
@@ -388,5 +483,12 @@ The user accepted each recommendation below on 2026-11-20.
    video's still frame as the picture instead.
 3. **An Omarchy menu entry.** Recommended: no automatic entry. Show an
    optional `omarchy-menu.jsonc` snippet in the README.
-4. **Drop-in name.** `50-foamy-lock.conf` sorts after Omarchy's
-   `10-theme.conf` (confirmed by spike result 4).
+4. **Drop-in name and theme folder** (changed 2026-11-20 after miriam-pc).
+   The drop-in is `99-zz-foamy-lock.conf`. It sorts after Omarchy's
+   `10-theme.conf` and `99-omarchy-login.conf` and after a custom `99-z-…`
+   file, in byte order and under `nb_NO`. It sets `ThemeDir` to
+   `/usr/share/sddm/themes` along with `Current`, and the theme is installed
+   there, so another file's `ThemeDir` can't hide it. Copying replaces
+   whatever theme was selected; the dialog names it. Restore removes only our
+   drop-in and theme folder, so the earlier theme and folder apply again.
+   `status` reports the effective `ThemeDir` and checks our folder in it.
