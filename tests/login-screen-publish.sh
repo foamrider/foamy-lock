@@ -407,7 +407,10 @@ case_bad_arguments() {
 }
 
 # A folder or drop-in by the same name that isn't ours: refused, untouched.
-foreign_cases=(folder-file folder-manifest folder-symlink folder-is-file dropin-foreign dropin-symlink)
+# The installed-* ones change what a publish installed.
+foreign_cases=(folder-file folder-manifest folder-symlink folder-is-file dropin-foreign dropin-symlink
+  installed-edited installed-added-file installed-added-folder installed-symlink-file
+  installed-symlink-folder installed-dropin-edited)
 
 make_foreign() {
   case $1 in
@@ -417,6 +420,32 @@ make_foreign() {
     folder-is-file) echo x >"$theme" ;;
     dropin-foreign) printf '[Theme]\nCurrent=foamy-lock\n' >"$dropin" ;;
     dropin-symlink) printf '%s\n' "$marker" >"$root/real-dropin" && ln -s -- "$root/real-dropin" "$dropin" ;;
+    # Same size, other content: only the SHA-256 tells.
+    installed-edited) printf 'X' | dd of="$theme/Main.qml" conv=notrunc status=none ;;
+    installed-added-file) echo x >"$theme/extra.qml" ;;
+    installed-added-folder) mkdir -- "$theme/extra" ;;
+    # A link to identical content, its target path as long as the file (a
+    # link's own size): only the no-symlink rule tells.
+    installed-symlink-file)
+      local target size
+      size=$(stat -c %s -- "$theme/LICENSE")
+      target=$root/l/$(python3 -I -c 'import sys
+rest, parts = int(sys.argv[1]), []
+while rest > 201:
+    parts.append("a" * 200)
+    rest -= 201
+print("/".join(parts + ["a" * rest]))' $((size - ${#root} - 3)))
+      mkdir -p -- "${target%/*}"
+      cp -- "$theme/LICENSE" "$target"
+      ln -sf -- "$target" "$theme/LICENSE"
+      (($(stat -c %s -- "$theme/LICENSE") == size)) || fail "the link isn't $size bytes"
+      ;;
+    installed-symlink-folder)
+      cp -a -- "$theme/elements" "$root/real-elements"
+      rm -rf -- "$theme/elements"
+      ln -s -- "$root/real-elements" "$theme/elements"
+      ;;
+    installed-dropin-edited) printf 'Current=other\n' >>"$dropin" ;;
   esac
 }
 
@@ -427,10 +456,10 @@ case_not_ours() {
       new_root "foreign-$name-$mode"
       stage
       # Restore must not remove our half either when the other is foreign.
-      if [[ $name == dropin-* && $mode == restore ]]; then
+      if [[ $name == installed-* || ($name == dropin-* && $mode == restore) ]]; then
         publish publish "$stage_dir"
         expect ok
-        rm -f -- "$dropin"
+        [[ $name == installed-* ]] || rm -f -- "$dropin"
       fi
       make_foreign "$name"
       before=$(system_state)
@@ -459,6 +488,85 @@ case_failure_after_swap() {
   publish publish "$stage_dir"
   chmod 0755 -- "$confd"
   expect IO "cannot write"
+  [[ $(system_state) == "$before" ]] || fail "the previous theme changed"
+  expect_no_leftovers
+}
+
+# Restore can't move the theme folder (mktemp fails in a read-only themes
+# folder) after it moved the drop-in aside: the drop-in goes back.
+case_restore_rollback() {
+  new_root restore-rollback
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  local before
+  before=$(system_state)
+  chmod 0555 -- "$themes"
+  publish restore
+  chmod 0755 -- "$themes"
+  expect IO "cannot remove $theme"
+  [[ $(system_state) == "$before" ]] || fail "the drop-in or theme changed"
+  expect_no_leftovers
+}
+
+# Restore moved both aside but can't delete the theme: IO saying the login
+# screen was restored; the next run clears the hidden leftover.
+case_restore_leftover() {
+  new_root restore-leftover
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  chmod 0555 -- "$theme/elements"
+  publish restore
+  expect IO "the login screen was restored, but hidden leftovers remain"
+  [[ ! -e $theme && ! -e $dropin ]] || fail "restore left the theme or drop-in in place"
+  chmod -R u+w -- "$themes"
+  publish restore
+  expect ok
+  expect_no_leftovers
+}
+
+# An earlier publisher killed between moving the theme aside and placing the
+# new one: the drop-in is there, the folder isn't, and only a hidden folder
+# holds the theme. The next run puts the complete one back (not the
+# incomplete one) before it clears leftovers, even when it then fails.
+case_interrupted_recovered() {
+  new_root interrupted
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  local first=$stage_hash before
+  before=$(system_state)
+  cp -a -- "$theme" "$themes/.foamy-lock.old-aaaaaa"
+  rm -- "$themes/.foamy-lock.old-aaaaaa/LICENSE"
+  mv -T -- "$theme" "$themes/.foamy-lock.new-bbbbbb"
+  stage '.timeFormat = "12h"'
+  printf 'x' >>"$stage_dir/Main.qml"
+  publish publish "$stage_dir"
+  expect INVALID_STAGE "Main.qml"
+  [[ $(system_state) == "$before" ]] || fail "the theme wasn't put back as it was"
+  expect_no_leftovers
+  jq -e --arg hash "$first" '.state == "installed" and .installed.hash == $hash' <<<"$(status)" >/dev/null \
+    || fail "status: $(status)"
+}
+
+# The root side's deadline stops a run that hangs (a FIFO in the staging
+# folder, read for up to 20 s otherwise): TIMEOUT within the deadline, the
+# previous theme intact.
+case_deadline() {
+  new_root deadline
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  local before start
+  before=$(system_state)
+  stage '.timeFormat = "12h"'
+  rm -- "$stage_dir/Main.qml"
+  mkfifo -- "$stage_dir/Main.qml"
+  start=$SECONDS
+  FOAMY_LOCK_PUBLISH_DEADLINE=2 publish publish "$stage_dir"
+  expect TIMEOUT "took too long"
+  ((SECONDS - start < 10)) || fail "took $((SECONDS - start)) s"
   [[ $(system_state) == "$before" ]] || fail "the previous theme changed"
   expect_no_leftovers
 }
@@ -496,7 +604,8 @@ case_busy() {
 
 cases=(good_publish theme_conf_escapes second_publish_replaces missing_config_folder
   leftovers_removed restore symlink_same_content symlink_other_content symlink_unreadable file_mismatch
-  bad_manifest bad_snapshot bad_arguments not_ours failure_after_swap untrusted_folder busy)
+  bad_manifest bad_snapshot bad_arguments not_ours failure_after_swap restore_rollback restore_leftover
+  interrupted_recovered deadline untrusted_folder busy)
 (($#)) && cases=("$@")
 failed=()
 for name in "${cases[@]}"; do
