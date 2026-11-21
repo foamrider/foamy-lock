@@ -434,7 +434,7 @@ Item {
   // side bounds itself; the deadline ends a prompt left open.
   function runPublisher(action, dir) {
     var args = dir ? [action, dir] : [action]
-    var script = publisher || pluginDir + "/sddm/foamy-lock-login-screen"
+    var script = publisher || pluginDir + "/sddm/foamy-lock-login-screen";
     run(action, "1830s", ["bash", "-c", '[[ -f $1 && -x $1 ]] || exit 70; exec -- "$@"', "foamy-lock-studio-publish", script].concat(args), "", false, ({}))
   }
 
