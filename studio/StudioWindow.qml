@@ -1777,7 +1777,7 @@ FocusScope {
     id: loginDialog
     objectName: "studioLoginDialog"
     visible: studio.loginAsked !== ""
-    title: studio.loginAsked === "restore" ? FoamyI18n.t("studio.login.restore") : FoamyI18n.t("studio.login.copy")
+    title: studio.loginAsked === "restore" ? FoamyI18n.t("studio.login.ask.restore.title") : FoamyI18n.t("studio.login.copy")
     body: studio.loginAsked === "restore" ? FoamyI18n.t("studio.login.ask.restore.body") + "\n\n" + FoamyI18n.t("studio.login.ask.root") : studio.loginAsked === "copy" ? studio.loginCopyBody() : ""
     onDismissed: studio.answerLogin(false)
 

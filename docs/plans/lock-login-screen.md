@@ -214,8 +214,8 @@ and doesn't hide the section.
 | --- | --- |
 | `unavailable` | Nothing (section hidden) |
 | `not-installed` | **Copy to login screen** |
-| `current` | "The login screen matches this look." **Copy to login screen** (disabled) and **Restore Omarchy login screen** |
-| `outdated` | "The login screen shows an older look." **Copy to login screen** and **Restore Omarchy login screen** |
+| `current` | "The login screen matches this look." **Copy to login screen** (disabled) and **Remove from login screen** |
+| `outdated` | "The login screen shows an older look." **Copy to login screen** and **Remove from login screen** |
 | `overridden` | "Foamy Lock's login theme is installed, but SDDM uses `<theme>`." Both buttons |
 | `broken` | "The login theme files are incomplete." Both buttons |
 
@@ -244,7 +244,8 @@ confirms that order.
 > - select the theme in `/etc/sddm.conf.d/99-zz-foamy-lock.conf`
 >
 > *(Only when SDDM uses another theme:)* This replaces the login theme
-> `<theme>`, set in `<file>`. Restoring brings it back.
+> `<theme>`, set in `<file>`. Removing Foamy Lock from the login screen
+> brings it back.
 >
 > Not shown on the login screen: media, weather, fingerprint, network and
 > battery status, the system panel and video backgrounds.
@@ -260,7 +261,7 @@ confirms that order.
 The list of left-out items is computed from the current look, so it names
 only what this look actually uses.
 
-**Restore Omarchy login screen** gets its own dialog with the same
+**Remove from login screen** gets its own dialog with the same
 structure: it removes `/etc/sddm.conf.d/99-zz-foamy-lock.conf` and
 `/usr/share/sddm/themes/foamy-lock`, and SDDM uses whatever the other
 drop-ins select again (usually `omarchy`). Root permission, password

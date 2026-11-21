@@ -819,7 +819,7 @@ Item {
             restore.forceActiveFocus(Qt.TabFocusReason)
             restore.clicked()
             var dialog = find(studio, "studioLoginDialog")
-            expect(dialog.visible && dialog.title === FoamyI18n.t("studio.login.restore") && dialog.body === FoamyI18n.t("studio.login.ask.restore.body") + "\n\n" + FoamyI18n.t("studio.login.ask.root"), "the restore dialog")
+            expect(dialog.visible && dialog.title === FoamyI18n.t("studio.login.ask.restore.title") && dialog.body === FoamyI18n.t("studio.login.ask.restore.body") + "\n\n" + FoamyI18n.t("studio.login.ask.root"), "the restore dialog")
             expect(find(studio, "studioLoginCancel").activeFocus && find(studio, "studioLoginConfirm").text === FoamyI18n.t("studio.login.ask.restore.confirm"), "Cancel has the keys")
             captureSizes("studio-login-restore-dialog", function () {
               studio.answerLogin(false)
