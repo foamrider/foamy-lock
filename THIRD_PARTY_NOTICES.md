@@ -12,9 +12,9 @@ How the lists are made:
 
 ## `foamy-lock-helper`
 
-- `bin/aarch64/foamy-lock-helper`: sha256 `dd77ccb18d06fa26f6bf1a2dd606a4fabddb618ebec5ab1d5a75074433ba1000`
-- `bin/x86_64/foamy-lock-helper`: sha256 `d8665da047208cc68beed8bcfcc4d9ba2dca1601aa36cc32db48662a108194cc`
-- `native/native.pin`: source `e59c99d307e922b720fc56ea2a9934a68bc532cb5eedb37129dad5ca0ac87c79`, toolchain 1.99.1
+- `bin/aarch64/foamy-lock-helper`: sha256 `d6e3f2b1f220651847fcf8793133ce4f437847d5e4fd398dc33af158e48faab4`
+- `bin/x86_64/foamy-lock-helper`: sha256 `38e3c16ffdae3d7127ee987bce274afc9bd16c70f3951870a1eaadf00fc0f568`
+- `native/native.pin`: source `0b2d4dbfd137b085e23f3400a19761e79617fcd7aaab0d290993530ee5fa3bef`, toolchain 1.99.1
 
 ### Crates linked into `foamy-lock-helper`
 
