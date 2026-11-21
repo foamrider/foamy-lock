@@ -172,6 +172,22 @@ test('pictures are accepted only where the sandboxed kinds write them', () => {
     assert.deepEqual(plain(Login.pictureReport(kind, exit, text, cache)), { ok: false, path: '', code }, `${kind} ${text}`)
 })
 
+test('the lock says which avatar it shows; no usable answer is a failure, never a guess', () => {
+  const avatar = '/home/u/.cache/omarchy/foamy.lock/avatar.png'
+  // Omarchy-shell prints the reply after anything else it says.
+  assert.deepEqual(plain(Login.lockAvatarReport(0, 'note\n' + line({ userName: 'u', avatarRenderPath: avatar }))), { ok: true, path: avatar, code: '' })
+  // The initial: the cached avatar.png left behind is not copied.
+  assert.deepEqual(plain(Login.lockAvatarReport(0, line({ avatarRenderPath: '' }))), { ok: true, path: '', code: '' })
+  const failures = [
+    [1, 'omarchy-shell is not running\n'], [124, ''], [-1, ''], [0, ''], [0, 'Target not found.\n'],
+    [0, line({ avatarPath: avatar })], [0, line({ avatarRenderPath: null })], [0, line({ avatarRenderPath: 'avatar.png' })],
+    [0, line({ avatarRenderPath: avatar + '\nx' })], [0, line({ avatarRenderPath: '/' + 'a'.repeat(4096) })],
+    [1, line({ avatarRenderPath: avatar })], [0, line([avatar])]
+  ]
+  for (const [exit, text] of failures)
+    assert.deepEqual(plain(Login.lockAvatarReport(exit, text)), { ok: false, path: '', code: 'lock-status' }, `${exit} ${text}`)
+})
+
 test('the publisher: 0 and 1 with JSON, 126 and 127 from pkexec, and never success otherwise', () => {
   const cases = [
     [0, line({ ok: true }), 'ok', ''],
