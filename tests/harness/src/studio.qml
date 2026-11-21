@@ -671,8 +671,8 @@ Item {
           expect(find(studio, "studioLoginCancel").activeFocus, "Cancel has the keys")
           var body = dialog.body
           var parts = [FoamyI18n.t("studio.login.ask.copy.intro"), FoamyI18n.t("studio.login.ask.copy.steps"), FoamyI18n.t("studio.login.ask.copy.replacesIn", ["omarchy", "/etc/sddm.conf.d/10-theme.conf"]), FoamyI18n.t("studio.login.ask.copy.leftOut", ["media", "status", "fingerprint"].map(function (k) {
-                  return FoamyI18n.t("studio.login.leftOut." + k)
-                }).join(", ")), FoamyI18n.t("studio.login.ask.root"), FoamyI18n.t("studio.login.ask.autologin")]
+              return FoamyI18n.t("studio.login.leftOut." + k)
+            }).join(", ")), FoamyI18n.t("studio.login.ask.root"), FoamyI18n.t("studio.login.ask.autologin")]
           expect(body === parts.join("\n\n"), "the copy dialog's text:\n" + body)
           expect(studio.appKey(Qt.Key_Z, Qt.ControlModifier, "") === false, "a question takes no shortcuts")
           captureSizes("studio-login-copy-dialog", function () {
