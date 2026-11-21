@@ -1055,8 +1055,12 @@ for index, option in enumerate(argv[:-2]):
     if option == '--ro-bind' and argv[index + 2] == '/input':
         record['input_sha256'] = hashlib.sha256(open(argv[index + 1], 'rb').read()).hexdigest()
         record['staging_mode'] = os.stat(os.path.dirname(argv[index + 1])).st_mode & 0o777
-with open(STATE + '/records/%d.json' % time.time_ns(), 'w') as stream:
+# Written under a hidden name and renamed into place: the test polls the
+# folder, and a rename never shows it a half-written record.
+name = '%d.json' % time.time_ns()
+with open(STATE + '/records/.' + name, 'w') as stream:
     json.dump(record, stream)
+os.rename(STATE + '/records/.' + name, STATE + '/records/' + name)
 mode = json.load(open(STATE + '/mode.json'))
 kind = mode['mode']
 if kind == 'pixels':
@@ -1285,7 +1289,7 @@ class FakeDecoderBase(Workspace):
         return self.run_helper(request, env=env, wrap=self.wrap(), pass_fds=pass_fds)
 
     def records(self):
-        return [json.loads(path.read_text()) for path in sorted((self.state / "records").iterdir())]
+        return [json.loads(path.read_text()) for path in sorted((self.state / "records").glob("[!.]*.json"))]
 
     def clear_records(self):
         for path in (self.state / "records").iterdir():

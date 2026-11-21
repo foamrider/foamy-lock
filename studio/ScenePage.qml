@@ -18,7 +18,9 @@ import "Draft.js" as Draft
 //   the selected module), and the selected shape's keys: what it wraps,
 //   its shape (padding, corners, width, edge, size, inset, style), fill,
 //   border and whether it is the background of the modules inside;
-// - "look": both, for the look as a whole (nothing is selected: a click
+// - "login": the login screen (LoginSection: copy the applied look to
+//   SDDM's login screen, or restore Omarchy's);
+// - "look": background and glass, for the look as a whole (nothing is selected: a click
 //   beside the lock on the canvas, or Esc).
 // Values are the lock's 0–1 amounts shown as percentages, within its
 // ranges. Every change is one Draft edit through the window (`app`);
@@ -31,8 +33,9 @@ FocusScope {
   property string page: "background"
   readonly property bool backgroundShown: page === "background" || page === "look"
   readonly property bool glassShown: page === "glass" || page === "look"
-  readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n.t("studio.shapes") : FoamyI18n.t("studio.background")
+  readonly property string title: page === "look" ? FoamyI18n.t("studio.look") : page === "glass" ? FoamyI18n.t("studio.glassDim") : page === "shapes" ? FoamyI18n.t("studio.shapes") : page === "login" ? FoamyI18n.t("studio.login") : FoamyI18n.t("studio.background")
 
+  readonly property alias loginSection: loginSection
   readonly property var look: app ? app.look : LockLayout.defaults()
   readonly property var background: look.background
   readonly property var sources: app ? app.sources : null
@@ -718,6 +721,16 @@ FocusScope {
             }
           }
         }
+      }
+
+      // --- the login screen ---------------------------------------------------
+      LoginSection {
+        id: loginSection
+        objectName: "studioSceneLoginSection"
+        width: parent.width
+        visible: scene.page === "login"
+        focus: visible
+        app: scene.app
       }
 
       // --- shapes ------------------------------------------------------------

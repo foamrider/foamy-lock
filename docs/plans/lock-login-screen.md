@@ -214,14 +214,20 @@ and doesn't hide the section.
 | --- | --- |
 | `unavailable` | Nothing (section hidden) |
 | `not-installed` | **Copy to login screen** |
-| `current` | "The login screen matches this look." **Copy to login screen** (disabled) and **Restore Omarchy login screen** |
-| `outdated` | "The login screen shows an older look." **Copy to login screen** and **Restore Omarchy login screen** |
+| `current` | "The login screen matches this look." **Copy to login screen** (disabled) and **Remove from login screen** |
+| `outdated` | "The login screen shows an older look." **Copy to login screen** and **Remove from login screen** |
 | `overridden` | "Foamy Lock's login theme is installed, but SDDM uses `<theme>`." Both buttons |
 | `broken` | "The login theme files are incomplete." Both buttons |
 
 `current` and `outdated` compare a hash of the snapshot Studio would write
 with the hash stored next to the installed copy. A newer plugin version also
 counts as `outdated`, because the greeter code has changed.
+
+**Remove from login screen** is also offered in `not-installed` when
+Foamy's theme folder or drop-in exists (`status`'s `managed`), for example
+when `/etc/sddm.conf` selects another theme and `ThemeDir`. A short note
+says the files are there but SDDM doesn't use them. A removal counts only
+when `status` then reports neither file.
 
 `overridden` means the effective `[Theme] Current`, computed from SDDM's
 config files in the order SDDM reads them, isn't `foamy-lock`. The spike
@@ -244,7 +250,8 @@ confirms that order.
 > - select the theme in `/etc/sddm.conf.d/99-zz-foamy-lock.conf`
 >
 > *(Only when SDDM uses another theme:)* This replaces the login theme
-> `<theme>`, set in `<file>`. Restoring brings it back.
+> `<theme>`, set in `<file>`. Removing Foamy Lock from the login screen
+> brings it back.
 >
 > Not shown on the login screen: media, weather, fingerprint, network and
 > battery status, the system panel and video backgrounds.
@@ -260,7 +267,7 @@ confirms that order.
 The list of left-out items is computed from the current look, so it names
 only what this look actually uses.
 
-**Restore Omarchy login screen** gets its own dialog with the same
+**Remove from login screen** gets its own dialog with the same
 structure: it removes `/etc/sddm.conf.d/99-zz-foamy-lock.conf` and
 `/usr/share/sddm/themes/foamy-lock`, and SDDM uses whatever the other
 drop-ins select again (usually `omarchy`). Root permission, password
@@ -296,8 +303,10 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
    `native/src/studio/login_screen/` (built in step 2; the module docs hold
    the exact contracts):
    - `status`: the checks and states above. It reports `installed` for a
-     complete folder that SDDM uses. Studio turns that into "matches" or
-     "out of date" by comparing `installed.hash` with `stage`'s hash. It
+     complete folder that SDDM uses, and in `managed` whether our theme
+     folder and drop-in exist, whatever SDDM uses. Studio turns
+     `installed` into "matches" or "out of date" by comparing
+     `installed.hash` with `stage`'s hash. It
      reads every file in SDDM's config folders, whatever the suffix (a
      `.pacnew` too), as SDDM 0.21's `ConfigReader.cpp` does, in Qt's
      locale-aware order under the locale systemd gives the daemon
@@ -424,16 +433,41 @@ writes it; the greeter part's test tooling writes it the same way.
   user's rights (`setpriv` to `PKEXEC_UID`), so a symlink there can't make
   root read a file the user can't; root then checks each copy's size and
   SHA-256 against `manifest.json`.
-- It replaces only a theme folder whose `manifest.json` is Foamy's, and only
-  a drop-in with Foamy's marker line; anything else named the same is
-  refused (`NOT_OURS`) and left alone.
+- It replaces or removes a theme folder only when it is exactly what Foamy
+  installed (every file in its manifest, by size and SHA-256, and nothing
+  else) and a drop-in only when its whole text is Foamy's; anything else is
+  refused (`NOT_OURS`) and left alone. It checks right before the change.
+- An existing theme is replaced in one step (`mv --exchange`), so it is
+  never absent; Remove moves the drop-in aside first and puts it back if
+  the folder can't follow.
+- The root side has its own deadline (`pkexec /usr/bin/timeout … 120`):
+  the user's `timeout` can't signal a root process. On it, the run puts the
+  previous state back and answers `TIMEOUT`.
+- `{"ok": true, "leftovers": true}`: the change was made, but hidden
+  temporary entries remain; SDDM ignores them and the next run clears them.
+- A failure's line comes after the rollback. When the rollback can't put
+  everything back, the code is `ROLLBACK_FAILED` (exit 1) and the error
+  names the first failure and what wasn't put back. Until the commit, the
+  hidden folder that holds the previous theme (publish's after the
+  exchange, restore's after the move) has a `.foamy-lock.rescue-*` name,
+  so a theme the rollback couldn't put back stays there; no later run
+  sweeps it, and a later run puts it back only when the theme folder is
+  missing, Foamy's drop-in is there and the folder is exactly a theme
+  Foamy installed. Studio never says "Nothing was changed" for it.
 
 **Studio** (step 5) runs `studio login-screen status` to show the section
 and its state, `studio login-screen stage` with the applied look (with
 `showsPicture` from `Layout.js`, the colours from `Commons`, the language,
-the avatar the lock rendered and a background prepared by the `background`
-kind at most 3840 × 2160), then the publisher with the returned folder, then
-`status` again, and compares `installed.hash` with `stage`'s hash.
+the avatar the lock shows now — asked with `omarchy-shell foamy.lock status`
+(`avatarRenderPath`; empty: no avatar; no answer: the copy fails), never
+the cached file alone, which outlives a removed photo — and a background
+prepared by the `background` kind at most 3840 × 2160), then the publisher
+with the returned folder, then `status` again, and compares
+`installed.hash` with `stage`'s hash; when the applied look or another
+input changed while the copy ran, it checks again with the inputs as they
+are now. A change to the lock's rendered avatar file, or to the photo it
+comes from (the lock's `avatarPath`, learnt from the same `status`; one
+watch, moved when the path changes), makes Studio check again.
 
 ## Steps
 
