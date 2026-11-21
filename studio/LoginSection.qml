@@ -75,6 +75,8 @@ Column {
     case "denied":
       return FoamyI18n.t("studio.login.result." + result.outcome)
     case "unconfirmed":
+      if (result.code === "files-left")
+        return FoamyI18n.t("studio.login.result.restore.filesLeft")
       return FoamyI18n.t("studio.login.result." + action + ".unconfirmed", reasonText(result.code))
     }
     // Refused before the publisher ran, or by the publisher itself (its
@@ -99,6 +101,12 @@ Column {
   PaneNote {
     objectName: "studioLoginUnapplied"
     text: section.app && section.app.unapplied && section.loginState !== "error" ? FoamyI18n.t("studio.login.unapplied") : ""
+  }
+  // SDDM doesn't use Foamy's theme, but its files are there: what Remove
+  // is offered for.
+  PaneNote {
+    objectName: "studioLoginManaged"
+    text: section.loginState === "not-installed" && section.login && section.login.restorePossible ? FoamyI18n.t("studio.login.managed") : ""
   }
   // Foamy's theme is in use, but this look couldn't be compared with it.
   PaneNote {
@@ -125,7 +133,7 @@ Column {
     objectName: "studioLoginRestore"
     width: parent.width
     focusable: true
-    visible: ["current", "outdated", "installed", "overridden", "broken"].indexOf(section.loginState) !== -1
+    visible: !!section.login && section.login.restorePossible
     enabled: !!section.login && section.login.canRestore
     busy: !!section.login && section.login.op === "restore"
     text: FoamyI18n.t("studio.login.restore")

@@ -137,8 +137,9 @@ const SHELL_JSON: &str =
 /// running) and counts in `$dir/catalog-count` instead, so it never shifts
 /// the other calls' numbers. `foamy.lock status` (no argument) answers the
 /// lock's avatar as `$dir/lock-status` says (`avatar` by default: the
-/// lock's cache `avatar.png`; `none`: "" as after the photo was removed;
-/// `fail`: like a lock that isn't running) and counts in
+/// photo `$HOME/.face` as `avatarPath`, and the lock's cache `avatar.png`
+/// as `avatarRenderPath` while that photo exists, "" as the lock says once
+/// it is removed; `fail`: like a lock that isn't running) and counts in
 /// `$dir/status-count`, also apart. Anything but `foamy.lock saveLook`,
 /// `previewLook`, `savePreset`, `deletePreset` or `setCoverArt` with one argument, or
 /// `renamePreset` with two, is refused.
@@ -154,8 +155,10 @@ fi
 if [[ $1:$2:$# == foamy.lock:status:2 ]]; then
   echo $(( $(cat "$dir/status-count" 2>/dev/null || echo 0) + 1 )) > "$dir/status-count"
   case $(cat "$dir/lock-status" 2>/dev/null || echo avatar) in
-    avatar) printf '{"userName":"sample","avatarRenderPath":"%s"}\n' "${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png" ;;
-    none) echo '{"userName":"sample","avatarRenderPath":""}' ;;
+    avatar)
+      render=""
+      [[ -e $HOME/.face ]] && render="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png"
+      printf '{"userName":"sample","avatarPath":"%s","avatarRenderPath":"%s"}\n' "$HOME/.face" "$render" ;;
     fail) echo 'omarchy-shell is not running' >&2; exit 1 ;;
     *) echo "fake omarchy-shell: unknown lock-status" >&2; exit 2 ;;
   esac
@@ -432,8 +435,14 @@ fn desktop(base: &Path) -> Result<PathBuf, String> {
     let config = home.join(".config/omarchy");
     fs::create_dir_all(&config).map_err(app::io("config"))?;
     fs::write(config.join("shell.json"), SHELL_JSON).map_err(app::io("shell.json"))?;
-    // The avatar the lock rendered (its sandbox's output), which the login
-    // screen's copy makes again for itself.
+    // The profile photo, and the avatar the lock rendered from it (its
+    // sandbox's output), which the login screen's copy makes again for
+    // itself.
+    fs::write(
+        home.join(".face"),
+        gradient(96, 96, [200, 120, 60], [60, 90, 200]),
+    )
+    .map_err(app::io(".face"))?;
     let lock_cache = home.join(".cache/omarchy/foamy.lock");
     fs::create_dir_all(&lock_cache).map_err(app::io(lock_cache.display()))?;
     fs::write(

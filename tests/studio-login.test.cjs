@@ -23,7 +23,8 @@ const plain = value => JSON.parse(JSON.stringify(value))
 const HASH = 'a'.repeat(64)
 const line = value => JSON.stringify(value) + '\n'
 const status = extra => Object.assign({ ok: true, state: 'not-installed', theme: 'omarchy',
-  themeSetIn: '/etc/sddm.conf.d/10-theme.conf', themeDir: '/usr/share/sddm/themes', autologin: true, installed: null }, extra)
+  themeSetIn: '/etc/sddm.conf.d/10-theme.conf', themeDir: '/usr/share/sddm/themes', autologin: true, installed: null,
+  managed: { theme: false, dropin: false } }, extra)
 
 test('the stage limits and colour keys match stage.rs', () => {
   const stage = fs.readFileSync(path.join(__dirname, '../native/src/studio/login_screen/stage.rs'), 'utf8')
@@ -53,6 +54,9 @@ test('status replies become reports, and anything else is an error', () => {
     [0, line(status({ state: 'installed' })), 'unexpected'],
     [0, line(status({ installed: { plugin: '1', hash: HASH } })), 'unexpected'],
     [0, line(status({ state: 'installed', installed: { plugin: '1', hash: 'nothex' } })), 'unexpected'],
+    [0, line(status({ managed: undefined })), 'unexpected'], [0, line(status({ managed: null })), 'unexpected'],
+    [0, line(status({ managed: { theme: true } })), 'unexpected'],
+    [0, line(status({ managed: { theme: 'yes', dropin: false } })), 'unexpected'],
     [0, line(['a']), 'unexpected']
   ]
   for (const [exit, text, code] of failures)
@@ -70,6 +74,23 @@ test('the section state follows status and the compared hash', () => {
     [Login.statusReport(0, line(status({ state: 'broken', detail: 'x' }))), '', '', 'broken']
   ]
   for (const [report, error, hash, state] of cases) assert.equal(Login.sectionState(report, error, hash), state)
+})
+
+test('Remove is offered whenever Foamy\'s files are there, whatever SDDM uses', () => {
+  const managed = (theme, dropin) => Login.statusReport(0, line(status({ managed: { theme, dropin } })))
+  assert.deepEqual(plain(managed(true, false).managed), { theme: true, dropin: false })
+  const installed = Login.statusReport(0, line(status({ state: 'installed', installed: { plugin: '1', hash: HASH },
+    managed: { theme: true, dropin: true } })))
+  const cases = [
+    ['not-installed', managed(false, false), false], ['not-installed', managed(true, false), true],
+    ['not-installed', managed(false, true), true], ['not-installed', managed(true, true), true],
+    ['current', installed, true], ['outdated', installed, true], ['installed', installed, true],
+    ['overridden', managed(true, false), true], ['broken', managed(false, true), true],
+    // A failed or first check, or SDDM not in use: nothing to act on.
+    ['error', installed, false], ['checking', null, false], ['hidden', managed(false, false), false]
+  ]
+  for (const [state, report, offered] of cases)
+    assert.equal(Login.restoreOffered(state, report), offered, `${state} ${JSON.stringify(report && report.managed)}`)
 })
 
 test('a picture shows for the wallpaper and a custom image, by the preset when the entry says nothing', () => {
@@ -175,17 +196,27 @@ test('pictures are accepted only where the sandboxed kinds write them', () => {
 test('the lock says which avatar it shows; no usable answer is a failure, never a guess', () => {
   const avatar = '/home/u/.cache/omarchy/foamy.lock/avatar.png'
   // Omarchy-shell prints the reply after anything else it says.
-  assert.deepEqual(plain(Login.lockAvatarReport(0, 'note\n' + line({ userName: 'u', avatarRenderPath: avatar }))), { ok: true, path: avatar, code: '' })
-  // The initial: the cached avatar.png left behind is not copied.
-  assert.deepEqual(plain(Login.lockAvatarReport(0, line({ avatarRenderPath: '' }))), { ok: true, path: '', code: '' })
+  const face = '/home/u/.face'
+  assert.deepEqual(plain(Login.lockAvatarReport(0, 'note\n' + line({ userName: 'u', avatarPath: face, avatarRenderPath: avatar }))),
+    { ok: true, path: avatar, source: face, code: '' })
+  // The initial: the cached avatar.png left behind is not copied; the photo
+  // it came from is still named, so Studio watches it.
+  assert.deepEqual(plain(Login.lockAvatarReport(0, line({ avatarPath: face, avatarRenderPath: '' }))),
+    { ok: true, path: '', source: face, code: '' })
+  assert.deepEqual(plain(Login.lockAvatarReport(0, line({ avatarPath: '', avatarRenderPath: '' }))),
+    { ok: true, path: '', source: '', code: '' })
   const failures = [
     [1, 'omarchy-shell is not running\n'], [124, ''], [-1, ''], [0, ''], [0, 'Target not found.\n'],
-    [0, line({ avatarPath: avatar })], [0, line({ avatarRenderPath: null })], [0, line({ avatarRenderPath: 'avatar.png' })],
-    [0, line({ avatarRenderPath: avatar + '\nx' })], [0, line({ avatarRenderPath: '/' + 'a'.repeat(4096) })],
-    [1, line({ avatarRenderPath: avatar })], [0, line([avatar])]
+    [0, line({ avatarPath: avatar })], [0, line({ avatarPath: face, avatarRenderPath: null })],
+    [0, line({ avatarPath: face, avatarRenderPath: 'avatar.png' })],
+    [0, line({ avatarPath: face, avatarRenderPath: avatar + '\nx' })],
+    [0, line({ avatarPath: face, avatarRenderPath: '/' + 'a'.repeat(4096) })],
+    [0, line({ avatarRenderPath: avatar })], [0, line({ avatarPath: '.face', avatarRenderPath: avatar })],
+    [0, line({ avatarPath: face + '\0', avatarRenderPath: avatar })],
+    [1, line({ avatarPath: face, avatarRenderPath: avatar })], [0, line([avatar])]
   ]
   for (const [exit, text] of failures)
-    assert.deepEqual(plain(Login.lockAvatarReport(exit, text)), { ok: false, path: '', code: 'lock-status' }, `${exit} ${text}`)
+    assert.deepEqual(plain(Login.lockAvatarReport(exit, text)), { ok: false, path: '', source: '', code: 'lock-status' }, `${exit} ${text}`)
 })
 
 test('the publisher: 0 and 1 with JSON, 126 and 127 from pkexec, and never success otherwise', () => {
@@ -234,6 +265,9 @@ test('the publisher\'s ok counts only when status agrees', () => {
   assert.equal(Login.confirmed('copy', Login.statusReport(0, line(status())), HASH), 'unconfirmed')
   assert.equal(Login.confirmed('copy', { ok: false, code: 'IO' }, HASH), 'unconfirmed')
   assert.equal(Login.confirmed('restore', Login.statusReport(0, line(status())), ''), 'done')
+  // SDDM is off Foamy's theme, but its files are still there.
+  assert.equal(Login.confirmed('restore', Login.statusReport(0, line(status({ managed: { theme: true, dropin: false } }))), ''), 'unconfirmed')
+  assert.equal(Login.confirmed('restore', Login.statusReport(0, line(status({ managed: { theme: false, dropin: true } }))), ''), 'unconfirmed')
   assert.equal(Login.confirmed('restore', installed(HASH), ''), 'unconfirmed')
   assert.equal(Login.confirmed('restore', Login.statusReport(0, line(status({ state: 'broken' }))), ''), 'unconfirmed')
   assert.equal(Login.confirmed('restore', null, ''), 'unconfirmed')

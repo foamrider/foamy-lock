@@ -79,7 +79,9 @@ function shortText(text, limit) {
 }
 
 // `status`'s reply: { ok: true, state, theme, themeSetIn, themeDir,
-// autologin, installed: { plugin, hash } | null }, or { ok: false, code }.
+// autologin, installed: { plugin, hash } | null, managed: { theme, dropin }
+// }, or { ok: false, code }. `managed`: Foamy's theme folder and drop-in
+// exist, whether SDDM uses them or not.
 // Anything off the contract is "unexpected", never a state: a failed check
 // must not hide the section.
 function statusReport(exitCode, text) {
@@ -89,6 +91,8 @@ function statusReport(exitCode, text) {
   if (STATES.indexOf(data.state) === -1 || typeof data.theme !== "string" || typeof data.themeDir !== "string"
       || typeof data.autologin !== "boolean") return bad
   if (data.themeSetIn !== null && typeof data.themeSetIn !== "string") return bad
+  if (!isPlainObject(data.managed) || typeof data.managed.theme !== "boolean" || typeof data.managed.dropin !== "boolean")
+    return bad
   var installed = null
   if (data.installed !== null) {
     if (!isPlainObject(data.installed) || typeof data.installed.plugin !== "string" || !HASH.test(String(data.installed.hash)))
@@ -100,7 +104,8 @@ function statusReport(exitCode, text) {
   return {
     ok: true, state: data.state, theme: shortText(data.theme, MAX_THEME_TEXT),
     themeSetIn: data.themeSetIn === null ? null : shortText(data.themeSetIn, MAX_PATH_TEXT),
-    themeDir: shortText(data.themeDir, MAX_PATH_TEXT), autologin: data.autologin, installed: installed
+    themeDir: shortText(data.themeDir, MAX_PATH_TEXT), autologin: data.autologin, installed: installed,
+    managed: { theme: data.managed.theme, dropin: data.managed.dropin }
   }
 }
 
@@ -197,18 +202,25 @@ function pictureReport(kind, exitCode, text, cache) {
   return { ok: false, path: "", code: code }
 }
 
+// An avatar path from the lock's `status`: "" or an absolute path of at
+// most MAX_AVATAR_PATH characters without NUL or newline.
+function avatarPathOk(path) {
+  return typeof path === "string" && (path === "" || (path[0] === "/" && path.length <= MAX_AVATAR_PATH && !/[\0\n]/.test(path)))
+}
+
 // The lock's own `status` (`omarchy-shell foamy.lock status`): the avatar
 // it shows now, `avatarRenderPath` ("" when it shows the initial, as after
 // the photo was removed or failed to decode; the cached avatar.png may
-// still be on disk then). { ok: true, path } or { ok: false, path: "",
-// code: "lock-status" } when the lock didn't answer or said no usable path:
-// the copy then stops, it never guesses an avatar.
+// still be on disk then), and the profile photo it renders it from,
+// `avatarPath` (`source`, for example ~/.face; Studio watches it). { ok:
+// true, path, source } or { ok: false, path: "", source: "", code:
+// "lock-status" } when the lock didn't answer or said no usable path: the
+// copy then stops, it never guesses an avatar.
 function lockAvatarReport(exitCode, text) {
   var data = exitCode === 0 ? replyOf(text) : null
-  var path = data ? data.avatarRenderPath : undefined
-  if (typeof path !== "string" || (path !== "" && (path[0] !== "/" || path.length > MAX_AVATAR_PATH || /[\0\n]/.test(path))))
-    return { ok: false, path: "", code: "lock-status" }
-  return { ok: true, path: path, code: "" }
+  if (!data || !avatarPathOk(data.avatarRenderPath) || !avatarPathOk(data.avatarPath))
+    return { ok: false, path: "", source: "", code: "lock-status" }
+  return { ok: true, path: data.avatarRenderPath, source: data.avatarPath, code: "" }
 }
 
 // The publisher's answer: { result: "ok" | "cancelled" | "denied" |
@@ -261,20 +273,34 @@ function leftOut(look, wallpaperIsVideo) {
   return out
 }
 
+// Foamy's theme folder or drop-in is there (`status`'s `managed`).
+function hasManaged(status) {
+  return !!status && !!status.managed && (status.managed.theme || status.managed.dropin)
+}
+
+// Remove is offered: Foamy's theme is in use or installed, or its files
+// are there although SDDM doesn't use them (another file's `Current` or
+// `ThemeDir`). Not while hidden, checking or after a failed check.
+function restoreOffered(sectionState, status) {
+  if (["current", "outdated", "installed", "overridden", "broken"].indexOf(sectionState) !== -1) return true
+  return sectionState === "not-installed" && hasManaged(status)
+}
+
 // After the publisher said ok, `status` must agree: a copy is ours with
-// the staged hash, a restore leaves no Foamy theme in use. "done", or
-// "unconfirmed" (the publisher's word alone isn't trusted).
+// the staged hash, a restore leaves no Foamy theme in use and none of its
+// files. "done", or "unconfirmed" (the publisher's word alone isn't
+// trusted).
 function confirmed(action, status, hash) {
   if (!status || status.ok !== true) return "unconfirmed"
   if (action === "copy")
     return status.state === "installed" && status.installed.hash === hash ? "done" : "unconfirmed"
-  return status.state === "not-installed" || status.state === "unavailable" ? "done" : "unconfirmed"
+  return (status.state === "not-installed" || status.state === "unavailable") && !hasManaged(status) ? "done" : "unconfirmed"
 }
 
 if (typeof module !== "undefined") module.exports = {
   STATES: STATES, COLOR_KEYS: COLOR_KEYS, THEMED_KEYS: THEMED_KEYS, LEFT_OUT: LEFT_OUT, MAX_WIDTH: MAX_WIDTH, MAX_HEIGHT: MAX_HEIGHT,
   replyOf: replyOf, exitProblem: exitProblem, statusReport: statusReport, showsPicture: showsPicture, pictureSize: pictureSize,
   colorText: colorText, stageRequest: stageRequest, stageReport: stageReport, pictureReport: pictureReport,
-  lockAvatarReport: lockAvatarReport,
+  lockAvatarReport: lockAvatarReport, hasManaged: hasManaged, restoreOffered: restoreOffered,
   publishReport: publishReport, sectionState: sectionState, leftOut: leftOut, confirmed: confirmed
 }
