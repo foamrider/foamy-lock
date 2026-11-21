@@ -64,7 +64,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 34] = [
+const CAPTURES: [&str; 54] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -99,6 +99,26 @@ const CAPTURES: [&str; 34] = [
     "studio-field-size",
     "studio-align",
     "studio-text-align",
+    "studio-login",
+    "studio-login-min",
+    "studio-login-wide",
+    "studio-login-copy-dialog",
+    "studio-login-copy-dialog-min",
+    "studio-login-copy-dialog-wide",
+    "studio-login-copy-dialog-long",
+    "studio-login-cancelled",
+    "studio-login-current",
+    "studio-login-current-min",
+    "studio-login-current-wide",
+    "studio-login-outdated",
+    "studio-login-overridden",
+    "studio-login-broken",
+    "studio-login-restore-dialog",
+    "studio-login-restore-dialog-min",
+    "studio-login-restore-dialog-wide",
+    "studio-login-failed",
+    "studio-login-error",
+    "studio-login-busy",
 ];
 /// The lock's entry the app reads (read-only) for the canvas.
 const SHELL_JSON: &str =
@@ -216,6 +236,106 @@ case $mode in
 esac
 "#;
 
+/// The stand-in for the login-screen publisher (`sddm/foamy-lock-login-screen`;
+/// the app's `publisher`): never pkexec, never the real `/usr` or `/etc`. It
+/// logs each call's arguments in `$dir/publish-calls` and answers what
+/// `$dir/publish-mode` says: `ok` installs as the real one would, into
+/// `$FOAMY_LOCK_SYSTEM_ROOT` (the staged files and manifest in
+/// `usr/share/sddm/themes/foamy-lock`, the drop-in in `etc/sddm.conf.d`; a
+/// restore removes both); `cancel` and `deny` exit as pkexec does (126, 127);
+/// `error` and `not-ours` refuse with its JSON; `garbage` exits 0 without
+/// JSON; `lie` says ok and changes nothing; `crash` exits 3; `slow` waits
+/// (its PID in `$dir/publish-pid`) until SIGTERM, which it records in
+/// `$dir/publish-term`.
+const FAKE_PUBLISHER: &str = r#"#!/bin/bash
+dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+printf '%s\n' "$*" >> "$dir/publish-calls"
+mode=$(cat "$dir/publish-mode" 2>/dev/null || echo ok)
+root=$FOAMY_LOCK_SYSTEM_ROOT
+[[ $root == /* ]] || { echo '{"ok":false,"code":"IO","error":"no test root"}'; exit 1; }
+case $mode in
+  cancel) exit 126 ;;
+  deny) exit 127 ;;
+  error) echo '{"ok":false,"code":"IO","error":"/usr/share/sddm/themes: Read-only file system"}'; exit 1 ;;
+  not-ours) echo '{"ok":false,"code":"NOT_OURS","error":"/usr/share/sddm/themes/foamy-lock is not Foamy Lock'"'"'s"}'; exit 1 ;;
+  garbage) echo 'done, probably'; exit 0 ;;
+  lie) echo '{"ok":true}'; exit 0 ;;
+  crash) exit 3 ;;
+  slow)
+    echo $$ > "$dir/publish-pid"
+    trap 'echo term > "$dir/publish-term"; kill $! 2>/dev/null; exit 143' TERM
+    sleep 60 & wait $!
+    exit 1 ;;
+esac
+theme="$root/usr/share/sddm/themes/foamy-lock"
+dropin="$root/etc/sddm.conf.d/99-zz-foamy-lock.conf"
+case $1:$# in
+  publish:2)
+    [[ -f $2/manifest.json ]] || { echo '{"ok":false,"code":"STAGE_INVALID","error":"no manifest"}'; exit 1; }
+    rm -rf "$theme"
+    mkdir -p "$theme"
+    cp -R "$2/." "$theme/"
+    printf '[Theme]\nCurrent=foamy-lock\nThemeDir=/usr/share/sddm/themes\n' > "$dropin"
+    echo '{"ok":true}' ;;
+  restore:1)
+    rm -rf "$theme" "$dropin"
+    echo '{"ok":true}' ;;
+  *) echo "fake publisher: unexpected call" >&2; exit 2 ;;
+esac
+"#;
+
+/// The app's `helper` for the login screen: the bundled helper itself, but
+/// `studio login-screen stage` fails with BUNDLE_INVALID while
+/// `$dir/login-mode` says `stage-fail`. `@PLUGIN@` is the plugin folder.
+const FAKE_LOGIN_HELPER: &str = r#"#!/bin/bash
+dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+mode=$(cat "$dir/login-mode" 2>/dev/null || echo real)
+if [[ $mode == stage-fail && $1:$2:$3 == studio:login-screen:stage ]]; then
+  cat > /dev/null
+  echo '{"ok":false,"code":"BUNDLE_INVALID","error":"sddm/bundle.txt: line 3: no such file"}'
+  exit 1
+fi
+exec -- "@PLUGIN@/bin/$HOSTTYPE/foamy-lock-helper" "$@"
+"#;
+
+/// First on PATH: a pkexec that only records that it was called.
+const FAKE_PKEXEC: &str = r#"#!/bin/bash
+dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+printf '%s\n' "$*" >> "$dir/pkexec-calls"
+exit 127
+"#;
+
+/// The SDDM system the login screen's `status` reads
+/// (`$FOAMY_LOCK_SYSTEM_ROOT`): SDDM as the display manager with its Qt 6
+/// greeter, Omarchy's theme selected, autologin on.
+fn system_tree(base: &Path) -> Result<PathBuf, String> {
+    use std::os::unix::fs::PermissionsExt;
+    let root = base.join("system");
+    let units = root.join("etc/systemd/system");
+    let conf = root.join("etc/sddm.conf.d");
+    let bin = root.join("usr/bin");
+    for dir in [&units, &conf, &bin, &root.join("usr/share/sddm/themes/omarchy")] {
+        fs::create_dir_all(dir).map_err(app::io(dir.display()))?;
+    }
+    symlink(
+        "/usr/lib/systemd/system/sddm.service",
+        units.join("display-manager.service"),
+    )
+    .map_err(app::io("display-manager.service"))?;
+    let greeter = bin.join("sddm-greeter-qt6");
+    fs::write(&greeter, "#!/bin/sh\nexit 1\n").map_err(app::io("sddm-greeter-qt6"))?;
+    fs::set_permissions(&greeter, fs::Permissions::from_mode(0o755))
+        .map_err(app::io("sddm-greeter-qt6"))?;
+    fs::write(conf.join("10-theme.conf"), "[Theme]\nCurrent=omarchy\n")
+        .map_err(app::io("10-theme.conf"))?;
+    fs::write(
+        conf.join("autologin.conf"),
+        "[Autologin]\nUser=sample\nSession=hyprland-uwsm\n",
+    )
+    .map_err(app::io("autologin.conf"))?;
+    Ok(root)
+}
+
 /// The fake omarchy-shell in `base/fake-shell/bin`, and the fake helper
 /// beside it; returns its directory.
 fn fake_shell(base: &Path) -> Result<PathBuf, String> {
@@ -228,6 +348,25 @@ fn fake_shell(base: &Path) -> Result<PathBuf, String> {
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
         .map_err(app::io("omarchy-shell"))?;
     fs::write(dir.join("mode"), "ok\n").map_err(app::io("mode"))?;
+    let pkexec = bin.join("pkexec");
+    fs::write(&pkexec, FAKE_PKEXEC).map_err(app::io("pkexec"))?;
+    fs::set_permissions(&pkexec, fs::Permissions::from_mode(0o755))
+        .map_err(app::io("pkexec"))?;
+    let plugin = app::plugin_root()
+        .canonicalize()
+        .map_err(app::io("plugin"))?;
+    for (name, body) in [
+        ("foamy-lock-login-screen", FAKE_PUBLISHER.to_string()),
+        (
+            "login-helper",
+            FAKE_LOGIN_HELPER.replace("@PLUGIN@", &plugin.display().to_string()),
+        ),
+    ] {
+        let script = dir.join(name);
+        fs::write(&script, body).map_err(app::io(name))?;
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
+            .map_err(app::io(name))?;
+    }
     fs::write(dir.join("catalog"), CATALOG).map_err(app::io("catalog"))?;
     let helper = dir.join("foamy-lock-helper");
     fs::write(&helper, FAKE_HELPER).map_err(app::io("foamy-lock-helper"))?;
@@ -278,6 +417,15 @@ fn desktop(base: &Path) -> Result<PathBuf, String> {
     let config = home.join(".config/omarchy");
     fs::create_dir_all(&config).map_err(app::io("config"))?;
     fs::write(config.join("shell.json"), SHELL_JSON).map_err(app::io("shell.json"))?;
+    // The avatar the lock rendered (its sandbox's output), which the login
+    // screen's copy makes again for itself.
+    let lock_cache = home.join(".cache/omarchy/foamy.lock");
+    fs::create_dir_all(&lock_cache).map_err(app::io(lock_cache.display()))?;
+    fs::write(
+        lock_cache.join("avatar.png"),
+        gradient(96, 96, [200, 120, 60], [60, 90, 200]),
+    )
+    .map_err(app::io("avatar.png"))?;
     let picture = base.join("lake.png");
     fs::write(&picture, gradient(240, 160, [20, 96, 112], [210, 160, 90]))
         .map_err(app::io("lake.png"))?;
@@ -531,6 +679,32 @@ fn check_drawn(output: &str, out: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The publisher the driver left waiting for its password prompt is gone
+/// once the app has quit, and it was asked to stop (SIGTERM).
+fn check_publisher_stopped(fake: &Path) -> Result<(), String> {
+    let pid = fs::read_to_string(fake.join("publish-pid")).map_err(app::io("publish-pid"))?;
+    let proc = Path::new("/proc").join(pid.trim());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while proc.exists() {
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "the login-screen publisher (pid {}) outlived the app",
+                pid.trim()
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    if !fake.join("publish-term").exists() {
+        return Err("the login-screen publisher ended without SIGTERM".into());
+    }
+    let pkexec = fs::read_to_string(fake.join("pkexec-calls")).unwrap_or_default();
+    if !pkexec.is_empty() {
+        return Err(format!("pkexec was called: {pkexec}"));
+    }
+    println!("studio ok: the waiting publisher stopped with the app (SIGTERM)");
+    Ok(())
+}
+
 /// `quickshell ipc -p <root> call studio raise` in the run's environment.
 fn raise(root: &Path, env: &[(String, String)]) -> Result<String, String> {
     let mut child = Command::new("quickshell")
@@ -579,6 +753,7 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
     let picture = desktop(&base)?.display().to_string();
     let fake = fake_shell(&base)?;
     let fake_text = fake.display().to_string();
+    let system = system_tree(&base)?.display().to_string();
     // The fake comes first, so neither the app nor the helper reaches the
     // real omarchy-shell; the rest is the hermetic PATH.
     let path = format!(
@@ -607,6 +782,7 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
             ("FOAMY_LOCK_STUDIO_OUT", &out_text),
             ("FOAMY_LOCK_STUDIO_PICTURE", &picture),
             ("FOAMY_LOCK_STUDIO_FAKE", &fake_text),
+            ("FOAMY_LOCK_SYSTEM_ROOT", &system),
             ("PATH", &path),
             ("QML_XHR_ALLOW_FILE_READ", "1"),
         ],
@@ -632,6 +808,7 @@ pub fn run_host(name: &str, shell: &Path, language: &str) -> Result<(), String> 
         ));
     }
     check_drawn(&output, &out)?;
+    check_publisher_stopped(&fake)?;
     let calls = fs::read_to_string(fake.join("count")).unwrap_or_default();
     println!(
         "studio ok: {} calls to the fake omarchy-shell",
