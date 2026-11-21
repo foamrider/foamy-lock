@@ -58,7 +58,7 @@ use serde_json::{Value, json};
 use super::{Env, io_failure, random_suffix};
 
 /// Links to the plugin, and whether the plugin must have them.
-const PLUGIN_LINKS: [(&str, bool); 8] = [
+const PLUGIN_LINKS: [(&str, bool); 9] = [
     ("elements", true),
     ("kit", true),
     ("i18n", true),
@@ -67,6 +67,8 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
     ("Model.js", true),
     ("previews", false),
     ("bin", false),
+    // The login-screen publisher, sddm/foamy-lock-login-screen.
+    ("sddm", false),
 ];
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";

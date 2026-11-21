@@ -180,7 +180,6 @@ test('the publisher: 0 and 1 with JSON, 126 and 127 from pkexec, and never succe
     [127, '', 'denied', ''],
     [1, line({ ok: false, code: 'NOT_OURS', error: 'x' }), 'failed', 'NOT_OURS'],
     [1, line({ ok: false, code: 'IO', error: 'x' }), 'failed', 'IO'],
-    [1, line({ ok: false, code: 'PUBLISHER_MISSING', error: 'x' }), 'failed', 'PUBLISHER_MISSING'],
     [0, '', 'failed', 'unexpected'],
     [0, line({ ok: false, code: 'IO' }), 'failed', 'unexpected'],
     [1, 'oops', 'failed', 'unexpected'],

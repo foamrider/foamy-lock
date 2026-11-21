@@ -607,7 +607,6 @@
   "studio.login.reason.not-possible": "det er ikke mulig nå",
   "studio.login.reason.BACKGROUND_MISSING": "bakgrunnsbildet er ikke tilgjengelig",
   "studio.login.reason.NOT_OURS": "et tema eller en innstilling med Foamy Locks navn er ikke Foamy Locks, så det ble latt være i fred",
-  "studio.login.reason.PUBLISHER_MISSING": "utvidelsens publiseringsskript for innloggingsskjermen mangler",
   "studio.login.reason.BUNDLE_INVALID": "utvidelsens filer for innloggingstemaet er skadet",
   "studio.login.reason.NO_RUNTIME_DIR": "det finnes ingen kjøretidsmappe (XDG_RUNTIME_DIR)",
   "studio.login.reason.BUSY": "en annen kopi gjøres klar",

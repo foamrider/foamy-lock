@@ -424,12 +424,11 @@ Item {
       }))
   }
 
-  // The plugin's publisher, found through the root's `bin` link (the
-  // root links no `sddm`). A missing one answers as the publisher would,
-  // never with 126 or 127, which are pkexec's.
+  // The plugin's publisher, through the app root's `sddm` link. A missing
+  // one fails to start, which is a failure, never pkexec's 126 or 127.
   function runPublisher(action, dir) {
     var args = dir ? [action, dir] : [action]
-    var command = publisher ? [publisher].concat(args) : ["bash", "-c", 'bin=$(readlink -e -- "$1/bin") && script="${bin%/bin}/sddm/foamy-lock-login-screen" && [[ -f $script && -x $script ]] || { printf \'%s\\n\' \'{"ok":false,"code":"PUBLISHER_MISSING","error":"the login-screen publisher is missing"}\'; exit 1; }; exec -- "$script" "${@:2}"', "foamy-lock-studio-login", pluginDir].concat(args)
+    var command = [publisher || pluginDir + "/sddm/foamy-lock-login-screen"].concat(args)
     run(action, "1830s", command, "", false, ({}))
   }
 

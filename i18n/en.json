@@ -607,7 +607,6 @@
   "studio.login.reason.not-possible": "it isn't possible in this state",
   "studio.login.reason.BACKGROUND_MISSING": "the background picture isn't available",
   "studio.login.reason.NOT_OURS": "a theme or setting with Foamy Lock's name isn't Foamy Lock's, so it was left alone",
-  "studio.login.reason.PUBLISHER_MISSING": "the plugin's login-screen publisher is missing",
   "studio.login.reason.BUNDLE_INVALID": "the plugin's login theme files are damaged",
   "studio.login.reason.NO_RUNTIME_DIR": "there is no runtime folder (XDG_RUNTIME_DIR)",
   "studio.login.reason.BUSY": "another copy is being prepared",

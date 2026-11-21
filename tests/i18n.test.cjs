@@ -64,7 +64,7 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...['busy', 'job-timeout', 'output-too-large'].map(c => 'video.failed.' + c),
   // The login screen (LoginSection.qml, StudioWindow.loginCopyBody): states, reasons, results, what is left out.
   ...['checking', 'error', 'not-installed', 'current', 'outdated', 'installed', 'overridden', 'broken'].flatMap(s => ['login.detail.' + s, ...(s === 'overridden' ? [] : ['login.state.' + s])]),
-  ...['timeout', 'start-failed', 'unexpected', 'not-possible', 'BACKGROUND_MISSING', 'NOT_OURS', 'PUBLISHER_MISSING', 'BUNDLE_INVALID',
+  ...['timeout', 'start-failed', 'unexpected', 'not-possible', 'BACKGROUND_MISSING', 'NOT_OURS', 'BUNDLE_INVALID',
     'NO_RUNTIME_DIR', 'BUSY', 'IO', 'INVALID_REQUEST'].map(c => 'login.reason.' + c),
   ...['copy', 'restore'].flatMap(a => ['done', 'unconfirmed', 'failed', 'failedNothing'].map(r => `login.result.${a}.${r}`)),
   ...['cancelled', 'denied'].map(r => 'login.result.' + r),
