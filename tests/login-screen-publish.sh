@@ -231,6 +231,23 @@ case_missing_config_folder() {
   [[ $(cat "$dropin") == "$expected_dropin" ]] || fail "drop-in: $(cat "$dropin")"
 }
 
+# What a run killed hard left behind goes on the next run.
+case_leftovers_removed() {
+  new_root leftovers
+  mkdir -p -- "$themes/.foamy-lock.new-abc123/elements" "$themes/.foamy-lock.old-def456"
+  : >"$confd/.99-zz-foamy-lock.conf.Xy12Ab"
+  : >"$confd/.99-zz-foamy-lock.conf.old-Qw34Er"
+  # Not ours: kept.
+  mkdir -p -- "$themes/.other"
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  local left
+  left=$(find "$themes" "$confd" -mindepth 1 -maxdepth 1 -name '.*' ! -name .other)
+  [[ -z $left ]] || fail "left behind: $left"
+  [[ -d $themes/.other ]] || fail "removed a folder that isn't ours"
+}
+
 case_restore() {
   new_root restore
   stage
@@ -478,7 +495,7 @@ case_busy() {
 }
 
 cases=(good_publish theme_conf_escapes second_publish_replaces missing_config_folder
-  restore symlink_same_content symlink_other_content symlink_unreadable file_mismatch
+  leftovers_removed restore symlink_same_content symlink_other_content symlink_unreadable file_mismatch
   bad_manifest bad_snapshot bad_arguments not_ours failure_after_swap untrusted_folder busy)
 (($#)) && cases=("$@")
 failed=()

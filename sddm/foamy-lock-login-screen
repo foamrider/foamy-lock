@@ -284,6 +284,12 @@ transaction() {
   flock -x -w 5 -E 75 "$themes_lock" || status=$?
   ((status != 75)) || refuse BUSY "another login-screen copy or restore is running"
   ((status == 0)) || refuse IO "cannot lock $themes"
+  # A run killed hard (SIGKILL, power loss) can leave its hidden temporary
+  # entries. Under the lock no other run owns them, and in these folders
+  # only their owner (root) can have made them.
+  context="cannot remove what an earlier run left behind"
+  find "$themes" -mindepth 1 -maxdepth 1 -uid "$EUID" \( -name '.foamy-lock.new-??????' -o -name '.foamy-lock.old-??????' \) -exec rm -rf -- {} +
+  [[ ! -d $confd ]] || find "$confd" -mindepth 1 -maxdepth 1 -uid "$EUID" -name '.99-zz-foamy-lock.conf.*' -exec rm -rf -- {} +
   check_theme
   check_dropin
 
