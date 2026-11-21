@@ -614,6 +614,11 @@ publish_term_at() {
     exec {fd}>&-
     fail "the transaction didn't reach $point: $(cat "$tmp/out") $(cat "$tmp/stderr")"
   fi
+  # A case can change the system at the pause first, in its own at_pause
+  # (cases run in subshells, so it never leaks into another).
+  if declare -F at_pause >/dev/null; then
+    at_pause
+  fi
   kill -TERM "$pid"
   printf 'go\n' >&"$fd"
   wait "$pid"
@@ -666,6 +671,26 @@ case_term_after_rename() {
   ((failed == 0))
 }
 
+# The rollback can't exchange the theme back (the themes folder became
+# read-only after the exchange): the previous theme stays in its hidden
+# folder instead of being deleted.
+case_rollback_exchange_fails() {
+  new_root rollback-exchange
+  stage
+  publish publish "$stage_dir"
+  expect ok
+  local first=$stage_hash kept
+  stage '.timeFormat = "12h"'
+  at_pause() { chmod 0555 -- "$themes"; }
+  publish_term_at publish-exchange publish "$stage_dir"
+  chmod 0755 -- "$themes"
+  expect TIMEOUT
+  kept=$(find "$themes" -mindepth 1 -maxdepth 1 -name '.foamy-lock.new-*' -print -quit)
+  [[ -n $kept && -f $kept/manifest.json ]] || fail "the previous theme was deleted"
+  jq -e --arg hash "$first" '.hash == $hash' "$kept/manifest.json" >/dev/null \
+    || fail "the hidden folder isn't the previous theme"
+}
+
 case_untrusted_folder() {
   new_root untrusted
   stage
@@ -700,7 +725,7 @@ case_busy() {
 cases=(good_publish theme_conf_escapes second_publish_replaces missing_config_folder
   leftovers_removed restore symlink_same_content symlink_other_content symlink_unreadable file_mismatch
   bad_manifest bad_snapshot bad_arguments not_ours failure_after_swap restore_rollback restore_leftover
-  interrupted_recovered deadline term_after_rename untrusted_folder busy)
+  interrupted_recovered deadline term_after_rename rollback_exchange_fails untrusted_folder busy)
 (($#)) && cases=("$@")
 failed=()
 for name in "${cases[@]}"; do

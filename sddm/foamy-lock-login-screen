@@ -139,9 +139,15 @@ transaction() {
       fi
       [[ -z $dropin_tmp ]] || rm -f -- "$dropin_tmp"
       # After an exchange $new_dir holds the previous theme: exchange back.
+      keep_new=
       if [[ -n $exchanged ]]; then
+        # If this fails, $new_dir is the only copy of the previous theme:
+        # it stays (hidden; the next run's recovery can put it back).
         mv --exchange --no-copy -T -- "$new_dir" "$theme" \
-          || echo "foamy-lock-login-screen: cannot put $theme back; it is in $new_dir" >&2
+          || {
+            echo "foamy-lock-login-screen: cannot put $theme back; it is in $new_dir" >&2
+            keep_new=1
+          }
       elif [[ -n $new_placed ]]; then
         mv --no-copy -T -- "$theme" "$new_dir" \
           || echo "foamy-lock-login-screen: cannot remove the new $theme" >&2
@@ -152,7 +158,7 @@ transaction() {
       elif [[ -n $aside_dir ]]; then
         rmdir -- "$aside_dir"
       fi
-      [[ -z $new_dir ]] || rm -rf -- "$new_dir"
+      [[ -z $new_dir || -n $keep_new ]] || rm -rf -- "$new_dir"
     fi
     exit "$rc"
   }
