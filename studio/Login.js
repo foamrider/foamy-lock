@@ -29,6 +29,8 @@ var LOOK_KEYS = ["preset", "layout", "background", "glass"]
 // "…"): both come from SDDM's config files.
 var MAX_THEME_TEXT = 64
 var MAX_PATH_TEXT = 256
+// Longest avatar path taken from the lock's `status` (PATH_MAX).
+var MAX_AVATAR_PATH = 4096
 
 var HASH = /^[0-9a-f]{64}$/
 var HEX_COLOR = /^#([0-9a-f]{6}|[0-9a-f]{8})$/
@@ -195,6 +197,20 @@ function pictureReport(kind, exitCode, text, cache) {
   return { ok: false, path: "", code: code }
 }
 
+// The lock's own `status` (`omarchy-shell foamy.lock status`): the avatar
+// it shows now, `avatarRenderPath` ("" when it shows the initial, as after
+// the photo was removed or failed to decode; the cached avatar.png may
+// still be on disk then). { ok: true, path } or { ok: false, path: "",
+// code: "lock-status" } when the lock didn't answer or said no usable path:
+// the copy then stops, it never guesses an avatar.
+function lockAvatarReport(exitCode, text) {
+  var data = exitCode === 0 ? replyOf(text) : null
+  var path = data ? data.avatarRenderPath : undefined
+  if (typeof path !== "string" || (path !== "" && (path[0] !== "/" || path.length > MAX_AVATAR_PATH || /[\0\n]/.test(path))))
+    return { ok: false, path: "", code: "lock-status" }
+  return { ok: true, path: path, code: "" }
+}
+
 // The publisher's answer: { result: "ok" | "cancelled" | "denied" |
 // "failed", code }. Its own exits are 0 and 1 with one JSON line; 126 and
 // 127 are pkexec's (the prompt was dismissed; not authorized, or no polkit
@@ -259,5 +275,6 @@ if (typeof module !== "undefined") module.exports = {
   STATES: STATES, COLOR_KEYS: COLOR_KEYS, THEMED_KEYS: THEMED_KEYS, LEFT_OUT: LEFT_OUT, MAX_WIDTH: MAX_WIDTH, MAX_HEIGHT: MAX_HEIGHT,
   replyOf: replyOf, exitProblem: exitProblem, statusReport: statusReport, showsPicture: showsPicture, pictureSize: pictureSize,
   colorText: colorText, stageRequest: stageRequest, stageReport: stageReport, pictureReport: pictureReport,
+  lockAvatarReport: lockAvatarReport,
   publishReport: publishReport, sectionState: sectionState, leftOut: leftOut, confirmed: confirmed
 }

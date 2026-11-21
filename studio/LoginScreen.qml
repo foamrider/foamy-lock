@@ -13,20 +13,24 @@ import "Login.js" as Login
 // state they report. Login.js checks each reply.
 //
 // - **Check** (refresh(): when the window shows, after each operation,
-//   and when the applied look or its inputs change): `foamy-lock-helper
+//   and when the applied look or its inputs change, the lock's rendered
+//   avatar included): `foamy-lock-helper
 //   studio login-screen status`. When Foamy's theme is in use, the
 //   applied look is prepared and staged too (below), and the stage's hash
 //   compared with the installed one: "matches" or "out of date".
-// - **Copy** (copy(), after the dialog): the pictures, made by the
-//   helper's sandboxed `artwork` kinds into Studio's own folder
-//   (`$XDG_CACHE_HOME/foamy-lock-studio/login`, so neither the lock's
-//   cache nor the canvas's picture is evicted or locked): for a look that
-//   shows a picture a `background` (the Omarchy wallpaper, the picture, or
-//   a video's still frame from the helper's `video-probe`) at the largest
-//   screen's size, capped at 3840 × 2160, with the look's blur; and the
-//   `avatar` re-made from the one the lock rendered
-//   (`$XDG_CACHE_HOME/omarchy/foamy.lock/avatar.png`; none there: no
-//   avatar). Then `studio login-screen stage` with the applied look (the
+// - **Copy** (copy(), after the dialog): first the lock's own `status`
+//   (`omarchy-shell foamy.lock status`, bounded as the catalog call is)
+//   for the avatar it shows now (Login.lockAvatarReport). Then the
+//   pictures, made by the helper's sandboxed `artwork` kinds into Studio's
+//   own folder (`$XDG_CACHE_HOME/foamy-lock-studio/login`, so neither the
+//   lock's cache nor the canvas's picture is evicted or locked): for a
+//   look that shows a picture a `background` (the Omarchy wallpaper, the
+//   picture, or a video's still frame from the helper's `video-probe`) at
+//   the largest screen's size, capped at 3840 × 2160, with the look's
+//   blur; and the `avatar` re-made from the lock's `avatarRenderPath`
+//   (empty: no avatar, even when an old avatar.png is still in the lock's
+//   cache; no usable answer: the copy stops, it never guesses). Then
+//   `studio login-screen stage` with the applied look (the
 //   colours from Commons, the language), then the publisher
 //   `sddm/foamy-lock-login-screen publish <dir>`, which asks for the
 //   password through pkexec, then `status` again: the result counts only
@@ -65,7 +69,10 @@ Item {
   readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME") || home + "/.cache"
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
   readonly property string loginCache: cacheHome + "/foamy-lock-studio/login"
+  // Where the lock renders the avatar: watched, so a changed photo makes
+  // the comparison old (`avatarRevision` is in `key`).
   readonly property string lockAvatar: cacheHome + "/omarchy/foamy.lock/avatar.png"
+  property int avatarRevision: 0
   readonly property string videoDirectory: cacheHome + "/omarchy/foamy.lock/video/"
 
   // The last `status` (Login.statusReport, ok) and the last failure's code
@@ -138,6 +145,7 @@ Item {
     timeFormat: settings.timeFormat,
     showUserInfo: settings.showUserInfo,
     wallpaper: showsPicture && look.background.source === "omarchy" ? wallpaperKey : "",
+    avatar: avatarRevision,
     size: showsPicture ? size : null,
     colors: Object.keys(colors).map(function (name) {
       return String(colors[name])
@@ -244,7 +252,8 @@ Item {
       Qt.callLater(refresh)
   }
 
-  // A copy (or a check of Foamy's theme in use): the pictures, then stage.
+  // A copy (or a check of Foamy's theme in use): the lock's avatar, the
+  // pictures, then stage.
   function prepare() {
     var background = !showsPicture ? "" : look.background.source === "omarchy" ? wallpaperPath : String(look.background.path || "")
     job = {
@@ -252,17 +261,13 @@ Item {
       entry: entry,
       look: look,
       source: background,
+      lockAvatar: "",
       background: "",
       avatar: "",
       dir: "",
       hash: ""
     }
-    if (background && Layout.isVideoPath(background))
-      runPoster(background)
-    else if (background)
-      runBackground(background)
-    else
-      runAvatar()
+    runLockStatus()
   }
 
   // A step's end (also a test hook): `exitCode` -1 when it couldn't start.
@@ -270,10 +275,20 @@ Item {
     if (name !== step)
       return
     step = ""
-    var poster, picture, avatar, staged
+    var shown, poster, picture, avatar, staged
     switch (name) {
     case "status":
       return statusDone(exitCode, text)
+    case "lock":
+      shown = Login.lockAvatarReport(exitCode, text)
+      if (!shown.ok)
+        return prepareFailed(shown.code)
+      job.lockAvatar = shown.path
+      if (job.source && Layout.isVideoPath(job.source))
+        return runPoster(job.source)
+      if (job.source)
+        return runBackground(job.source)
+      return runAvatar()
     case "poster":
       poster = Model.videoProbeResult(exitCode === 0 ? text : "", videoDirectory)
       if (!poster.ok || !poster.poster)
@@ -287,8 +302,9 @@ Item {
       return runAvatar()
     case "avatar":
       avatar = Login.pictureReport("avatar", exitCode, text, loginCache)
-      // No avatar the lock rendered: the login screen shows the initial.
-      if (!avatar.ok && avatar.code !== "avatar-missing")
+      // The lock said it shows this avatar: without it the copy would not
+      // match the lock.
+      if (!avatar.ok)
         return prepareFailed(avatar.code)
       job.avatar = avatar.path
       return runStage()
@@ -379,6 +395,12 @@ Item {
     run("status", "10s", helperCommand(["studio", "login-screen", "status"]), "", false, ({}))
   }
 
+  // The lock's status through omarchy-shell (from PATH, else Omarchy's
+  // own), read only, with the catalog call's deadline (LockSources.qml).
+  function runLockStatus() {
+    run("lock", "6s", ["bash", "-c", 'export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"; shell=$(command -v omarchy-shell) || shell="$OMARCHY_PATH/bin/omarchy-shell"; exec -- "$shell" foamy.lock status', "foamy-lock-studio-lock-status"], "", false, ({}))
+  }
+
   // A video's still frame, as the lock makes it (the helper's own limit is
   // 60 s), at the largest screen's size.
   function runPoster(path) {
@@ -400,10 +422,13 @@ Item {
     }), true, sandboxEnv(loginCache))
   }
 
+  // The lock shows the initial: no avatar.
   function runAvatar() {
+    if (!job.lockAvatar)
+      return runStage()
     run("avatar", "10s", helperCommand(["artwork"]), JSON.stringify({
       kind: "avatar",
-      path: lockAvatar
+      path: job.lockAvatar
     }), true, sandboxEnv(loginCache))
   }
 
@@ -436,6 +461,16 @@ Item {
     var args = dir ? [action, dir] : [action]
     var script = publisher || pluginDir + "/sddm/foamy-lock-login-screen";
     run(action, "1830s", ["bash", "-c", '[[ -f $1 && -x $1 ]] || exit 70; exec -- "$@"', "foamy-lock-studio-publish", script].concat(args), "", false, ({}))
+  }
+
+  // Not read (preload off): only its changes count. The lock renames each
+  // new render into place; Quickshell's watch follows the path.
+  FileView {
+    path: login.lockAvatar
+    preload: false
+    watchChanges: true
+    printErrors: false
+    onFileChanged: login.avatarRevision += 1
   }
 
   Process {

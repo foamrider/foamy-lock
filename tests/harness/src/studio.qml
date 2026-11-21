@@ -540,6 +540,28 @@ Item {
   function setLoginMode(mode) {
     writeFile(fake + "/login-mode", mode + "\n")
   }
+  // What the fake omarchy-shell's `foamy.lock status` says about the
+  // avatar ("avatar", "none", "fail"), and how often it was asked.
+  function setLockStatus(mode) {
+    writeFile(fake + "/lock-status", mode + "\n")
+  }
+  function lockStatusCalls() {
+    return Number(readFile(fake + "/status-count").trim()) || 0
+  }
+  function installedNames() {
+    return JSON.parse(readFile(systemRoot + "/usr/share/sddm/themes/foamy-lock/manifest.json")).files.map(function (f) {
+      return f.name
+    })
+  }
+  // Real key events to the window's focused item, which then go up its
+  // parents as typed keys do (QtTest's TestEvent; its QObject parent
+  // names the window, as this driver is outside it).
+  property var keyEvents: null
+  function key(code) {
+    if (!keyEvents)
+      keyEvents = Qt.createQmlObject("import QtTest\nTestEvent {}", studio, "keyEvents")
+    expect(keyEvents.keyClick(code, Qt.NoModifier, -1), "key " + code + " delivered")
+  }
   function publishCalls() {
     return readFile(fake + "/publish-calls").split("\n").filter(function (l) {
       return l !== ""
@@ -675,6 +697,11 @@ Item {
             }).join(", ")), FoamyI18n.t("studio.login.ask.root"), FoamyI18n.t("studio.login.ask.autologin")]
           expect(body === parts.join("\n\n"), "the copy dialog's text:\n" + body)
           expect(studio.appKey(Qt.Key_Z, Qt.ControlModifier, "") === false, "a question takes no shortcuts")
+          // A body that fits takes no scrolling keys.
+          var fits = find(dialog, "studioQuestionBody")
+          key(Qt.Key_End)
+          key(Qt.Key_Down)
+          expect(!fits.interactive && fits.contentY === 0 && dialog.visible && find(studio, "studioLoginCancel").activeFocus, "a body that fits stays: " + fits.interactive + " " + fits.contentY)
           captureSizes("studio-login-copy-dialog", function () {
             expect(studio.appKey(Qt.Key_Escape, 0, ""), "Esc closes it")
             expect(!dialog.visible && studio.loginAsked === "" && !login.busy && publishCalls().length === 0, "nothing ran")
@@ -699,6 +726,23 @@ Item {
                   expect(bottom <= studio.height - 8, "the buttons in a short window: " + bottom + " of " + studio.height)
                   expect(heading && heading.mapToItem(studio, 0, 0).y >= 8, "the title in a short window")
                   expect(flick && flick.interactive && flick.height < flick.contentHeight, "the body scrolls")
+                  // The keys scroll it while Cancel keeps them.
+                  var cancel = find(studio, "studioLoginCancel")
+                  var end = flick.contentHeight - flick.height
+                  expect(cancel.activeFocus && flick.contentY === 0, "Cancel has the keys, at the top")
+                  key(Qt.Key_Down)
+                  var line = flick.contentY
+                  expect(line > 0 && line < end && cancel.activeFocus, "Down scrolls a line: " + line + " of " + end)
+                  key(Qt.Key_PageDown)
+                  expect(flick.contentY > line && cancel.activeFocus, "Page Down scrolls further: " + flick.contentY)
+                  key(Qt.Key_End)
+                  expect(near(flick.contentY, end, 0.5) && cancel.activeFocus, "End: the end " + flick.contentY + " of " + end)
+                  key(Qt.Key_Down)
+                  expect(near(flick.contentY, end, 0.5), "never past the end")
+                  key(Qt.Key_Up)
+                  expect(flick.contentY < end, "Up scrolls back")
+                  key(Qt.Key_Home)
+                  expect(flick.contentY === 0 && cancel.activeFocus && dialog.visible && studio.loginAsked === "copy", "Home: the top, the dialog still open")
                   capture("studio-login-copy-dialog-short", function () {
                     windowSize(0, 0, function () {
                       studio.answerLogin(false)
@@ -776,6 +820,87 @@ Item {
             waitFor(function () {
               return loginIdle() && login.sectionState === "current"
             }, "matching again", next, 40000)
+          }, 40000)
+        }
+      },
+      {
+        // The lock renders a new photo (renamed into place, as its helper
+        // does): no refresh is asked for, the watch notices.
+        name: "login: a changed profile photo makes it check again",
+        wait: 0,
+        run: function (next) {
+          var asked = lockStatusCalls()
+          sh('cp "$1" "$3/avatar.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [login.lockAvatar, fake + "/poster.png", fake], function () {
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated"
+            }, function () {
+              return "out of date after a new photo: " + login.sectionState + " " + login.avatarRevision
+            }, function () {
+              expect(lockStatusCalls() > asked, "the lock was asked again")
+              sh('mv "$2/avatar.before" "$1"', [login.lockAvatar, fake], function () {
+                waitFor(function () {
+                  return loginIdle() && login.sectionState === "current"
+                }, "matching again with the old photo", next, 40000)
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        // The photo was removed: the lock shows the initial, but its old
+        // avatar.png is still in the cache. It is never copied.
+        name: "login: the lock shows no avatar, so none is copied",
+        wait: 0,
+        run: function (next) {
+          sh('test -s "$1"', [login.lockAvatar], function () {
+            setLockStatus("none")
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated"
+            }, "out of date without the avatar", function () {
+              confirmLogin("copy", "ok", function () {
+                expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                var snapshot = JSON.parse(readFile(theme() + "/snapshot.json"))
+                expect(snapshot.files.avatar === null && installedNames().indexOf("avatar.png") === -1, "no avatar: " + json(snapshot.files) + " " + installedNames().slice(0, 4))
+                expect(login.sectionState === "current", "matches without it")
+                // The lock shows a photo again: its next answer counts.
+                setLockStatus("avatar")
+                login.refresh()
+                waitFor(function () {
+                  return loginIdle() && login.sectionState === "outdated"
+                }, "out of date with the avatar back", function () {
+                  confirmLogin("copy", "ok", function () {
+                    expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                    var again = JSON.parse(readFile(theme() + "/snapshot.json"))
+                    expect(again.files.avatar === "avatar.png" && installedNames().indexOf("avatar.png") !== -1, "the avatar copied: " + json(again.files))
+                    next()
+                  })
+                }, 40000)
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        name: "login: no answer from the lock: no comparison, and the copy stops",
+        wait: 0,
+        run: function (next) {
+          setLockStatus("fail")
+          login.refresh()
+          waitFor(function () {
+            return loginIdle() && login.sectionState === "installed"
+          }, "not compared", function () {
+            expect(login.compareError === "lock-status" && loginButton("studioLoginCopy").enabled, "the lock's silence: " + login.compareError)
+            var calls = publishCalls().length
+            confirmLogin("copy", "ok", function (made) {
+              expectResult("failed", "lock-status", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.lock-status")))
+              expect(login.result.before === true && made.length === calls, "the publisher never ran: " + json(made))
+              setLockStatus("avatar")
+              login.refresh()
+              waitFor(function () {
+                return loginIdle() && login.sectionState === "current"
+              }, "matching once the lock answers", next, 40000)
+            })
           }, 40000)
         }
       },

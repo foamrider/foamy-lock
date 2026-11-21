@@ -135,7 +135,11 @@ const SHELL_JSON: &str =
 /// (ok by default). `foamy.lock catalog` (no argument) prints `$dir/catalog`
 /// (Foamy Weather reachable by default; "fail" fails like a lock that isn't
 /// running) and counts in `$dir/catalog-count` instead, so it never shifts
-/// the other calls' numbers. Anything but `foamy.lock saveLook`,
+/// the other calls' numbers. `foamy.lock status` (no argument) answers the
+/// lock's avatar as `$dir/lock-status` says (`avatar` by default: the
+/// lock's cache `avatar.png`; `none`: "" as after the photo was removed;
+/// `fail`: like a lock that isn't running) and counts in
+/// `$dir/status-count`, also apart. Anything but `foamy.lock saveLook`,
 /// `previewLook`, `savePreset`, `deletePreset` or `setCoverArt` with one argument, or
 /// `renamePreset` with two, is refused.
 const FAKE_SHELL: &str = r#"#!/bin/bash
@@ -145,6 +149,16 @@ if [[ $1:$2:$# == foamy.lock:catalog:2 ]]; then
   catalog=$(cat "$dir/catalog")
   [[ $catalog == fail ]] && { echo 'omarchy-shell is not running' >&2; exit 1; }
   printf '%s\n' "$catalog"
+  exit 0
+fi
+if [[ $1:$2:$# == foamy.lock:status:2 ]]; then
+  echo $(( $(cat "$dir/status-count" 2>/dev/null || echo 0) + 1 )) > "$dir/status-count"
+  case $(cat "$dir/lock-status" 2>/dev/null || echo avatar) in
+    avatar) printf '{"userName":"sample","avatarRenderPath":"%s"}\n' "${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png" ;;
+    none) echo '{"userName":"sample","avatarRenderPath":""}' ;;
+    fail) echo 'omarchy-shell is not running' >&2; exit 1 ;;
+    *) echo "fake omarchy-shell: unknown lock-status" >&2; exit 2 ;;
+  esac
   exit 0
 fi
 n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
