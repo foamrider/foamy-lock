@@ -237,18 +237,25 @@ case_missing_config_folder() {
 # What a run killed hard left behind goes on the next run.
 case_leftovers_removed() {
   new_root leftovers
-  mkdir -p -- "$themes/.foamy-lock.new-abc123/elements" "$themes/.foamy-lock.old-def456"
-  : >"$confd/.99-zz-foamy-lock.conf.Xy12Ab"
-  : >"$confd/.99-zz-foamy-lock.conf.old-Qw34Er"
-  # Not ours: kept.
-  mkdir -p -- "$themes/.other"
   stage
   publish publish "$stage_dir"
   expect ok
+  # Provably ours: a complete earlier theme, a drop-in cut short, an empty
+  # temporary drop-in.
+  cp -a -- "$theme" "$themes/.foamy-lock.old-def456"
+  printf '%s' "${expected_dropin:0:12}" >"$confd/.99-zz-foamy-lock.conf.Xy12Ab"
+  : >"$confd/.99-zz-foamy-lock.conf.old-Qw34Er"
+  # Not provably ours: kept. An admin's backup under a matching name, a
+  # folder that isn't a complete theme, another hidden folder.
+  printf '[Theme]\nCurrent=breeze\n' >"$confd/.99-zz-foamy-lock.conf.backup"
+  mkdir -p -- "$themes/.foamy-lock.new-abc123/elements" "$themes/.other"
+  stage '.timeFormat = "12h"'
+  publish publish "$stage_dir"
+  expect ok
   local left
-  left=$(find "$themes" "$confd" -mindepth 1 -maxdepth 1 -name '.*' ! -name .other)
-  [[ -z $left ]] || fail "left behind: $left"
-  [[ -d $themes/.other ]] || fail "removed a folder that isn't ours"
+  left=$(find "$themes" "$confd" -mindepth 1 -maxdepth 1 -name '.*' | sort | tr '\n' ' ')
+  [[ $left == "$confd/.99-zz-foamy-lock.conf.backup $themes/.foamy-lock.new-abc123 $themes/.other " ]] \
+    || fail "left behind or removed: $left"
 }
 
 case_restore() {
@@ -526,7 +533,11 @@ case_restore_leftover() {
   chmod -R u+w -- "$themes"
   publish restore
   expect ok
-  expect_no_leftovers
+  # The half-deleted folder can't be proven ours any more, so it stays,
+  # hidden; nothing else is left.
+  local left
+  left=$(find "$themes" "$confd" -mindepth 1 -maxdepth 1 -name '.*')
+  [[ $left == "$themes"/.foamy-lock.old-?????? ]] || fail "left behind: $left"
 }
 
 # An earlier publisher killed between moving the theme aside and placing the
@@ -547,6 +558,9 @@ case_interrupted_recovered() {
   printf 'x' >>"$stage_dir/Main.qml"
   publish publish "$stage_dir"
   expect INVALID_STAGE "Main.qml"
+  # The incomplete copy isn't provably ours: kept, hidden.
+  [[ -d $themes/.foamy-lock.old-aaaaaa ]] || fail "removed a folder that isn't provably ours"
+  rm -rf -- "$themes/.foamy-lock.old-aaaaaa"
   [[ $(system_state) == "$before" ]] || fail "the theme wasn't put back as it was"
   expect_no_leftovers
   jq -e --arg hash "$first" '.state == "installed" and .installed.hash == $hash' <<<"$(status)" >/dev/null \

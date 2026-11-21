@@ -434,8 +434,27 @@ transaction() {
     done
   fi
   context="cannot remove what an earlier run left behind"
-  find "$themes" -mindepth 1 -maxdepth 1 -uid "$EUID" \( -name '.foamy-lock.new-??????' -o -name '.foamy-lock.old-??????' \) -exec rm -rf -- {} +
-  [[ ! -d $confd ]] || find "$confd" -mindepth 1 -maxdepth 1 -uid "$EUID" -name '.99-zz-foamy-lock.conf.*' -exec rm -rf -- {} +
+  # Only what is provably this publisher's goes, under mktemp's names: a
+  # theme folder that passes theme_ok, a drop-in file whose text is ours
+  # or the start of it (a write cut short). Anything else stays; it is
+  # hidden, and SDDM skips hidden entries.
+  local leftover text
+  while IFS= read -r -d '' leftover; do
+    if theme_ok "$leftover"; then
+      rm -rf -- "$leftover"
+    fi
+  done < <(find "$themes" -mindepth 1 -maxdepth 1 -type d -uid "$EUID" -regextype posix-extended \
+    -regex '.*/\.foamy-lock\.(new|old)-[A-Za-z0-9]{6}' -print0)
+  if [[ -d $confd ]]; then
+    while IFS= read -r -d '' leftover; do
+      (($(stat -c %s -- "$leftover") <= ${#dropin_text})) || continue
+      text=$(head -c ${#dropin_text} -- "$leftover" && printf x) || continue
+      if [[ $dropin_text == "${text%x}"* ]]; then
+        rm -f -- "$leftover"
+      fi
+    done < <(find "$confd" -mindepth 1 -maxdepth 1 -type f -uid "$EUID" -regextype posix-extended \
+      -regex '.*/\.99-zz-foamy-lock\.conf\.(old-)?[A-Za-z0-9]{6}' -print0)
+  fi
   check_theme
   check_dropin
 
