@@ -121,12 +121,14 @@ test('wrong field types take their defaults', () => {
   assert.equal(snapshot.avatar, false)
 })
 
-test('the field logs in the last user, else the user who copied the look', () => {
+test('the field logs in the last user, else the copier, else the first user', () => {
   const { snapshot } = Greeter.parseSnapshot(JSON.stringify(SNAPSHOT))
-  assert.equal(Greeter.loginUser(snapshot, 'bob'), 'bob')
-  assert.equal(Greeter.loginUser(snapshot, ''), 'ada')
-  const anonymous = Greeter.parseSnapshot(JSON.stringify({ ...SNAPSHOT, user: '' })).snapshot
-  assert.equal(Greeter.loginUser(anonymous, ''), '')
+  assert.equal(Greeter.loginUser(snapshot, 'bob', 'carol'), 'bob')
+  assert.equal(Greeter.loginUser(snapshot, '', 'carol'), 'ada')
+  const broken = Greeter.parseSnapshot('{').snapshot
+  assert.equal(Greeter.loginUser(broken, '', 'carol'), 'carol')
+  assert.equal(Greeter.loginUser(broken, 'bob', 'carol'), 'bob')
+  assert.equal(Greeter.loginUser(broken, '', ''), '')
 })
 
 test('the copied avatar shows only for the user who copied the look', () => {

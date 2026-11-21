@@ -14,9 +14,17 @@ import "Greeter.js" as Greeter
 // properties on each (src/greeter/GreeterApp.cpp, addViewForScreen()):
 // `sddm` (login(), loginFailed), `userModel` (lastUser), `sessionModel`
 // (lastIndex), `config` (theme.conf's [General]) and `primaryScreen`
-// (QGuiApplication::primaryScreen() == this view's screen). Every screen
-// draws the look; only the primary one shows the account and the field and
-// takes the keys, as the lock's primary surface does.
+// (QGuiApplication::primaryScreen() == this view's screen, set once when
+// the view is made). Every screen draws the look. The account and the
+// field's chrome show on the view whose window has the keys (Window.active)
+// and on SDDM's primary screen, so feedback shows where the user types even
+// after the focus or the primary monitor changes.
+//
+// Each view has its own QML engine, so views share no state. Only the view
+// with the keys submits; SDDM answers every view (loginFailed). A second
+// submission from another screen while the first is still being checked is
+// dropped by SDDM (Auth already running), and that view then shows the
+// first attempt's result.
 //
 // Whatever the snapshot holds, the screen keeps a password field: a
 // snapshot that doesn't parse, or a look Layout.js rejects, shows the
@@ -38,7 +46,7 @@ Item {
   readonly property bool primary: primaryScreen
   readonly property var parsed: Greeter.parseSnapshot(config.snapshot)
   readonly property var snapshot: parsed.snapshot
-  readonly property string lastUser: Greeter.loginUser(snapshot, String(users.lastUser || ""))
+  readonly property string lastUser: Greeter.loginUser(snapshot, String(users.lastUser || ""), firstAccount)
 
   // The copied picture beside this file, as a path (LockLayout makes the URL).
   readonly property string backgroundFile: snapshot.background ? decodeURIComponent(Qt.resolvedUrl("background.png").toString().replace(/^file:\/\//, "")) : ""
@@ -50,10 +58,14 @@ Item {
     return Layout.parseLook(Greeter.fallbackEntry()).look
   }
 
-  // userModel's real name for the last user ("" until known).
+  // userModel's real name for the last user ("" until known), and its
+  // first user's name (the last resort for who logs in).
   property string lastUserRealName: ""
+  property string firstAccount: ""
 
   function findRealName() {
+    const first = accounts.count > 0 ? accounts.objectAt(0) as Account : null
+    root.firstAccount = first ? first.name : ""
     for (let i = 0; i < accounts.count; i++) {
       const account = accounts.objectAt(i) as Account
       if (account && account.name === root.lastUser) {
@@ -183,7 +195,8 @@ Item {
     }
 
     look: root.look
-    primary: root.primary
+    // SDDM's primary screen, and whichever view has the keys now.
+    primary: root.primary || Window.active
     now: clock.date
     timeFormat: root.snapshot.timeFormat
     // No account without a user to log in.

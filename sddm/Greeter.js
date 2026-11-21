@@ -94,10 +94,12 @@ function lookEntry(snapshot, backgroundPath) {
 }
 
 // Who logs in: SDDM's last user, else (a fresh system, where SDDM
-// remembers nobody yet) the user who copied the look, so the field can
-// always log someone in.
-function loginUser(snapshot, lastUser) {
-  return lastUser !== "" ? lastUser : snapshot.user
+// remembers nobody yet) the user who copied the look, else (no snapshot)
+// SDDM's first user, so the field can always log someone in.
+function loginUser(snapshot, lastUser, firstUser) {
+  if (lastUser !== "")
+    return lastUser
+  return snapshot.user !== "" ? snapshot.user : firstUser || ""
 }
 
 // The copied avatar shows only for the user who copied the look, so one
