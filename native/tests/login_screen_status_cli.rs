@@ -103,7 +103,7 @@ fn status_follows_the_fake_system() {
         (
             json!({"ok": true, "state": "unavailable", "reason": "not-sddm", "theme": "",
                    "themeSetIn": null, "themeDir": "/usr/share/sddm/themes", "autologin": false,
-                   "installed": null}),
+                   "installed": null, "managed": {"theme": false, "dropin": false}}),
             0
         )
     );
@@ -117,7 +117,8 @@ fn status_follows_the_fake_system() {
         (
             json!({"ok": true, "state": "not-installed", "theme": "omarchy",
                    "themeSetIn": "/etc/sddm.conf.d/10-theme.conf",
-                   "themeDir": "/usr/share/sddm/themes", "autologin": true, "installed": null}),
+                   "themeDir": "/usr/share/sddm/themes", "autologin": true, "installed": null,
+                   "managed": {"theme": false, "dropin": false}}),
             0
         )
     );
@@ -132,7 +133,8 @@ fn status_follows_the_fake_system() {
             json!({"ok": true, "state": "installed", "theme": "foamy-lock",
                    "themeSetIn": "/etc/sddm.conf.d/50-foamy-lock.conf",
                    "themeDir": "/usr/share/sddm/themes", "autologin": true,
-                   "installed": {"plugin": "1.4.1", "hash": HASH}}),
+                   "installed": {"plugin": "1.4.1", "hash": HASH},
+                   "managed": {"theme": true, "dropin": false}}),
             0
         )
     );
@@ -204,6 +206,21 @@ fn status_looks_in_the_effective_theme_dir() {
     assert_eq!(
         (reply["state"].as_str(), reply["themeDir"].as_str(), code),
         (Some("installed"), Some("/usr/share/sddm/themes"), 0)
+    );
+    // /etc/sddm.conf hides both: SDDM uses neither, but they are there to
+    // remove.
+    system.file(
+        "etc/sddm.conf",
+        "[Theme]\nCurrent=breeze\nThemeDir=/usr/local/share/sddm/themes\n",
+    );
+    let (reply, code) = system.status();
+    assert_eq!(
+        (reply["state"].as_str(), &reply["managed"], code),
+        (
+            Some("not-installed"),
+            &json!({"theme": true, "dropin": true}),
+            0
+        )
     );
 }
 

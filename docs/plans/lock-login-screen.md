@@ -223,6 +223,12 @@ and doesn't hide the section.
 with the hash stored next to the installed copy. A newer plugin version also
 counts as `outdated`, because the greeter code has changed.
 
+**Remove from login screen** is also offered in `not-installed` when
+Foamy's theme folder or drop-in exists (`status`'s `managed`), for example
+when `/etc/sddm.conf` selects another theme and `ThemeDir`. A short note
+says the files are there but SDDM doesn't use them. A removal counts only
+when `status` then reports neither file.
+
 `overridden` means the effective `[Theme] Current`, computed from SDDM's
 config files in the order SDDM reads them, isn't `foamy-lock`. The spike
 confirms that order.
@@ -297,8 +303,10 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
    `native/src/studio/login_screen/` (built in step 2; the module docs hold
    the exact contracts):
    - `status`: the checks and states above. It reports `installed` for a
-     complete folder that SDDM uses. Studio turns that into "matches" or
-     "out of date" by comparing `installed.hash` with `stage`'s hash. It
+     complete folder that SDDM uses, and in `managed` whether our theme
+     folder and drop-in exist, whatever SDDM uses. Studio turns
+     `installed` into "matches" or "out of date" by comparing
+     `installed.hash` with `stage`'s hash. It
      reads every file in SDDM's config folders, whatever the suffix (a
      `.pacnew` too), as SDDM 0.21's `ConfigReader.cpp` does, in Qt's
      locale-aware order under the locale systemd gives the daemon
@@ -447,7 +455,9 @@ the cached file alone, which outlives a removed photo — and a background
 prepared by the `background` kind at most 3840 × 2160), then the publisher
 with the returned folder, then `status` again, and compares
 `installed.hash` with `stage`'s hash. A change to the lock's rendered
-avatar file makes Studio check again.
+avatar file, or to the photo it comes from (the lock's `avatarPath`, learnt
+from the same `status`; one watch, moved when the path changes), makes
+Studio check again.
 
 ## Steps
 

@@ -848,34 +848,40 @@ Item {
       },
       {
         // The photo was removed: the lock shows the initial, but its old
-        // avatar.png is still in the cache. It is never copied.
+        // avatar.png is still in the cache. No refresh is asked for: the
+        // watch on the photo notices. The old avatar.png is never copied.
         name: "login: the lock shows no avatar, so none is copied",
         wait: 0,
         run: function (next) {
-          sh('test -s "$1"', [login.lockAvatar], function () {
-            setLockStatus("none")
-            login.refresh()
+          var face = Quickshell.env("HOME") + "/.face";
+          expect(login.sectionState === "current" && login.lockAvatarSource === face, "matches, the photo watched: " + login.sectionState + " " + login.lockAvatarSource)
+          var asked = lockStatusCalls()
+          sh('test -s "$1"; mv "$2" "$2.away"', [login.lockAvatar, face], function () {
             waitFor(function () {
               return loginIdle() && login.sectionState === "outdated"
-            }, "out of date without the avatar", function () {
+            }, function () {
+              return "out of date without the photo: " + login.sectionState + " " + login.avatarRevision
+            }, function () {
+              expect(lockStatusCalls() > asked, "the lock was asked again")
               confirmLogin("copy", "ok", function () {
                 expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
                 var snapshot = JSON.parse(readFile(theme() + "/snapshot.json"))
                 expect(snapshot.files.avatar === null && installedNames().indexOf("avatar.png") === -1, "no avatar: " + json(snapshot.files) + " " + installedNames().slice(0, 4))
                 expect(login.sectionState === "current", "matches without it")
-                // The lock shows a photo again: its next answer counts.
-                setLockStatus("avatar")
-                login.refresh()
-                waitFor(function () {
-                  return loginIdle() && login.sectionState === "outdated"
-                }, "out of date with the avatar back", function () {
-                  confirmLogin("copy", "ok", function () {
-                    expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
-                    var again = JSON.parse(readFile(theme() + "/snapshot.json"))
-                    expect(again.files.avatar === "avatar.png" && installedNames().indexOf("avatar.png") !== -1, "the avatar copied: " + json(again.files))
-                    next()
-                  })
-                }, 40000)
+                // The photo is back: the watch notices that too, and the
+                // lock's next answer counts.
+                sh('mv "$1.away" "$1"', [face], function () {
+                  waitFor(function () {
+                    return loginIdle() && login.sectionState === "outdated"
+                  }, "out of date with the avatar back", function () {
+                    confirmLogin("copy", "ok", function () {
+                      expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                      var again = JSON.parse(readFile(theme() + "/snapshot.json"))
+                      expect(again.files.avatar === "avatar.png" && installedNames().indexOf("avatar.png") !== -1, "the avatar copied: " + json(again.files))
+                      next()
+                    })
+                  }, 40000)
+                })
               })
             }, 40000)
           })
@@ -990,6 +996,44 @@ Item {
                   expect(login.sectionState === "not-installed" && !loginButton("studioLoginRestore").visible, "restored: " + login.sectionState)
                   expect(readFile(theme() + "/manifest.json") === "", "the theme folder is gone")
                   next()
+                })
+              })
+            })
+          })
+        }
+      },
+      {
+        // /etc/sddm.conf picks another theme in another folder: SDDM uses
+        // none of Foamy's files, but a leftover theme folder is there, so
+        // Remove is offered, and a removal that leaves it isn't believed.
+        name: "login: Foamy's files that SDDM doesn't use can still be removed",
+        wait: 0,
+        run: function (next) {
+          sh('printf "[Theme]\\nCurrent=miriam-lock\\nThemeDir=/usr/local/share/sddm/themes\\n" > "$1/etc/sddm.conf"; mkdir -p "$2"; : > "$2/Main.qml"', [systemRoot, theme()], function () {
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "not-installed" && login.status.managed.theme
+            }, function () {
+              return "not installed, the folder there: " + login.sectionState + " " + json(login.status)
+            }, function () {
+              var restore = loginButton("studioLoginRestore")
+              expect(!login.status.managed.dropin && restore.visible && restore.enabled && loginButton("studioLoginCopy").enabled, "Copy and Remove")
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.not-installed") && loginText("studioLoginManaged") === FoamyI18n.t("studio.login.managed"), "the state and the note: " + loginText("studioLoginManaged"))
+              capture("studio-login-managed", function () {
+                confirmLogin("restore", "lie", function () {
+                  expectResult("unconfirmed", "files-left", FoamyI18n.t("studio.login.result.restore.filesLeft"))
+                  expect(restore.visible && restore.enabled, "Remove still offered")
+                  confirmLogin("restore", "ok", function () {
+                    expectResult("done", "", FoamyI18n.t("studio.login.result.restore.done"))
+                    expect(!login.status.managed.theme && !restore.visible && loginText("studioLoginManaged") === "", "removed, nothing left to offer")
+                    // The folder is gone (a failed test fails the run).
+                    sh('test ! -e "$2"; rm "$1/etc/sddm.conf"', [systemRoot, theme()], function () {
+                      login.refresh()
+                      waitFor(function () {
+                        return loginIdle() && login.sectionState === "not-installed" && login.status.theme === "omarchy"
+                      }, "Omarchy's theme again", next)
+                    })
+                  })
                 })
               })
             })

@@ -14,13 +14,14 @@ import "Login.js" as Login
 //
 // - **Check** (refresh(): when the window shows, after each operation,
 //   and when the applied look or its inputs change, the lock's rendered
-//   avatar included): `foamy-lock-helper
+//   avatar and its source photo included): `foamy-lock-helper
 //   studio login-screen status`. When Foamy's theme is in use, the
 //   applied look is prepared and staged too (below), and the stage's hash
 //   compared with the installed one: "matches" or "out of date".
 // - **Copy** (copy(), after the dialog): first the lock's own `status`
 //   (`omarchy-shell foamy.lock status`, bounded as the catalog call is)
-//   for the avatar it shows now (Login.lockAvatarReport). Then the
+//   for the avatar it shows now and the photo it comes from
+//   (Login.lockAvatarReport). Then the
 //   pictures, made by the helper's sandboxed `artwork` kinds into Studio's
 //   own folder (`$XDG_CACHE_HOME/foamy-lock-studio/login`, so neither the
 //   lock's cache nor the canvas's picture is evicted or locked): for a
@@ -36,7 +37,8 @@ import "Login.js" as Login
 //   password through pkexec, then `status` again: the result counts only
 //   when status agrees (Login.confirmed).
 // - **Restore** (restore(), after its dialog): the publisher's `restore`,
-//   then `status` again.
+//   then `status` again. Offered whenever Foamy's theme folder or drop-in
+//   is there (status `managed`), also when SDDM doesn't use them.
 //
 // One operation runs at a time (`op`); a check asked for meanwhile runs
 // after it. Each step has a deadline; the publisher's is 30 minutes, as
@@ -69,9 +71,14 @@ Item {
   readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME") || home + "/.cache"
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
   readonly property string loginCache: cacheHome + "/foamy-lock-studio/login"
-  // Where the lock renders the avatar: watched, so a changed photo makes
-  // the comparison old (`avatarRevision` is in `key`).
+  // Where the lock renders the avatar, and the photo it renders it from
+  // (`avatarPath` in the lock's last status, "" before one): both watched,
+  // so a changed, replaced or removed photo makes the comparison old
+  // (`avatarRevision` is in `key`). The lock clears its render path for a
+  // removed photo without touching avatar.png, so the render alone misses
+  // that.
   readonly property string lockAvatar: cacheHome + "/omarchy/foamy.lock/avatar.png"
+  property string lockAvatarSource: ""
   property int avatarRevision: 0
   readonly property string videoDirectory: cacheHome + "/omarchy/foamy.lock/video/"
 
@@ -164,7 +171,7 @@ Item {
   // What the section's buttons offer (Copy is disabled while the login
   // screen matches; a copy confirmed during a check runs even then).
   readonly property bool copyPossible: !!look && ["hidden", "checking", "error"].indexOf(sectionState) === -1
-  readonly property bool restorePossible: ["current", "outdated", "installed", "overridden", "broken"].indexOf(sectionState) !== -1
+  readonly property bool restorePossible: Login.restoreOffered(sectionState, status)
   readonly property bool canCopy: !busy && copyPossible && sectionState !== "current"
   readonly property bool canRestore: !busy && restorePossible
 
@@ -284,6 +291,7 @@ Item {
       if (!shown.ok)
         return prepareFailed(shown.code)
       job.lockAvatar = shown.path
+      lockAvatarSource = shown.source
       if (job.source && Layout.isVideoPath(job.source))
         return runPoster(job.source)
       if (job.source)
@@ -360,7 +368,9 @@ Item {
     if (published.result !== "ok")
       return finish(published.result, published.code, false)
     var outcome = Login.confirmed(op, report, job.hash)
-    finish(outcome, outcome === "done" ? "" : report.ok ? report.state : report.code, false)
+    // A restore that leaves SDDM off Foamy's theme but its files there.
+    var left = op === "restore" && report.ok && (report.state === "not-installed" || report.state === "unavailable")
+    finish(outcome, outcome === "done" ? "" : left ? "files-left" : report.ok ? report.state : report.code, false)
   }
 
   // --- the steps -----------------------------------------------------------------
@@ -467,6 +477,15 @@ Item {
   // new render into place; Quickshell's watch follows the path.
   FileView {
     path: login.lockAvatar
+    preload: false
+    watchChanges: true
+    printErrors: false
+    onFileChanged: login.avatarRevision += 1
+  }
+  // The source photo the same way: one watch, moved when the lock names
+  // another photo; none ("") before the lock's first status.
+  FileView {
+    path: login.lockAvatarSource
     preload: false
     watchChanges: true
     printErrors: false

@@ -6,15 +6,15 @@
 //! the system sees it ("/etc/sddm.conf.d/10-theme.conf"), or null>,
 //! "themeDir": <the folder SDDM looks for themes in, see below>,
 //! "autologin": <[Autologin] User is set>, "installed": {"plugin": …,
-//! "hash": …} | null}`, plus `"reason"` for `unavailable` and `"detail"`
-//! (English) for `broken`.
+//! "hash": …} | null, "managed": {"theme": <bool>, "dropin": <bool>}}`,
+//! plus `"reason"` for `unavailable` and `"detail"` (English) for `broken`.
 //!
 //! - `unavailable` (`reason`): `not-sddm` when
 //!   `/etc/systemd/system/display-manager.service` isn't a symlink to an
 //!   `sddm.service` (the alias `systemctl enable` makes), `greeter-missing`
 //!   when `/usr/bin/sddm-greeter-qt6` isn't an executable file. Nothing
 //!   else is read, so `theme` is `""`, `themeSetIn` null, `themeDir`
-//!   SDDM's default and `autologin` false.
+//!   SDDM's default, `autologin` false and both `managed` false.
 //! - `not-installed`: no theme folder, and the effective theme isn't ours.
 //! - `installed`: the folder is complete and the effective theme is ours.
 //! - `overridden`: the folder is complete, but SDDM uses another theme.
@@ -41,6 +41,13 @@
 //! folder or one inside it), manifest or file makes it `broken`. The
 //! folders above it (`ThemeDir` itself) are followed, as SDDM does.
 //! `installed` is set only for `installed` and `overridden`.
+//!
+//! `managed` says whether the files the publisher writes exist, whatever
+//! SDDM ends up using: `theme` for `/usr/share/sddm/themes/foamy-lock`,
+//! `dropin` for `/etc/sddm.conf.d/99-zz-foamy-lock.conf` (Decision 4 of
+//! docs/plans/lock-login-screen.md). Each is there in any type, a symlink
+//! (not followed) included. So Studio can offer to remove a copy that
+//! another file's `Current` or `ThemeDir` hides (state `not-installed`).
 //!
 //! A read that fails other than with "not found" is `IO` (exit 1), never
 //! `unavailable`: a failed check must not hide the section. So is an SDDM
@@ -93,6 +100,9 @@ const SYSTEM_CONFIG_DIR: &str = "usr/lib/sddm/sddm.conf.d";
 const CONFIG_DIR: &str = "etc/sddm.conf.d";
 const CONFIG_FILE: &str = "etc/sddm.conf";
 const LOCALE_CONF: &str = "etc/locale.conf";
+/// The publisher's theme folder and drop-in, relative to the root.
+const MANAGED_THEME: &str = "usr/share/sddm/themes/foamy-lock";
+const MANAGED_DROPIN: &str = "etc/sddm.conf.d/99-zz-foamy-lock.conf";
 
 /// `studio login-screen status`.
 pub fn run() -> Result<Value, Failure> {
@@ -115,6 +125,7 @@ pub fn status(root: &Path) -> Result<Value, Failure> {
             "ok": true, "state": "unavailable", "reason": reason,
             "theme": "", "themeSetIn": null, "themeDir": DEFAULT_THEME_DIR,
             "autologin": false, "installed": null,
+            "managed": {"theme": false, "dropin": false},
         }));
     }
     let config = effective_config(root)?;
@@ -143,6 +154,10 @@ pub fn status(root: &Path) -> Result<Value, Failure> {
         "themeSetIn": config.theme_set_in, "themeDir": theme_dir,
         "autologin": !config.autologin_user.is_empty(),
         "installed": installed,
+        "managed": {
+            "theme": present(&root.join(MANAGED_THEME))?,
+            "dropin": present(&root.join(MANAGED_DROPIN))?,
+        },
     });
     if let (Some(detail), Value::Object(reply)) = (detail, &mut reply) {
         reply.insert("detail".into(), detail.into());
@@ -153,6 +168,15 @@ pub fn status(root: &Path) -> Result<Value, Failure> {
 /// "Not there" as SDDM and `systemctl` see it.
 fn absent(error: &io::Error) -> bool {
     matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory)
+}
+
+/// Something is at `path`, in any type; a symlink isn't followed.
+fn present(path: &Path) -> Result<bool, Failure> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if absent(&error) => Ok(false),
+        Err(error) => Err(io_error(path)(error)),
+    }
 }
 
 fn io_error(path: &Path) -> impl FnOnce(io::Error) -> Failure + '_ {
@@ -1593,6 +1617,148 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// `/etc/sddm.conf` selects another theme in another folder, as in
+    /// the review's case: our files there or not, SDDM doesn't use them.
+    fn elsewhere(scratch: &Scratch) {
+        sddm(scratch);
+        omarchy(scratch);
+        scratch.file(
+            CONFIG_FILE,
+            "[Theme]\nCurrent=breeze\nThemeDir=/usr/local/share/sddm/themes\n",
+        );
+    }
+
+    fn dropin(scratch: &Scratch) {
+        scratch.file(
+            MANAGED_DROPIN,
+            "[Theme]\nCurrent=foamy-lock\nThemeDir=/usr/share/sddm/themes\n",
+        );
+    }
+
+    #[test]
+    fn managed_files_count_whatever_sddm_uses() {
+        // (name, setup, state, theme, drop-in)
+        type Setup = fn(&Scratch);
+        let cases: &[(&str, Setup, &str, bool, bool)] = &[
+            ("neither", elsewhere, "not-installed", false, false),
+            (
+                "theme only",
+                |s| {
+                    elsewhere(s);
+                    theme(s);
+                },
+                "not-installed",
+                true,
+                false,
+            ),
+            (
+                "drop-in only",
+                |s| {
+                    elsewhere(s);
+                    dropin(s);
+                },
+                "not-installed",
+                false,
+                true,
+            ),
+            (
+                "both",
+                |s| {
+                    elsewhere(s);
+                    theme(s);
+                    dropin(s);
+                },
+                "not-installed",
+                true,
+                true,
+            ),
+            (
+                "both, in use",
+                |s| {
+                    sddm(s);
+                    omarchy(s);
+                    theme(s);
+                    dropin(s);
+                },
+                "installed",
+                true,
+                true,
+            ),
+            (
+                "a symlinked theme folder",
+                |s| {
+                    elsewhere(s);
+                    theme_in(s, "elsewhere/foamy-lock");
+                    fs::create_dir_all(s.path("usr/share/sddm/themes")).unwrap();
+                    symlink(s.path("elsewhere/foamy-lock"), s.path(MANAGED_THEME)).unwrap();
+                },
+                "not-installed",
+                true,
+                false,
+            ),
+            (
+                "a dangling symlink as the drop-in",
+                |s| {
+                    elsewhere(s);
+                    symlink("/nowhere", s.path(MANAGED_DROPIN)).unwrap();
+                },
+                "not-installed",
+                false,
+                true,
+            ),
+            (
+                "a file as the theme folder",
+                |s| {
+                    elsewhere(s);
+                    s.file(MANAGED_THEME, "");
+                },
+                "not-installed",
+                true,
+                false,
+            ),
+            (
+                "SDDM isn't in use: not read",
+                |s| {
+                    theme(s);
+                    dropin(s);
+                },
+                "unavailable",
+                false,
+                false,
+            ),
+        ];
+        for (name, setup, state, theme, dropin) in cases {
+            let scratch = Scratch::new("login-managed");
+            setup(&scratch);
+            let reply = status(&scratch.0).unwrap_or_else(|failure| panic!("{name}: {failure}"));
+            assert_eq!(reply["state"], json!(state), "{name}: {reply}");
+            assert_eq!(
+                reply["managed"],
+                json!({"theme": theme, "dropin": dropin}),
+                "{name}: {reply}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unreadable_managed_folder_is_io() {
+        // Root reads through any mode.
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        // SDDM looks elsewhere, so only the managed check reads the folder.
+        let scratch = Scratch::new("login-managed-io");
+        elsewhere(&scratch);
+        theme(&scratch);
+        let themes = scratch.path("usr/share/sddm/themes");
+        fs::set_permissions(&themes, fs::Permissions::from_mode(0o000)).unwrap();
+        let result = status(&scratch.0);
+        fs::set_permissions(&themes, fs::Permissions::from_mode(0o755)).unwrap();
+        let failure = result.unwrap_err();
+        assert_eq!(failure.code, "IO");
+        assert!(failure.message.contains(MANAGED_THEME), "{failure}");
     }
 
     #[test]
