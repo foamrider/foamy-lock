@@ -54,7 +54,7 @@ Column {
   function reasonText(code) {
     if (code === "helper-unavailable")
       return FoamyI18n.t("studio.helperUnavailable")
-    var known = ["timeout", "start-failed", "unexpected", "not-possible", "BACKGROUND_MISSING", "NOT_OURS", "BUNDLE_INVALID", "NO_RUNTIME_DIR", "BUSY", "IO", "INVALID_REQUEST"]
+    var known = ["timeout", "start-failed", "unexpected", "not-possible", "BACKGROUND_MISSING", "NOT_OURS", "BUNDLE_INVALID", "NO_RUNTIME_DIR", "BUSY", "TIMEOUT", "IO", "INVALID_REQUEST"]
     if (known.indexOf(code) !== -1)
       return FoamyI18n.t("studio.login.reason." + code)
     if (/^(background|avatar|video)-/.test(code) || code === "decoder-unavailable")

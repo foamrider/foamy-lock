@@ -113,9 +113,11 @@ expect() {
   local lines
   lines=$(printf '%s\n' "$out" | wc -l)
   ((lines == 1)) || fail "expected one line, got: $out"
-  if [[ $1 == ok ]]; then
+  if [[ $1 == ok || $1 == ok-leftovers ]]; then
     ((rc == 0)) || fail "exit $rc, reply $out ($(cat "$tmp/stderr"))"
-    jq -e '. == {"ok": true}' <<<"$out" >/dev/null || fail "reply $out"
+    local want='{"ok": true}'
+    [[ $1 == ok ]] || want='{"ok": true, "leftovers": true}'
+    jq -e --argjson want "$want" '. == $want' <<<"$out" >/dev/null || fail "reply $out"
   else
     ((rc == 1)) || fail "exit $rc, expected 1; reply $out"
     jq -e --arg code "$1" '.ok == false and .code == $code and (.error | type) == "string"' \
@@ -509,8 +511,8 @@ case_restore_rollback() {
   expect_no_leftovers
 }
 
-# Restore moved both aside but can't delete the theme: IO saying the login
-# screen was restored; the next run clears the hidden leftover.
+# Restore moved both aside but can't delete the theme: the login screen is
+# restored (ok, with leftovers); the next run clears the hidden leftover.
 case_restore_leftover() {
   new_root restore-leftover
   stage
@@ -518,7 +520,7 @@ case_restore_leftover() {
   expect ok
   chmod 0555 -- "$theme/elements"
   publish restore
-  expect IO "the login screen was restored, but hidden leftovers remain"
+  expect ok-leftovers
   [[ ! -e $theme && ! -e $dropin ]] || fail "restore left the theme or drop-in in place"
   chmod -R u+w -- "$themes"
   publish restore

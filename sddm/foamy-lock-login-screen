@@ -23,7 +23,8 @@
 # publisher wrote (see theme_ok and dropin_ok), checked under the lock right
 # before the change; anything else is NOT_OURS and left alone.
 # Output: one JSON line on stdout, {"ok": true} or {"ok": false, "code",
-# "error"}, exit 0 or 1. Exit 126 and 127 are pkexec's own (the prompt was
+# "error"}, exit 0 or 1. {"ok": true, "leftovers": true}: the change was
+# made, but hidden temporary entries remain (the next run clears them). Exit 126 and 127 are pkexec's own (the prompt was
 # dismissed; not authorized or no polkit agent), with no JSON line. Exit
 # 137: the deadline's SIGKILL (below), with no JSON line.
 # Codes: INVALID_ARGUMENT, INVALID_STAGE, NOT_OURS, BUSY, IO, TIMEOUT,
@@ -92,6 +93,19 @@ transaction() {
     exit 1
   }
 
+  # The change is made and stands; only hidden temporary entries remain,
+  # which SDDM ignores and the next run clears. That is a success.
+  succeed_with_leftovers() {
+    if ((BASHPID != main_pid)); then
+      exit 0
+    fi
+    if [[ -z $replied ]]; then
+      replied=1
+      printf '{"ok": true, "leftovers": true}\n'
+    fi
+    exit 0
+  }
+
   # Ends the transaction, once: called at the end of a success, else by the
   # EXIT trap. Until the change is committed, it puts the previous theme
   # folder and drop-in back and removes what this run made.
@@ -141,7 +155,7 @@ transaction() {
   trap cleanup EXIT
   trap 'refuse "$code" "$context"' ERR
   trap 'refuse INTERNAL "the transaction was interrupted"' HUP INT
-  trap '[[ -z $committed ]] || refuse IO "the login screen was changed, but the run was stopped before it removed its hidden leftovers (the next copy or restore clears them)"
+  trap '[[ -z $committed ]] || succeed_with_leftovers
     refuse TIMEOUT "the login-screen change took too long and was stopped; what it had changed is put back"' TERM
 
   mode=${1-}
@@ -397,8 +411,7 @@ transaction() {
     if [[ -n $aside_dir ]] && ! rm -rf -- "$aside_dir"; then
       left+=" $aside_dir"
     fi
-    [[ -z $left ]] \
-      || refuse IO "the login screen was restored, but hidden leftovers remain (the next copy or restore clears them):$left"
+    [[ -z $left ]] || succeed_with_leftovers
     replied=1
     printf '{"ok": true}\n'
     cleanup

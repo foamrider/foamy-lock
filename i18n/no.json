@@ -610,6 +610,7 @@
   "studio.login.reason.BUNDLE_INVALID": "utvidelsens filer for innloggingstemaet er skadet",
   "studio.login.reason.NO_RUNTIME_DIR": "det finnes ingen kjøretidsmappe (XDG_RUNTIME_DIR)",
   "studio.login.reason.BUSY": "en annen kopi gjøres klar",
+  "studio.login.reason.TIMEOUT": "det tok for lang tid og ble stoppet",
   "studio.login.reason.IO": "en fil kunne ikke leses eller skrives",
   "studio.login.reason.INVALID_REQUEST": "utseendet eller temafargene ble avvist",
   "studio.login.reason.picture": "bildene kunne ikke gjøres klare (%1)",

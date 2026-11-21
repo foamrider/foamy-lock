@@ -610,6 +610,7 @@
   "studio.login.reason.BUNDLE_INVALID": "the plugin's login theme files are damaged",
   "studio.login.reason.NO_RUNTIME_DIR": "there is no runtime folder (XDG_RUNTIME_DIR)",
   "studio.login.reason.BUSY": "another copy is being prepared",
+  "studio.login.reason.TIMEOUT": "it took too long and was stopped",
   "studio.login.reason.IO": "a file couldn't be read or written",
   "studio.login.reason.INVALID_REQUEST": "the look or the theme colours were refused",
   "studio.login.reason.picture": "the pictures couldn't be prepared (%1)",

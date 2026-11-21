@@ -425,9 +425,18 @@ writes it; the greeter part's test tooling writes it the same way.
   user's rights (`setpriv` to `PKEXEC_UID`), so a symlink there can't make
   root read a file the user can't; root then checks each copy's size and
   SHA-256 against `manifest.json`.
-- It replaces only a theme folder whose `manifest.json` is Foamy's, and only
-  a drop-in with Foamy's marker line; anything else named the same is
-  refused (`NOT_OURS`) and left alone.
+- It replaces or removes a theme folder only when it is exactly what Foamy
+  installed (every file in its manifest, by size and SHA-256, and nothing
+  else) and a drop-in only when its whole text is Foamy's; anything else is
+  refused (`NOT_OURS`) and left alone. It checks right before the change.
+- An existing theme is replaced in one step (`mv --exchange`), so it is
+  never absent; Remove moves the drop-in aside first and puts it back if
+  the folder can't follow.
+- The root side has its own deadline (`pkexec /usr/bin/timeout … 120`):
+  the user's `timeout` can't signal a root process. On it, the run puts the
+  previous state back and answers `TIMEOUT`.
+- `{"ok": true, "leftovers": true}`: the change was made, but hidden
+  temporary entries remain; SDDM ignores them and the next run clears them.
 
 **Studio** (step 5) runs `studio login-screen status` to show the section
 and its state, `studio login-screen stage` with the applied look (with
