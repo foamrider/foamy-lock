@@ -330,7 +330,9 @@ All new text goes through `FoamyI18n`, in `i18n/en.json` and `i18n/no.json`.
    - For step 4: the publisher takes `stage.lock` (next to the `stage-*`
      folders) while it reads a staging folder, so a new `stage` can't
      remove the folder under it.
-3. **Publisher**, `bin/foamy-lock-login-screen`, a bash script modelled on
+3. **Publisher**, `sddm/foamy-lock-login-screen` (not `bin/`, which holds
+   only the verified helper binaries; not in `bundle.txt`), a bash script
+   modelled on
    `omarchy-plymouth-set`:
    - It refuses to run as root, stages as the user, then runs a fixed
      privileged transaction through `pkexec`.
@@ -405,6 +407,33 @@ writes it; the greeter part's test tooling writes it the same way.
   initial.
 - No fingerprint text. Every screen draws the theme; only the primary
   screen's field takes the keys, like the lock.
+
+## Steps 4 and 5 contract
+
+**Publisher CLI** (step 4), run by Studio as the user:
+
+- `sddm/foamy-lock-login-screen publish <staging-folder>`: `<staging-folder>`
+  is a folder `stage` returned. It asks for root once through `pkexec`.
+- `sddm/foamy-lock-login-screen restore`: removes our drop-in and theme
+  folder through `pkexec`.
+- stdout: one JSON line, `{"ok": true}` or `{"ok": false, "code": "<CODE>",
+  "error": "<English>"}`, with exit 0 or 1. Its own exits are never 126 or
+  127, which are `pkexec`'s: 126 the prompt was dismissed, 127 not
+  authorized or no polkit agent (no JSON line then).
+- As root, the files are read from the staging folder with the invoking
+  user's rights (`setpriv` to `PKEXEC_UID`), so a symlink there can't make
+  root read a file the user can't; root then checks each copy's size and
+  SHA-256 against `manifest.json`.
+- It replaces only a theme folder whose `manifest.json` is Foamy's, and only
+  a drop-in with Foamy's marker line; anything else named the same is
+  refused (`NOT_OURS`) and left alone.
+
+**Studio** (step 5) runs `studio login-screen status` to show the section
+and its state, `studio login-screen stage` with the applied look (with
+`showsPicture` from `Layout.js`, the colours from `Commons`, the language,
+the avatar the lock rendered and a background prepared by the `background`
+kind at most 3840 × 2160), then the publisher with the returned folder, then
+`status` again, and compares `installed.hash` with `stage`'s hash.
 
 ## Steps
 
