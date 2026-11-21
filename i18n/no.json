@@ -616,6 +616,7 @@
   "studio.login.reason.IO": "en fil kunne ikke leses eller skrives",
   "studio.login.reason.INVALID_REQUEST": "utseendet eller temafargene ble avvist",
   "studio.login.reason.picture": "bildene kunne ikke gjøres klare (%1)",
+  "studio.login.reason.ROLLBACK_FAILED": "ikke alt den allerede hadde endret kunne settes tilbake; det forrige innloggingstemaet kan ligge i en skjult mappe i /usr/share/sddm/themes",
   "studio.login.reason.lock-status": "Foamy Lock sa ikke hvilket profilbilde den viser",
   "studio.login.result.copy.done": "Kopiert. Innloggingsskjermen viser dette utseendet.",
   "studio.login.result.restore.done": "Fjernet fra innloggingsskjermen.",

@@ -251,6 +251,15 @@ function publishReport(exitCode, text) {
   return { result: "failed", code: exitCode === 0 || exitCode === 1 ? "unexpected" : "exit-" + exitCode }
 }
 
+// A failed copy or restore left the login screen as it was: it stopped
+// before the publisher ran (`before`), or the publisher refused with one
+// of its codes, which it prints after its rollback. Not ROLLBACK_FAILED
+// (the rollback couldn't put everything back), and not a publisher that
+// ended otherwise (killed, an exit it never gives).
+function unchanged(before, code) {
+  return before === true || (CODE.test(String(code)) && code !== "ROLLBACK_FAILED")
+}
+
 // The section's state: "hidden" (SDDM isn't in use), "checking" (before
 // the first answer), "error" (the check failed), "not-installed",
 // "current", "outdated", "installed" (in use, not compared: the compare
@@ -314,5 +323,5 @@ if (typeof module !== "undefined") module.exports = {
   replyOf: replyOf, exitProblem: exitProblem, statusReport: statusReport, showsPicture: showsPicture, pictureSize: pictureSize,
   colorText: colorText, stageRequest: stageRequest, stageReport: stageReport, pictureReport: pictureReport,
   lockAvatarReport: lockAvatarReport, avatarAbsent: avatarAbsent, hasManaged: hasManaged, restoreOffered: restoreOffered,
-  publishReport: publishReport, sectionState: sectionState, leftOut: leftOut, confirmed: confirmed
+  publishReport: publishReport, unchanged: unchanged, sectionState: sectionState, leftOut: leftOut, confirmed: confirmed
 }

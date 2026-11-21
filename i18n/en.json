@@ -616,6 +616,7 @@
   "studio.login.reason.IO": "a file couldn't be read or written",
   "studio.login.reason.INVALID_REQUEST": "the look or the theme colours were refused",
   "studio.login.reason.picture": "the pictures couldn't be prepared (%1)",
+  "studio.login.reason.ROLLBACK_FAILED": "not everything it had already changed could be put back; the previous login theme may be in a hidden folder in /usr/share/sddm/themes",
   "studio.login.reason.lock-status": "Foamy Lock didn't say which profile picture it shows",
   "studio.login.result.copy.done": "Copied. The login screen shows this look.",
   "studio.login.result.restore.done": "Removed from the login screen.",

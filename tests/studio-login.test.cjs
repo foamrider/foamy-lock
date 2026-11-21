@@ -227,6 +227,7 @@ test('the publisher: 0 and 1 with JSON, 126 and 127 from pkexec, and never succe
     [127, '', 'denied', ''],
     [1, line({ ok: false, code: 'NOT_OURS', error: 'x' }), 'failed', 'NOT_OURS'],
     [1, line({ ok: false, code: 'IO', error: 'x' }), 'failed', 'IO'],
+    [1, line({ ok: false, code: 'ROLLBACK_FAILED', error: 'x' }), 'failed', 'ROLLBACK_FAILED'],
     [0, '', 'failed', 'unexpected'],
     [0, line({ ok: false, code: 'IO' }), 'failed', 'unexpected'],
     [1, 'oops', 'failed', 'unexpected'],
@@ -239,6 +240,23 @@ test('the publisher: 0 and 1 with JSON, 126 and 127 from pkexec, and never succe
   ]
   for (const [exit, text, result, code] of cases)
     assert.deepEqual(plain(Login.publishReport(exit, text)), { result, code }, `${exit} ${text}`)
+})
+
+test('only a refusal after a rollback that worked, or a stop before the publisher, changed nothing', () => {
+  const cases = [
+    [true, 'BUNDLE_INVALID', true],
+    [true, 'lock-status', true],
+    [false, 'IO', true],
+    [false, 'NOT_OURS', true],
+    [false, 'TIMEOUT', true],
+    [false, 'ROLLBACK_FAILED', false],
+    [false, 'timeout', false],
+    [false, 'exit-3', false],
+    [false, 'unexpected', false],
+    [false, '', false]
+  ]
+  for (const [before, code, unchanged] of cases)
+    assert.equal(Login.unchanged(before, code), unchanged, `${before} ${code}`)
 })
 
 test('what the look leaves out names only what it shows', () => {

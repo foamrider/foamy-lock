@@ -370,7 +370,12 @@ Item {
         return prepare()
       return finish()
     }
-    // After the publisher: its word, checked against status.
+    // After the publisher: its word, checked against status. A look (or
+    // another input) changed while the copy ran: the copied inputs aren't
+    // the current ones, so a comparison with those runs next (the key
+    // watch above only does that while Foamy's theme was installed).
+    if (op === "copy" && job.key !== key)
+      pending = true
     var published = job.published
     if (published.result !== "ok")
       return finish(published.result, published.code, false)
