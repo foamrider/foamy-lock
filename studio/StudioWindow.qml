@@ -1518,6 +1518,46 @@ FocusScope {
     color: Qt.alpha(FoamyPalette.background, 0.72)
     z: 30
 
+    // A body that scrolls takes Up, Down, Page Up, Page Down, Home and End
+    // as they come up from the focused button, so Cancel keeps the keys
+    // and Tab, Enter, Space and Esc keep their jobs. A body that fits takes
+    // none of them.
+    Keys.onPressed: function (event) {
+      if (question.scrollKey(event.key, event.modifiers))
+        event.accepted = true
+    }
+    function scrollKey(key, modifiers) {
+      if (!questionFlick.interactive || (modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) !== 0)
+        return false
+      var line = FoamyStyle.rowHeight
+      var end = questionFlick.contentHeight - questionFlick.height
+      var y = questionFlick.contentY
+      switch (key) {
+      case Qt.Key_Up:
+        y -= line
+        break
+      case Qt.Key_Down:
+        y += line
+        break
+      case Qt.Key_PageUp:
+        y -= Math.max(line, questionFlick.height - line)
+        break
+      case Qt.Key_PageDown:
+        y += Math.max(line, questionFlick.height - line)
+        break
+      case Qt.Key_Home:
+        y = 0
+        break
+      case Qt.Key_End:
+        y = end
+        break
+      default:
+        return false
+      }
+      questionFlick.contentY = Math.max(0, Math.min(end, y))
+      return true
+    }
+
     MouseArea {
       anchors.fill: parent
       onClicked: question.dismissed()
@@ -1562,6 +1602,7 @@ FocusScope {
           Accessible.name: text
         }
         Flickable {
+          id: questionFlick
           objectName: "studioQuestionBody"
           width: parent.width
           height: Math.min(questionBody.implicitHeight, Math.max(3 * FoamyStyle.font.body, question.bodyRoom))
