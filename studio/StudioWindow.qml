@@ -1500,6 +1500,10 @@ FocusScope {
       return width + Math.max(0, shown - 1) * FoamyStyle.gap
     }
     readonly property bool stacked: buttonsWidth > questionColumn.width + 0.5
+    // Room for the body: the window less the card's margins and padding,
+    // the title, the content and the buttons. A longer body scrolls, so the
+    // title and the buttons stay in the window (large text, small window).
+    readonly property real bodyRoom: height - 4 * FoamyStyle.padding - questionTitle.height - (contentSlot.visible ? contentSlot.height + FoamyStyle.gap : 0) - buttonRow.height - 2 * FoamyStyle.gap
     onStackedChanged: fitButtons()
     Component.onCompleted: fitButtons()
     function fitButtons() {
@@ -1543,6 +1547,8 @@ FocusScope {
         spacing: FoamyStyle.gap
 
         Text {
+          id: questionTitle
+          objectName: "studioQuestionTitle"
           width: parent.width
           horizontalAlignment: Text.AlignLeft
           text: question.title
@@ -1555,15 +1561,27 @@ FocusScope {
           Accessible.role: Accessible.Heading
           Accessible.name: text
         }
-        Text {
+        Flickable {
+          objectName: "studioQuestionBody"
           width: parent.width
-          horizontalAlignment: Text.AlignLeft
-          text: question.body
-          textFormat: Text.PlainText
-          wrapMode: Text.Wrap
-          color: FoamyPalette.secondaryText
-          font.family: FoamyStyle.fontFamily
-          font.pixelSize: FoamyStyle.font.body
+          height: Math.min(questionBody.implicitHeight, Math.max(3 * FoamyStyle.font.body, question.bodyRoom))
+          contentWidth: width
+          contentHeight: questionBody.implicitHeight
+          clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          interactive: contentHeight > height
+
+          Text {
+            id: questionBody
+            width: parent.width
+            horizontalAlignment: Text.AlignLeft
+            text: question.body
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            color: FoamyPalette.secondaryText
+            font.family: FoamyStyle.fontFamily
+            font.pixelSize: FoamyStyle.font.body
+          }
         }
         Column {
           id: contentSlot

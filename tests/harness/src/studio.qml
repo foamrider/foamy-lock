@@ -690,10 +690,22 @@ Item {
               var bottom = confirm.mapToItem(studio, 0, confirm.height).y
               expect(bottom <= studio.height - 8, "the buttons fit: " + bottom + " of " + studio.height)
               capture("studio-login-copy-dialog-long", function () {
-                windowSize(0, 0, function () {
-                  studio.answerLogin(false)
-                  studio.history = Draft.history(studio.savedDraft)
-                  next()
+                // Shorter than the dialog (as with large text): the body
+                // scrolls, the title and the buttons stay in the window.
+                windowSize(1100, 400, function () {
+                  var bottom = confirm.mapToItem(studio, 0, confirm.height).y
+                  var flick = find(dialog, "studioQuestionBody")
+                  var heading = find(dialog, "studioQuestionTitle")
+                  expect(bottom <= studio.height - 8, "the buttons in a short window: " + bottom + " of " + studio.height)
+                  expect(heading && heading.mapToItem(studio, 0, 0).y >= 8, "the title in a short window")
+                  expect(flick && flick.interactive && flick.height < flick.contentHeight, "the body scrolls")
+                  capture("studio-login-copy-dialog-short", function () {
+                    windowSize(0, 0, function () {
+                      studio.answerLogin(false)
+                      studio.history = Draft.history(studio.savedDraft)
+                      next()
+                    })
+                  })
                 })
               })
             })

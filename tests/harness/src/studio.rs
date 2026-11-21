@@ -64,7 +64,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 54] = [
+const CAPTURES: [&str; 55] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -106,6 +106,7 @@ const CAPTURES: [&str; 54] = [
     "studio-login-copy-dialog-min",
     "studio-login-copy-dialog-wide",
     "studio-login-copy-dialog-long",
+    "studio-login-copy-dialog-short",
     "studio-login-cancelled",
     "studio-login-current",
     "studio-login-current-min",
