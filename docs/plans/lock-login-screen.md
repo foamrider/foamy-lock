@@ -441,9 +441,13 @@ writes it; the greeter part's test tooling writes it the same way.
 **Studio** (step 5) runs `studio login-screen status` to show the section
 and its state, `studio login-screen stage` with the applied look (with
 `showsPicture` from `Layout.js`, the colours from `Commons`, the language,
-the avatar the lock rendered and a background prepared by the `background`
-kind at most 3840 × 2160), then the publisher with the returned folder, then
-`status` again, and compares `installed.hash` with `stage`'s hash.
+the avatar the lock shows now — asked with `omarchy-shell foamy.lock status`
+(`avatarRenderPath`; empty: no avatar; no answer: the copy fails), never
+the cached file alone, which outlives a removed photo — and a background
+prepared by the `background` kind at most 3840 × 2160), then the publisher
+with the returned folder, then `status` again, and compares
+`installed.hash` with `stage`'s hash. A change to the lock's rendered
+avatar file makes Studio check again.
 
 ## Steps
 
