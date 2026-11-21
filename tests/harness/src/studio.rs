@@ -158,9 +158,12 @@ if [[ $1:$2:$# == foamy.lock:status:2 ]]; then
   echo $(( $(cat "$dir/status-count" 2>/dev/null || echo 0) + 1 )) > "$dir/status-count"
   case $(cat "$dir/lock-status" 2>/dev/null || echo avatar) in
     avatar)
+      # The photo the lock reads: ~/.face, or another path (as AccountsService
+      # can point at) while $dir/lock-avatar-path names one.
+      photo=$(cat "$dir/lock-avatar-path" 2>/dev/null || echo "$HOME/.face")
       render=""
-      [[ -e $HOME/.face ]] && render="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png"
-      printf '{"userName":"sample","avatarPath":"%s","avatarRenderPath":"%s"}\n' "$HOME/.face" "$render" ;;
+      [[ -e $photo ]] && render="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png"
+      printf '{"userName":"sample","avatarPath":"%s","avatarRenderPath":"%s"}\n' "$photo" "$render" ;;
     stale)
       printf '{"userName":"sample","avatarPath":"%s","avatarRenderPath":"%s"}\n' "$HOME/.face" "${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/foamy.lock/avatar.png" ;;
     fail) echo 'omarchy-shell is not running' >&2; exit 1 ;;

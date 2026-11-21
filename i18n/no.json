@@ -595,6 +595,7 @@
   "studio.login.state.broken": "Filene til innloggingstemaet er ufullstendige.",
   "studio.login.managed": "Filene til Foamy Locks innloggingstema ligger fortsatt på maskinen, men SDDM bruker dem ikke.",
   "studio.login.unapplied": "Endringer du ikke har tatt i bruk, blir ikke kopiert: innloggingsskjermen får utseendet låseskjermen har.",
+  "studio.login.configUnreadable": "Lock Studio kan ikke lese låseskjermens innstillinger (shell.json), så den kan ikke kopiere dem til innloggingsskjermen. Rett opp filen først.",
   "studio.login.compareFailed": "Dette utseendet kunne ikke sammenlignes med det: %1.",
   "studio.login.copy": "Kopier til innloggingsskjermen",
   "studio.login.restore": "Fjern fra innloggingsskjermen",

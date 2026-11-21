@@ -1425,6 +1425,7 @@ FocusScope {
     wallpaperIsVideo: lockSources.wallpaperIsVideo
     screenSize: lockSources.videoSize
     active: studio.awake && lockSources.configKnown
+    configValid: lockSources.settingsError === ""
   }
 
   // The module being dragged from the library, until it is over the canvas.

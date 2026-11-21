@@ -171,7 +171,10 @@ Item {
   readonly property var leftOut: Login.leftOut(look, wallpaperIsVideo)
   // What the section's buttons offer (Copy is disabled while the login
   // screen matches; a copy confirmed during a check runs even then).
-  readonly property bool copyPossible: !!look && ["hidden", "checking", "error"].indexOf(sectionState) === -1
+  // The lock keeps its last good settings when shell.json can't be read,
+  // so Studio's would be a guess: no copy then (Remove stays).
+  property bool configValid: true
+  readonly property bool copyPossible: !!look && configValid && ["hidden", "checking", "error"].indexOf(sectionState) === -1
   readonly property bool restorePossible: Login.restoreOffered(sectionState, status)
   readonly property bool canCopy: !busy && copyPossible && sectionState !== "current"
   readonly property bool canRestore: !busy && restorePossible
@@ -479,6 +482,17 @@ Item {
 
   // Not read (preload off): only their changes count. Quickshell's watch
   // follows the path, so a file renamed into place counts too.
+  // The lock's rendered avatar: it changes when the lock reads another
+  // photo (AccountsService can point at a new file), so the next check asks
+  // the lock again and moves the photo's watch. A check at each lock is the
+  // cost.
+  FileView {
+    path: login.lockAvatar
+    preload: false
+    watchChanges: true
+    printErrors: false
+    onFileChanged: login.avatarRevision += 1
+  }
   // The photo: one watch, moved when the lock names another photo; none
   // ("") before the lock's first status.
   FileView {

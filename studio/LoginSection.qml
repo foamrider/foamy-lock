@@ -102,6 +102,11 @@ Column {
     objectName: "studioLoginUnapplied"
     text: section.app && section.app.unapplied && section.loginState !== "error" ? FoamyI18n.t("studio.login.unapplied") : ""
   }
+  // Studio can't read the lock's settings, so it can't copy them.
+  PaneNote {
+    objectName: "studioLoginConfig"
+    text: section.login && !section.login.configValid && section.loginState !== "hidden" ? FoamyI18n.t("studio.login.configUnreadable") : ""
+  }
   // SDDM doesn't use Foamy's theme, but its files are there: what Remove
   // is offered for.
   PaneNote {

@@ -595,6 +595,7 @@
   "studio.login.state.broken": "The login theme files are incomplete.",
   "studio.login.managed": "Foamy Lock's login theme files are still on this computer, but SDDM doesn't use them.",
   "studio.login.unapplied": "Changes you haven't applied aren't copied: the login screen gets the look the lock screen has.",
+  "studio.login.configUnreadable": "Lock Studio can't read the lock screen's settings (shell.json), so it can't copy them to the login screen. Fix the file first.",
   "studio.login.compareFailed": "This look couldn't be compared with it: %1.",
   "studio.login.copy": "Copy to login screen",
   "studio.login.restore": "Remove from login screen",

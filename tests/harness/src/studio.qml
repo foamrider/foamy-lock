@@ -850,6 +850,49 @@ Item {
         }
       },
       {
+        // AccountsService points the lock at another photo file; the old one
+        // is untouched. The lock renders the new one (avatar.png changes), so
+        // Studio asks the lock again and follows the new photo.
+        name: "login: the lock reading another photo makes it check again",
+        wait: 0,
+        run: function (next) {
+          var other = fake + "/other-face.png";
+          var face = Quickshell.env("HOME") + "/.face";
+          sh('cp "$1" "$2"; printf %s "$2" > "$3/lock-avatar-path"; cp "$1" "$4.new"; mv "$4.new" "$4"', [fake + "/poster.png", other, fake, login.lockAvatar], function () {
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated" && login.lockAvatarSource === other
+            }, function () {
+              return "out of date with the other photo: " + login.sectionState + " " + login.lockAvatarSource
+            }, function () {
+              sh('rm -f "$2/lock-avatar-path"; cp "$1" "$3.new"; mv "$3.new" "$3"', [face, fake, login.lockAvatar], function () {
+                waitFor(function () {
+                  return loginIdle() && login.sectionState === "current" && login.lockAvatarSource === face
+                }, "matching again with ~/.face", next, 40000)
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        // shell.json can't be read: the lock keeps its last good settings,
+        // which Studio doesn't know, so Copy is off and says why.
+        name: "login: an unreadable shell.json stops Copy",
+        wait: 0,
+        run: function (next) {
+          var before = readFile(shellJson)
+          writeFile(shellJson, "{ not json\n")
+          waitFor(function () {
+            return studio.sources.settingsError !== "" && !login.copyPossible
+          }, "Copy off with a bad shell.json", function () {
+            expect(!loginButton("studioLoginCopy").enabled && loginText("studioLoginConfig") === FoamyI18n.t("studio.login.configUnreadable"), "the note: " + loginText("studioLoginConfig"))
+            writeFile(shellJson, before)
+            waitFor(function () {
+              return studio.sources.settingsError === "" && login.copyPossible && loginIdle()
+            }, "Copy back with a good shell.json", next, 40000)
+          }, 40000)
+        }
+      },
+      {
         // The photo was removed: the lock's old avatar.png is still in the
         // cache, and the lock still reports it until it locks again (the
         // fake's `stale`). No refresh is asked for: the watch on the photo
