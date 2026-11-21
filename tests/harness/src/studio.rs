@@ -64,7 +64,7 @@ const PLUGIN_LINKS: [(&str, bool); 8] = [
 const COMMONS: &str = "Commons";
 const UI: &str = "Ui";
 const QMLDIR: &str = "qmldir";
-const CAPTURES: [&str; 55] = [
+const CAPTURES: [&str; 56] = [
     "studio-idle",
     "studio-dragging",
     "studio-wrong-password",
@@ -108,6 +108,7 @@ const CAPTURES: [&str; 55] = [
     "studio-login-copy-dialog-long",
     "studio-login-copy-dialog-short",
     "studio-login-cancelled",
+    "studio-login-rollback-failed",
     "studio-login-current",
     "studio-login-current-min",
     "studio-login-current-wide",
@@ -268,10 +269,12 @@ esac
 /// `$FOAMY_LOCK_SYSTEM_ROOT` (the staged files and manifest in
 /// `usr/share/sddm/themes/foamy-lock`, the drop-in in `etc/sddm.conf.d`; a
 /// restore removes both); `cancel` and `deny` exit as pkexec does (126, 127);
-/// `error` and `not-ours` refuse with its JSON; `garbage` exits 0 without
-/// JSON; `lie` says ok and changes nothing; `crash` exits 3; `slow` waits
-/// (its PID in `$dir/publish-pid`) until SIGTERM, which it records in
-/// `$dir/publish-term`.
+/// `error` and `not-ours` refuse with its JSON; `rollback-failed` answers
+/// ROLLBACK_FAILED and changes nothing; `garbage` exits 0 without JSON;
+/// `lie` says ok and changes nothing; `crash` exits 3; `slow` waits (its
+/// PID in `$dir/publish-pid`) until SIGTERM, which it records in
+/// `$dir/publish-term`; `hold` writes `$dir/publish-held`, waits (at most
+/// 60 s) for `$dir/publish-go`, then installs as `ok` does.
 const FAKE_PUBLISHER: &str = r#"#!/bin/bash
 dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 printf '%s\n' "$*" >> "$dir/publish-calls"
@@ -283,6 +286,11 @@ case $mode in
   deny) exit 127 ;;
   error) echo '{"ok":false,"code":"IO","error":"/usr/share/sddm/themes: Read-only file system"}'; exit 1 ;;
   not-ours) echo '{"ok":false,"code":"NOT_OURS","error":"/usr/share/sddm/themes/foamy-lock is not Foamy Lock'"'"'s"}'; exit 1 ;;
+  rollback-failed) echo '{"ok":false,"code":"ROLLBACK_FAILED","error":"cannot write the drop-in (IO), and putting back what it had changed failed too"}'; exit 1 ;;
+  hold)
+    echo held > "$dir/publish-held"
+    for _ in $(seq 600); do [[ -e $dir/publish-go ]] && break; sleep 0.1; done
+    rm -f "$dir/publish-held" "$dir/publish-go" ;;
   garbage) echo 'done, probably'; exit 0 ;;
   lie) echo '{"ok":true}'; exit 0 ;;
   crash) exit 3 ;;

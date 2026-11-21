@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import "kit"
+import "Login.js" as Login
 
 // The login screen page (Library → Scene → Login screen): the state of the
 // SDDM login screen against the applied look, Copy to login screen and
@@ -54,7 +55,7 @@ Column {
   function reasonText(code) {
     if (code === "helper-unavailable")
       return FoamyI18n.t("studio.helperUnavailable")
-    var known = ["timeout", "start-failed", "unexpected", "not-possible", "BACKGROUND_MISSING", "NOT_OURS", "BUNDLE_INVALID", "NO_RUNTIME_DIR", "BUSY", "TIMEOUT", "IO", "INVALID_REQUEST", "lock-status"]
+    var known = ["timeout", "start-failed", "unexpected", "not-possible", "BACKGROUND_MISSING", "NOT_OURS", "BUNDLE_INVALID", "NO_RUNTIME_DIR", "BUSY", "TIMEOUT", "IO", "INVALID_REQUEST", "ROLLBACK_FAILED", "lock-status"]
     if (known.indexOf(code) !== -1)
       return FoamyI18n.t("studio.login.reason." + code)
     if (/^(background|avatar|video)-/.test(code) || code === "decoder-unavailable")
@@ -79,11 +80,11 @@ Column {
         return FoamyI18n.t("studio.login.result.restore.filesLeft")
       return FoamyI18n.t("studio.login.result." + action + ".unconfirmed", reasonText(result.code))
     }
-    // Refused before the publisher ran, or by the publisher itself (its
-    // codes): nothing changed. A publisher that ended otherwise (killed,
-    // an exit it never gives) may have changed something: the state
-    // above, read again, says what the login screen has now.
-    var nothing = result.before || /^[A-Z_]+$/.test(result.code)
+    // Refused before the publisher ran, or by the publisher itself after
+    // a rollback that worked: nothing changed (Login.unchanged). Otherwise
+    // something may have changed: the state above, read again, says what
+    // the login screen has now.
+    var nothing = Login.unchanged(result.before, result.code)
     return FoamyI18n.t("studio.login.result." + action + (nothing ? ".failedNothing" : ".failed"), reasonText(result.code))
   }
 

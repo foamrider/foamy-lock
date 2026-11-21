@@ -760,7 +760,7 @@ Item {
         name: "login: cancelled, not permitted, refused: nothing changes",
         wait: 0,
         run: function (next) {
-          var cases = [["cancel", "cancelled", "", FoamyI18n.t("studio.login.result.cancelled")], ["deny", "denied", "", FoamyI18n.t("studio.login.result.denied")], ["error", "failed", "IO", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.IO"))], ["not-ours", "failed", "NOT_OURS", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.NOT_OURS"))], ["garbage", "failed", "unexpected", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.unexpected"))], ["crash", "failed", "exit-3", FoamyI18n.t("studio.login.result.copy.failed", "exit-3")]]
+          var cases = [["cancel", "cancelled", "", FoamyI18n.t("studio.login.result.cancelled")], ["deny", "denied", "", FoamyI18n.t("studio.login.result.denied")], ["error", "failed", "IO", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.IO"))], ["not-ours", "failed", "NOT_OURS", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.NOT_OURS"))], ["rollback-failed", "failed", "ROLLBACK_FAILED", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.ROLLBACK_FAILED"))], ["garbage", "failed", "unexpected", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.unexpected"))], ["crash", "failed", "exit-3", FoamyI18n.t("studio.login.result.copy.failed", "exit-3")]]
           var round = function (i) {
             if (i === cases.length)
               return next()
@@ -770,8 +770,8 @@ Item {
               var dir = made[made.length - 1].split(" ")[1]
               expect(dir.indexOf(Quickshell.env("XDG_RUNTIME_DIR") + "/foamy-lock/login-screen/stage-") === 0, "the staged folder " + dir)
               expect(login.sectionState === "not-installed" && loginButton("studioLoginCopy").enabled, c[0] + ": still not installed, " + login.sectionState)
-              if (i === 0)
-                capture("studio-login-cancelled", function () {
+              if (i === 0 || c[0] === "rollback-failed")
+                capture(i === 0 ? "studio-login-cancelled" : "studio-login-rollback-failed", function () {
                   round(i + 1)
                 })
               else
@@ -1228,6 +1228,42 @@ Item {
                 }, "shown again", next)
               })
             })
+          })
+        }
+      },
+      {
+        // The first copy (nothing installed, so no key watch runs): a look
+        // applied while the publisher waits at its prompt is compared once
+        // the copy is done, not shown as matching.
+        name: "login: a look applied during the first copy is compared afresh",
+        wait: 0,
+        run: function (next) {
+          expect(login.sectionState === "not-installed", "nothing installed: " + login.sectionState)
+          setPublish("hold")
+          studio.askLogin("copy")
+          find(studio, "studioLoginConfirm").clicked()
+          waitFor(function () {
+            return login.step === "publish" && readFile(fake + "/publish-held").trim() === "held"
+          }, "the publisher at its prompt", function () {
+            var copied = login.job.key
+            studio.savedDraft = {
+              preset: "foamy",
+              background: {
+                dim: 0.3
+              }
+            }
+            studio.history = Draft.history(studio.savedDraft)
+            expect(login.key !== copied, "the applied look changed during the copy")
+            writeFile(fake + "/publish-go", "go\n")
+            waitFor(function () {
+              return loginIdle() && login.result !== null && login.compareKey === login.key
+            }, function () {
+              return "a fresh comparison: " + login.sectionState + " " + json(login.result)
+            }, function () {
+              expect(login.result.outcome === "done" && login.sectionState === "outdated", "out of date, not matching: " + login.sectionState)
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.outdated") && loginText("studioLoginResult") === "", "the old copy isn't shown as current: " + loginText("studioLoginResult"))
+              next()
+            }, 40000)
           })
         }
       },
