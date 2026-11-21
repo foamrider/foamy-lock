@@ -1,9 +1,12 @@
 # Plan: copy the lock look to the SDDM login screen
 
-Status: draft 4 (2026-11-20). Steps 1 and 2 are done; step 2 is on `dev`
-(`5840ebe`). Step 3 (the greeter bundle) is being built; see "Step 3
-contract". Calling `pkexec` from Studio's own process is checked in step 5.
-The user accepted every recommendation under "Decisions".
+Status: done (2026-11-21), released in Foamy Lock 1.5.0. Steps 1–5 are on
+`dev` (`70f3a46`). Step 6 ran on miriam-pc instead of this PC: a copy from
+Lock Studio through the real `pkexec` prompt, checked at the machine by the
+user ("looks good"). Step 7 is the
+README's "Login screen (SDDM)" section. The last two Codex review rounds
+were skipped at the user's request. The user accepted every recommendation
+under "Decisions".
 
 ## Goal
 

@@ -621,6 +621,75 @@ the last tip you saw in
 
 Screenshots of the app will follow.
 
+## Login screen (SDDM)
+
+Lock Studio can copy the lock screen's look to the login screen, the SDDM
+greeter that shows when the computer starts and after you log out. Open
+**Library → Scene → Login screen**. The page is hidden when SDDM isn't the
+display manager.
+
+**Copy to login screen** copies the look the lock screen has now, not
+changes you haven't applied. A dialog says what will happen. After **Copy
+to login screen** in the dialog, Omarchy asks for your password, because
+the copy needs administrator (root) permission. Studio then reads SDDM's
+settings again and shows the result; it never assumes success.
+
+What is copied:
+
+- the preset, layout, glass and background, the theme's colours, the
+  language and the time format;
+- the background picture (scaled to fit 3840 × 2160, with the look's blur);
+- your profile picture, decoded again from the photo itself. Without a
+  usable photo the login screen shows your initial.
+
+What the login screen doesn't show: media, weather, network and battery
+status, the system panel, fingerprint sign-in and video backgrounds (a
+video shows its still frame). Before login there is no clipboard paste.
+
+**Privacy.** The copied picture, your profile picture and the look are
+installed in `/usr/share/sddm/themes/foamy-lock`, where every user on the
+computer can read them, and they show on the login screen to anyone at the
+computer.
+
+What the copy changes, and nothing else:
+
+- `/usr/share/sddm/themes/foamy-lock`: the theme. It is replaced in one
+  step, so the old one stays until the new one is complete.
+- `/etc/sddm.conf.d/99-zz-foamy-lock.conf`: selects the theme
+  (`Current=foamy-lock`) and SDDM's theme folder
+  (`ThemeDir=/usr/share/sddm/themes`). The name sorts after Omarchy's own
+  files, so it wins over them.
+
+The copy replaces only files it can prove it installed. Anything else with
+those names is left alone, and the copy stops. If another theme was
+selected, the dialog names it.
+
+**Remove from login screen** deletes those two again, under the same
+conditions, and SDDM goes back to the theme its other settings select
+(usually Omarchy's). You see the change the next time the login screen
+shows.
+
+**Omarchy's Unlock menu** (Appearance → Unlock) styles the boot screen and
+Omarchy's own login theme. While Foamy Lock's theme is selected, its
+login-screen change doesn't show; the boot screen still changes.
+
+**Autologin.** With autologin on, the login screen shows only after you log
+out; the dialog says so.
+
+**Requirements and limits.**
+
+- SDDM 0.21 with its Qt 6 greeter, and Omarchy's polkit agent
+  (`omarchy.polkit`, enabled by default) for the password prompt. Without
+  an agent the copy reports that permission wasn't granted.
+- If `/etc/sddm.conf` selects another theme, it wins over every file in
+  `/etc/sddm.conf.d`. Studio then says SDDM uses another theme and still
+  offers **Remove from login screen**.
+- A copy that is stopped hard (for example by a power cut) can leave hidden
+  folders in `/usr/share/sddm/themes`. SDDM ignores them; the next copy or
+  removal clears the ones it can prove are its own.
+- To remove it without Studio, as root:
+  `rm -rf /usr/share/sddm/themes/foamy-lock /etc/sddm.conf.d/99-zz-foamy-lock.conf`.
+
 ## Fingerprint recovery
 
 Temporary reader or daemon errors are retried with increasing delays. If the
@@ -1031,6 +1100,10 @@ remain unchanged.
 
 Omarchy manages the plugin entry in `shell.json`. Packages and data outside
 the plugin directory are retained unless you remove them separately.
+
+If you copied the look to the login screen, remove it first with Lock
+Studio's **Remove from login screen**: removing the plugin leaves the
+login theme in place (see Login screen above).
 
 ## License
 
