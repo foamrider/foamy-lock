@@ -41,6 +41,11 @@ import "Draft.js" as Draft
 //   as new…" asks for a name; rename and delete (asked first) are there
 //   too. Quitting's "Apply and quit" never asks for a name.
 // - **Preview full screen** shows the look on the lock's own preview.
+// - **The login screen** (Library → Scene → Login screen, shown while SDDM
+//   is in use): Copy to login screen copies the applied look (never the
+//   draft) to SDDM's login screen, Restore Omarchy login screen takes it
+//   away; each asks first, naming what changes, and needs the password
+//   (LoginScreen runs it all, one operation at a time).
 // - **Quitting** (Ctrl+Q, or closing the window) with changes the lock
 //   doesn't have asks: Apply and quit, Discard (deletes the draft), or
 //   Cancel. A pending draft write finishes first.
@@ -95,6 +100,7 @@ FocusScope {
   readonly property alias inspector: inspectorPage
   readonly property alias scenePage: scenePage
   readonly property alias presetMenu: presetMenu
+  readonly property alias login: lockLogin
   readonly property var lockSettings: lockSources.settings
   readonly property var problems: lockChecker.problems
   // Shape advice (Layout.shapeAdvice) only warns, like a reference size.
@@ -130,7 +136,9 @@ FocusScope {
   readonly property bool canPreview: session === "ready" && !lockSources.previewing && !quitting
   // Reset can go back to the saved look, or to the preset without changes.
   readonly property bool canReset: session === "ready" && !quitting && (unapplied || presetChanged)
-  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked || resetAsked || nameAsked !== "" || deleteAsked !== ""
+  readonly property bool questionOpen: pendingPreset !== "" || session === "ask" || quitAsked || resetAsked || nameAsked !== "" || deleteAsked !== "" || loginAsked !== ""
+  // The login screen question: "" (closed), "copy" or "restore".
+  property string loginAsked: ""
 
   // Foamy Weather: unless the lock's catalog says it can't reach it, the
   // weather can be shown. Without it a hidden weather can't be shown (its
@@ -431,6 +439,51 @@ FocusScope {
         kind: "busy",
         text: ""
       }
+  }
+
+  // --- the login screen ---------------------------------------------------------------
+
+  // "copy" or "restore": asked first (the dialog names every change).
+  function askLogin(action) {
+    if (questionOpen || (action === "copy" ? !lockLogin.canCopy : action === "restore" ? !lockLogin.canRestore : true))
+      return
+    loginAsked = action
+    // The safe answer has the keys: Enter alone never asks for root.
+    loginCancel.forceActiveFocus(Qt.PopupFocusReason)
+  }
+
+  function answerLogin(confirm) {
+    var action = loginAsked
+    if (!action)
+      return
+    loginAsked = ""
+    if (confirm)
+      action === "copy" ? lockLogin.copy() : lockLogin.restore()
+    var section = studio.scenePage.loginSection
+    var back = action === "copy" ? section.copyButton : section.restoreButton
+    // Busy, the button is inert: the page keeps the keys.
+    back.visible && back.enabled ? back.forceActiveFocus(Qt.OtherFocusReason) : section.forceActiveFocus(Qt.OtherFocusReason)
+  }
+
+  // The copy dialog's text: what it does, where, what this look leaves
+  // out, and what else to know.
+  function loginCopyBody() {
+    var status = lockLogin.status
+    var parts = [FoamyI18n.t("studio.login.ask.copy.intro"), FoamyI18n.t(lockLogin.showsPicture ? "studio.login.ask.copy.steps" : "studio.login.ask.copy.stepsNoPicture")]
+    // Copying replaces another theme the system selects.
+    if (status && status.theme && status.theme !== "foamy-lock")
+      parts.push(status.themeSetIn ? FoamyI18n.t("studio.login.ask.copy.replacesIn", [status.theme, status.themeSetIn]) : FoamyI18n.t("studio.login.ask.copy.replaces", status.theme))
+    var left = lockLogin.leftOut.map(function (key) {
+      return FoamyI18n.t("studio.login.leftOut." + key)
+    })
+    if (left.length > 0)
+      parts.push(FoamyI18n.t("studio.login.ask.copy.leftOut", left.join(", ")))
+    parts.push(FoamyI18n.t("studio.login.ask.root"))
+    if (status && status.autologin)
+      parts.push(FoamyI18n.t("studio.login.ask.autologin"))
+    if (unapplied)
+      parts.push(FoamyI18n.t("studio.login.unapplied"))
+    return parts.join("\n\n")
   }
 
   // --- quitting ----------------------------------------------------------------------
@@ -892,6 +945,10 @@ FocusScope {
       answerDelete(false)
       return true
     }
+    if (key === Qt.Key_Escape && loginAsked) {
+      answerLogin(false)
+      return true
+    }
     // A question is open: only its own buttons and Esc.
     if (questionOpen)
       return false
@@ -1332,7 +1389,7 @@ FocusScope {
             visible: !inspectorPage.visible
             focus: visible
             app: studio
-            page: ["glass", "background", "shapes"].indexOf(studio.page) !== -1 ? studio.page : "look"
+            page: ["glass", "background", "shapes", "login"].indexOf(studio.page) !== -1 ? studio.page : "look"
           }
         }
       }
@@ -1354,6 +1411,21 @@ FocusScope {
     screenWidth: studio.monitor.width
     screenHeight: studio.monitor.height
     active: studio.awake
+  }
+
+  // The login screen: its state, Copy and Restore (never shown). It copies
+  // the applied look, once shell.json has said what that is.
+  Studio.LoginScreen {
+    id: lockLogin
+    lockView: lockCanvas.view
+    entry: studio.savedDraft
+    settings: studio.lockSettings
+    wallpaperPath: lockSources.wallpaperPath
+    wallpaperKey: lockSources.wallpaperSignature + ":" + lockSources.wallpaperVersion
+    wallpaperIsVideo: lockSources.wallpaperIsVideo
+    screenSize: lockSources.videoSize
+    active: studio.awake && lockSources.configKnown
+    configValid: lockSources.settingsError === ""
   }
 
   // The module being dragged from the library, until it is over the canvas.
@@ -1429,6 +1501,10 @@ FocusScope {
       return width + Math.max(0, shown - 1) * FoamyStyle.gap
     }
     readonly property bool stacked: buttonsWidth > questionColumn.width + 0.5
+    // Room for the body: the window less the card's margins and padding,
+    // the title, the content and the buttons. A longer body scrolls, so the
+    // title and the buttons stay in the window (large text, small window).
+    readonly property real bodyRoom: height - 4 * FoamyStyle.padding - questionTitle.height - (contentSlot.visible ? contentSlot.height + FoamyStyle.gap : 0) - buttonRow.height - 2 * FoamyStyle.gap
     onStackedChanged: fitButtons()
     Component.onCompleted: fitButtons()
     function fitButtons() {
@@ -1442,6 +1518,46 @@ FocusScope {
     anchors.fill: parent
     color: Qt.alpha(FoamyPalette.background, 0.72)
     z: 30
+
+    // A body that scrolls takes Up, Down, Page Up, Page Down, Home and End
+    // as they come up from the focused button, so Cancel keeps the keys
+    // and Tab, Enter, Space and Esc keep their jobs. A body that fits takes
+    // none of them.
+    Keys.onPressed: function (event) {
+      if (question.scrollKey(event.key, event.modifiers))
+        event.accepted = true
+    }
+    function scrollKey(key, modifiers) {
+      if (!questionFlick.interactive || (modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) !== 0)
+        return false
+      var line = FoamyStyle.rowHeight
+      var end = questionFlick.contentHeight - questionFlick.height
+      var y = questionFlick.contentY
+      switch (key) {
+      case Qt.Key_Up:
+        y -= line
+        break
+      case Qt.Key_Down:
+        y += line
+        break
+      case Qt.Key_PageUp:
+        y -= Math.max(line, questionFlick.height - line)
+        break
+      case Qt.Key_PageDown:
+        y += Math.max(line, questionFlick.height - line)
+        break
+      case Qt.Key_Home:
+        y = 0
+        break
+      case Qt.Key_End:
+        y = end
+        break
+      default:
+        return false
+      }
+      questionFlick.contentY = Math.max(0, Math.min(end, y))
+      return true
+    }
 
     MouseArea {
       anchors.fill: parent
@@ -1472,6 +1588,8 @@ FocusScope {
         spacing: FoamyStyle.gap
 
         Text {
+          id: questionTitle
+          objectName: "studioQuestionTitle"
           width: parent.width
           horizontalAlignment: Text.AlignLeft
           text: question.title
@@ -1484,15 +1602,28 @@ FocusScope {
           Accessible.role: Accessible.Heading
           Accessible.name: text
         }
-        Text {
+        Flickable {
+          id: questionFlick
+          objectName: "studioQuestionBody"
           width: parent.width
-          horizontalAlignment: Text.AlignLeft
-          text: question.body
-          textFormat: Text.PlainText
-          wrapMode: Text.Wrap
-          color: FoamyPalette.secondaryText
-          font.family: FoamyStyle.fontFamily
-          font.pixelSize: FoamyStyle.font.body
+          height: Math.min(questionBody.implicitHeight, Math.max(3 * FoamyStyle.font.body, question.bodyRoom))
+          contentWidth: width
+          contentHeight: questionBody.implicitHeight
+          clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          interactive: contentHeight > height
+
+          Text {
+            id: questionBody
+            width: parent.width
+            horizontalAlignment: Text.AlignLeft
+            text: question.body
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            color: FoamyPalette.secondaryText
+            font.family: FoamyStyle.fontFamily
+            font.pixelSize: FoamyStyle.font.body
+          }
         }
         Column {
           id: contentSlot
@@ -1698,6 +1829,31 @@ FocusScope {
       kind: "primary"
       text: FoamyI18n.t("studio.restore.continue")
       onClicked: studio.answerRestore(true)
+    }
+  }
+
+  // Copy to login screen, or Restore Omarchy login screen: asked first.
+  Question {
+    id: loginDialog
+    objectName: "studioLoginDialog"
+    visible: studio.loginAsked !== ""
+    title: studio.loginAsked === "restore" ? FoamyI18n.t("studio.login.ask.restore.title") : FoamyI18n.t("studio.login.copy")
+    body: studio.loginAsked === "restore" ? FoamyI18n.t("studio.login.ask.restore.body") + "\n\n" + FoamyI18n.t("studio.login.ask.root") : studio.loginAsked === "copy" ? studio.loginCopyBody() : ""
+    onDismissed: studio.answerLogin(false)
+
+    FoamyButton {
+      id: loginCancel
+      focusable: true
+      objectName: "studioLoginCancel"
+      text: FoamyI18n.t("studio.cancel")
+      onClicked: studio.answerLogin(false)
+    }
+    FoamyButton {
+      focusable: true
+      objectName: "studioLoginConfirm"
+      kind: "primary"
+      text: studio.loginAsked === "restore" ? FoamyI18n.t("studio.login.ask.restore.confirm") : FoamyI18n.t("studio.login.copy")
+      onClicked: studio.answerLogin(true)
     }
   }
 

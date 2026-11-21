@@ -1,6 +1,4 @@
 import QtQuick
-// Qualify the theme singleton to avoid QtQuick.Color taking precedence.
-import qs.Commons as Commons
 import "../kit"
 
 // The password field: the editor, its placeholder and states, the unlock hint
@@ -8,7 +6,9 @@ import "../kit"
 // reports text and submission through the host view.
 Rectangle {
   id: field
-  // The host LockView: data, theme and scale (its properties aren't visible to qmllint as Item).
+  // The host view (LockLayout: the lock or the login screen): data, scale and the
+  // theme colours, lockBorderError and lockTextError among them (its
+  // properties aren't visible to qmllint as Item).
   required property var view
   // This element's size: the view's scale for its screen (LockView sets it).
   required property real uiScale
@@ -114,7 +114,7 @@ Rectangle {
   radius: box ? Math.round(12 * uiScale) : terminal ? Math.round(6 * uiScale) : card ? Math.round(24 * uiScale) : underline || dotsOnly ? 0 : height / 2
   color: !surfaceShown ? "transparent" : terminal ? Qt.rgba(0.012, 0.016, 0.03, 0.72) : glassFill
   border.width: surfaceShown ? 1 : 0
-  border.color: view.errorState ? Commons.Color.lock.borderError : view.glassBorder
+  border.color: view.errorState ? view.lockBorderError : view.glassBorder
   // Not clipped: the unlock hint below shows only while the field has no
   // fill or border, and a translated hint can be wider than the pill.
   // The editor and its placeholder clip and elide on their own.
@@ -170,7 +170,7 @@ Rectangle {
     radius: height / 2
     color: Qt.rgba(1, 1, 1, field.view.showPassword ? 0.08 : 0.05)
     border.width: 1
-    border.color: field.view.errorState ? Commons.Color.lock.borderError : field.view.glassBorder
+    border.color: field.view.errorState ? field.view.lockBorderError : field.view.glassBorder
   }
 
   Text {
@@ -215,7 +215,7 @@ Rectangle {
         width: dotsTrack.dot
         height: width
         radius: width / 2
-        color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+        color: field.view.errorState ? field.view.lockBorderError : field.view.foreground
         opacity: field.view.errorState ? 1 : field.view.showPassword ? 0.6 : 0.38
       }
     }
@@ -228,7 +228,7 @@ Rectangle {
     anchors.right: parent.right
     anchors.bottom: parent.bottom
     height: Math.max(1, Math.round(1.5 * field.uiScale))
-    color: field.view.errorState ? Commons.Color.lock.borderError : field.view.foreground
+    color: field.view.errorState ? field.view.lockBorderError : field.view.foreground
     opacity: field.view.errorState ? 1 : (field.view.showPassword ? 0.85 : 0.5)
   }
 
@@ -274,7 +274,7 @@ Rectangle {
     Text {
       objectName: "unlockHintText"
       textFormat: Text.PlainText
-      text: field.view.fingerprintConfigured && !field.view.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : FoamyI18n.t("Enter password to unlock")
+      text: field.view.fingerprintConfigured && !field.view.fingerprintUnavailable ? FoamyI18n.t("Use fingerprint or enter password") : field.view.unlockHintText
       width: Math.min(implicitWidth, unlockHint.limit - (unlockHintIcon.visible ? unlockHintIcon.width + unlockHint.spacing : 0))
       color: unlockHint.tone
       // The theme's placeholder colour carries its own alpha.
@@ -539,7 +539,7 @@ Rectangle {
     anchors.fill: passwordInput
     text: field.view.authenticatingPassword ? FoamyI18n.t("Checking…") : (field.view.failureMessage.length > 0 ? field.view.failedAttempts > 0 ? FoamyI18n.t("Authentication failed (%1)", FoamyI18n.number(field.view.failedAttempts)) : FoamyI18n.t(field.view.failureMessage) : field.view.placeholderText)
     visible: field.chromeShown && field.view.showPassword && passwordInput.text.length === 0
-    color: field.view.authenticatingPassword ? field.view.foreground : (field.view.errorState ? Commons.Color.lock.textError : field.view.secondary)
+    color: field.view.authenticatingPassword ? field.view.foreground : (field.view.errorState ? field.view.lockTextError : field.view.secondary)
     font.family: field.editorFontFamily
     font.pixelSize: field.dotsOnly ? Math.round(13 * field.textScale) : field.terminal ? Math.round(15 * field.textScale) : field.fieldFontSize
     font.italic: field.view.errorState

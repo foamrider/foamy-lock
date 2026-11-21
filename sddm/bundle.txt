@@ -1,0 +1,56 @@
+# The plugin files Foamy Lock's login-screen theme needs, one plugin-relative
+# path per line ("Step 3 contract" in docs/plans/lock-login-screen.md). In
+# the theme, sddm/X is X and every other path keeps its place, so the
+# element files keep their relative imports (../kit, shaders/…). stage
+# copies exactly these files and lists them in manifest.json; snapshot.json,
+# background.png, avatar.png and theme.conf come from stage and the publisher.
+# tests/greeter.sh assembles a theme from this list.
+
+# The theme: SDDM's entry point and its snapshot reading.
+sddm/metadata.desktop
+sddm/Main.qml
+sddm/Greeter.js
+
+# The greeter's kit: what the elements import from ../kit, without the
+# Omarchy shell. FoamyWallClock and FoamyI18nText.js are foamy-kit's own.
+sddm/kit/qmldir
+sddm/kit/FoamyClipboard.qml
+sddm/kit/FoamyI18n.qml
+sddm/kit/FoamyPalette.qml
+sddm/kit/FoamyStyle.qml
+kit/FoamyWallClock.qml
+kit/FoamyI18nText.js
+
+# The look model and the lock's layout and elements, as they are.
+Layout.js
+Model.js
+elements/LockLayout.qml
+elements/AccountElement.qml
+elements/Backdrop.qml
+elements/BackdropStill.js
+elements/CalendarElement.qml
+elements/ClockElement.qml
+elements/DateElement.qml
+elements/Decoration.qml
+elements/FingerprintIcon.qml
+elements/GlyphIcon.qml
+elements/LineIcon.qml
+elements/MediaElement.qml
+elements/PasswordElement.qml
+elements/StatusElement.qml
+elements/WeatherElement.qml
+
+# The animated backgrounds' shaders (compiled; elements/shaders/build.sh).
+elements/shaders/backdrop.vert.qsb
+elements/shaders/aurora.frag.qsb
+elements/shaders/fireflies.frag.qsb
+elements/shaders/gradient.frag.qsb
+elements/shaders/matrix.frag.qsb
+elements/shaders/ocean.frag.qsb
+elements/shaders/rain.frag.qsb
+elements/shaders/snow.frag.qsb
+elements/shaders/stars.frag.qsb
+
+# The licences of the copied code.
+LICENSE
+LICENSE-OMARCHY

@@ -61,7 +61,14 @@ const built = [...Layout.ELEMENTS.map(n => 'module.' + n), ...Layout.ZONES.map(z
   ...Layout.MOTIONS.map(m => 'motion.' + m),
   ...['input-too-large', 'input-too-wide'].map(c => 'video.limit.' + c),
   ...['decode-failed', 'unsupported-format', 'video-missing', 'decoder-unavailable'].map(c => 'video.problem.' + c),
-  ...['busy', 'job-timeout', 'output-too-large'].map(c => 'video.failed.' + c)];
+  ...['busy', 'job-timeout', 'output-too-large'].map(c => 'video.failed.' + c),
+  // The login screen (LoginSection.qml, StudioWindow.loginCopyBody): states, reasons, results, what is left out.
+  ...['checking', 'error', 'not-installed', 'current', 'outdated', 'installed', 'overridden', 'broken'].flatMap(s => ['login.detail.' + s, ...(s === 'overridden' ? [] : ['login.state.' + s])]),
+  ...['timeout', 'start-failed', 'unexpected', 'not-possible', 'BACKGROUND_MISSING', 'NOT_OURS', 'BUNDLE_INVALID',
+    'NO_RUNTIME_DIR', 'BUSY', 'TIMEOUT', 'IO', 'INVALID_REQUEST', 'ROLLBACK_FAILED', 'lock-status'].map(c => 'login.reason.' + c),
+  ...['copy', 'restore'].flatMap(a => ['done', 'unconfirmed', 'failed', 'failedNothing'].map(r => `login.result.${a}.${r}`)),
+  ...['cancelled', 'denied'].map(r => 'login.result.' + r),
+  ...['media', 'weather', 'status', 'system', 'video', 'fingerprint'].map(k => 'login.leftOut.' + k)];
 for (const key of built) assert.ok(Object.hasOwn(I.en, 'studio.' + key), `studio.${key}`);
 // The shapes page (ScenePage.qml) and the shapes' advice (StudioWindow.problemText).
 const shapeKeys = [...['around', 'aroundModule'].map(d => 'decor.' + d), ...Layout.SHAPE_KINDS.map(k => 'shape.kind.' + k),

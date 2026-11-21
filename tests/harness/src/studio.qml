@@ -519,6 +519,780 @@ Item {
     blockLoading: true
   }
 
+  // --- the login screen: the real helper on a fake system tree ---------------
+  // `status` and `stage` are the bundled helper's (FOAMY_LOCK_SYSTEM_ROOT
+  // points `status` at the harness's tree), reached through the fake
+  // `login-helper`, which fails `stage` on demand. The publisher is
+  // always the fake (`foamy-lock-login-screen`): it answers what
+  // `publish-mode` says and, for ok, installs into the tree as the real one
+  // would. A `pkexec` stub first on PATH fails any call loudly.
+  readonly property string systemRoot: Quickshell.env("FOAMY_LOCK_SYSTEM_ROOT") || ""
+  readonly property var login: studio ? studio.login : null
+  // One bash line with arguments, then next() (a failure fails the run).
+  function sh(script, args, next) {
+    loginShell.callback = next
+    loginShell.command = ["bash", "-c", "set -e; " + script, "login-test"].concat(args || [])
+    loginShell.running = true
+  }
+  function setPublish(mode) {
+    writeFile(fake + "/publish-mode", mode + "\n")
+  }
+  function setLoginMode(mode) {
+    writeFile(fake + "/login-mode", mode + "\n")
+  }
+  // What the fake omarchy-shell's `foamy.lock status` says about the
+  // avatar ("avatar", "none", "fail"), and how often it was asked.
+  function setLockStatus(mode) {
+    writeFile(fake + "/lock-status", mode + "\n")
+  }
+  function lockStatusCalls() {
+    return Number(readFile(fake + "/status-count").trim()) || 0
+  }
+  function installedNames() {
+    return JSON.parse(readFile(systemRoot + "/usr/share/sddm/themes/foamy-lock/manifest.json")).files.map(function (f) {
+      return f.name
+    })
+  }
+  // Real key events to the window's focused item, which then go up its
+  // parents as typed keys do (QtTest's TestEvent; its QObject parent
+  // names the window, as this driver is outside it).
+  property var keyEvents: null
+  function key(code) {
+    if (!keyEvents)
+      keyEvents = Qt.createQmlObject("import QtTest\nTestEvent {}", studio, "keyEvents")
+    expect(keyEvents.keyClick(code, Qt.NoModifier, -1), "key " + code + " delivered")
+  }
+  function publishCalls() {
+    return readFile(fake + "/publish-calls").split("\n").filter(function (l) {
+      return l !== ""
+    })
+  }
+  function loginIdle() {
+    return !login.busy
+  }
+  function loginButton(name) {
+    return find(studio.scenePage, name)
+  }
+  function loginText(name) {
+    var item = find(studio.scenePage, name)
+    return item && item.visible ? item.text : ""
+  }
+  // Ask, confirm with the publisher answering `mode`, wait for the end.
+  function confirmLogin(action, mode, next) {
+    setPublish(mode)
+    var calls = publishCalls().length
+    studio.askLogin(action)
+    expect(studio.loginAsked === action && find(studio, "studioLoginDialog").visible, action + " asked: " + studio.loginAsked)
+    find(studio, "studioLoginConfirm").clicked()
+    expect(studio.loginAsked === "" && login.busy, action + " runs")
+    waitFor(function () {
+      return loginIdle() && login.result !== null
+    }, action + " with " + mode, function () {
+      // Cancel and permission go through the publisher too: one call each.
+      var made = publishCalls()
+      if (login.result.before !== true)
+        expect(made.length === calls + 1 && made[made.length - 1].split(" ")[0] === (action === "copy" ? "publish" : "restore"), "publisher calls " + json(made))
+      next(made)
+    }, 40000)
+  }
+  function expectResult(outcome, code, key) {
+    var r = login.result
+    expect(r && r.outcome === outcome && r.code === code, "result " + json(r) + ", expected " + outcome + " " + code)
+    var text = loginText("studioLoginResult")
+    expect(text === key, "result text " + JSON.stringify(text) + ", expected " + JSON.stringify(key))
+  }
+  // The app's content at `width` × `height` (0: the window's size again),
+  // then next() once it is laid out. Offscreen, the window itself keeps
+  // its size; the content is what the captures show.
+  function windowSize(width, height, next) {
+    if (width === 0) {
+      studio.anchors.fill = studio.parent
+    } else {
+      studio.anchors.fill = undefined
+      studio.width = width
+      studio.height = height
+    }
+    var w = width || window.width, h = height || window.height
+    waitFor(function () {
+      return near(studio.width, w, 2) && near(studio.height, h, 2)
+    }, function () {
+      return "the content at " + w + " × " + h + ": " + studio.width + " × " + studio.height
+    }, function () {
+      Qt.callLater(next)
+    }, 5000)
+  }
+  function captureSizes(name, next) {
+    windowSize(1100, 680, function () {
+      capture(name + "-min", function () {
+        windowSize(1920, 1080, function () {
+          capture(name + "-wide", function () {
+            windowSize(0, 0, function () {
+              capture(name, next)
+            })
+          })
+        })
+      })
+    })
+  }
+  Process {
+    id: loginShell
+    property var callback: null
+    stderr: StdioCollector {
+      id: loginShellErrors
+      waitForEnd: true
+    }
+    onExited: function (exitCode) {
+      if (exitCode !== 0)
+        test.fail("login-test shell failed (" + exitCode + "): " + loginShellErrors.text)
+      else
+        Qt.callLater(callback)
+    }
+  }
+
+  function loginSteps() {
+    var theme = function () {
+      return systemRoot + "/usr/share/sddm/themes/foamy-lock"
+    }
+    var foamyCopy = FoamyI18n.t("studio.login.copy")
+    return [
+      {
+        name: "login: SDDM in use, Foamy's theme not installed",
+        wait: 0,
+        run: function (next) {
+          reset()
+          expect(systemRoot !== "" && login.helper === "" && login.publisher === "", "the harness's tree, the bundled helper at first")
+          // The first check ran on the bundled helper against the tree.
+          waitFor(function () {
+            return loginIdle() && login.status !== null
+          }, "the first check", function () {
+            expect(login.sectionState === "not-installed" && login.status.theme === "omarchy" && login.status.themeSetIn === "/etc/sddm.conf.d/10-theme.conf" && login.status.autologin === true, "status " + json(login.status))
+            login.helper = fake + "/login-helper"
+            login.publisher = fake + "/foamy-lock-login-screen"
+            setLoginMode("real")
+            var row = find(studio.library, "studioSceneLogin")
+            expect(row.visible && row.detail === FoamyI18n.t("studio.login.detail.not-installed"), "the library row: " + row.visible + " " + row.detail)
+            row.clicked()
+            expect(studio.page === "login" && studio.scenePage.loginSection.visible, "the login page")
+            var copy = loginButton("studioLoginCopy")
+            expect(copy.visible && copy.enabled && copy.text === foamyCopy && !loginButton("studioLoginRestore").visible, "Copy only")
+            expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.not-installed"), "state text " + loginText("studioLoginState"))
+            expect(loginText("studioLoginUnapplied") === "", "nothing unapplied")
+            captureSizes("studio-login", next)
+          })
+        }
+      },
+      {
+        name: "login: the copy dialog says what changes and takes the keys",
+        wait: 0,
+        run: function (next) {
+          var copy = loginButton("studioLoginCopy")
+          copy.forceActiveFocus(Qt.TabFocusReason)
+          copy.clicked()
+          var dialog = find(studio, "studioLoginDialog")
+          expect(dialog.visible && studio.questionOpen && dialog.title === foamyCopy, "the dialog")
+          expect(find(studio, "studioLoginCancel").activeFocus, "Cancel has the keys")
+          var body = dialog.body
+          var parts = [FoamyI18n.t("studio.login.ask.copy.intro"), FoamyI18n.t("studio.login.ask.copy.steps"), FoamyI18n.t("studio.login.ask.copy.replacesIn", ["omarchy", "/etc/sddm.conf.d/10-theme.conf"]), FoamyI18n.t("studio.login.ask.copy.leftOut", ["media", "status", "fingerprint"].map(function (k) {
+              return FoamyI18n.t("studio.login.leftOut." + k)
+            }).join(", ")), FoamyI18n.t("studio.login.ask.root"), FoamyI18n.t("studio.login.ask.autologin")]
+          expect(body === parts.join("\n\n"), "the copy dialog's text:\n" + body)
+          expect(studio.appKey(Qt.Key_Z, Qt.ControlModifier, "") === false, "a question takes no shortcuts")
+          // A body that fits takes no scrolling keys.
+          var fits = find(dialog, "studioQuestionBody")
+          key(Qt.Key_End)
+          key(Qt.Key_Down)
+          expect(!fits.interactive && fits.contentY === 0 && dialog.visible && find(studio, "studioLoginCancel").activeFocus, "a body that fits stays: " + fits.interactive + " " + fits.contentY)
+          captureSizes("studio-login-copy-dialog", function () {
+            expect(studio.appKey(Qt.Key_Escape, 0, ""), "Esc closes it")
+            expect(!dialog.visible && studio.loginAsked === "" && !login.busy && publishCalls().length === 0, "nothing ran")
+            expect(copy.activeFocus, "the keys go back to Copy")
+            // Unapplied changes aren't copied: said on the page and in the dialog.
+            unappliedEdit(0.5)
+            expect(loginText("studioLoginUnapplied") === FoamyI18n.t("studio.login.unapplied"), "the unapplied note")
+            studio.askLogin("copy")
+            expect(dialog.body.indexOf(FoamyI18n.t("studio.login.unapplied")) !== -1, "the dialog says so too")
+            // The longest dialog, at the smallest window: the buttons stay on it.
+            windowSize(1100, 680, function () {
+              var confirm = find(studio, "studioLoginConfirm")
+              var bottom = confirm.mapToItem(studio, 0, confirm.height).y
+              expect(bottom <= studio.height - 8, "the buttons fit: " + bottom + " of " + studio.height)
+              capture("studio-login-copy-dialog-long", function () {
+                // Shorter than the dialog (as with large text): the body
+                // scrolls, the title and the buttons stay in the window.
+                windowSize(1100, 400, function () {
+                  var bottom = confirm.mapToItem(studio, 0, confirm.height).y
+                  var flick = find(dialog, "studioQuestionBody")
+                  var heading = find(dialog, "studioQuestionTitle")
+                  expect(bottom <= studio.height - 8, "the buttons in a short window: " + bottom + " of " + studio.height)
+                  expect(heading && heading.mapToItem(studio, 0, 0).y >= 8, "the title in a short window")
+                  expect(flick && flick.interactive && flick.height < flick.contentHeight, "the body scrolls")
+                  // The keys scroll it while Cancel keeps them.
+                  var cancel = find(studio, "studioLoginCancel")
+                  var end = flick.contentHeight - flick.height
+                  expect(cancel.activeFocus && flick.contentY === 0, "Cancel has the keys, at the top")
+                  key(Qt.Key_Down)
+                  var line = flick.contentY
+                  expect(line > 0 && line < end && cancel.activeFocus, "Down scrolls a line: " + line + " of " + end)
+                  key(Qt.Key_PageDown)
+                  expect(flick.contentY > line && cancel.activeFocus, "Page Down scrolls further: " + flick.contentY)
+                  key(Qt.Key_End)
+                  expect(near(flick.contentY, end, 0.5) && cancel.activeFocus, "End: the end " + flick.contentY + " of " + end)
+                  key(Qt.Key_Down)
+                  expect(near(flick.contentY, end, 0.5), "never past the end")
+                  key(Qt.Key_Up)
+                  expect(flick.contentY < end, "Up scrolls back")
+                  key(Qt.Key_Home)
+                  expect(flick.contentY === 0 && cancel.activeFocus && dialog.visible && studio.loginAsked === "copy", "Home: the top, the dialog still open")
+                  capture("studio-login-copy-dialog-short", function () {
+                    windowSize(0, 0, function () {
+                      studio.answerLogin(false)
+                      studio.history = Draft.history(studio.savedDraft)
+                      next()
+                    })
+                  })
+                })
+              })
+            })
+          })
+        }
+      },
+      {
+        name: "login: cancelled, not permitted, refused: nothing changes",
+        wait: 0,
+        run: function (next) {
+          var cases = [["cancel", "cancelled", "", FoamyI18n.t("studio.login.result.cancelled")], ["deny", "denied", "", FoamyI18n.t("studio.login.result.denied")], ["error", "failed", "IO", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.IO"))], ["not-ours", "failed", "NOT_OURS", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.NOT_OURS"))], ["rollback-failed", "failed", "ROLLBACK_FAILED", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.ROLLBACK_FAILED"))], ["garbage", "failed", "unexpected", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.unexpected"))], ["crash", "failed", "exit-3", FoamyI18n.t("studio.login.result.copy.failed", "exit-3")]]
+          var round = function (i) {
+            if (i === cases.length)
+              return next()
+            var c = cases[i]
+            confirmLogin("copy", c[0], function (made) {
+              expectResult(c[1], c[2], c[3])
+              var dir = made[made.length - 1].split(" ")[1]
+              expect(dir.indexOf(Quickshell.env("XDG_RUNTIME_DIR") + "/foamy-lock/login-screen/stage-") === 0, "the staged folder " + dir)
+              expect(login.sectionState === "not-installed" && loginButton("studioLoginCopy").enabled, c[0] + ": still not installed, " + login.sectionState)
+              if (i === 0 || c[0] === "rollback-failed")
+                capture(i === 0 ? "studio-login-cancelled" : "studio-login-rollback-failed", function () {
+                  round(i + 1)
+                })
+              else
+                round(i + 1)
+            })
+          }
+          round(0)
+        }
+      },
+      {
+        name: "login: copied, and status agrees",
+        wait: 0,
+        run: function (next) {
+          confirmLogin("copy", "ok", function () {
+            expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+            expect(login.sectionState === "current" && login.status.installed.hash === login.compareHash, "current: " + login.sectionState + " " + json(login.status))
+            expect(!loginButton("studioLoginCopy").enabled && loginButton("studioLoginRestore").visible && loginButton("studioLoginRestore").enabled, "Copy disabled, Restore offered")
+            expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.current"), "matches")
+            // What reached the tree: the snapshot, the pictures and the bundle.
+            var manifest = JSON.parse(readFile(theme() + "/manifest.json"))
+            var names = manifest.files.map(function (f) {
+              return f.name
+            })
+            expect(names[0] === "snapshot.json" && names[1] === "background.png" && names[2] === "avatar.png" && names.indexOf("Main.qml") !== -1, "files " + names.slice(0, 5))
+            var snapshot = JSON.parse(readFile(theme() + "/snapshot.json"))
+            expect(snapshot.look.background.source === "picture" && snapshot.look.background.path === undefined && snapshot.timeFormat === "12h" && snapshot.language === FoamyI18n.language && snapshot.files.avatar === "avatar.png" && snapshot.look.layout.media.hidden === true, "snapshot " + json(snapshot).slice(0, 400))
+            expect(readFile(fake + "/pkexec-calls") === "", "pkexec never ran")
+            captureSizes("studio-login-current", next)
+          })
+        }
+      },
+      {
+        // An earlier match says nothing once a comparison fails.
+        name: "login: a failed comparison doesn't keep saying it matches",
+        wait: 0,
+        run: function (next) {
+          setLoginMode("stage-fail")
+          login.refresh()
+          waitFor(function () {
+            return loginIdle()
+          }, "the check with stage failing", function () {
+            expect(login.sectionState === "installed" && login.compareHash === "" && login.compareError === "BUNDLE_INVALID", "not compared: " + login.sectionState + " " + login.compareHash + " " + login.compareError)
+            expect(loginButton("studioLoginCopy").enabled, "Copy offered again")
+            setLoginMode("ok")
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "current"
+            }, "matching again", next, 40000)
+          }, 40000)
+        }
+      },
+      {
+        // The lock renders a new photo (renamed into place, as its helper
+        // does): no refresh is asked for, the watch notices.
+        name: "login: a changed profile photo makes it check again",
+        wait: 0,
+        run: function (next) {
+          // A new photo where the lock reads it (~/.face), written in place
+          // as a user's tool would; Studio decodes the photo itself.
+          var asked = lockStatusCalls()
+          var face = Quickshell.env("HOME") + "/.face";
+          sh('cp "$1" "$3/avatar.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [face, fake + "/poster.png", fake], function () {
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated"
+            }, function () {
+              return "out of date after a new photo: " + login.sectionState + " " + login.avatarRevision
+            }, function () {
+              expect(lockStatusCalls() > asked, "the lock was asked again")
+              sh('mv "$2/avatar.before" "$1"', [face, fake], function () {
+                waitFor(function () {
+                  return loginIdle() && login.sectionState === "current"
+                }, "matching again with the old photo", next, 40000)
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        // AccountsService points the lock at another photo file; the old one
+        // is untouched. The lock renders the new one (avatar.png changes), so
+        // Studio asks the lock again and follows the new photo.
+        name: "login: the lock reading another photo makes it check again",
+        wait: 0,
+        run: function (next) {
+          var other = fake + "/other-face.png";
+          var face = Quickshell.env("HOME") + "/.face";
+          sh('cp "$1" "$2"; printf %s "$2" > "$3/lock-avatar-path"; cp "$1" "$4.new"; mv "$4.new" "$4"', [fake + "/poster.png", other, fake, login.lockAvatar], function () {
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated" && login.lockAvatarSource === other
+            }, function () {
+              return "out of date with the other photo: " + login.sectionState + " " + login.lockAvatarSource
+            }, function () {
+              sh('rm -f "$2/lock-avatar-path"; cp "$1" "$3.new"; mv "$3.new" "$3"', [face, fake, login.lockAvatar], function () {
+                waitFor(function () {
+                  return loginIdle() && login.sectionState === "current" && login.lockAvatarSource === face
+                }, "matching again with ~/.face", next, 40000)
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        // shell.json can't be read: the lock keeps its last good settings,
+        // which Studio doesn't know, so Copy is off and says why.
+        name: "login: an unreadable shell.json stops Copy",
+        wait: 0,
+        run: function (next) {
+          var before = readFile(shellJson)
+          writeFile(shellJson, "{ not json\n")
+          waitFor(function () {
+            return studio.sources.settingsError !== "" && !login.copyPossible
+          }, "Copy off with a bad shell.json", function () {
+            expect(!loginButton("studioLoginCopy").enabled && loginText("studioLoginConfig") === FoamyI18n.t("studio.login.configUnreadable"), "the note: " + loginText("studioLoginConfig"))
+            writeFile(shellJson, before)
+            waitFor(function () {
+              return studio.sources.settingsError === "" && login.copyPossible && loginIdle()
+            }, "Copy back with a good shell.json", next, 40000)
+          }, 40000)
+        }
+      },
+      {
+        // The photo was removed: the lock's old avatar.png is still in the
+        // cache, and the lock still reports it until it locks again (the
+        // fake's `stale`). No refresh is asked for: the watch on the photo
+        // notices. Studio decodes the photo itself, so the old avatar.png is
+        // never copied.
+        name: "login: the lock shows no avatar, so none is copied",
+        wait: 0,
+        run: function (next) {
+          var face = Quickshell.env("HOME") + "/.face";
+          expect(login.sectionState === "current" && login.lockAvatarSource === face, "matches, the photo watched: " + login.sectionState + " " + login.lockAvatarSource)
+          var asked = lockStatusCalls()
+          setLockStatus("stale")
+          sh('test -s "$1"; mv "$2" "$2.away"', [login.lockAvatar, face], function () {
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated"
+            }, function () {
+              return "out of date without the photo: " + login.sectionState + " " + login.avatarRevision
+            }, function () {
+              expect(lockStatusCalls() > asked, "the lock was asked again")
+              confirmLogin("copy", "ok", function () {
+                expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                var snapshot = JSON.parse(readFile(theme() + "/snapshot.json"))
+                expect(snapshot.files.avatar === null && installedNames().indexOf("avatar.png") === -1, "no avatar: " + json(snapshot.files) + " " + installedNames().slice(0, 4))
+                expect(login.sectionState === "current", "matches without it")
+                // The photo is back: the watch notices that too, and the
+                // lock's next answer counts.
+                setLockStatus("avatar")
+                sh('mv "$1.away" "$1"', [face], function () {
+                  waitFor(function () {
+                    return loginIdle() && login.sectionState === "outdated"
+                  }, "out of date with the avatar back", function () {
+                    confirmLogin("copy", "ok", function () {
+                      expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                      var again = JSON.parse(readFile(theme() + "/snapshot.json"))
+                      expect(again.files.avatar === "avatar.png" && installedNames().indexOf("avatar.png") !== -1, "the avatar copied: " + json(again.files))
+                      next()
+                    })
+                  }, 40000)
+                })
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        name: "login: no answer from the lock: no comparison, and the copy stops",
+        wait: 0,
+        run: function (next) {
+          setLockStatus("fail")
+          login.refresh()
+          waitFor(function () {
+            return loginIdle() && login.sectionState === "installed"
+          }, "not compared", function () {
+            expect(login.compareError === "lock-status" && loginButton("studioLoginCopy").enabled, "the lock's silence: " + login.compareError)
+            var calls = publishCalls().length
+            confirmLogin("copy", "ok", function (made) {
+              expectResult("failed", "lock-status", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.lock-status")))
+              expect(login.result.before === true && made.length === calls, "the publisher never ran: " + json(made))
+              setLockStatus("avatar")
+              login.refresh()
+              waitFor(function () {
+                return loginIdle() && login.sectionState === "current"
+              }, "matching once the lock answers", next, 40000)
+            })
+          }, 40000)
+        }
+      },
+      {
+        // A picture background replaced in place while Studio is open: the
+        // watch on it makes the comparison old, and the old one comes back.
+        name: "login: a replaced background picture makes it check again",
+        wait: 0,
+        run: function (next) {
+          var picture = fake + "/login-picture.png";
+          sh('cp "$1" "$2"', [fake + "/poster.png", picture], function () {
+            studio.savedDraft = {
+              preset: "foamy",
+              background: {
+                source: "picture",
+                path: picture
+              }
+            }
+            studio.history = Draft.history(studio.savedDraft)
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "outdated"
+            }, "out of date with the picture look", function () {
+              confirmLogin("copy", "ok", function () {
+                expectResult("done", "", FoamyI18n.t("studio.login.result.copy.done"))
+                sh('cp "$1" "$3/picture.before"; cp "$2" "$1.new"; mv "$1.new" "$1"', [picture, login.lockAvatar, fake], function () {
+                  waitFor(function () {
+                    return loginIdle() && login.sectionState === "outdated"
+                  }, function () {
+                    return "out of date after a new picture: " + login.sectionState + " " + login.backgroundRevision
+                  }, function () {
+                    sh('mv "$2/picture.before" "$1"', [picture, fake], function () {
+                      waitFor(function () {
+                        return loginIdle() && login.sectionState === "current"
+                      }, "matching again with the old picture", next, 40000)
+                    })
+                  }, 40000)
+                })
+              })
+            }, 40000)
+          })
+        }
+      },
+      {
+        name: "login: another applied look is out of date",
+        wait: 0,
+        run: function (next) {
+          studio.savedDraft = {
+            preset: "foamy",
+            background: {
+              dim: 0.55
+            }
+          }
+          studio.history = Draft.history(studio.savedDraft)
+          waitFor(function () {
+            return loginIdle() && login.sectionState === "outdated"
+          }, function () {
+            return "out of date: " + login.sectionState + " " + login.compareError
+          }, function () {
+            expect(loginButton("studioLoginCopy").enabled && loginButton("studioLoginRestore").enabled, "both buttons")
+            expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.outdated"), "an older look")
+            capture("studio-login-outdated", next)
+          }, 30000)
+        }
+      },
+      {
+        name: "login: another theme selected after ours",
+        wait: 0,
+        run: function (next) {
+          sh('printf "[Theme]\\nCurrent=miriam-lock\\n" > "$1/etc/sddm.conf"', [systemRoot], function () {
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "overridden"
+            }, "overridden", function () {
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.overriddenIn", ["miriam-lock", "/etc/sddm.conf"]), "names the theme and file: " + loginText("studioLoginState"))
+              expect(loginButton("studioLoginCopy").enabled && loginButton("studioLoginRestore").enabled, "both buttons")
+              studio.askLogin("copy")
+              expect(find(studio, "studioLoginDialog").body.indexOf(FoamyI18n.t("studio.login.ask.copy.replacesIn", ["miriam-lock", "/etc/sddm.conf"])) !== -1, "the dialog names what it replaces")
+              studio.answerLogin(false)
+              capture("studio-login-overridden", function () {
+                sh('rm "$1/etc/sddm.conf"', [systemRoot], next)
+              })
+            })
+          })
+        }
+      },
+      {
+        name: "login: incomplete theme files",
+        wait: 0,
+        run: function (next) {
+          sh('mv "$1/avatar.png" "$1/../avatar.png.away"', [theme()], function () {
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "broken"
+            }, "broken", function () {
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.broken") && loginButton("studioLoginRestore").enabled, "incomplete, Restore offered")
+              capture("studio-login-broken", function () {
+                sh('mv "$1/../avatar.png.away" "$1/avatar.png"', [theme()], next)
+              })
+            })
+          })
+        }
+      },
+      {
+        name: "login: the restore dialog, then restored",
+        wait: 0,
+        run: function (next) {
+          login.refresh()
+          waitFor(function () {
+            return loginIdle() && login.sectionState === "outdated"
+          }, "back to out of date", function () {
+            var restore = loginButton("studioLoginRestore")
+            restore.forceActiveFocus(Qt.TabFocusReason)
+            restore.clicked()
+            var dialog = find(studio, "studioLoginDialog")
+            expect(dialog.visible && dialog.title === FoamyI18n.t("studio.login.ask.restore.title") && dialog.body === FoamyI18n.t("studio.login.ask.restore.body") + "\n\n" + FoamyI18n.t("studio.login.ask.root"), "the restore dialog")
+            expect(find(studio, "studioLoginCancel").activeFocus && find(studio, "studioLoginConfirm").text === FoamyI18n.t("studio.login.ask.restore.confirm"), "Cancel has the keys")
+            captureSizes("studio-login-restore-dialog", function () {
+              studio.answerLogin(false)
+              expect(restore.activeFocus, "the keys go back to Restore")
+              // A cancelled restore, then the real one.
+              confirmLogin("restore", "cancel", function () {
+                expectResult("cancelled", "", FoamyI18n.t("studio.login.result.cancelled"))
+                expect(login.sectionState === "outdated", "still installed")
+                confirmLogin("restore", "ok", function () {
+                  expectResult("done", "", FoamyI18n.t("studio.login.result.restore.done"))
+                  expect(login.sectionState === "not-installed" && !loginButton("studioLoginRestore").visible, "restored: " + login.sectionState)
+                  expect(readFile(theme() + "/manifest.json") === "", "the theme folder is gone")
+                  next()
+                })
+              })
+            })
+          })
+        }
+      },
+      {
+        // /etc/sddm.conf picks another theme in another folder: SDDM uses
+        // none of Foamy's files, but a leftover theme folder is there, so
+        // Remove is offered, and a removal that leaves it isn't believed.
+        name: "login: Foamy's files that SDDM doesn't use can still be removed",
+        wait: 0,
+        run: function (next) {
+          sh('printf "[Theme]\\nCurrent=miriam-lock\\nThemeDir=/usr/local/share/sddm/themes\\n" > "$1/etc/sddm.conf"; mkdir -p "$2"; : > "$2/Main.qml"', [systemRoot, theme()], function () {
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "not-installed" && login.status.managed.theme
+            }, function () {
+              return "not installed, the folder there: " + login.sectionState + " " + json(login.status)
+            }, function () {
+              var restore = loginButton("studioLoginRestore")
+              expect(!login.status.managed.dropin && restore.visible && restore.enabled && loginButton("studioLoginCopy").enabled, "Copy and Remove")
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.not-installed") && loginText("studioLoginManaged") === FoamyI18n.t("studio.login.managed"), "the state and the note: " + loginText("studioLoginManaged"))
+              capture("studio-login-managed", function () {
+                confirmLogin("restore", "lie", function () {
+                  expectResult("unconfirmed", "files-left", FoamyI18n.t("studio.login.result.restore.filesLeft"))
+                  expect(restore.visible && restore.enabled, "Remove still offered")
+                  confirmLogin("restore", "ok", function () {
+                    expectResult("done", "", FoamyI18n.t("studio.login.result.restore.done"))
+                    expect(!login.status.managed.theme && !restore.visible && loginText("studioLoginManaged") === "", "removed, nothing left to offer")
+                    // The folder is gone (a failed test fails the run).
+                    sh('test ! -e "$2"; rm "$1/etc/sddm.conf"', [systemRoot, theme()], function () {
+                      login.refresh()
+                      waitFor(function () {
+                        return loginIdle() && login.sectionState === "not-installed" && login.status.theme === "omarchy"
+                      }, "Omarchy's theme again", next)
+                    })
+                  })
+                })
+              })
+            })
+          })
+        }
+      },
+      {
+        // timeout's own 126 and 127 must never read as pkexec's.
+        name: "login: a missing publisher is a failed start, not a cancel",
+        wait: 0,
+        run: function (next) {
+          var fake = login.publisher
+          login.publisher = fake + ".missing"
+          studio.askLogin("copy")
+          find(studio, "studioLoginConfirm").clicked()
+          waitFor(function () {
+            return loginIdle() && login.result !== null
+          }, "copy with a missing publisher", function () {
+            login.publisher = fake
+            expectResult("failed", "start-failed", FoamyI18n.t("studio.login.result.copy.failed", FoamyI18n.t("studio.login.reason.start-failed")))
+            next()
+          }, 40000)
+        }
+      },
+      {
+        name: "login: a publisher that says ok without doing it is not believed",
+        wait: 0,
+        run: function (next) {
+          confirmLogin("copy", "lie", function () {
+            expectResult("unconfirmed", "not-installed", FoamyI18n.t("studio.login.result.copy.unconfirmed", "not-installed"))
+            expect(login.sectionState === "not-installed", "still not installed")
+            next()
+          })
+        }
+      },
+      {
+        name: "login: stage and picture failures stop before the publisher",
+        wait: 0,
+        run: function (next) {
+          setLoginMode("stage-fail")
+          confirmLogin("copy", "ok", function (made) {
+            expectResult("failed", "BUNDLE_INVALID", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.BUNDLE_INVALID")))
+            expect(login.result.before === true, "before the publisher")
+            setLoginMode("real")
+            // No Omarchy wallpaper: the helper's own BACKGROUND_MISSING.
+            var calls = made.length
+            studio.sources.wallpaperPath = ""
+            confirmLogin("copy", "ok", function (after) {
+              expectResult("failed", "BACKGROUND_MISSING", FoamyI18n.t("studio.login.result.copy.failedNothing", FoamyI18n.t("studio.login.reason.BACKGROUND_MISSING")))
+              expect(after.length === calls, "the publisher never ran: " + json(after))
+              capture("studio-login-failed", function () {
+                studio.sources.refreshWallpaper()
+                waitFor(function () {
+                  return studio.sources.wallpaperPath !== ""
+                }, "the wallpaper back", next)
+              })
+            })
+          })
+        }
+      },
+      {
+        name: "login: a check that fails shows, and Retry",
+        wait: 0,
+        run: function (next) {
+          sh('printf "[Theme]\\n" > "$1/etc/sddm.conf.d/50-locked.conf"; chmod 000 "$1/etc/sddm.conf.d/50-locked.conf"', [systemRoot], function () {
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "error"
+            }, "the error", function () {
+              var row = find(studio.library, "studioSceneLogin")
+              expect(row.visible && login.statusError === "IO", "the section stays: " + login.statusError)
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.error", FoamyI18n.t("studio.login.reason.IO")) && !loginButton("studioLoginCopy").visible, "the error, no Copy")
+              var retry = loginButton("studioLoginRetry")
+              expect(retry.visible && retry.enabled, "Retry")
+              capture("studio-login-error", function () {
+                sh('rm -f "$1/etc/sddm.conf.d/50-locked.conf"', [systemRoot], function () {
+                  retry.clicked()
+                  waitFor(function () {
+                    return loginIdle() && login.sectionState === "not-installed"
+                  }, "back after Retry", next)
+                })
+              })
+            })
+          })
+        }
+      },
+      {
+        name: "login: without SDDM the section is hidden",
+        wait: 0,
+        run: function (next) {
+          sh('mv "$1/etc/systemd/system/display-manager.service" "$1/etc/systemd/system/dm.away"', [systemRoot], function () {
+            login.refresh()
+            waitFor(function () {
+              return loginIdle() && login.sectionState === "hidden"
+            }, "hidden", function () {
+              expect(!find(studio.library, "studioSceneLogin").visible && !loginButton("studioLoginCopy").visible, "no row, no buttons")
+              studio.askLogin("copy")
+              expect(studio.loginAsked === "", "nothing to ask")
+              sh('mv "$1/etc/systemd/system/dm.away" "$1/etc/systemd/system/display-manager.service"', [systemRoot], function () {
+                login.refresh()
+                waitFor(function () {
+                  return loginIdle() && login.sectionState === "not-installed"
+                }, "shown again", next)
+              })
+            })
+          })
+        }
+      },
+      {
+        // The first copy (nothing installed, so no key watch runs): a look
+        // applied while the publisher waits at its prompt is compared once
+        // the copy is done, not shown as matching.
+        name: "login: a look applied during the first copy is compared afresh",
+        wait: 0,
+        run: function (next) {
+          expect(login.sectionState === "not-installed", "nothing installed: " + login.sectionState)
+          setPublish("hold")
+          studio.askLogin("copy")
+          find(studio, "studioLoginConfirm").clicked()
+          waitFor(function () {
+            return login.step === "publish" && readFile(fake + "/publish-held").trim() === "held"
+          }, "the publisher at its prompt", function () {
+            var copied = login.job.key
+            studio.savedDraft = {
+              preset: "foamy",
+              background: {
+                dim: 0.3
+              }
+            }
+            studio.history = Draft.history(studio.savedDraft)
+            expect(login.key !== copied, "the applied look changed during the copy")
+            writeFile(fake + "/publish-go", "go\n")
+            waitFor(function () {
+              return loginIdle() && login.result !== null && login.compareKey === login.key
+            }, function () {
+              return "a fresh comparison: " + login.sectionState + " " + json(login.result)
+            }, function () {
+              expect(login.result.outcome === "done" && login.sectionState === "outdated", "out of date, not matching: " + login.sectionState)
+              expect(loginText("studioLoginState") === FoamyI18n.t("studio.login.state.outdated") && loginText("studioLoginResult") === "", "the old copy isn't shown as current: " + loginText("studioLoginResult"))
+              next()
+            }, 40000)
+          })
+        }
+      },
+      {
+        name: "login: one operation at a time; the prompt may wait",
+        wait: 0,
+        run: function (next) {
+          setPublish("slow")
+          studio.askLogin("copy")
+          find(studio, "studioLoginConfirm").clicked()
+          waitFor(function () {
+            return login.step === "publish" && readFile(fake + "/publish-pid").trim() !== ""
+          }, "the publisher waiting", function () {
+            expect(!loginButton("studioLoginCopy").enabled && loginButton("studioLoginCopy").busy, "Copy is busy")
+            expect(loginText("studioLoginBusy") === FoamyI18n.t("studio.login.busy.password"), "waiting for the password: " + loginText("studioLoginBusy"))
+            expect(!login.copy() && !login.restore(), "nothing else starts")
+            studio.askLogin("copy")
+            expect(studio.loginAsked === "", "no second question")
+            login.refresh()
+            expect(login.pending && login.op === "copy", "a check waits")
+            // Left running: quitting the app must stop it (the harness
+            // checks that its process is gone and saw SIGTERM).
+            capture("studio-login-busy", next)
+          })
+        }
+      }
+    ]
+  }
+
   // --- user presets (R2-2), against the fake: each step a body ---------------
   function userPresetSteps() {
     return [
@@ -3702,7 +4476,7 @@ Item {
         })
       }
     }
-  ]).concat([
+  ]).concat(loginSteps()).concat([
     {
       name: "costs",
       wait: 600,

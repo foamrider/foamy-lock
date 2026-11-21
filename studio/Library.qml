@@ -5,7 +5,8 @@ import "Draft.js" as Draft
 
 // The library (mockup A, left pane): first the preset ("Preset: Default ▾",
 // which opens the preset menu), then the modules, each with its zone or
-// "Hidden", and the scene pages (background, glass and dim, shapes). The list
+// "Hidden", and the scene pages (background, glass and dim, shapes, and
+// the login screen while SDDM is in use). The list
 // scrolls (wheel, and the keyboard keeps the row it is on in view) when the
 // pane is short; the window pins the tips card under it.
 //
@@ -264,6 +265,20 @@ FocusScope {
         checked: library.app.page === "shapes"
         Accessible.role: Accessible.PageTab
         onClicked: library.app.selectShape(library.app.selectedShape)
+      }
+      // Only when SDDM is the display manager (or the check failed).
+      StudioButton {
+        objectName: "studioSceneLogin"
+        readonly property string loginState: library.app.login.sectionState
+        visible: loginState !== "hidden"
+        width: parent.width
+        height: FoamyStyle.rowHeight + FoamyStyle.gapSmall
+        horizontalAlignment: Text.AlignLeft
+        text: FoamyI18n.t("studio.login")
+        detail: loginState === "hidden" ? "" : FoamyI18n.t("studio.login.detail." + loginState)
+        checked: library.app.page === "login"
+        Accessible.role: Accessible.PageTab
+        onClicked: library.app.page = "login"
       }
     }
   }
